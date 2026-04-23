@@ -4,6 +4,7 @@ import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
+import { scrapeSeinfraCompositions } from '../services/engineering/seinfra-scraper';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -735,6 +736,150 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
     } catch (e: any) {
         console.error('[Eng Import] Error:', e);
         res.status(500).json({ error: 'Erro na importação', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/scrape-seinfra
+// Scrape SEINFRA-CE SIPROCE portal and populate database
+// ═══════════════════════════════════════════════════════════
+router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        console.log('[SEINFRA Scraper] 🚀 Iniciando scrape do SIPROCE...');
+
+        // Phase 1: Scrape all compositions from SIPROCE
+        const { compositions, errors } = await scrapeSeinfraCompositions((p) => {
+            console.log(`[SEINFRA Scraper] ${p.phase} [${p.current}/${p.total}] ${p.message}`);
+        });
+
+        console.log(`[SEINFRA Scraper] ✅ Scrape concluído: ${compositions.length} composições, ${errors.length} erros`);
+
+        if (compositions.length === 0) {
+            return res.json({
+                message: 'Scrape concluído mas nenhuma composição encontrada. Verifique se o portal SIPROCE está acessível.',
+                errors: errors.slice(0, 20),
+            });
+        }
+
+        // Phase 2: Create or find the SEINFRA database
+        let db = await prisma.engineeringDatabase.findFirst({
+            where: { name: 'SEINFRA', uf: 'CE', type: 'OFICIAL' }
+        });
+        if (!db) {
+            db = await prisma.engineeringDatabase.create({
+                data: {
+                    name: 'SEINFRA',
+                    uf: 'CE',
+                    version: '028',
+                    type: 'OFICIAL',
+                }
+            });
+        }
+
+        // Phase 3: Upsert compositions into database
+        let insertedComps = 0;
+        let insertedItems = 0;
+
+        for (const comp of compositions) {
+            try {
+                // Upsert composition
+                const dbComp = await prisma.engineeringComposition.upsert({
+                    where: { databaseId_code: { databaseId: db.id, code: comp.code } },
+                    create: {
+                        databaseId: db.id,
+                        code: comp.code,
+                        description: comp.description,
+                        unit: comp.unit,
+                        totalPrice: comp.totalPrice,
+                    },
+                    update: {
+                        description: comp.description,
+                        unit: comp.unit,
+                        totalPrice: comp.totalPrice,
+                    },
+                });
+
+                // Delete existing items and re-insert
+                await prisma.engineeringCompositionItem.deleteMany({
+                    where: { compositionId: dbComp.id }
+                });
+
+                // Also upsert each insumo as EngineeringItem
+                for (const item of comp.items) {
+                    // Ensure the insumo exists in the items table
+                    if (item.type !== 'COMPOSICAO_AUXILIAR') {
+                        await prisma.engineeringItem.upsert({
+                            where: { databaseId_code: { databaseId: db.id, code: item.insumoCode } },
+                            create: {
+                                databaseId: db.id,
+                                code: item.insumoCode,
+                                description: item.description,
+                                unit: item.unit,
+                                price: item.unitPrice,
+                                type: item.type,
+                            },
+                            update: {
+                                description: item.description,
+                                unit: item.unit,
+                                price: item.unitPrice,
+                                type: item.type,
+                            },
+                        });
+                    }
+
+                    // Find the item or auxiliary composition reference
+                    let itemId: string | null = null;
+                    let auxCompId: string | null = null;
+
+                    if (item.type === 'COMPOSICAO_AUXILIAR') {
+                        const auxComp = await prisma.engineeringComposition.findFirst({
+                            where: { databaseId: db.id, code: item.insumoCode }
+                        });
+                        auxCompId = auxComp?.id || null;
+                    } else {
+                        const dbItem = await prisma.engineeringItem.findFirst({
+                            where: { databaseId: db.id, code: item.insumoCode }
+                        });
+                        itemId = dbItem?.id || null;
+                    }
+
+                    if (itemId || auxCompId) {
+                        await prisma.engineeringCompositionItem.create({
+                            data: {
+                                compositionId: dbComp.id,
+                                itemId,
+                                auxiliaryCompositionId: auxCompId,
+                                coefficient: item.coefficient,
+                                price: item.totalPrice,
+                            },
+                        });
+                        insertedItems++;
+                    }
+                }
+
+                insertedComps++;
+            } catch (e: any) {
+                errors.push(`Composition ${comp.code}: ${e.message}`);
+            }
+        }
+
+        console.log(`[SEINFRA Scraper] 🏁 Import concluído: ${insertedComps} composições, ${insertedItems} itens`);
+
+        res.json({
+            message: `SEINFRA-CE: ${insertedComps} composições e ${insertedItems} itens importados com sucesso`,
+            databaseId: db.id,
+            scraped: compositions.length,
+            inserted: { compositions: insertedComps, items: insertedItems },
+            errors: errors.slice(0, 20),
+        });
+
+    } catch (e: any) {
+        console.error('[SEINFRA Scraper] Fatal:', e);
+        res.status(500).json({ error: 'Erro no scrape SEINFRA', details: e.message });
     }
 });
 
