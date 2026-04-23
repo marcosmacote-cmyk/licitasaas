@@ -604,16 +604,35 @@ router.post('/ai-populate', async (req: any, res: any) => {
             }
 
             // ═══════════════════════════════════════════════════
-            // PASSO 2: Fallback — usar texto completo para AI extraction
-            // Preferência: biddingItems (texto detalhado) > requiredDocuments
+            // PASSO 2: Fallback — combinar TODAS as fontes de texto para AI extraction
+            // Engenharia precisa do máximo de contexto possível
             // ═══════════════════════════════════════════════════
-            if (bidding?.aiAnalysis?.biddingItems) {
-                extractionText = bidding.aiAnalysis.biddingItems;
-            } else if (bidding?.aiAnalysis?.requiredDocuments) {
-                extractionText = bidding.aiAnalysis.requiredDocuments;
+            const textParts: string[] = [];
+            
+            // Priority 1: Full summary has the most comprehensive text
+            if (bidding?.aiAnalysis?.fullSummary) textParts.push(bidding.aiAnalysis.fullSummary);
+            // Priority 2: Bidding items (planilha, quantitativos)
+            if (bidding?.aiAnalysis?.biddingItems) textParts.push(bidding.aiAnalysis.biddingItems);
+            // Priority 3: Pricing considerations (BDI, custos)
+            if (bidding?.aiAnalysis?.pricingConsiderations) textParts.push(bidding.aiAnalysis.pricingConsiderations);
+            // Priority 4: Required documents (pode conter referências a itens)
+            if (bidding?.aiAnalysis?.requiredDocuments) textParts.push(bidding.aiAnalysis.requiredDocuments);
+            
+            // Priority 5: V2 structured data (serialize as context)
+            if (schemaV2) {
+                const v2Parts: string[] = [];
+                if (schemaV2.proposal_analysis?.itens_licitados?.length > 0) {
+                    v2Parts.push('ITENS LICITADOS (V2):\n' + JSON.stringify(schemaV2.proposal_analysis.itens_licitados, null, 2));
+                }
+                if (schemaV2.proposal_analysis?.proposta_comercial?.length > 0) {
+                    v2Parts.push('PROPOSTA COMERCIAL:\n' + JSON.stringify(schemaV2.proposal_analysis.proposta_comercial, null, 2));
+                }
+                if (v2Parts.length > 0) textParts.push(v2Parts.join('\n\n'));
             }
+            
+            extractionText = textParts.join('\n\n═══════════════════════════════════════\n\n');
 
-            console.log(`[Engineering AI-Populate] ⚠️ V2 itens_licitados insuficiente (${itensV2?.length || 0}), usando fallback IA com texto de ${extractionText?.length || 0} chars`);
+            console.log(`[Engineering AI-Populate] ⚠️ V2 itens_licitados insuficiente (${itensV2?.length || 0}), usando fallback IA com ${textParts.length} fontes, ${extractionText?.length || 0} chars`);
         }
 
         if (!extractionText) {
