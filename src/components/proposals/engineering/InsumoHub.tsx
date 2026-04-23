@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info } from 'lucide-react';
+import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText } from 'lucide-react';
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats } from './insumoEngine';
+import { exportHubExcel, exportHubPdf } from './exportEngine';
 
 interface ClientItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -136,6 +137,18 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+
+            {/* Export bar */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+                <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
+                    onClick={() => exportHubExcel(insumos, stats, descontoConfig)}>
+                    <Download size={13} /> Excel
+                </button>
+                <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
+                    onClick={() => exportHubPdf(insumos, stats)}>
+                    <FileText size={13} /> PDF
+                </button>
+            </div>
 
             {/* Info banner when no compositions exist */}
             {mode === 'no_compositions' && (
