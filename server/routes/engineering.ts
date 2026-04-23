@@ -5,9 +5,106 @@ import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
 import { downloadAndParseSeinfra } from '../services/engineering/seinfra-scraper';
+import axios from 'axios';
+import https from 'https';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+/**
+ * Baixa os PDFs do edital diretamente do PNCP e prepara para envio inline ao Gemini.
+ * Prioriza: Projeto Básico > Planilha Orçamentária > Edital > outros anexos
+ */
+async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]> {
+    const bidding = await prisma.biddingProcess.findUnique({ where: { id: biddingId } });
+    if (!bidding?.pncpLink) {
+        console.log(`[PNCP-PDF] ⚠️ Sem pncpLink para processo ${biddingId}`);
+        return [];
+    }
+
+    // Parse CNPJ, ano, sequencial from pncpLink
+    // Format: https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ or /api/pncp/v1/orgaos/CNPJ/compras/ANO/SEQ
+    const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
+    if (!linkMatch) {
+        console.log(`[PNCP-PDF] ⚠️ Não foi possível extrair CNPJ/ano/seq de: ${bidding.pncpLink}`);
+        return [];
+    }
+
+    const [, cnpj, ano, seq] = linkMatch;
+    const agent = new https.Agent({ rejectUnauthorized: false });
+    const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+
+    console.log(`[PNCP-PDF] 📥 Buscando anexos: ${arquivosUrl}`);
+
+    let arquivos: any[] = [];
+    try {
+        const res = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 20000 } as any);
+        arquivos = Array.isArray(res.data) ? res.data : [];
+    } catch (e: any) {
+        console.warn(`[PNCP-PDF] ⚠️ Falha ao listar anexos: ${e.message}`);
+        return [];
+    }
+
+    if (arquivos.length === 0) return [];
+
+    // Prioritize engineering-relevant docs
+    const scored = arquivos.map((arq: any) => {
+        const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase();
+        let score = 10;
+        if (/projeto.?b[aá]sico/i.test(name)) score = 1;
+        if (/planilha|or[cç]amento|quantitativ/i.test(name)) score = 2;
+        if (/composi[cç][aã]o|cpu|bdi/i.test(name)) score = 3;
+        if (/cronograma/i.test(name)) score = 4;
+        if (/edital/i.test(name)) score = 5;
+        if (/memorial|especifica[cç]/i.test(name)) score = 6;
+        // Exclude irrelevant files
+        if (/ata|aviso|decreto|portaria|lei|certid|retifica|resultado|homologa/i.test(name)) score = 99;
+        return { arq, score, name };
+    }).filter(s => s.score < 99).sort((a, b) => a.score - b.score);
+
+    // Download top 4 most relevant PDFs (budget limit)
+    const MAX_PDFS = 4;
+    const MAX_SIZE_KB = 12000;
+    let totalSizeKB = 0;
+    const pdfParts: any[] = [];
+
+    for (const { arq, name } of scored.slice(0, MAX_PDFS + 2)) {
+        if (pdfParts.length >= MAX_PDFS) break;
+
+        let fileUrl = arq.url || arq.uri || '';
+        if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
+        if (!fileUrl) continue;
+
+        try {
+            const fileRes = await axios.get(fileUrl, {
+                responseType: 'arraybuffer', httpsAgent: agent, timeout: 30000,
+                maxRedirects: 5,
+            } as any);
+            const buffer = Buffer.from(fileRes.data);
+            const sizeKB = buffer.length / 1024;
+
+            // Verify it's a PDF
+            if (buffer[0] !== 0x25 || buffer[1] !== 0x50) {
+                console.log(`[PNCP-PDF] ⏭️ "${name}" não é PDF, ignorando`);
+                continue;
+            }
+
+            if (totalSizeKB + sizeKB > MAX_SIZE_KB) {
+                console.log(`[PNCP-PDF] ⏭️ Budget de ${MAX_SIZE_KB}KB atingido, parando`);
+                break;
+            }
+
+            totalSizeKB += sizeKB;
+            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
+            console.log(`[PNCP-PDF] ✅ "${name}" (${Math.round(sizeKB)}KB) adicionado`);
+        } catch (dlErr: any) {
+            console.warn(`[PNCP-PDF] ⚠️ Falha ao baixar "${name}": ${dlErr.message}`);
+        }
+    }
+
+    console.log(`[PNCP-PDF] 📦 ${pdfParts.length} PDFs prontos (${Math.round(totalSizeKB)}KB total)`);
+    return pdfParts;
+}
 
 // ═══════════════════════════════════════════════════════════
 // GET /api/engineering/bases
@@ -635,37 +732,90 @@ router.post('/ai-populate', async (req: any, res: any) => {
             console.log(`[Engineering AI-Populate] ⚠️ V2 itens_licitados insuficiente (${itensV2?.length || 0}), usando fallback IA com ${textParts.length} fontes, ${extractionText?.length || 0} chars`);
         }
 
-        if (!extractionText) {
-            return res.status(400).json({ error: 'Falta o texto do documento (biddingId sem análise ou textChunk vazio)' });
+        if (!extractionText || extractionText.length < 200) {
+            // If even combined text is too short, try direct PDF extraction
+            console.log(`[Engineering AI-Populate] ⚠️ Texto combinado insuficiente (${extractionText?.length || 0} chars), tentando extração direta dos PDFs do PNCP...`);
         }
 
         // ═══════════════════════════════════════════════════
-        // PASSO 3: AI Extraction (Gemini) — fallback quando V2 não tem itens
+        // PASSO 3: AI Extraction — Dois modos:
+        //   A) Texto longo (>1000 chars): usar texto diretamente
+        //   B) Texto curto ou sem texto: baixar PDFs do PNCP e enviar inline
         // ═══════════════════════════════════════════════════
-        const prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
-        const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText;
-
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{
-                role: 'user',
-                parts: [{ text: userInput }]
-            }],
-            config: { 
-                systemInstruction: {
-                    role: 'system',
-                    parts: [{ text: prompt }]
-                },
-                temperature: 0.2, 
-                maxOutputTokens: 65536 
+        const prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
+        let result: any;
+
+        const shouldTryPdfDirect = !extractionText || extractionText.length < 1000;
+
+        if (shouldTryPdfDirect && biddingId) {
+            // MODE B: Direct PDF extraction from PNCP
+            console.log(`[Engineering AI-Populate] 📄 Modo PDF Direto — baixando documentos do PNCP`);
+            try {
+                const pdfParts = await downloadPncpPdfsForEngineering(biddingId);
+                if (pdfParts.length > 0) {
+                    console.log(`[Engineering AI-Populate] 📄 ${pdfParts.length} PDFs prontos para envio ao Gemini`);
+                    result = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
+                        config: {
+                            systemInstruction: { role: 'system', parts: [{ text: prompt }] },
+                            temperature: 0.15, maxOutputTokens: 65536,
+                        }
+                    });
+                }
+            } catch (pdfErr: any) {
+                console.warn(`[Engineering AI-Populate] ⚠️ Falha no modo PDF direto: ${pdfErr.message}`);
             }
-        }); 
+        }
+
+        // MODE A: Text-based extraction (used if PDF mode wasn't tried or failed)
+        if (!result && extractionText && extractionText.length > 50) {
+            const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText.slice(0, 120000);
+            result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: userInput }] }],
+                config: {
+                    systemInstruction: { role: 'system', parts: [{ text: prompt }] },
+                    temperature: 0.2, maxOutputTokens: 65536,
+                }
+            });
+        }
+
+        if (!result) {
+            return res.status(400).json({ error: 'Não foi possível extrair itens: sem texto nem PDFs disponíveis' });
+        }
 
         const rawResponse = result?.text || '';
         const extractedData = robustJsonParse(rawResponse);
         
-        const items = extractedData?.engineeringItems || [];
+        let items = extractedData?.engineeringItems || [];
+
+        // If text mode yielded ≤1 item and we haven't tried PDF mode, try it now
+        if (items.length <= 1 && biddingId && !shouldTryPdfDirect) {
+            console.log(`[Engineering AI-Populate] 🔄 Texto retornou apenas ${items.length} item(ns). Tentando modo PDF direto...`);
+            try {
+                const pdfParts = await downloadPncpPdfsForEngineering(biddingId);
+                if (pdfParts.length > 0) {
+                    const pdfResult = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
+                        config: {
+                            systemInstruction: { role: 'system', parts: [{ text: prompt }] },
+                            temperature: 0.15, maxOutputTokens: 65536,
+                        }
+                    });
+                    const pdfData = robustJsonParse(pdfResult?.text || '');
+                    const pdfItems = pdfData?.engineeringItems || [];
+                    if (pdfItems.length > items.length) {
+                        console.log(`[Engineering AI-Populate] ✅ PDF direto retornou ${pdfItems.length} itens (melhor que texto: ${items.length})`);
+                        items = pdfItems;
+                    }
+                }
+            } catch (pdfErr: any) {
+                console.warn(`[Engineering AI-Populate] ⚠️ Fallback PDF falhou: ${pdfErr.message}`);
+            }
+        }
         
         // Auto-lookup for prices against registered databases
         await enrichWithOfficialPrices(items);
