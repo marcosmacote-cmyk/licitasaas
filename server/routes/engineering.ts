@@ -228,7 +228,29 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
             }
         }
 
-        // 3. Consolidate: group by insumo code, sum weighted coefficients
+        // 3. Fallback: if no compositions found, treat proposal items AS insumos directly
+        //    This ensures the Hub always shows something useful
+        if (rawInsumos.length === 0) {
+            for (const item of proposalItems) {
+                const desc = item.description || 'Item sem descrição';
+                const cat = inferCategoryFromDescription(desc, item.unit);
+                rawInsumos.push({
+                    insumoCode: item.code || item.itemNumber || `ITEM-${item.sortOrder + 1}`,
+                    insumoDescription: desc,
+                    insumoUnit: item.unit || 'UN',
+                    insumoPrice: item.unitCost || 0,
+                    insumoType: cat,
+                    coefficient: 1,
+                    compositionCode: 'PROPOSTA',
+                    compositionDescription: 'Itens da proposta (sem composição detalhada)',
+                    base: item.sourceName || 'PROPRIA',
+                    serviceQuantity: item.quantity || 1,
+                });
+            }
+            console.log(`[Insumo Hub] ⚠️ Nenhuma composição encontrada, usando ${rawInsumos.length} itens da proposta como insumos diretos`);
+        }
+
+        // 4. Consolidate: group by insumo code, sum weighted coefficients
         const consolidated = new Map<string, any>();
 
         for (const raw of rawInsumos) {
@@ -279,6 +301,7 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
 
         // Stats
         const compositionCodes = new Set(rawInsumos.map((r: any) => r.compositionCode));
+        const hasRealCompositions = !compositionCodes.has('PROPOSTA');
         const stats = {
             totalInsumos: insumos.length,
             totalCusto: Math.round(totalCusto * 100) / 100,
@@ -286,11 +309,14 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
             custoMaoDeObra: Math.round(insumos.filter((i: any) => i.categoria === 'MAO_DE_OBRA').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
             custoEquipamento: Math.round(insumos.filter((i: any) => i.categoria === 'EQUIPAMENTO').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
             custoServico: Math.round(insumos.filter((i: any) => i.categoria === 'SERVICO').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
-            composicoesEncontradas: compositionCodes.size,
-            itensSemComposicao: proposalItems.filter(i => i.code && i.code !== 'N/A').length - compositionCodes.size,
+            composicoesEncontradas: hasRealCompositions ? compositionCodes.size : 0,
+            itensSemComposicao: hasRealCompositions
+                ? proposalItems.filter(i => i.code && i.code !== 'N/A').length - compositionCodes.size
+                : proposalItems.length,
+            mode: hasRealCompositions ? 'compositions' : 'proposal_items',
         };
 
-        console.log(`[Insumo Hub] 📊 ${stats.totalInsumos} insumos de ${stats.composicoesEncontradas} composições (R$ ${stats.totalCusto.toLocaleString()})`);
+        console.log(`[Insumo Hub] 📊 ${stats.totalInsumos} insumos (mode=${stats.mode}) — R$ ${stats.totalCusto.toLocaleString()}`);
 
         res.json({ insumos, stats, rawCount: rawInsumos.length });
 
@@ -305,6 +331,19 @@ function normalizeInsumoType(type: string): string {
     if (upper.includes('MAO') || upper.includes('MÃO')) return 'MAO_DE_OBRA';
     if (upper.includes('EQUIP')) return 'EQUIPAMENTO';
     if (upper.includes('MATERIAL')) return 'MATERIAL';
+    return 'SERVICO';
+}
+
+function inferCategoryFromDescription(desc: string, unit?: string): string {
+    const d = (desc || '').toUpperCase();
+    const u = (unit || '').toUpperCase();
+    // Mão de obra
+    if (['H', 'HORA', 'MES', 'DIA'].includes(u) && (d.includes('PEDREIRO') || d.includes('SERVENTE') || d.includes('MESTRE') || d.includes('ELETRICISTA') || d.includes('PINTOR') || d.includes('CARPINTEIRO') || d.includes('ARMADOR') || d.includes('ENCANADOR'))) return 'MAO_DE_OBRA';
+    // Equipamento
+    if (d.includes('BETONEIRA') || d.includes('CAMINHAO') || d.includes('RETROESCAVADEIRA') || d.includes('COMPACTADOR') || d.includes('GUINDASTE') || d.includes('VIBRADOR') || d.includes('GERADOR')) return 'EQUIPAMENTO';
+    // Material
+    if (d.includes('CIMENTO') || d.includes('AREIA') || d.includes('BRITA') || d.includes('TIJOLO') || d.includes('BLOCO') || d.includes('TINTA') || d.includes('TUBO') || d.includes('FIO') || d.includes('ACO ') || d.includes('PREGO') || d.includes('TELHA')) return 'MATERIAL';
+    // Default: serviço
     return 'SERVICO';
 }
 

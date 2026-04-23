@@ -93,6 +93,22 @@ export function InsumoHub({ proposalId }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
+            {/* Info banner when no compositions exist */}
+            {stats?.mode === 'proposal_items' && (
+                <div style={{
+                    padding: '12px 16px', borderRadius: 'var(--radius-md)',
+                    background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
+                    display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.78rem',
+                }}>
+                    <span style={{ fontSize: '1.1rem' }}>💡</span>
+                    <div>
+                        <strong style={{ color: '#d97706' }}>Modo Simplificado</strong> — Exibindo itens da proposta como insumos diretos.
+                        Para detalhamento completo (materiais, mão de obra, equipamentos por composição),
+                        importe composições SINAPI/SEINFRA ou extraia do Projeto Básico.
+                    </div>
+                </div>
+            )}
+
             {/* Stats Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
                 {([
