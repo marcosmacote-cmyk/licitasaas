@@ -482,6 +482,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     items={items}
                     initialIndex={compositionEditorIndex}
                     onClose={() => setCompositionEditorIndex(null)}
+                    onUpdateItem={(itemId, updates) => {
+                        if (updates.unitCost !== undefined) {
+                            updateItem(itemId, 'unitCost', updates.unitCost);
+                        }
+                    }}
                 />
             )}
         </div>

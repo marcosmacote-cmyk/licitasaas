@@ -1,14 +1,13 @@
 /**
- * CompositionEditor — Editor full-page de composições com navegação contínua.
+ * CompositionEditor — Editor full-page de composições com CASCADE COMPLETO.
  * 
- * Permite:
- * - Navegar entre composições com ◀ ▶ sem voltar à planilha
- * - Editar coeficientes inline
- * - Ver resumo de todas as composições na sidebar
- * - Drill-down em composições auxiliares
+ * Fluxo de cascade:
+ *   Edita preço/coef do insumo → recalcula subtotais do grupo
+ *   → recalcula total da composição → callback onUpdateItem(unitCost)
+ *   → planilha recalcula BDI + total → Hub reflete novos preços
  */
-import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, ChevronUp, Loader2, AlertCircle, Pencil, Check, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp } from 'lucide-react';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -25,7 +24,7 @@ interface Props {
     items: EngItem[];
     initialIndex: number;
     onClose: () => void;
-    onUpdateItem?: (itemId: string, updates: Partial<EngItem>) => void;
+    onUpdateItem: (itemId: string, updates: Partial<EngItem>) => void;
 }
 
 const GROUP_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -41,9 +40,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'AUXILIAR']));
-    const [editingCoef, setEditingCoef] = useState<string | null>(null);
-    const [editingPrice, setEditingPrice] = useState<string | null>(null);
+    const [editingField, setEditingField] = useState<{ id: string; field: 'coef' | 'price' } | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [hasChanges, setHasChanges] = useState(false);
 
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -59,6 +58,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         setLoading(true);
         setError('');
         setData(null);
+        setHasChanges(false);
         try {
             const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}`, { headers: hdrs() });
             if (!res.ok) throw new Error('not_found');
@@ -82,14 +82,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     // Keyboard navigation (disabled while editing)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if (editingCoef || editingPrice) return;
+            if (editingField) return;
             if (e.key === 'ArrowLeft' && hasPrev) navigate(-1);
             if (e.key === 'ArrowRight' && hasNext) navigate(1);
             if (e.key === 'Escape') onClose();
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [currentIndex, hasPrev, hasNext, editingCoef, editingPrice]);
+    }, [currentIndex, hasPrev, hasNext, editingField]);
 
     const toggleGroup = (key: string) => {
         setExpandedGroups(prev => {
@@ -98,6 +98,87 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
             return n;
         });
     };
+
+    // ═══════════════════════════════════════════════════════
+    // CASCADE ENGINE — Recalculates everything when a value changes
+    // ═══════════════════════════════════════════════════════
+    const commitEdit = useCallback(() => {
+        if (!editingField || !data) {
+            setEditingField(null);
+            return;
+        }
+
+        const newVal = parseFloat(editValue);
+        if (isNaN(newVal) || newVal < 0) {
+            setEditingField(null);
+            return;
+        }
+
+        const updated = { ...data, groups: { ...data.groups } };
+        let found = false;
+
+        // Find and update the item across all groups
+        for (const groupKey of Object.keys(updated.groups)) {
+            updated.groups[groupKey] = updated.groups[groupKey].map((ci: any) => {
+                if (ci.id !== editingField.id) return ci;
+                found = true;
+                const itemData = ci.item || ci.auxiliaryComposition;
+
+                if (editingField.field === 'coef') {
+                    const newCoef = newVal;
+                    const unitPrice = itemData?.price || itemData?.totalPrice || 0;
+                    return {
+                        ...ci,
+                        coefficient: newCoef,
+                        price: Math.round(newCoef * unitPrice * 100) / 100,
+                    };
+                } else {
+                    // price edit
+                    const newPrice = newVal;
+                    const newItem = { ...(ci.item || ci.auxiliaryComposition), price: newPrice };
+                    return {
+                        ...ci,
+                        item: ci.item ? newItem : ci.item,
+                        auxiliaryComposition: ci.auxiliaryComposition ? newItem : ci.auxiliaryComposition,
+                        price: Math.round(ci.coefficient * newPrice * 100) / 100,
+                    };
+                }
+            });
+        }
+
+        if (!found) {
+            setEditingField(null);
+            return;
+        }
+
+        // Recalculate composition total
+        let newTotal = 0;
+        for (const groupKey of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[groupKey]) {
+                newTotal += ci.price || 0;
+            }
+        }
+        updated.totalPrice = Math.round(newTotal * 100) / 100;
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+
+        // CASCADE → Update the parent planilha item with new unitCost
+        if (onUpdateItem && currentItem) {
+            onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        }
+
+        setEditingField(null);
+    }, [editingField, editValue, data, currentItem, onUpdateItem]);
+
+    const startEdit = (id: string, field: 'coef' | 'price', currentValue: number) => {
+        setEditingField({ id, field });
+        setEditValue(String(currentValue));
+    };
+
+    // Computed total from current data
+    const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
 
     if (!currentItem) return null;
 
@@ -185,6 +266,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                         <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>{currentItem.description}</h3>
                         <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
                             Código: <strong>{currentItem.code}</strong> · {currentItem.sourceName}
+                            {hasChanges && <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 700 }}>● Modificado</span>}
                         </span>
                     </div>
 
@@ -193,6 +275,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                         <X size={18} />
                     </button>
                 </div>
+
+                {/* Cascade indicator */}
+                {hasChanges && (
+                    <div style={{
+                        padding: '6px 24px', background: 'rgba(34,197,94,0.06)', borderBottom: '1px solid rgba(34,197,94,0.15)',
+                        display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.72rem', color: '#16a34a',
+                    }}>
+                        <ArrowDownUp size={13} />
+                        <strong>Cascade ativo</strong> — Alterações refletidas na Planilha e Hub de Insumos em tempo real.
+                    </div>
+                )}
 
                 {/* Composition Detail */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
@@ -243,7 +336,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                             <>
                                                 {/* Column headers */}
                                                 <div style={{
-                                                    display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 80px 90px 90px',
+                                                    display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px',
                                                     gap: 8, padding: '8px 20px', background: 'var(--color-bg-base)',
                                                     borderBottom: '1px solid var(--color-border)',
                                                 }}>
@@ -259,11 +352,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                                 {/* Rows */}
                                                 {groupItems.map((ci: any, idx: number) => {
                                                     const itemData = ci.item || ci.auxiliaryComposition;
-                                                    const isEditing = editingCoef === ci.id;
+                                                    const unitPrice = itemData?.price || itemData?.totalPrice || 0;
+                                                    const isEditingCoef = editingField?.id === ci.id && editingField?.field === 'coef';
+                                                    const isEditingPrice = editingField?.id === ci.id && editingField?.field === 'price';
 
                                                     return (
                                                         <div key={ci.id || idx} style={{
-                                                            display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 80px 90px 90px',
+                                                            display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px',
                                                             gap: 8, padding: '8px 20px', alignItems: 'center',
                                                             borderBottom: '1px solid var(--color-border)',
                                                             background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)',
@@ -281,25 +376,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
                                                             {/* Editable coefficient */}
                                                             <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                                                {isEditing ? (
+                                                                {isEditingCoef ? (
                                                                     <>
                                                                         <input type="number" step="0.0001" autoFocus
                                                                             value={editValue}
                                                                             onChange={e => setEditValue(e.target.value)}
                                                                             onKeyDown={e => {
-                                                                                if (e.key === 'Enter') { setEditingCoef(null); }
-                                                                                if (e.key === 'Escape') { setEditingCoef(null); }
+                                                                                if (e.key === 'Enter') commitEdit();
+                                                                                if (e.key === 'Escape') setEditingField(null);
                                                                             }}
-                                                                            style={{ width: 60, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
+                                                                            onBlur={commitEdit}
+                                                                            style={{ width: 65, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
                                                                         />
-                                                                        <button onClick={() => setEditingCoef(null)} style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer' }}>
-                                                                            <Check size={12} color="#16a34a" />
-                                                                        </button>
                                                                     </>
                                                                 ) : (
                                                                     <>
                                                                         <span style={{ fontSize: '0.78rem', fontFamily: 'monospace' }}>{fmtCoef(ci.coefficient)}</span>
-                                                                        <button onClick={() => { setEditingCoef(ci.id); setEditValue(String(ci.coefficient)); }}
+                                                                        <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient)}
                                                                             style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
                                                                             title="Editar coeficiente">
                                                                             <Pencil size={10} />
@@ -310,25 +403,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
                                                             {/* Editable price */}
                                                             <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                                                {editingPrice === ci.id ? (
+                                                                {isEditingPrice ? (
                                                                     <>
                                                                         <input type="number" step="0.01" autoFocus
                                                                             value={editValue}
                                                                             onChange={e => setEditValue(e.target.value)}
                                                                             onKeyDown={e => {
-                                                                                if (e.key === 'Enter') { setEditingPrice(null); }
-                                                                                if (e.key === 'Escape') { setEditingPrice(null); }
+                                                                                if (e.key === 'Enter') commitEdit();
+                                                                                if (e.key === 'Escape') setEditingField(null);
                                                                             }}
-                                                                            style={{ width: 70, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
+                                                                            onBlur={commitEdit}
+                                                                            style={{ width: 75, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
                                                                         />
-                                                                        <button onClick={() => setEditingPrice(null)} style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer' }}>
-                                                                            <Check size={12} color="#16a34a" />
-                                                                        </button>
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <span style={{ fontSize: '0.78rem' }}>{fmt(itemData?.price || itemData?.totalPrice || 0)}</span>
-                                                                        <button onClick={() => { setEditingPrice(ci.id); setEditValue(String(itemData?.price || 0)); }}
+                                                                        <span style={{ fontSize: '0.78rem' }}>{fmt(unitPrice)}</span>
+                                                                        <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
                                                                             style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
                                                                             title="Editar preço">
                                                                             <Pencil size={10} />
@@ -336,6 +427,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                                                     </>
                                                                 )}
                                                             </div>
+
                                                             <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: meta.color }}>
                                                                 {fmt(ci.price)}
                                                             </span>
@@ -355,7 +447,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 {data && !error && (
                     <div style={{
                         padding: '16px 24px', borderTop: '1px solid var(--color-border)',
-                        background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(124,58,237,0.03))',
+                        background: hasChanges
+                            ? 'linear-gradient(135deg, rgba(34,197,94,0.06), rgba(37,99,235,0.04))'
+                            : 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(124,58,237,0.03))',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
                         <div>
@@ -364,14 +458,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                             </div>
                             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
                                 {data.items?.length || 0} insumos · {currentItem.quantity} {currentItem.unit} no orçamento
+                                {hasChanges && <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 8 }}>✓ Cascade ativo</span>}
                             </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                                {fmt(data.totalPrice || data.totalDirect || 0)}
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: hasChanges ? '#16a34a' : 'var(--color-primary)' }}>
+                                {fmt(compositionTotal)}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                Total: {fmt((data.totalPrice || data.totalDirect || 0) * currentItem.quantity)}
+                                Total: {fmt(compositionTotal * currentItem.quantity)}
                             </div>
                         </div>
                     </div>
