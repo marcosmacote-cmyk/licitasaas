@@ -6,6 +6,7 @@ import { CompositionEditor } from './CompositionEditor';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
 import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
+import { BudgetDocsPanel } from './BudgetDocsPanel';
 
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -39,7 +40,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [compositionEditorIndex, setCompositionEditorIndex] = useState<number | null>(null);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma'>('planilha');
+    const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
 
     const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
@@ -232,6 +233,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     { key: 'hub_insumos' as const, label: 'Hub de Insumos', icon: Package },
                     { key: 'curva_abc' as const, label: 'Curva ABC', icon: BarChart3 },
                     { key: 'cronograma' as const, label: 'Cronograma', icon: Calendar },
+                    { key: 'caderno' as const, label: 'Caderno de Orçamento', icon: Download },
                 ].map(tab => (
                     <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
                         flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
@@ -259,6 +261,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             {/* Tab Content: Cronograma */}
             {activeTab === 'cronograma' && (
                 <CronogramaPanel items={items} />
+            )}
+
+            {/* Tab Content: Caderno de Orçamento */}
+            {activeTab === 'caderno' && (
+                <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={[]} cronogramaResult={null} />
             )}
 
             {/* Tab Content: Planilha */}
