@@ -241,7 +241,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
             {/* Tab Content: Hub de Insumos */}
             {activeTab === 'hub_insumos' && (
-                <InsumoHub proposalId={proposalId} />
+                <InsumoHub proposalId={proposalId} clientItems={items} />
             )}
 
             {/* Tab Content: Curva ABC */}

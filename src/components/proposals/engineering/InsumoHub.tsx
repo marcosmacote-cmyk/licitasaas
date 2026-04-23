@@ -1,9 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3 } from 'lucide-react';
+import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info } from 'lucide-react';
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats } from './insumoEngine';
 
-interface Props { proposalId: string; }
+interface ClientItem {
+    id: string; itemNumber: string; code: string; sourceName: string;
+    description: string; unit: string; quantity: number;
+    unitCost: number; unitPrice: number; totalPrice: number;
+}
+
+interface Props {
+    proposalId: string;
+    clientItems?: ClientItem[];
+}
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const token = () => localStorage.getItem('token') || '';
@@ -16,11 +25,21 @@ const ABC_COLORS: Record<string, { bg: string; color: string }> = {
     C: { bg: 'rgba(34,197,94,0.1)', color: '#16a34a' },
 };
 
-export function InsumoHub({ proposalId }: Props) {
+function inferCategory(desc: string, unit: string): InsumoCategoria {
+    const d = (desc || '').toUpperCase();
+    const u = (unit || '').toUpperCase();
+    if (['H', 'HORA', 'MES', 'DIA'].includes(u) && (d.includes('PEDREIRO') || d.includes('SERVENTE') || d.includes('MESTRE') || d.includes('ELETRICISTA') || d.includes('PINTOR'))) return 'MAO_DE_OBRA';
+    if (d.includes('BETONEIRA') || d.includes('CAMINHAO') || d.includes('RETROESCAVADEIRA') || d.includes('COMPACTADOR') || d.includes('VIBRADOR')) return 'EQUIPAMENTO';
+    if (d.includes('CIMENTO') || d.includes('AREIA') || d.includes('BRITA') || d.includes('TIJOLO') || d.includes('BLOCO') || d.includes('TINTA') || d.includes('TUBO') || d.includes('FIO ') || d.includes('ACO ') || d.includes('PREGO')) return 'MATERIAL';
+    return 'SERVICO';
+}
+
+export function InsumoHub({ proposalId, clientItems }: Props) {
     const [insumos, setInsumos] = useState<InsumoConsolidado[]>([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     const [descontoConfig, setDescontoConfig] = useState<DescontoConfig>({ ...DEFAULT_DESCONTO_CONFIG });
+    const [mode, setMode] = useState<'compositions' | 'proposal_items'>('proposal_items');
 
     // Filters
     const [catFilter, setCatFilter] = useState<InsumoCategoria | 'TODOS'>('TODOS');
@@ -30,15 +49,57 @@ export function InsumoHub({ proposalId }: Props) {
     const loadInsumos = useCallback(async () => {
         setLoading(true);
         try {
+            // Strategy 1: Try server endpoint (needs items saved in DB)
             const res = await fetch(`/api/engineering/proposals/${proposalId}/insumos-hub`, { headers: hdrs() });
             const data = await res.json();
-            if (data.insumos) {
+
+            if (data.insumos && data.insumos.length > 0) {
                 setInsumos(data.insumos);
                 setStats(data.stats);
+                setMode(data.stats?.mode || 'compositions');
+                setLoading(false);
+                return;
             }
-        } catch (e) { console.error('Hub load error:', e); }
-        finally { setLoading(false); }
-    }, [proposalId]);
+        } catch (e) { console.error('Hub API error:', e); }
+
+        // Strategy 2: Use client items directly (when not saved yet)
+        if (clientItems && clientItems.length > 0) {
+            const clientInsumos: InsumoConsolidado[] = clientItems.map((item, idx) => {
+                const cat = inferCategory(item.description, item.unit);
+                return {
+                    id: item.code?.toUpperCase() || `ITEM-${idx + 1}`,
+                    codigo: item.code || item.itemNumber || `${idx + 1}`,
+                    descricao: item.description || 'Item sem descrição',
+                    categoria: cat,
+                    unidade: item.unit || 'UN',
+                    precoOriginal: item.unitCost || 0,
+                    desconto: 0,
+                    precoFinal: item.unitCost || 0,
+                    base: item.sourceName || 'PROPRIA',
+                    composicoesVinculadas: ['PROPOSTA'],
+                    coeficienteTotal: item.quantity || 1,
+                    custoTotal: Math.round((item.unitCost || 0) * (item.quantity || 1) * 100) / 100,
+                };
+            });
+
+            // Sort and ABC
+            clientInsumos.sort((a, b) => b.custoTotal - a.custoTotal);
+            const totalCusto = clientInsumos.reduce((s, i) => s + i.custoTotal, 0);
+            if (totalCusto > 0) {
+                let accum = 0;
+                for (const ins of clientInsumos) {
+                    accum += ins.custoTotal;
+                    ins.abcClass = (accum / totalCusto * 100) <= 80 ? 'A' : (accum / totalCusto * 100) <= 95 ? 'B' : 'C';
+                }
+            }
+
+            setInsumos(clientInsumos);
+            setStats(calculateHubStats(clientInsumos));
+            setMode('proposal_items');
+        }
+
+        setLoading(false);
+    }, [proposalId, clientItems]);
 
     useEffect(() => { loadInsumos(); }, [loadInsumos]);
 
@@ -83,8 +144,7 @@ export function InsumoHub({ proposalId }: Props) {
                 <Package size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                 <h4 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)' }}>Nenhum insumo encontrado</h4>
                 <p style={{ fontSize: '0.85rem', color: 'var(--color-text-tertiary)', maxWidth: 400, margin: '0 auto' }}>
-                    O Hub consolida insumos das composições vinculadas aos itens do orçamento.
-                    Adicione itens com códigos SINAPI/SEINFRA para ver os insumos aqui.
+                    Adicione itens na aba "Planilha Orçamentária" primeiro.
                 </p>
             </div>
         );
@@ -94,16 +154,16 @@ export function InsumoHub({ proposalId }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
             {/* Info banner when no compositions exist */}
-            {stats?.mode === 'proposal_items' && (
+            {mode === 'proposal_items' && (
                 <div style={{
                     padding: '12px 16px', borderRadius: 'var(--radius-md)',
                     background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
                     display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.78rem',
                 }}>
-                    <span style={{ fontSize: '1.1rem' }}>💡</span>
+                    <Info size={16} color="#d97706" style={{ flexShrink: 0 }} />
                     <div>
-                        <strong style={{ color: '#d97706' }}>Modo Simplificado</strong> — Exibindo itens da proposta como insumos diretos.
-                        Para detalhamento completo (materiais, mão de obra, equipamentos por composição),
+                        <strong style={{ color: '#d97706' }}>Modo Simplificado</strong> — Exibindo itens da proposta como serviços.
+                        Para detalhamento por insumo (materiais, mão de obra, equipamentos),
                         importe composições SINAPI/SEINFRA ou extraia do Projeto Básico.
                     </div>
                 </div>
@@ -112,11 +172,11 @@ export function InsumoHub({ proposalId }: Props) {
             {/* Stats Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
                 {([
-                    { label: 'Material', value: stats?.custoMaterial || 0, cat: 'MATERIAL' as const },
-                    { label: 'Mão de Obra', value: stats?.custoMaoDeObra || 0, cat: 'MAO_DE_OBRA' as const },
-                    { label: 'Equipamento', value: stats?.custoEquipamento || 0, cat: 'EQUIPAMENTO' as const },
+                    { label: 'Material', value: stats?.custoMaterial || 0, cat: 'MATERIAL' as InsumoCategoria },
+                    { label: 'Mão de Obra', value: stats?.custoMaoDeObra || 0, cat: 'MAO_DE_OBRA' as InsumoCategoria },
+                    { label: 'Equipamento', value: stats?.custoEquipamento || 0, cat: 'EQUIPAMENTO' as InsumoCategoria },
                     { label: 'Total Insumos', value: stats?.totalCusto || 0, cat: null },
-                ] as const).map((card, idx) => {
+                ]).map((card, idx) => {
                     const meta = card.cat ? CATEGORIA_META[card.cat] : null;
                     const Icon = card.cat ? CAT_ICON[card.cat] : TrendingDown;
                     return (
@@ -124,7 +184,7 @@ export function InsumoHub({ proposalId }: Props) {
                             style={{
                                 padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
                                 background: card.cat ? (catFilter === card.cat ? meta!.bgLight : 'var(--color-bg-surface)') : 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))',
-                                border: `1px solid ${catFilter === card.cat ? meta!.color + '40' : 'var(--color-border)'}`,
+                                border: `1px solid ${card.cat && catFilter === card.cat ? meta!.color + '40' : 'var(--color-border)'}`,
                                 cursor: card.cat ? 'pointer' : 'default',
                                 transition: 'all 0.15s',
                             }}>
@@ -176,7 +236,7 @@ export function InsumoHub({ proposalId }: Props) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                    {['', 'Código', 'Descrição', 'Unid.', 'Preço', 'Desc%', 'Preço Final', 'Qtd Total', 'Custo Total', 'ABC'].map((h, i) => (
+                                    {['', 'Código', 'Descrição', 'Unid.', 'Preço Unit.', 'Desc%', 'Preço Final', 'Qtd', 'Custo Total', 'ABC'].map((h, i) => (
                                         <th key={i} style={{ padding: '10px 8px', textAlign: i >= 4 ? 'right' : 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '0.72rem' }}>{h}</th>
                                     ))}
                                 </tr>
@@ -197,7 +257,7 @@ export function InsumoHub({ proposalId }: Props) {
                                                     {ins.descricao}
                                                 </div>
                                                 <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                                    {ins.base} · {ins.composicoesVinculadas.length} comp.
+                                                    {ins.base}{mode === 'compositions' ? ` · ${ins.composicoesVinculadas.length} comp.` : ''}
                                                 </div>
                                             </td>
                                             <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>{ins.unidade}</td>
@@ -212,7 +272,7 @@ export function InsumoHub({ proposalId }: Props) {
                                                 {fmt(ins.precoFinal)}
                                             </td>
                                             <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>
-                                                {ins.coeficienteTotal.toFixed(4)}
+                                                {ins.coeficienteTotal % 1 === 0 ? ins.coeficienteTotal : ins.coeficienteTotal.toFixed(4)}
                                             </td>
                                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>
                                                 {fmt(ins.custoTotal)}
@@ -291,20 +351,22 @@ export function InsumoHub({ proposalId }: Props) {
                         </div>
                     )}
 
-                    {/* Composition Info */}
+                    {/* Info Panel */}
                     <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: 'var(--space-3)' }}>
                         <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <span>Composições encontradas</span>
-                                <strong>{stats?.composicoesEncontradas || 0}</strong>
+                                <span>Modo</span>
+                                <strong style={{ color: mode === 'compositions' ? '#16a34a' : '#d97706' }}>
+                                    {mode === 'compositions' ? '🔬 Composições' : '📋 Serviços'}
+                                </strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <span>Itens sem composição</span>
-                                <strong style={{ color: stats?.itensSemComposicao > 0 ? '#d97706' : 'inherit' }}>{stats?.itensSemComposicao || 0}</strong>
+                                <span>Itens no orçamento</span>
+                                <strong>{stats?.totalInsumos || 0}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Insumos consolidados</span>
-                                <strong>{stats?.totalInsumos || 0}</strong>
+                                <span>Custo total</span>
+                                <strong>{fmt(stats?.totalCusto || 0)}</strong>
                             </div>
                         </div>
                     </div>
