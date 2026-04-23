@@ -659,6 +659,154 @@ router.post('/ai-populate', async (req: any, res: any) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-compositions
+// Extrai Composições de Preços Unitários (CPUs) via IA
+// a partir do texto do edital/projeto básico
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-compositions', async (req: any, res: any) => {
+    try {
+        const { biddingId } = req.body;
+        if (!biddingId) return res.status(400).json({ error: 'biddingId obrigatório' });
+
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id: biddingId },
+            include: { aiAnalysis: true }
+        });
+
+        if (!bidding?.aiAnalysis) {
+            return res.status(404).json({ error: 'Análise IA não encontrada para este processo' });
+        }
+
+        // Build extraction text from all available sources
+        const parts: string[] = [];
+        if (bidding.aiAnalysis.biddingItems) parts.push(bidding.aiAnalysis.biddingItems);
+        if (bidding.aiAnalysis.requiredDocuments) parts.push(bidding.aiAnalysis.requiredDocuments);
+        if (bidding.aiAnalysis.pricingConsiderations) parts.push(bidding.aiAnalysis.pricingConsiderations);
+        if (bidding.aiAnalysis.fullSummary) parts.push(bidding.aiAnalysis.fullSummary);
+
+        // Also check schemaV2 for structured composition data
+        const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
+        if (schemaV2?.proposal_analysis?.itens_licitados) {
+            parts.push('ITENS LICITADOS (estruturados):\n' + JSON.stringify(schemaV2.proposal_analysis.itens_licitados, null, 2));
+        }
+
+        const extractionText = parts.join('\n\n---\n\n');
+        if (extractionText.length < 50) {
+            return res.status(400).json({ error: 'Texto insuficiente para extração de composições' });
+        }
+
+        console.log(`[Engineering AI-Compositions] 🔬 Extraindo composições de ${extractionText.length} chars`);
+
+        const { COMPOSITION_EXTRACTION_SYSTEM_PROMPT, COMPOSITION_EXTRACTION_USER_INSTRUCTION } = await import('../services/ai/modules/prompts/engineeringCompositionPrompt');
+
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: [{
+                role: 'user',
+                parts: [{ text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + '\n\nDOCUMENTO:\n' + extractionText.slice(0, 120000) }]
+            }],
+            config: {
+                systemInstruction: { role: 'system', parts: [{ text: COMPOSITION_EXTRACTION_SYSTEM_PROMPT }] },
+                temperature: 0.15,
+                maxOutputTokens: 65536,
+            }
+        });
+
+        const rawResponse = result?.text || '';
+        const parsed = robustJsonParse(rawResponse);
+        const compositions = parsed?.compositions || [];
+
+        if (compositions.length === 0) {
+            return res.json({ compositions: [], message: 'Nenhuma composição encontrada no documento' });
+        }
+
+        // Store extracted compositions in the database as "PROPRIA"
+        let dbId: string | undefined;
+        // Find or create a "PROPRIA" database for this tenant
+        const tenantId = bidding.tenantId;
+        let propriaDb = await prisma.engineeringDatabase.findFirst({
+            where: { name: 'PROPRIA', tenantId }
+        });
+        if (!propriaDb) {
+            propriaDb = await prisma.engineeringDatabase.create({
+                data: { name: 'PROPRIA', uf: '', referenceDate: new Date(), tenantId, type: 'PROPRIA' }
+            });
+        }
+        dbId = propriaDb.id;
+
+        let insertedCount = 0;
+        for (const comp of compositions) {
+            try {
+                // Upsert composition
+                const existing = await prisma.engineeringComposition.findFirst({
+                    where: { code: comp.code, databaseId: dbId }
+                });
+
+                const compRecord = existing
+                    ? await prisma.engineeringComposition.update({
+                        where: { id: existing.id },
+                        data: { description: comp.description, unit: comp.unit || 'UN' }
+                    })
+                    : await prisma.engineeringComposition.create({
+                        data: {
+                            code: comp.code, description: comp.description,
+                            unit: comp.unit || 'UN', databaseId: dbId,
+                        }
+                    });
+
+                // Delete old items and insert new ones
+                await prisma.engineeringCompositionItem.deleteMany({
+                    where: { compositionId: compRecord.id }
+                });
+
+                for (const [groupKey, items] of Object.entries(comp.groups || {})) {
+                    if (!Array.isArray(items)) continue;
+                    for (const item of items) {
+                        // Find or create the insumo
+                        let insumo = await prisma.engineeringInsumo.findFirst({
+                            where: { code: item.code, databaseId: dbId }
+                        });
+                        if (!insumo) {
+                            insumo = await prisma.engineeringInsumo.create({
+                                data: {
+                                    code: item.code, description: item.description,
+                                    unit: item.unit || 'UN', price: item.unitPrice || 0,
+                                    type: groupKey, databaseId: dbId,
+                                }
+                            });
+                        }
+
+                        await prisma.engineeringCompositionItem.create({
+                            data: {
+                                compositionId: compRecord.id, insumoId: insumo.id,
+                                coefficient: item.coefficient || 0,
+                            }
+                        });
+                    }
+                }
+                insertedCount++;
+            } catch (compErr: any) {
+                console.warn(`[AI-Compositions] ⚠️ Erro ao salvar composição ${comp.code}:`, compErr.message);
+            }
+        }
+
+        console.log(`[Engineering AI-Compositions] ✅ ${insertedCount}/${compositions.length} composições extraídas e salvas`);
+
+        res.json({
+            compositions,
+            saved: insertedCount,
+            databaseId: dbId,
+            message: `${insertedCount} composições extraídas via IA e salvas na base PROPRIA`
+        });
+
+    } catch (e: any) {
+        console.error('[AI-Compositions] ❌ Error:', e);
+        res.status(500).json({ error: 'Falha ao extrair composições via IA', details: e.message });
+    }
+});
+
 /**
  * Mapeia itens_licitados do V2 para formato de engenharia
  * e faz auto-match contra as bases oficiais cadastradas (SINAPI/SEINFRA)

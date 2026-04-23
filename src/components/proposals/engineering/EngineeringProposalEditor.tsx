@@ -108,6 +108,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         finally { setIsExtracting(false); setTimeout(() => setSaveMsg(''), 5000); }
     };
 
+    // AI composition extraction
+    const [isExtractingComps, setIsExtractingComps] = useState(false);
+    const handleExtractCompositions = async () => {
+        setIsExtractingComps(true);
+        setSaveMsg('🔬 Extraindo composições do projeto básico via IA...');
+        try {
+            const res = await fetch('/api/engineering/ai-extract-compositions', {
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
+            const data = await res.json();
+            setSaveMsg(`✅ ${data.saved || 0} composições extraídas e salvas na base PRÓPRIA`);
+        } catch (e: any) { setSaveMsg('❌ ' + e.message); }
+        finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(''), 8000); }
+    };
+
     // Inline edit
     const updateItem = (id: string, field: keyof EngItem, value: any) => {
         setItems(prev => prev.map(it => {
@@ -214,7 +230,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
-                        {isExtracting ? 'Extraindo...' : 'Extrair via IA'}
+                        {isExtracting ? 'Extraindo...' : 'Extrair Itens IA'}
+                    </button>
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractCompositions} disabled={isExtractingComps}>
+                        {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
+                        {isExtractingComps ? 'Extraindo CPUs...' : 'Extrair Composições IA'}
                     </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExportExcel}>
                         <Download size={14} /> Exportar Excel
