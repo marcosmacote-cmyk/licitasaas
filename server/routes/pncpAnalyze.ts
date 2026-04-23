@@ -197,7 +197,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 5; // Send only top 5 most important docs to Stage 1 (Edital + TR + Planilha + etc)
+        const MAX_PDF_PARTS = 8; // Send top 8 most important docs to Stage 1 (Edital + TR + Planilha + Projeto Básico + etc)
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
@@ -248,9 +248,11 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             if (n.includes('bdi') || n.includes('encargos')) return 4;
             if (n.includes('composic')) return 5;
             if (n.includes('memoria') || n.includes('calculo')) return 6;
+            if (n.includes('projeto_basico') || n.includes('projeto basico')) return 7;
+            if (n.includes('etp') || n.includes('estudo_tecnico') || n.includes('estudo tecnico')) return 8;
             // Prioridade média: documentos complementares
             if (n.includes('memorial')) return 50;
-            if (n.includes('projeto') || n.includes('pavimentac')) return 60;
+            if (n.includes('projeto') || n.includes('pavimentac')) return 55;
             // Baixa prioridade: fotos, licenças, ARTs
             if (n.includes('relatorio_fot') || n.includes('relatorio fot') || n.includes('foto') || n.includes('marco_zero') || n.includes('marco zero')) return 90;
             if (n.includes('licenca') || n.includes('licença')) return 91;
@@ -261,8 +263,9 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
         const ESSENTIAL_KEYWORDS = [
             'edital', 'termo_referencia', 'termo de referencia', 'tr_',
-            'projeto_basico', 'projeto basico', 'planilha', 'orcamento',
-            'cronograma', 'bdi', 'etp', 'estudo_tecnico',
+            'projeto_basico', 'projeto basico', 'projeto básico', 'planilha', 'orcamento', 'orçamento',
+            'cronograma', 'bdi', 'etp', 'estudo_tecnico', 'estudo tecnico',
+            'orcamentaria', 'orçamentária', 'quantitativo', 'sinapi', 'seinfra', 'composicao', 'composição',
         ];
 
         const filteredArquivos = arquivos.filter((arq: any) => {
