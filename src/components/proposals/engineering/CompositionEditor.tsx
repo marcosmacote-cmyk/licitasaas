@@ -474,5 +474,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 )}
             </div>
         </div>
+    );
+
     return createPortal(editor, document.body);
 }
