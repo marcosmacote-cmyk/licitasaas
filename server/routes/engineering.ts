@@ -176,6 +176,139 @@ router.get('/compositions', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /api/engineering/proposals/:id/insumos-hub
+// Consolida TODOS os insumos de todas as composições do orçamento
+// Para o Hub de Insumos (Fase 1 — Proposta de Obras)
+// ═══════════════════════════════════════════════════════════
+router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+
+        // 1. Load all engineering items for this proposal
+        const proposalItems = await prisma.engineeringProposalItem.findMany({
+            where: { proposalId },
+            orderBy: { sortOrder: 'asc' },
+        });
+
+        if (proposalItems.length === 0) {
+            return res.json({ insumos: [], stats: { totalInsumos: 0, totalCusto: 0 } });
+        }
+
+        // 2. For each item with a code, find its composition and drill down to insumos
+        const rawInsumos: any[] = [];
+
+        for (const item of proposalItems) {
+            if (!item.code || item.code === 'N/A') continue;
+
+            const composition = await prisma.engineeringComposition.findFirst({
+                where: { code: { equals: item.code, mode: 'insensitive' } },
+                include: {
+                    items: { include: { item: true } },
+                    database: { select: { name: true, uf: true } },
+                },
+            });
+
+            if (!composition) continue;
+
+            for (const ci of composition.items) {
+                if (ci.item) {
+                    rawInsumos.push({
+                        insumoCode: ci.item.code,
+                        insumoDescription: ci.item.description,
+                        insumoUnit: ci.item.unit,
+                        insumoPrice: ci.item.price,
+                        insumoType: ci.item.type,
+                        coefficient: ci.coefficient,
+                        compositionCode: composition.code,
+                        compositionDescription: composition.description,
+                        base: composition.database?.name || item.sourceName || 'PROPRIA',
+                        serviceQuantity: item.quantity,
+                    });
+                }
+            }
+        }
+
+        // 3. Consolidate: group by insumo code, sum weighted coefficients
+        const consolidated = new Map<string, any>();
+
+        for (const raw of rawInsumos) {
+            const key = raw.insumoCode.toUpperCase();
+            const weightedCoef = raw.coefficient * raw.serviceQuantity;
+            const existing = consolidated.get(key);
+
+            if (existing) {
+                existing.coeficienteTotal += weightedCoef;
+                if (!existing.composicoesVinculadas.includes(raw.compositionCode)) {
+                    existing.composicoesVinculadas.push(raw.compositionCode);
+                }
+            } else {
+                consolidated.set(key, {
+                    id: key,
+                    codigo: raw.insumoCode,
+                    descricao: raw.insumoDescription,
+                    categoria: normalizeInsumoType(raw.insumoType),
+                    unidade: raw.insumoUnit,
+                    precoOriginal: raw.insumoPrice,
+                    desconto: 0,
+                    precoFinal: raw.insumoPrice,
+                    base: raw.base,
+                    composicoesVinculadas: [raw.compositionCode],
+                    coeficienteTotal: weightedCoef,
+                    custoTotal: Math.round(raw.insumoPrice * weightedCoef * 100) / 100,
+                });
+            }
+        }
+
+        // Recalculate custoTotal and sort
+        const insumos = Array.from(consolidated.values()).map(ins => ({
+            ...ins,
+            custoTotal: Math.round(ins.precoFinal * ins.coeficienteTotal * 100) / 100,
+        }));
+        insumos.sort((a: any, b: any) => b.custoTotal - a.custoTotal);
+
+        // ABC classification
+        const totalCusto = insumos.reduce((s: number, i: any) => s + i.custoTotal, 0);
+        if (totalCusto > 0) {
+            let accum = 0;
+            for (const ins of insumos) {
+                accum += ins.custoTotal;
+                const pct = (accum / totalCusto) * 100;
+                ins.abcClass = pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C';
+            }
+        }
+
+        // Stats
+        const compositionCodes = new Set(rawInsumos.map((r: any) => r.compositionCode));
+        const stats = {
+            totalInsumos: insumos.length,
+            totalCusto: Math.round(totalCusto * 100) / 100,
+            custoMaterial: Math.round(insumos.filter((i: any) => i.categoria === 'MATERIAL').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
+            custoMaoDeObra: Math.round(insumos.filter((i: any) => i.categoria === 'MAO_DE_OBRA').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
+            custoEquipamento: Math.round(insumos.filter((i: any) => i.categoria === 'EQUIPAMENTO').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
+            custoServico: Math.round(insumos.filter((i: any) => i.categoria === 'SERVICO').reduce((s: number, i: any) => s + i.custoTotal, 0) * 100) / 100,
+            composicoesEncontradas: compositionCodes.size,
+            itensSemComposicao: proposalItems.filter(i => i.code && i.code !== 'N/A').length - compositionCodes.size,
+        };
+
+        console.log(`[Insumo Hub] 📊 ${stats.totalInsumos} insumos de ${stats.composicoesEncontradas} composições (R$ ${stats.totalCusto.toLocaleString()})`);
+
+        res.json({ insumos, stats, rawCount: rawInsumos.length });
+
+    } catch (e: any) {
+        console.error('[Insumo Hub] Error:', e);
+        res.status(500).json({ error: 'Erro ao consolidar insumos', details: e.message });
+    }
+});
+
+function normalizeInsumoType(type: string): string {
+    const upper = (type || '').toUpperCase();
+    if (upper.includes('MAO') || upper.includes('MÃO')) return 'MAO_DE_OBRA';
+    if (upper.includes('EQUIP')) return 'EQUIPAMENTO';
+    if (upper.includes('MATERIAL')) return 'MATERIAL';
+    return 'SERVICO';
+}
+
+// ═══════════════════════════════════════════════════════════
 // CRUD — Engineering Proposal Items (linked to PriceProposal)
 // ═══════════════════════════════════════════════════════════
 
