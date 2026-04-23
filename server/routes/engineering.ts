@@ -731,7 +731,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         });
         if (!propriaDb) {
             propriaDb = await prisma.engineeringDatabase.create({
-                data: { name: 'PROPRIA', uf: '', referenceDate: new Date(), tenantId, type: 'PROPRIA' }
+                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
             });
         }
         dbId = propriaDb.id;
@@ -739,6 +739,13 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         let insertedCount = 0;
         for (const comp of compositions) {
             try {
+                // Calculate totalPrice from groups
+                let compTotal = 0;
+                for (const items of Object.values(comp.groups || {})) {
+                    if (!Array.isArray(items)) continue;
+                    for (const it of items) compTotal += (it.coefficient || 0) * (it.unitPrice || 0);
+                }
+
                 // Upsert composition
                 const existing = await prisma.engineeringComposition.findFirst({
                     where: { code: comp.code, databaseId: dbId }
@@ -747,12 +754,12 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                 const compRecord = existing
                     ? await prisma.engineeringComposition.update({
                         where: { id: existing.id },
-                        data: { description: comp.description, unit: comp.unit || 'UN' }
+                        data: { description: comp.description, unit: comp.unit || 'UN', totalPrice: compTotal }
                     })
                     : await prisma.engineeringComposition.create({
                         data: {
                             code: comp.code, description: comp.description,
-                            unit: comp.unit || 'UN', databaseId: dbId,
+                            unit: comp.unit || 'UN', databaseId: dbId, totalPrice: compTotal,
                         }
                     });
 
@@ -764,12 +771,12 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                 for (const [groupKey, items] of Object.entries(comp.groups || {})) {
                     if (!Array.isArray(items)) continue;
                     for (const item of items) {
-                        // Find or create the insumo
-                        let insumo = await prisma.engineeringInsumo.findFirst({
+                        // Find or create the insumo (EngineeringItem)
+                        let insumo = await prisma.engineeringItem.findFirst({
                             where: { code: item.code, databaseId: dbId }
                         });
                         if (!insumo) {
-                            insumo = await prisma.engineeringInsumo.create({
+                            insumo = await prisma.engineeringItem.create({
                                 data: {
                                     code: item.code, description: item.description,
                                     unit: item.unit || 'UN', price: item.unitPrice || 0,
@@ -778,10 +785,11 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                             });
                         }
 
+                        const itemPrice = (item.coefficient || 0) * (item.unitPrice || 0);
                         await prisma.engineeringCompositionItem.create({
                             data: {
-                                compositionId: compRecord.id, insumoId: insumo.id,
-                                coefficient: item.coefficient || 0,
+                                compositionId: compRecord.id, itemId: insumo.id,
+                                coefficient: item.coefficient || 0, price: itemPrice,
                             }
                         });
                     }
