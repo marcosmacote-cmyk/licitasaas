@@ -7,6 +7,7 @@
  *   → planilha recalcula BDI + total → Hub reflete novos preços
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp } from 'lucide-react';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -182,7 +183,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
     if (!currentItem) return null;
 
-    return (
+    const editor = (
         <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', background: 'var(--color-bg-base)' }}>
 
             {/* Sidebar — Item Navigator */}
@@ -473,5 +474,5 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 )}
             </div>
         </div>
-    );
+    return createPortal(editor, document.body);
 }
