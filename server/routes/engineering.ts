@@ -233,7 +233,7 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
         if (rawInsumos.length === 0) {
             for (const item of proposalItems) {
                 const desc = item.description || 'Item sem descrição';
-                const cat = inferCategoryFromDescription(desc, item.unit);
+                const cat = normalizeInsumoType(desc);
                 rawInsumos.push({
                     insumoCode: item.code || item.itemNumber || `ITEM-${item.sortOrder + 1}`,
                     insumoDescription: desc,
@@ -334,18 +334,142 @@ function normalizeInsumoType(type: string): string {
     return 'SERVICO';
 }
 
-function inferCategoryFromDescription(desc: string, unit?: string): string {
-    const d = (desc || '').toUpperCase();
-    const u = (unit || '').toUpperCase();
-    // Mão de obra
-    if (['H', 'HORA', 'MES', 'DIA'].includes(u) && (d.includes('PEDREIRO') || d.includes('SERVENTE') || d.includes('MESTRE') || d.includes('ELETRICISTA') || d.includes('PINTOR') || d.includes('CARPINTEIRO') || d.includes('ARMADOR') || d.includes('ENCANADOR'))) return 'MAO_DE_OBRA';
-    // Equipamento
-    if (d.includes('BETONEIRA') || d.includes('CAMINHAO') || d.includes('RETROESCAVADEIRA') || d.includes('COMPACTADOR') || d.includes('GUINDASTE') || d.includes('VIBRADOR') || d.includes('GERADOR')) return 'EQUIPAMENTO';
-    // Material
-    if (d.includes('CIMENTO') || d.includes('AREIA') || d.includes('BRITA') || d.includes('TIJOLO') || d.includes('BLOCO') || d.includes('TINTA') || d.includes('TUBO') || d.includes('FIO') || d.includes('ACO ') || d.includes('PREGO') || d.includes('TELHA')) return 'MATERIAL';
-    // Default: serviço
-    return 'SERVICO';
-}
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/insumos-hub-resolve
+// Recebe códigos de serviços do client-side e retorna insumos
+// individuais (materiais, mão de obra, equipamentos) consolidados.
+// Insumos duplicados em múltiplas composições ficam com preço ÚNICO.
+// ═══════════════════════════════════════════════════════════
+router.post('/insumos-hub-resolve', async (req: any, res: any) => {
+    try {
+        const { items } = req.body; // [{ code, quantity, sourceName }]
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.json({ insumos: [], stats: { totalInsumos: 0, totalCusto: 0 }, mode: 'empty' });
+        }
+
+        // Map: insumoCode → consolidated data
+        const consolidated = new Map<string, {
+            id: string; codigo: string; descricao: string; categoria: string;
+            unidade: string; precoOriginal: number; base: string;
+            composicoesVinculadas: string[];
+            coeficientesPorComposicao: { compCode: string; coef: number; qty: number }[];
+            coeficienteTotal: number;
+        }>();
+
+        let compositionsFound = 0;
+        let itemsWithoutComposition = 0;
+
+        for (const clientItem of items) {
+            const code = (clientItem.code || '').trim();
+            if (!code || code === 'N/A') { itemsWithoutComposition++; continue; }
+
+            // Search composition by code across all databases
+            const composition = await prisma.engineeringComposition.findFirst({
+                where: { code: { equals: code, mode: 'insensitive' } },
+                include: {
+                    items: { include: { item: true } },
+                    database: { select: { name: true, uf: true } },
+                },
+            });
+
+            if (!composition) {
+                itemsWithoutComposition++;
+                continue;
+            }
+
+            compositionsFound++;
+            const serviceQty = Number(clientItem.quantity) || 1;
+            const baseName = composition.database?.name || clientItem.sourceName || 'PROPRIA';
+
+            // Drill into each insumo of the composition
+            for (const ci of composition.items) {
+                if (!ci.item) continue;
+
+                const insumoKey = ci.item.code.toUpperCase();
+                const existing = consolidated.get(insumoKey);
+                const weightedCoef = ci.coefficient * serviceQty;
+
+                if (existing) {
+                    existing.coeficienteTotal += weightedCoef;
+                    existing.coeficientesPorComposicao.push({
+                        compCode: composition.code,
+                        coef: ci.coefficient,
+                        qty: serviceQty,
+                    });
+                    if (!existing.composicoesVinculadas.includes(composition.code)) {
+                        existing.composicoesVinculadas.push(composition.code);
+                    }
+                    // IMPORTANT: Keep the SAME price (legal requirement)
+                    // If different prices found, log a warning
+                    if (Math.abs(existing.precoOriginal - ci.item.price) > 0.01) {
+                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${ci.item.code}: R$${existing.precoOriginal} vs R$${ci.item.price} — usando preço da primeira ocorrência`);
+                    }
+                } else {
+                    consolidated.set(insumoKey, {
+                        id: insumoKey,
+                        codigo: ci.item.code,
+                        descricao: ci.item.description,
+                        categoria: normalizeInsumoType(ci.item.type),
+                        unidade: ci.item.unit,
+                        precoOriginal: ci.item.price,
+                        base: baseName,
+                        composicoesVinculadas: [composition.code],
+                        coeficientesPorComposicao: [{
+                            compCode: composition.code,
+                            coef: ci.coefficient,
+                            qty: serviceQty,
+                        }],
+                        coeficienteTotal: weightedCoef,
+                    });
+                }
+            }
+        }
+
+        // Build final array with computed fields
+        const insumos = Array.from(consolidated.values()).map(ins => ({
+            ...ins,
+            desconto: 0,
+            precoFinal: ins.precoOriginal,
+            custoTotal: Math.round(ins.precoOriginal * ins.coeficienteTotal * 100) / 100,
+        }));
+
+        // Sort by custoTotal descending
+        insumos.sort((a, b) => b.custoTotal - a.custoTotal);
+
+        // ABC classification
+        const totalCusto = insumos.reduce((s, i) => s + i.custoTotal, 0);
+        if (totalCusto > 0) {
+            let accum = 0;
+            for (const ins of insumos as any[]) {
+                accum += ins.custoTotal;
+                const pct = (accum / totalCusto) * 100;
+                ins.abcClass = pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C';
+            }
+        }
+
+        // Stats
+        const stats = {
+            totalInsumos: insumos.length,
+            totalCusto: Math.round(totalCusto * 100) / 100,
+            custoMaterial: Math.round(insumos.filter(i => i.categoria === 'MATERIAL').reduce((s, i) => s + i.custoTotal, 0) * 100) / 100,
+            custoMaoDeObra: Math.round(insumos.filter(i => i.categoria === 'MAO_DE_OBRA').reduce((s, i) => s + i.custoTotal, 0) * 100) / 100,
+            custoEquipamento: Math.round(insumos.filter(i => i.categoria === 'EQUIPAMENTO').reduce((s, i) => s + i.custoTotal, 0) * 100) / 100,
+            custoServico: Math.round(insumos.filter(i => i.categoria === 'SERVICO').reduce((s, i) => s + i.custoTotal, 0) * 100) / 100,
+            composicoesEncontradas: compositionsFound,
+            itensSemComposicao: itemsWithoutComposition,
+            mode: compositionsFound > 0 ? 'compositions' : 'no_compositions',
+        };
+
+        console.log(`[Insumo Hub] 🔬 ${stats.totalInsumos} insumos de ${compositionsFound} composições (${itemsWithoutComposition} sem) | Material: R$${stats.custoMaterial} | MO: R$${stats.custoMaoDeObra} | Equip: R$${stats.custoEquipamento}`);
+
+        res.json({ insumos, stats });
+
+    } catch (e: any) {
+        console.error('[Insumo Hub Resolve] Error:', e);
+        res.status(500).json({ error: 'Erro ao resolver insumos', details: e.message });
+    }
+});
 
 // ═══════════════════════════════════════════════════════════
 // CRUD — Engineering Proposal Items (linked to PriceProposal)

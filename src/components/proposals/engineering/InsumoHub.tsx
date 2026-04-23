@@ -47,59 +47,43 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
     const [abcFilter, setAbcFilter] = useState<'A' | 'B' | 'C' | 'TODOS'>('TODOS');
 
     const loadInsumos = useCallback(async () => {
+        if (!clientItems || clientItems.length === 0) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
-            // Strategy 1: Try server endpoint (needs items saved in DB)
-            const res = await fetch(`/api/engineering/proposals/${proposalId}/insumos-hub`, { headers: hdrs() });
+            // Send item codes to server — it will resolve compositions
+            // and return individual INSUMOS (materials, labor, equipment)
+            const payload = clientItems.map(it => ({
+                code: it.code,
+                quantity: it.quantity,
+                sourceName: it.sourceName,
+            }));
+
+            const res = await fetch('/api/engineering/insumos-hub-resolve', {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ items: payload }),
+            });
             const data = await res.json();
 
             if (data.insumos && data.insumos.length > 0) {
                 setInsumos(data.insumos);
                 setStats(data.stats);
                 setMode(data.stats?.mode || 'compositions');
-                setLoading(false);
-                return;
+            } else {
+                setInsumos([]);
+                setStats(data.stats || { totalInsumos: 0, totalCusto: 0, mode: 'no_compositions' });
+                setMode('no_compositions');
             }
-        } catch (e) { console.error('Hub API error:', e); }
-
-        // Strategy 2: Use client items directly (when not saved yet)
-        if (clientItems && clientItems.length > 0) {
-            const clientInsumos: InsumoConsolidado[] = clientItems.map((item, idx) => {
-                const cat = inferCategory(item.description, item.unit);
-                return {
-                    id: item.code?.toUpperCase() || `ITEM-${idx + 1}`,
-                    codigo: item.code || item.itemNumber || `${idx + 1}`,
-                    descricao: item.description || 'Item sem descrição',
-                    categoria: cat,
-                    unidade: item.unit || 'UN',
-                    precoOriginal: item.unitCost || 0,
-                    desconto: 0,
-                    precoFinal: item.unitCost || 0,
-                    base: item.sourceName || 'PROPRIA',
-                    composicoesVinculadas: ['PROPOSTA'],
-                    coeficienteTotal: item.quantity || 1,
-                    custoTotal: Math.round((item.unitCost || 0) * (item.quantity || 1) * 100) / 100,
-                };
-            });
-
-            // Sort and ABC
-            clientInsumos.sort((a, b) => b.custoTotal - a.custoTotal);
-            const totalCusto = clientInsumos.reduce((s, i) => s + i.custoTotal, 0);
-            if (totalCusto > 0) {
-                let accum = 0;
-                for (const ins of clientInsumos) {
-                    accum += ins.custoTotal;
-                    ins.abcClass = (accum / totalCusto * 100) <= 80 ? 'A' : (accum / totalCusto * 100) <= 95 ? 'B' : 'C';
-                }
-            }
-
-            setInsumos(clientInsumos);
-            setStats(calculateHubStats(clientInsumos));
-            setMode('proposal_items');
+        } catch (e) {
+            console.error('Hub resolve error:', e);
         }
-
         setLoading(false);
-    }, [proposalId, clientItems]);
+    }, [clientItems]);
+
 
     useEffect(() => { loadInsumos(); }, [loadInsumos]);
 
@@ -154,7 +138,7 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
             {/* Info banner when no compositions exist */}
-            {mode === 'proposal_items' && (
+            {mode === 'no_compositions' && (
                 <div style={{
                     padding: '12px 16px', borderRadius: 'var(--radius-md)',
                     background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
