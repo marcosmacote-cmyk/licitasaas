@@ -282,16 +282,12 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                 return false;
             }
 
-            // Rule 2: "Outros Documentos" with generic "ANEXO" names and no essential keywords → likely project files
-            const isOutros = tipoDesc.includes('outros') || (tipoId !== 2 && tipoId !== 4); // Not Edital (2) nor TR (4)
-            const hasEssentialKeyword = ESSENTIAL_KEYWORDS.some(kw => name.includes(kw));
-            const isGenericAnexo = /^anexo[_\s]+(i|ii|iii|iv|v|vi|vii|viii|ix|x|[0-9])/.test(name);
 
-            if (isOutros && isGenericAnexo && !hasEssentialKeyword) {
-                logger.info(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
-                discardedFiles.push(`${arq.titulo} (excluído: anexo genérico)`);
-                return false;
-            }
+            // Rule 2: DISABLED — Generic "ANEXO I/II/III" files frequently ARE the
+            // Projeto Básico / Planilha Orçamentária in engineering processes.
+            // The priority sorting + MAX_PDF_PARTS limit already controls which docs
+            // reach the AI. We only exclude by explicit EXCLUDE_PATTERNS (Rule 1).
+            // Previously this discarded critical engineering documents.
 
             return true;
         });
