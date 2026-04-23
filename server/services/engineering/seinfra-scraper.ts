@@ -1,6 +1,6 @@
 /**
  * ══════════════════════════════════════════════════════════════════
- *  SEINFRA-CE Excel Importer
+ *  SEINFRA-CE Excel Importer V2
  * ══════════════════════════════════════════════════════════════════
  *
  *  Downloads and parses the official SEINFRA-CE cost table Excel files
@@ -8,8 +8,14 @@
  *    - Composicoes-028---ENC.-SOCIAIS-114,15.xls → Compositions
  *    - Tabela-de-Insumos-028---ENC.-SOCIAIS-114,15.xls → Items/Insumos
  *
- *  These are publicly available at:
- *    https://sin.seinfra.ce.gov.br/site-seinfra/siproce/onerada/
+ *  Excel Structure (Composições):
+ *    Row: "C1802 - BOMBA CENTRÍFUGA DE 1/4 CV... - UN"  (header)
+ *    Row: "MAO DE OBRA" | "" | "Unidade" | "Coeficiente" | "Preço" | "Total"
+ *    Row: "I0043" | "AJUDANTE DE ENCANADOR" | "H" | 8 | 21.1 | 168.8
+ *    ...
+ *    Row: "" | "" | "" | "Total Simples:" | "" | 836.05
+ *    Row: "" | "" | "" | "Valor Geral:" | "" | 836.05
+ *    Row: "C1803 - MURETA C/TIJOLO MACIÇO..." (next composition)
  */
 
 import * as XLSX from 'xlsx';
@@ -33,7 +39,7 @@ export interface ParsedCompositionItem {
     coefficient: number;
     unitPrice: number;
     totalPrice: number;
-    isComposition: boolean; // true if C-code (auxiliary composition)
+    isComposition: boolean;
 }
 
 export interface ParsedComposition {
@@ -44,13 +50,10 @@ export interface ParsedComposition {
     items: ParsedCompositionItem[];
 }
 
-/**
- * Download a file from URL and return as Buffer
- */
 async function downloadFile(url: string): Promise<Buffer> {
-    console.log(`[SEINFRA Import] ⬇️ Downloading: ${url.split('/').pop()}`);
+    console.log(`[SEINFRA Import] ⬇️ Downloading: ${url.split('/').pop()?.split('?')[0]}`);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000); // 2min timeout
+    const timeout = setTimeout(() => controller.abort(), 120000);
     try {
         const res = await fetch(url, {
             signal: controller.signal,
@@ -66,31 +69,30 @@ async function downloadFile(url: string): Promise<Buffer> {
     }
 }
 
-/**
- * Detect insumo type from description
- */
 function detectType(code: string, description: string): ParsedInsumo['type'] {
     const desc = (description || '').toUpperCase();
-    if (code.startsWith('C')) return 'SERVICO'; // Compositions are services
+    if (code.startsWith('C')) return 'SERVICO';
     if (desc.includes('PEDREIRO') || desc.includes('SERVENTE') || desc.includes('CARPINTEIRO') ||
         desc.includes('ELETRICIST') || desc.includes('BOMBEIRO') || desc.includes('PINTOR') ||
         desc.includes('ENCANADOR') || desc.includes('SOLDADOR') || desc.includes('ARMADOR') ||
         desc.includes('OPERADOR') || desc.includes('MOTORISTA') || desc.includes('MÃO DE OBRA') ||
         desc.includes('MAO DE OBRA') || desc.includes('AJUDANTE') || desc.includes('ENGENHEIRO') ||
         desc.includes('MESTRE DE OBRA') || desc.includes('APONTADOR') || desc.includes('VIGIA') ||
-        desc.includes('TOPÓGRAFO') || desc.includes('TOPOGRAFO') || desc.includes('ALMOXARIFE')) return 'MAO_DE_OBRA';
+        desc.includes('TOPÓGRAFO') || desc.includes('TOPOGRAFO') || desc.includes('ALMOXARIFE') ||
+        desc.includes('MONTADOR') || desc.includes('SERRALHEIRO') || desc.includes('CALCETEIRO') ||
+        desc.includes('MARMORISTA') || desc.includes('VIDRACEIRO') || desc.includes('IMPERMEABILIZADOR')) return 'MAO_DE_OBRA';
     if (desc.includes('BETONEIRA') || desc.includes('COMPACTADOR') || desc.includes('RETRO') ||
         desc.includes('ESCAVADEIRA') || desc.includes('CAMINHÃO') || desc.includes('CAMINHAO') ||
         desc.includes('VIBRADOR') || desc.includes('GUINDASTE') || desc.includes('MÁQUINA') ||
         desc.includes('MAQUINA') || desc.includes('ROLO') || desc.includes('TRATOR') ||
         desc.includes('GUINCHO') || desc.includes('SERRA CIRCULAR') || desc.includes('PERFURATRIZ') ||
-        desc.includes('ALUGUEL')) return 'EQUIPAMENTO';
+        desc.includes('USINA') || desc.includes('GERADOR') || desc.includes('ANDAIME')) return 'EQUIPAMENTO';
     return 'MATERIAL';
 }
 
 /**
  * Parse the Insumos Excel file
- * Structure: Código | Descrição | Unidade | Preço
+ * Structure: Código | Descrição | Unidade | Preço (with group headers)
  */
 export function parseInsumosExcel(buffer: Buffer): ParsedInsumo[] {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -105,7 +107,7 @@ export function parseInsumosExcel(buffer: Buffer): ParsedInsumo[] {
             
             const code = String(row[0] || '').trim();
             // Valid insumo codes: I followed by digits, or just numeric codes
-            if (!code || (!code.match(/^I\d{3,5}$/i) && !code.match(/^\d{4,6}$/))) continue;
+            if (!code.match(/^I\d{3,5}$/i) && !code.match(/^\d{4,6}$/)) continue;
 
             const description = String(row[1] || '').trim();
             const unit = String(row[2] || '').trim();
@@ -124,16 +126,18 @@ export function parseInsumosExcel(buffer: Buffer): ParsedInsumo[] {
         }
     }
 
-    console.log(`[SEINFRA Import] 📋 Insumos parsed: ${items.length} items from ${workbook.SheetNames.length} sheets`);
+    console.log(`[SEINFRA Import] 📋 Insumos parsed: ${items.length} from ${workbook.SheetNames.length} sheets`);
     return items;
 }
 
 /**
- * Parse the Composições Excel file
- * Structure varies but typically:
- *   - Header row: Composition Code | Description | Unit | Total Price
- *   - Item rows: Insumo Code | Description | Unit | Coefficient | Unit Price | Total
- *   - Blank row separator between compositions
+ * Parse the Composições Excel file — V2 format
+ * 
+ * Each composition starts with a row like:
+ *   "C1802 - BOMBA CENTRÍFUGA DE 1/4 CV, INCLUSIVE MAT.DE SUCÇÃO - UN"
+ * Followed by group headers ("MAO DE OBRA", "MATERIAIS", "EQUIPAMENTOS")
+ * Followed by item rows: I-code | Description | Unit | Coefficient | Price | Total
+ * Ends at "Valor Geral:" row
  */
 export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -147,49 +151,53 @@ export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            if (!row || row.length < 2) {
-                // Empty row = end of current composition
-                if (currentComp && currentComp.items.length > 0) {
-                    compositions.push(currentComp);
-                    currentComp = null;
-                }
-                continue;
-            }
+            if (!row) continue;
 
             const col0 = String(row[0] || '').trim();
-            const col1 = String(row[1] || '').trim();
 
-            // Detect composition header: C-code in first column
-            if (col0.match(/^C\d{3,5}$/i)) {
-                // Save previous composition if exists
+            // Detect composition header: "C1802 - DESCRIÇÃO - UNIDADE"
+            const headerMatch = col0.match(/^(C\d{4,5})\s*-\s*(.+?)\s*-\s*(\w+(?:\.\w+)?)\s*$/);
+            if (headerMatch) {
+                // Save previous composition
                 if (currentComp && currentComp.items.length > 0) {
                     compositions.push(currentComp);
-                }
-
-                const unit = String(row[2] || '').trim() || 'UN';
-                // Total price may be in column 3 or at the end
-                let totalPrice = 0;
-                for (let c = row.length - 1; c >= 3; c--) {
-                    const val = typeof row[c] === 'number' ? row[c] :
-                        parseFloat(String(row[c] || '0').replace('.', '').replace(',', '.'));
-                    if (val > 0) { totalPrice = val; break; }
                 }
 
                 currentComp = {
-                    code: col0.toUpperCase(),
-                    description: col1,
-                    unit,
-                    totalPrice,
+                    code: headerMatch[1].toUpperCase(),
+                    description: headerMatch[2].trim(),
+                    unit: headerMatch[3].trim(),
+                    totalPrice: 0,
                     items: [],
                 };
                 continue;
             }
 
-            // Detect item row within a composition
-            if (currentComp && (col0.match(/^I\d{3,5}$/i) || col0.match(/^C\d{3,5}$/i) || col0.match(/^\d{4,6}$/))) {
-                // This is a C-code auxiliary composition reference inside another composition
-                const isComposition = col0.toUpperCase().startsWith('C');
-                
+            // Skip group headers and empty rows
+            if (!currentComp) continue;
+            if (col0 === 'MAO DE OBRA' || col0 === 'MATERIAIS' || col0 === 'EQUIPAMENTOS' || 
+                col0 === 'ATIVIDADES AUXILIARES' || col0 === 'SERVIÇOS' || col0 === 'CUSTOS HORÁRIOS') continue;
+
+            // Detect "Valor Geral:" → captures total price
+            const col3 = String(row[3] || '').trim();
+            if (col3 === 'Valor Geral:' || col3 === 'Total Simples:') {
+                const totalVal = typeof row[5] === 'number' ? row[5] :
+                    parseFloat(String(row[5] || '0').replace('.', '').replace(',', '.')) || 0;
+                if (col3 === 'Valor Geral:' && totalVal > 0) {
+                    currentComp.totalPrice = Math.round(totalVal * 100) / 100;
+                }
+                continue;
+            }
+
+            // Skip "Total:" subtotal rows and "Encargos Sociais:" rows
+            const col4 = String(row[4] || '').trim();
+            if (col4 === 'Total:' || col3 === 'Encargos Sociais:' || col3 === 'Valor BDI:') continue;
+
+            // Detect item row: I-code or C-code | Description | Unit | Coefficient | Price | Total
+            const itemMatch = col0.match(/^([IC]\d{4,5})$/i);
+            if (itemMatch) {
+                const insumoCode = itemMatch[1].toUpperCase();
+                const desc = String(row[1] || '').trim();
                 const unit = String(row[2] || '').trim();
                 const coefficient = typeof row[3] === 'number' ? row[3] :
                     parseFloat(String(row[3] || '0').replace(',', '.')) || 0;
@@ -198,15 +206,15 @@ export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
                 const totalPrice = typeof row[5] === 'number' ? row[5] :
                     parseFloat(String(row[5] || '0').replace('.', '').replace(',', '.')) || 0;
 
-                if (col1 && coefficient > 0) {
+                if (desc && coefficient > 0) {
                     currentComp.items.push({
-                        insumoCode: col0.toUpperCase(),
-                        description: col1,
+                        insumoCode,
+                        description: desc,
                         unit: unit || 'UN',
                         coefficient,
                         unitPrice,
                         totalPrice: totalPrice || (coefficient * unitPrice),
-                        isComposition,
+                        isComposition: insumoCode.startsWith('C'),
                     });
                 }
             }
@@ -218,7 +226,7 @@ export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
         }
     }
 
-    console.log(`[SEINFRA Import] 📋 Composições parsed: ${compositions.length} compositions from ${workbook.SheetNames.length} sheets`);
+    console.log(`[SEINFRA Import] 📋 Composições parsed: ${compositions.length} from ${workbook.SheetNames.length} sheets`);
     return compositions;
 }
 
@@ -234,7 +242,6 @@ export async function downloadAndParseSeinfra(): Promise<{
     let insumos: ParsedInsumo[] = [];
     let compositions: ParsedComposition[] = [];
 
-    // Download Insumos
     try {
         const insumosBuffer = await downloadFile(INSUMOS_URL);
         insumos = parseInsumosExcel(insumosBuffer);
@@ -243,7 +250,6 @@ export async function downloadAndParseSeinfra(): Promise<{
         console.error('[SEINFRA Import] ❌ Insumos download failed:', e.message);
     }
 
-    // Download Composições
     try {
         const composBuffer = await downloadFile(COMPOSICOES_URL);
         compositions = parseComposicoesExcel(composBuffer);
