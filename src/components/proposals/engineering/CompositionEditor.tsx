@@ -42,6 +42,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     const [error, setError] = useState('');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'AUXILIAR']));
     const [editingCoef, setEditingCoef] = useState<string | null>(null);
+    const [editingPrice, setEditingPrice] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 
     const currentItem = items[currentIndex];
@@ -78,16 +79,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         if (next >= 0 && next < items.length) setCurrentIndex(next);
     };
 
-    // Keyboard navigation
+    // Keyboard navigation (disabled while editing)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
+            if (editingCoef || editingPrice) return;
             if (e.key === 'ArrowLeft' && hasPrev) navigate(-1);
             if (e.key === 'ArrowRight' && hasNext) navigate(1);
             if (e.key === 'Escape') onClose();
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [currentIndex, hasPrev, hasNext]);
+    }, [currentIndex, hasPrev, hasNext, editingCoef, editingPrice]);
 
     const toggleGroup = (key: string) => {
         setExpandedGroups(prev => {
@@ -100,7 +102,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     if (!currentItem) return null;
 
     return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', background: 'var(--color-bg-base)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', background: 'var(--color-bg-base)' }}>
 
             {/* Sidebar — Item Navigator */}
             <div style={{
@@ -306,9 +308,34 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                                                 )}
                                                             </div>
 
-                                                            <span style={{ fontSize: '0.78rem', textAlign: 'right' }}>
-                                                                {fmt(itemData?.price || itemData?.totalPrice || 0)}
-                                                            </span>
+                                                            {/* Editable price */}
+                                                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                                                {editingPrice === ci.id ? (
+                                                                    <>
+                                                                        <input type="number" step="0.01" autoFocus
+                                                                            value={editValue}
+                                                                            onChange={e => setEditValue(e.target.value)}
+                                                                            onKeyDown={e => {
+                                                                                if (e.key === 'Enter') { setEditingPrice(null); }
+                                                                                if (e.key === 'Escape') { setEditingPrice(null); }
+                                                                            }}
+                                                                            style={{ width: 70, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
+                                                                        />
+                                                                        <button onClick={() => setEditingPrice(null)} style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer' }}>
+                                                                            <Check size={12} color="#16a34a" />
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <span style={{ fontSize: '0.78rem' }}>{fmt(itemData?.price || itemData?.totalPrice || 0)}</span>
+                                                                        <button onClick={() => { setEditingPrice(ci.id); setEditValue(String(itemData?.price || 0)); }}
+                                                                            style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                            title="Editar preço">
+                                                                            <Pencil size={10} />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                             <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: meta.color }}>
                                                                 {fmt(ci.price)}
                                                             </span>
