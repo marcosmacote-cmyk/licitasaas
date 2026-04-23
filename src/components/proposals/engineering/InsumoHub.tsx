@@ -39,7 +39,7 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     const [descontoConfig, setDescontoConfig] = useState<DescontoConfig>({ ...DEFAULT_DESCONTO_CONFIG });
-    const [mode, setMode] = useState<'compositions' | 'proposal_items'>('proposal_items');
+    const [mode, setMode] = useState<'compositions' | 'proposal_items' | 'no_compositions'>('proposal_items');
 
     // Filters
     const [catFilter, setCatFilter] = useState<InsumoCategoria | 'TODOS'>('TODOS');
