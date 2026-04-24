@@ -369,11 +369,14 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         const regime = desonerado ? 'Desonerado' : 'Onerado';
         const version = `${String(month).padStart(2, '0')}/${year}`;
 
-        // Idempotency check
+        // Idempotency check: require both items and compositions to consider it fully synced
         const existing = await prisma.engineeringDatabase.findFirst({
-          where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL', itemCount: { gt: 0 } }
+          where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL' }
         });
-        if (existing) { results.push({ success: true, message: `Já existente: ${existing.itemCount} itens` }); continue; }
+        if (existing && existing.itemCount > 0 && existing.compositionCount > 0) { 
+          results.push({ success: true, message: `Já existente: ${existing.itemCount} itens, ${existing.compositionCount} composições` }); 
+          continue; 
+        }
 
         console.log(`\n[SINAPI Crawler] 📥 ${baseName} ${uf} ${version} ${regime}...`);
         let zipBuffer: Buffer | null = null;
