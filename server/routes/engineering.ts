@@ -5,6 +5,7 @@ import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
 import { downloadAndParseSeinfra } from '../services/engineering/seinfra-scraper';
+import { CompositionFlattener } from '../services/engineering/compositionFlattener';
 import axios from 'axios';
 import https from 'https';
 
@@ -430,6 +431,28 @@ function normalizeInsumoType(type: string): string {
     if (upper.includes('MATERIAL')) return 'MATERIAL';
     return 'SERVICO';
 }
+
+// ═══════════════════════════════════════════════════════════
+// GET /api/engineering/proposals/:id/analytical-report
+// Gera o relatório analítico no Padrão TCU (Composições Principais + Auxiliares)
+// ═══════════════════════════════════════════════════════════
+router.get('/proposals/:id/analytical-report', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        
+        // Obter configuração de BDI ou Encargos se a proposta tiver (mockando por agora)
+        const flattener = new CompositionFlattener(0.25, 0.8464); // Exemplo BDI 25%, LS 84.64%
+        
+        const report = await flattener.flattenProposal(proposalId);
+        
+        console.log(`[Analytical Report] 📊 ${report.principalCompositions.length} principais, ${report.auxiliaryCompositions.length} auxiliares`);
+        res.json(report);
+        
+    } catch (e: any) {
+        console.error('[Analytical Report] Error:', e);
+        res.status(500).json({ error: 'Erro ao gerar relatório analítico', details: e.message });
+    }
+});
 
 // ═══════════════════════════════════════════════════════════
 // POST /api/engineering/insumos-hub-resolve
