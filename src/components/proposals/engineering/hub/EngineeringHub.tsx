@@ -89,6 +89,10 @@ export function EngineeringHub() {
         }
     };
 
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN';
+
     return (
         <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', fontFamily: 'Inter, sans-serif' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -97,27 +101,29 @@ export function EngineeringHub() {
                         <Database size={24} color="var(--color-primary)" /> Hub de Bases Oficiais
                     </h2>
                     <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>
-                        Gerencie os catálogos oficiais do SINAPI, SEINFRA e outros para uso automatizado nas propostas.
+                        Catálogos oficiais do SINAPI, SEINFRA e outros para uso automatizado nas propostas.
                     </p>
                 </div>
 
-                <div style={{ position: 'relative' }}>
-                    <input type="file" ref={fileInputRef} onChange={handleUpload} accept=".xlsx,.xls,.csv" style={{ display: 'none' }} />
-                    <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        style={{ 
-                            background: 'var(--color-primary)', color: '#fff', border: 'none', 
-                            padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, 
-                            display: 'flex', alignItems: 'center', gap: 8, cursor: uploading ? 'wait' : 'pointer',
-                            opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
-                            boxShadow: '0 4px 12px rgba(37,99,235,0.2)'
-                        }}
-                    >
-                        {uploading ? <RefreshCw size={16} className="spin" /> : <UploadCloud size={16} />}
-                        {uploading ? `Processando... ${uploadProgress}%` : 'Importar Planilha Oficial'}
-                    </button>
-                </div>
+                {isAdmin && (
+                    <div style={{ position: 'relative' }}>
+                        <input type="file" ref={fileInputRef} onChange={handleUpload} accept=".xlsx,.xls,.csv" style={{ display: 'none' }} />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            style={{ 
+                                background: 'var(--color-primary)', color: '#fff', border: 'none', 
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, 
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: uploading ? 'wait' : 'pointer',
+                                opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(37,99,235,0.2)'
+                            }}
+                        >
+                            {uploading ? <RefreshCw size={16} className="spin" /> : <UploadCloud size={16} />}
+                            {uploading ? `Processando... ${uploadProgress}%` : 'Importar Planilha Oficial'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {loading && bases.length === 0 ? (
@@ -128,13 +134,17 @@ export function EngineeringHub() {
             ) : bases.length === 0 ? (
                 <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
                     <FileSpreadsheet size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
-                    <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma base importada</h3>
+                    <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma base oficial instalada</h3>
                     <p style={{ margin: '0 0 20px', color: 'var(--color-text-tertiary)', fontSize: '0.9rem', maxWidth: 400, marginInline: 'auto' }}>
-                        Importe as planilhas analíticas da Caixa (SINAPI) ou estaduais para que o motor de Inteligência Artificial detalhe as composições automaticamente.
+                        {isAdmin 
+                            ? 'Como administrador, importe as planilhas analíticas da Caixa (SINAPI) ou estaduais para disponibilizá-las globalmente na plataforma.'
+                            : 'Nossa equipe técnica ainda não instalou os catálogos oficiais do SINAPI/SEINFRA para este ambiente.'}
                     </p>
-                    <button onClick={() => fileInputRef.current?.click()} style={{ background: 'transparent', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', padding: '8px 16px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer' }}>
-                        Escolher Arquivo .xlsx
-                    </button>
+                    {isAdmin && (
+                        <button onClick={() => fileInputRef.current?.click()} style={{ background: 'transparent', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', padding: '8px 16px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer' }}>
+                            Escolher Arquivo .xlsx
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
