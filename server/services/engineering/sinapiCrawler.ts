@@ -426,17 +426,14 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
       
       const isSvc = ci.type === 'SERVICO';
       const itemId = isSvc ? null : (itemIdMap.get(ci.code) || null);
+      const auxCompId = isSvc ? (compIdMap.get(ci.code) || null) : null;
       
       dbCompItems.push({
         compositionId: compId,
         itemId: itemId,
-        type: ci.type,
-        code: ci.code,
-        description: ci.description,
-        unit: ci.unit,
-        quantity: ci.quantity,
-        unitPrice: unitPrice,
-        totalPrice: totalPrice
+        auxiliaryCompositionId: auxCompId,
+        coefficient: ci.quantity,
+        price: totalPrice
       });
     }
     
