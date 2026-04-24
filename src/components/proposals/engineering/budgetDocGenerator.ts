@@ -287,7 +287,11 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
 
     try {
-        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { headers: hdrs });
+        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
+            method: 'POST',
+            headers: hdrs,
+            body: JSON.stringify({ items, bdi })
+        });
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
 

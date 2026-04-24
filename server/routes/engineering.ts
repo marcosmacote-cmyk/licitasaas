@@ -436,14 +436,16 @@ function normalizeInsumoType(type: string): string {
 // GET /api/engineering/proposals/:id/analytical-report
 // Gera o relatório analítico no Padrão TCU (Composições Principais + Auxiliares)
 // ═══════════════════════════════════════════════════════════
-router.get('/proposals/:id/analytical-report', async (req: any, res: any) => {
+router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const { items, bdi } = req.body || {};
         
-        // Obter configuração de BDI ou Encargos se a proposta tiver (mockando por agora)
-        const flattener = new CompositionFlattener(0.25, 0.8464); // Exemplo BDI 25%, LS 84.64%
+        // Obter configuração de BDI ou Encargos
+        const bdiValue = typeof bdi === 'number' ? bdi : 0.25;
+        const flattener = new CompositionFlattener(bdiValue, 0.8464); // Exemplo LS 84.64%
         
-        const report = await flattener.flattenProposal(proposalId);
+        const report = await flattener.flattenProposal(proposalId, items);
         
         console.log(`[Analytical Report] 📊 ${report.principalCompositions.length} principais, ${report.auxiliaryCompositions.length} auxiliares`);
         res.json(report);

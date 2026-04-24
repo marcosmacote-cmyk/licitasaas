@@ -51,8 +51,8 @@ export class CompositionFlattener {
   /**
    * Flattens all compositions within a given proposal.
    */
-  public async flattenProposal(proposalId: string): Promise<FlattenedReport> {
-    const proposalItems = await prisma.engineeringProposalItem.findMany({
+  public async flattenProposal(proposalId: string, providedItems?: any[]): Promise<FlattenedReport> {
+    const proposalItems = providedItems || await prisma.engineeringProposalItem.findMany({
       where: { proposalId },
       orderBy: { sortOrder: 'asc' },
     });
