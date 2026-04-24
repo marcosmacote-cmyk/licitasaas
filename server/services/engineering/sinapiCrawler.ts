@@ -154,7 +154,7 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
   return excels;
 }
 
-function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; description: string; unit: string; price: number; type: string }[] {
+function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { code: string; description: string; unit: string; price: number; type: string }[] {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
   const targetUf = (uf || 'CE').toUpperCase();
@@ -162,9 +162,15 @@ function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; descrip
   console.log(`[SINAPI Parse] 📄 ${workbook.SheetNames.length} abas: ${workbook.SheetNames.join(', ')}`);
 
   // Target sheets: IND/ISD=Insumos NãoDesonerado, ICD=Insumos Desonerado
-  // CSD=Composições SemDesoneração, CCD=Composições ComDesoneração, CNE=Composições SemEncargos
-  const insumoSheets = ['IND', 'ICD', 'ISD', 'ISE'];
-  const compSheets = ['CSD', 'CCD', 'CNE', 'CSE'];
+  // CSD=Composições SemDesoneração, CCD=Composições ComDesoneração
+  let insumoSheets = ['IND', 'ISD', 'ICD', 'ISE'];
+  let compSheets = ['CSD', 'CCD', 'CNE', 'CSE'];
+  
+  if (desonerado !== undefined) {
+    insumoSheets = desonerado ? ['ICD'] : ['IND', 'ISD'];
+    compSheets = desonerado ? ['CCD'] : ['CSD'];
+  }
+  
   const allTargets = [...insumoSheets, ...compSheets];
 
   for (const sheetName of workbook.SheetNames) {
@@ -333,8 +339,13 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   }
 
   let insertedComps = 0;
-  for (const svc of serviceItems) {
-    try { await prisma.engineeringComposition.create({ data: { databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price } }); insertedComps++; } catch {}
+  for (let i = 0; i < serviceItems.length; i += 1000) {
+    const chunk = serviceItems.slice(i, i + 1000);
+    const r = await prisma.engineeringComposition.createMany({
+      data: chunk.map(svc => ({ databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price })),
+      skipDuplicates: true
+    });
+    insertedComps += r.count;
   }
 
   await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
@@ -400,7 +411,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel`); results.push({ success: false, message: `ZIP sem Excel` }); continue; }
 
         console.log(`[SINAPI Crawler] 📊 Parseando ${excels.length} planilhas...`);
-        const allItems = excels.flatMap(buf => parseExcelToItems(buf, uf));
+        const allItems = excels.flatMap(buf => parseExcelToItems(buf, uf, desonerado));
         console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}`);
         if (allItems.length === 0) { console.log(`[SINAPI Crawler] ❌ Nenhum item válido encontrado`); results.push({ success: false, message: `Nenhum item válido` }); continue; }
 
@@ -416,7 +427,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
 }
 
 export async function importFromBuffer(buffer: Buffer, baseName: string, uf: string, month: number, year: number, desonerado: boolean): Promise<SyncResult> {
-  const items = parseExcelToItems(buffer);
+  const items = parseExcelToItems(buffer, uf, desonerado);
   if (items.length === 0) return { success: false, message: 'Nenhum item válido' };
   return persistItems(baseName, uf, month, year, desonerado, items);
 }
