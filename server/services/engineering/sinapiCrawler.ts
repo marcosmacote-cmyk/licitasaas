@@ -43,25 +43,38 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
     const client = await page.createCDPSession();
     await client.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir, eventsEnabled: true });
     
-    // Step 3: Navigate to the UF-specific downloads page
-    const ufSlug = `sinapi-a-partir-jul-2009-${uf.toLowerCase()}`;
-    const downloadsPage = `https://www.caixa.gov.br/site/Paginas/downloads.aspx#categoria_702`;
-    console.log(`[SINAPI Crawler] 📂 Acessando página de downloads...`);
-    await page.goto(downloadsPage, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // Step 4: Try to fetch the ZIP directly using the session cookies
+    // Step 3: Build correct file URLs based on year
+    // From 2025+: national bundles → SINAPI-YYYY-MM-formato-xlsx.zip
+    // Pre-2025: state-specific → SINAPI_ref_Insumos_Composicoes_CE_YYYYMM_NaoDesonerado.zip
     const mm = String(month).padStart(2, '0');
     const regime = desonerado ? 'Desonerado' : 'NaoDesonerado';
-    const filePatterns = [
-      `SINAPI_ref_Insumos_Composicoes_${uf}_${mm}${year}_${regime}.zip`,
-      `SINAPI_Preco_Ref_Insumos_${uf}_${mm}${year}_${regime}.zip`,
-      `SINAPI_Custo_Ref_Composicoes_Sintetico_${uf}_${mm}${year}_${regime}.zip`,
-    ];
     
-    for (const fileName of filePatterns) {
-      const fileUrl = `https://www.caixa.gov.br/Downloads/${ufSlug}/${fileName}`;
-      console.log(`[SINAPI Crawler] 📥 Tentando via fetch in-page: ${fileName}`);
+    let fileUrls: { url: string; fileName: string }[] = [];
+    
+    if (year >= 2025) {
+      // New format: single national ZIP per month (contains all UFs)
+      const basePath = 'https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais';
+      fileUrls = [
+        { url: `${basePath}/SINAPI-${year}-${mm}-formato-xlsx.zip`, fileName: `SINAPI-${year}-${mm}-formato-xlsx.zip` },
+        // Try rectified version too
+        { url: `${basePath}/SINAPI-${year}-${mm}-formato-xlsx_Retificacao01.zip`, fileName: `SINAPI-${year}-${mm}-formato-xlsx_Retificacao01.zip` },
+      ];
+      console.log(`[SINAPI Crawler] 📅 Formato 2025+: ZIP nacional mensal`);
+    } else {
+      // Old format: state-specific ZIPs (YYYYMM, not MMYYYY!)
+      const ufSlug = `sinapi-a-partir-jul-2009-${uf.toLowerCase()}`;
+      const datePart = `${year}${mm}`; // YYYYMM format
+      const basePath = `https://www.caixa.gov.br/Downloads/${ufSlug}`;
+      fileUrls = [
+        { url: `${basePath}/SINAPI_ref_Insumos_Composicoes_${uf}_${datePart}_${regime}.zip`, fileName: `SINAPI_ref_Insumos_Composicoes_${uf}_${datePart}_${regime}.zip` },
+        { url: `${basePath}/SINAPI_Preco_Ref_Insumos_${uf}_${datePart}_${regime}.zip`, fileName: `SINAPI_Preco_Ref_Insumos_${uf}_${datePart}_${regime}.zip` },
+        { url: `${basePath}/SINAPI_Custo_Ref_Composicoes_Sintetico_${uf}_${datePart}_${regime}.zip`, fileName: `SINAPI_Custo_Ref_Composicoes_Sintetico_${uf}_${datePart}_${regime}.zip` },
+      ];
+      console.log(`[SINAPI Crawler] 📅 Formato pré-2025: ZIP por UF (${uf})`);
+    }
+    
+    for (const { url: fileUrl, fileName } of fileUrls) {
+      console.log(`[SINAPI Crawler] 📥 Tentando: ${fileName}`);
       
       try {
         // Use page.evaluate to fetch with the browser's cookies
@@ -70,7 +83,6 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
             const resp = await fetch(url, { redirect: 'follow', credentials: 'include' });
             if (!resp.ok) return { ok: false, status: resp.status };
             const buf = await resp.arrayBuffer();
-            // Convert to base64 for transport
             const bytes = new Uint8Array(buf);
             let binary = '';
             for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
@@ -82,7 +94,6 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
         
         if (result.ok && result.data && result.size > 1000) {
           const buffer = Buffer.from(result.data, 'base64');
-          // Verify ZIP magic bytes
           if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
             const filePath = path.join(downloadDir, fileName);
             fs.writeFileSync(filePath, buffer);
@@ -91,7 +102,7 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
           }
           console.log(`[SINAPI Crawler] ⚠️ Não é ZIP: ${fileName} (${buffer.length} bytes)`);
         } else {
-          console.log(`[SINAPI Crawler] ❌ Fetch falhou: ${fileName} (status=${result.status || result.error})`);
+          console.log(`[SINAPI Crawler] ❌ ${fileName} (status=${result.status || result.error})`);
         }
       } catch (err: any) {
         console.log(`[SINAPI Crawler] ❌ Erro: ${err.message}`);
