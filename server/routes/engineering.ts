@@ -1460,16 +1460,42 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 
         // Bulk insert in batches of 1000
         const BATCH = 1000;
-        let inserted = 0;
-        for (let i = 0; i < allItems.length; i += BATCH) {
-            const batch = allItems.slice(i, i + BATCH);
+        let insertedItems = 0;
+        
+        const basicItems = allItems.filter(it => it.type !== 'SERVICO');
+        const serviceItems = allItems.filter(it => it.type === 'SERVICO');
+
+        for (let i = 0; i < basicItems.length; i += BATCH) {
+            const batch = basicItems.slice(i, i + BATCH);
             const result = await prisma.engineeringItem.createMany({
                 data: batch.map(it => ({ databaseId: db!.id, ...it })),
                 skipDuplicates: true,
             });
-            inserted += result.count;
-            if (i + BATCH < allItems.length) {
-                console.log(`[Eng Import] Batch ${Math.floor(i / BATCH) + 1}: ${result.count} inseridos (${inserted}/${allItems.length})...`);
+            insertedItems += result.count;
+        }
+
+        // Bulk insert compositions
+        await prisma.engineeringComposition.deleteMany({ where: { databaseId: db!.id } });
+        let insertedComps = 0;
+        for (let i = 0; i < serviceItems.length; i += BATCH) {
+            const batch = serviceItems.slice(i, i + BATCH);
+            for (const svc of batch) {
+                try {
+                    await prisma.engineeringComposition.create({
+                        data: {
+                            databaseId: db!.id,
+                            code: svc.code,
+                            description: svc.description,
+                            unit: svc.unit,
+                            totalPrice: svc.price,
+                        }
+                    });
+                    insertedComps++;
+                } catch (e: any) {
+                    if (!e.message?.includes('Unique constraint')) {
+                        console.warn(`[Eng Import] Composição ${svc.code} erro: ${e.message}`);
+                    }
+                }
             }
         }
 
@@ -1478,6 +1504,8 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
             MAO_DE_OBRA: allItems.filter(i => i.type === 'MAO_DE_OBRA').length,
             EQUIPAMENTO: allItems.filter(i => i.type === 'EQUIPAMENTO').length,
             SERVICO: allItems.filter(i => i.type === 'SERVICO').length,
+            Total: insertedItems + insertedComps
+        };
         };
 
         console.log(`[Eng Import] ✅ Concluído! ${inserted} itens na base "${db.name} ${db.uf}".`);
