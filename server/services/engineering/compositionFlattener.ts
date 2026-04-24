@@ -209,6 +209,8 @@ export class CompositionFlattener {
       totalEquipamento,
       valorBdi,
       valorComBdi,
+      proposalQuantity: 0,
+      proposalTotal: 0,
     };
 
     if (isAuxiliary) {
