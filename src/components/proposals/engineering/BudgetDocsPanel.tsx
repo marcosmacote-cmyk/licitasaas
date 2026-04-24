@@ -45,7 +45,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 case 'resumido': docOrcamentoResumido(items, effectiveBdi); break;
                 case 'sintetico': docOrcamentoSintetico(items, effectiveBdi); break;
                 case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi); break;
-                case 'cpu': await docCpuBatch(items); break;
+                case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi); break;
                 case 'abc_servicos': docCurvaAbcServicos(items); break;
                 case 'abc_insumos': docCurvaAbcInsumos(insumos); break;
                 case 'cronograma':

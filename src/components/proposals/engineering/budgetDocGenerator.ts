@@ -61,11 +61,17 @@ ${html}
 
 // Helper: group items by chapter prefix
 function groupByChapter(items: EngItem[]) {
-    const map = new Map<string, { items: EngItem[]; total: number }>();
+    const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
     for (const it of items) {
         const prefix = it.itemNumber.split('.')[0] || '1';
-        if (!map.has(prefix)) map.set(prefix, { items: [], total: 0 });
+        if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
         const g = map.get(prefix)!;
+        
+        // If this item is exactly the chapter parent (e.g. "1", "2") and usually has no unit/price
+        if (it.itemNumber === prefix && (!it.unit || it.unit === '')) {
+            g.title = `${prefix} — ${it.description}`;
+        }
+
         g.items.push(it);
         g.total += it.totalPrice;
     }
@@ -81,7 +87,7 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number) {
     let rows = '';
     for (const [prefix, ch] of chapters) {
         const pct = total > 0 ? (ch.total / total * 100) : 0;
-        rows += `<tr><td class="bold">${prefix}</td><td class="bold">Etapa ${prefix}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
+        rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
     }
     openDoc('Orçamento Resumido', `
 <h1>ORÇAMENTO RESUMIDO</h1>
@@ -100,12 +106,12 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number) {
     let html = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>`;
 
     for (const [prefix, ch] of chapters) {
-        html += `<h2>Etapa ${prefix}</h2>
+        html += `<h2>${ch.title}</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th><th class="r">Custo Unit.</th><th class="r">Preço Unit.</th><th class="r">Total</th></tr></thead><tbody>`;
         for (const it of ch.items) {
             html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r">${it.quantity}</td><td class="r">${fmt(it.unitCost)}</td><td class="r">${fmt(it.unitPrice)}</td><td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
         }
-        html += `<tr class="total"><td colspan="7" class="r">Subtotal Etapa ${prefix}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
+        html += `<tr class="total"><td colspan="7" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
     html += `<table><tfoot><tr class="grand"><td colspan="7" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
     openDoc('Orçamento Sintético', html);
@@ -275,16 +281,63 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
     openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode}</div>${bdiHtml}${esHtml}`);
 }
 
+// Helper para renderizar Composição no padrão TCU
+function renderComposition(comp: any) {
+    let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
+        <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
+            <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
+            <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
+        </div>
+        <table>
+        <thead><tr><th>Tipo</th><th>Código</th><th>Banco</th><th>Descrição</th><th class="c">Und</th><th class="r">Coef.</th><th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
+        <tbody>`;
+
+    for (const ci of comp.items) {
+        const tipo = ci.type === 'MAO_DE_OBRA' ? 'Mão de Obra' : ci.type === 'MATERIAL' ? 'Material' : ci.type === 'EQUIPAMENTO' ? 'Equipamento' : 'Comp. Auxiliar';
+        ch += `<tr>
+            <td>${tipo}</td>
+            <td class="mono">${ci.code || ''}</td>
+            <td>${ci.sourceName || ''}</td>
+            <td>${ci.description || '—'}</td>
+            <td class="c">${ci.unit || ''}</td>
+            <td class="r mono">${ci.coefficient.toFixed(7)}</td>
+            <td class="r">${fmt(ci.unitPrice || 0)}</td>
+            <td class="r">${fmt(ci.totalPrice || 0)}</td>
+        </tr>`;
+    }
+
+    ch += `</tbody></table>
+    <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
+        <div style="display:flex; justify-content:space-between; margin-bottom: 2px;">
+            <div style="color:#475569;">
+                MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
+            </div>
+            <div style="color:#475569;">
+                Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
+            </div>
+        </div>
+        ${comp.proposalQuantity ? `
+        <div style="display:flex; justify-content:flex-end; gap: 20px; color:#1e40af; font-weight:bold; font-size: 8.5px;">
+            <div>Quant. => ${comp.proposalQuantity.toFixed(4)}</div>
+            <div>Preço Total => ${fmt(comp.proposalTotal || 0)}</div>
+        </div>` : ''}
+    </div>
+    </div>`;
+    return ch;
+}
+
 // ═══════════════════════════════════════════════════════════
-// 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard)
+// 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard - Only Principals)
 // ═══════════════════════════════════════════════════════════
 export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
 
-    let html = `<h1>COMPOSIÇÕES ANALÍTICAS DE PREÇO UNITÁRIO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
-    html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
+    let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
 
     try {
         const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
@@ -295,107 +348,50 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
 
-        const renderComposition = (comp: any) => {
-            let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0;">
-                <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
-                    <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
-                    <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
-                </div>
-                <table>
-                <thead><tr><th>Tipo</th><th>Código</th><th>Banco</th><th>Descrição</th><th class="c">Und</th><th class="r">Coef.</th><th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
-                <tbody>`;
-
-            for (const ci of comp.items) {
-                const tipo = ci.type === 'MAO_DE_OBRA' ? 'Mão de Obra' : ci.type === 'MATERIAL' ? 'Material' : ci.type === 'EQUIPAMENTO' ? 'Equipamento' : 'Comp. Auxiliar';
-                ch += `<tr>
-                    <td>${tipo}</td>
-                    <td class="mono">${ci.code || ''}</td>
-                    <td>${ci.sourceName || ''}</td>
-                    <td>${ci.description || '—'}</td>
-                    <td class="c">${ci.unit || ''}</td>
-                    <td class="r mono">${ci.coefficient.toFixed(7)}</td>
-                    <td class="r">${fmt(ci.unitPrice || 0)}</td>
-                    <td class="r">${fmt(ci.totalPrice || 0)}</td>
-                </tr>`;
-            }
-
-            ch += `</tbody></table>
-            <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
-                <div style="display:flex; justify-content:space-between; margin-bottom: 2px;">
-                    <div style="color:#475569;">
-                        MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                        LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                        MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
-                    </div>
-                    <div style="color:#475569;">
-                        Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                        Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
-                    </div>
-                </div>
-                ${comp.proposalQuantity ? `
-                <div style="display:flex; justify-content:flex-end; gap: 20px; color:#1e40af; font-weight:bold; font-size: 8.5px;">
-                    <div>Quant. => ${comp.proposalQuantity.toFixed(4)}</div>
-                    <div>Preço Total => ${fmt(comp.proposalTotal || 0)}</div>
-                </div>` : ''}
-            </div>
-            </div>`;
-            return ch;
-        };
-
         for (const comp of report.principalCompositions) {
             html += renderComposition(comp);
-        }
-
-        if (report.auxiliaryCompositions.length > 0) {
-            html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed; page-break-before: always;">Composições Auxiliares</div>`;
-            for (const comp of report.auxiliaryCompositions) {
-                html += renderComposition(comp);
-            }
         }
         
     } catch (e: any) {
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
     }
 
-    openDoc('Orçamento Analítico', html);
+    openDoc('Planilha Orçamentária Analítica', html);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 4. CPU — COMPOSIÇÕES DE CUSTOS UNITÁRIOS (batch)
 // ═══════════════════════════════════════════════════════════
-export async function docCpuBatch(items: EngItem[]) {
+export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const groupLabels: Record<string,{label:string;color:string}> = {
-        MATERIAL:{label:'Materiais',color:'#2563eb'}, MAO_DE_OBRA:{label:'Mão de Obra',color:'#16a34a'},
-        EQUIPAMENTO:{label:'Equipamentos',color:'#d97706'}, AUXILIAR:{label:'Auxiliares',color:'#7c3aed'},
-    };
 
-    let html = `<h1>COMPOSIÇÃO DE PREÇOS UNITÁRIOS — CPU</h1><div class="meta">${items.length} serviços</div>`;
-    let count = 0;
+    let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${items.length} serviços</div>`;
 
-    for (const it of items) {
-        if (!it.code || it.code === 'N/A') continue;
-        try {
-            const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(it.code)}`, { headers: hdrs });
-            if (!res.ok) continue;
-            const d = await res.json();
-            count++;
-            html += `<h2 style="page-break-before:${count>1?'always':'auto'}">${it.itemNumber} — ${it.code} — ${it.description}</h2>`;
-            for (const [gk, meta] of Object.entries(groupLabels)) {
-                const gItems = d.groups?.[gk] || [];
-                if (gItems.length === 0) continue;
-                const gTotal = gItems.reduce((s:number, ci:any) => s + (ci.price||0), 0);
-                html += `<div style="font-size:8.5px;font-weight:700;color:${meta.color};margin:6px 0 2px">${meta.label} (${gItems.length}) — ${fmt(gTotal)}</div>
-<table><thead><tr><th>#</th><th>Descrição</th><th>Un.</th><th class="r">Coef.</th><th class="r">Preço</th><th class="r">Subtotal</th></tr></thead><tbody>`;
-                gItems.forEach((ci:any, idx:number) => {
-                    const id = ci.item || ci.auxiliaryComposition;
-                    html += `<tr><td>${idx+1}</td><td>${id?.description||'—'}</td><td class="c">${id?.unit||''}</td><td class="r mono">${ci.coefficient.toFixed(4)}</td><td class="r">${fmt(id?.price||0)}</td><td class="r" style="color:${meta.color};font-weight:600">${fmt(ci.price)}</td></tr>`;
-                });
-                html += `</tbody></table>`;
+    try {
+        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
+            method: 'POST',
+            headers: hdrs,
+            body: JSON.stringify({ items, bdi })
+        });
+        if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+        const report = await res.json();
+
+        html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
+        for (const comp of report.principalCompositions) {
+            html += renderComposition(comp);
+        }
+
+        if (report.auxiliaryCompositions.length > 0) {
+            html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
+            for (const comp of report.auxiliaryCompositions) {
+                html += renderComposition(comp);
             }
-            html += `<table><tfoot><tr class="grand"><td colspan="5">CUSTO UNITÁRIO (S/ BDI)</td><td class="r">${fmt(d.totalPrice||d.totalDirect||0)}</td></tr></tfoot></table>`;
-        } catch { /* skip */ }
+        }
+        
+    } catch (e: any) {
+        html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
     }
-    openDoc('CPU — Composição de Preços Unitários', html);
+
+    openDoc('Caderno de Composições', html);
 }
