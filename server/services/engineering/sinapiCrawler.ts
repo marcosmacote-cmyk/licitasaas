@@ -157,67 +157,128 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
 function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; description: string; unit: string; price: number; type: string }[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
+  const targetUf = (uf || 'CE').toUpperCase();
 
-  console.log(`[SINAPI Parse] 📄 Planilha com ${workbook.SheetNames.length} abas: ${workbook.SheetNames.slice(0, 10).join(', ')}${workbook.SheetNames.length > 10 ? '...' : ''}`);
+  console.log(`[SINAPI Parse] 📄 ${workbook.SheetNames.length} abas: ${workbook.SheetNames.join(', ')}`);
 
-  // Determine which sheets to parse
-  let sheetsToProcess = workbook.SheetNames;
-  if (uf) {
-    // Try to find sheets matching the UF (exact match or contains)
-    const ufSheets = workbook.SheetNames.filter(s => {
-      const upper = s.toUpperCase().trim();
-      return upper === uf || upper.includes(uf) || upper.includes(`(${uf})`) || upper.endsWith(` ${uf}`);
-    });
-    if (ufSheets.length > 0) {
-      console.log(`[SINAPI Parse] 🎯 Abas filtradas por UF=${uf}: ${ufSheets.join(', ')}`);
-      sheetsToProcess = ufSheets;
-    } else {
-      console.log(`[SINAPI Parse] ⚠️ Nenhuma aba específica para UF=${uf}, processando todas`);
-    }
-  }
+  // Target sheets: IND=Insumos NãoDesonerado, ICD=Insumos Desonerado
+  // CSD=Composições SemDesoneração, CCD=Composições ComDesoneração, CNE=Composições SemEncargos
+  const insumoSheets = ['IND', 'ICD', 'OE'];
+  const compSheets = ['CSD', 'CCD', 'CNE'];
+  const allTargets = [...insumoSheets, ...compSheets];
 
-  for (const sheetName of sheetsToProcess) {
+  for (const sheetName of workbook.SheetNames) {
+    const upper = sheetName.toUpperCase().trim();
+    const isTarget = allTargets.includes(upper);
+    if (!isTarget) continue;
+
+    const isComposition = compSheets.includes(upper);
     const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-    if (rows.length < 2) continue;
+    if (rows.length < 5) continue;
 
-    let headerIdx = -1, colMap: Record<string, number> = {};
-    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    // Find the header row with UF columns (AC, AL, AM, ..., CE, ..., TO)
+    let headerIdx = -1, ufColIdx = -1;
+    let codeCol = -1, descCol = -1, unitCol = -1, groupCol = -1;
+
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
       const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
-      const cI = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO'));
-      const dI = row.findIndex((c: string) => c.includes('DESCRI'));
-      const pI = row.findIndex((c: string) => c.includes('PRECO') || c.includes('PREÇO') || c.includes('CUSTO') || c.includes('MEDIANA'));
-      const uI = row.findIndex((c: string) => c.includes('UNID') || c === 'UN');
-      if (cI >= 0 && dI >= 0 && pI >= 0) { headerIdx = i; colMap = { code: cI, desc: dI, price: pI, unit: uI >= 0 ? uI : -1 }; break; }
+      const ceIdx = row.indexOf(targetUf);
+      if (ceIdx >= 0) {
+        // This row has the UF as a column header
+        headerIdx = i;
+        ufColIdx = ceIdx;
+        // Find other columns in this row or previous rows
+        for (let j = Math.max(0, i - 3); j <= i; j++) {
+          const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
+          if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'CÓDIGO SINAPI');
+          if (descCol < 0) descCol = r2.findIndex((c: string) => c.includes('DESCRI'));
+          if (unitCol < 0) unitCol = r2.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UNIDADE');
+          if (groupCol < 0) groupCol = r2.findIndex((c: string) => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO'));
+        }
+        break;
+      }
     }
-    if (headerIdx < 0) continue;
 
+    if (headerIdx < 0 || ufColIdx < 0) {
+      console.log(`[SINAPI Parse] ⚠️ Aba "${sheetName}": UF ${targetUf} não encontrada nas colunas`);
+      continue;
+    }
+
+    // Fallback column detection
+    if (codeCol < 0) codeCol = 1; // Column B typically
+    if (descCol < 0) descCol = codeCol + 1;
+    if (unitCol < 0) unitCol = codeCol + 2;
+
+    console.log(`[SINAPI Parse] 🎯 Aba "${sheetName}": UF ${targetUf}=col${ufColIdx}, código=col${codeCol}, desc=col${descCol}, unid=col${unitCol}`);
+
+    let count = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      const code = String(r[colMap.code] ?? '').trim();
-      const desc = String(r[colMap.desc] ?? '').trim();
-      const unit = colMap.unit >= 0 ? String(r[colMap.unit] ?? '').trim().toUpperCase() : 'UN';
+      const code = String(r[codeCol] ?? '').trim();
+      const desc = String(r[descCol] ?? '').trim();
+      const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
       if (!code || !desc || code.length < 2) continue;
 
+      // Read price from the UF column
       let price = 0;
-      const raw = r[colMap.price];
+      const raw = r[ufColIdx];
       if (typeof raw === 'number') price = raw;
       else if (raw) {
         const c = String(raw).replace(/[^\d.,\-]/g, '');
-        price = c.includes(',') && (!c.includes('.') || c.lastIndexOf(',') > c.lastIndexOf('.'))
-          ? parseFloat(c.replace(/\./g, '').replace(',', '.')) || 0
-          : parseFloat(c.replace(/,/g, '')) || 0;
+        if (c) {
+          price = c.includes(',') && (!c.includes('.') || c.lastIndexOf(',') > c.lastIndexOf('.'))
+            ? parseFloat(c.replace(/\./g, '').replace(',', '.')) || 0
+            : parseFloat(c.replace(/,/g, '')) || 0;
+        }
       }
       if (price <= 0) continue;
 
-      let type = 'SERVICO';
-      const du = desc.toUpperCase();
-      if (/PEDREIRO|SERVENTE|MESTRE|ELETRICISTA|PINTOR|CARPINTEIRO/.test(du) && ['H', 'HORA', 'MES'].includes(unit)) type = 'MAO_DE_OBRA';
-      else if (['KG', 'L', 'M', 'UN', 'M2', 'M3'].includes(unit) && price < 500 && !/INSTALACAO|EXECUCAO/.test(du)) type = 'MATERIAL';
-      else if (/BETONEIRA|CAMINHAO|RETROESCAVADEIRA|COMPACTADOR/.test(du)) type = 'EQUIPAMENTO';
+      // Determine type
+      let type = isComposition ? 'SERVICO' : 'MATERIAL';
+      const group = String(r[groupCol] ?? '').toUpperCase();
+      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) type = 'MAO_DE_OBRA';
+      else if (group.includes('EQUIP')) type = 'EQUIPAMENTO';
+      else if (group.includes('COMPOS') || group.includes('SERV')) type = 'SERVICO';
+      else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
 
-      items.push({ code, description: desc, unit: unit || 'UN', price, type });
+      items.push({ code, description: desc, unit, price, type });
+      count++;
+    }
+    console.log(`[SINAPI Parse] ✅ Aba "${sheetName}": ${count} itens para ${targetUf}`);
+  }
+
+  // Fallback: if no target sheets found, try generic parsing (for mão_de_obra etc.)
+  if (items.length === 0) {
+    for (const sheetName of workbook.SheetNames) {
+      const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+      if (rows.length < 5) continue;
+      // Look for header with CODIGO + DESCRI + UF column
+      for (let i = 0; i < Math.min(rows.length, 20); i++) {
+        const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+        const ceIdx = row.indexOf(targetUf);
+        const cI = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO'));
+        const dI = row.findIndex((c: string) => c.includes('DESCRI'));
+        if (ceIdx >= 0 && cI >= 0 && dI >= 0) {
+          const uI = row.findIndex((c: string) => c.includes('UNID'));
+          console.log(`[SINAPI Parse] 🔄 Fallback aba "${sheetName}": UF col=${ceIdx}`);
+          for (let j = i + 1; j < rows.length; j++) {
+            const r = rows[j];
+            const code = String(r[cI] ?? '').trim();
+            const desc = String(r[dI] ?? '').trim();
+            if (!code || !desc || code.length < 2) continue;
+            let price = 0;
+            const raw = r[ceIdx];
+            if (typeof raw === 'number') price = raw;
+            else if (raw) { const c = String(raw).replace(/[^\d.,\-]/g, ''); price = parseFloat(c.replace(',', '.')) || 0; }
+            if (price <= 0) continue;
+            items.push({ code, description: desc, unit: uI >= 0 ? String(r[uI] ?? 'UN').trim() : 'UN', price, type: 'MATERIAL' });
+          }
+          break;
+        }
+      }
     }
   }
+
   return items;
 }
 
