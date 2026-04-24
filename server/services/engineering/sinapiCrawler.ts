@@ -119,15 +119,47 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
 }
 
 // ═══════════════════════════════════════════════════════════
-// ZIP + Excel Processing
+// ZIP + Excel Processing (handles nested ZIPs for national bundles)
 // ═══════════════════════════════════════════════════════════
 
-function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
+function extractExcelFromZip(zipBuffer: Buffer, uf?: string): Buffer[] {
   const zip = new AdmZip(zipBuffer);
-  return zip.getEntries()
-    .filter((e: any) => e.entryName.toUpperCase().endsWith('.XLSX'))
-    .sort((a: any, b: any) => b.header.size - a.header.size)
-    .map((e: any) => e.getData());
+  const entries = zip.getEntries();
+  
+  // Log what's inside for diagnostics
+  const names = entries.map((e: any) => e.entryName);
+  console.log(`[SINAPI Parse] 📦 ZIP contém ${entries.length} arquivos:`);
+  names.slice(0, 15).forEach((n: string) => console.log(`  → ${n}`));
+  if (names.length > 15) console.log(`  ... e mais ${names.length - 15} arquivos`);
+  
+  const excels: Buffer[] = [];
+  
+  for (const entry of entries) {
+    const name = (entry as any).entryName.toUpperCase();
+    
+    // Filter by UF if specified (e.g. "/CE/" or "_CE_" in path)
+    if (uf && !name.includes(`/${uf}/`) && !name.includes(`_${uf}_`) && !name.includes(`_${uf}.`) && !name.includes(`${uf}/`)) continue;
+    
+    if (name.endsWith('.XLSX')) {
+      console.log(`[SINAPI Parse] 📋 Encontrado Excel: ${(entry as any).entryName} (${((entry as any).header.size / 1024).toFixed(0)} KB)`);
+      excels.push((entry as any).getData());
+    } else if (name.endsWith('.ZIP')) {
+      // Nested ZIP — recursively extract (common in national bundles)
+      console.log(`[SINAPI Parse] 📦 ZIP aninhado: ${(entry as any).entryName} — extraindo...`);
+      try {
+        const innerBuf = (entry as any).getData();
+        const innerExcels = extractExcelFromZip(innerBuf, uf);
+        excels.push(...innerExcels);
+      } catch (err: any) {
+        console.log(`[SINAPI Parse] ⚠️ Erro ao ler ZIP aninhado: ${err.message}`);
+      }
+    }
+  }
+  
+  // Sort by size descending (larger files typically have more data)
+  excels.sort((a, b) => b.length - a.length);
+  console.log(`[SINAPI Parse] ✅ ${excels.length} planilhas Excel encontradas${uf ? ` para UF=${uf}` : ''}`);
+  return excels;
 }
 
 function parseExcelToItems(buffer: Buffer): { code: string; description: string; unit: string; price: number; type: string }[] {
@@ -269,13 +301,16 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
           fs.rmSync(tmpDir, { recursive: true, force: true });
         }
 
-        if (!zipBuffer) { results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
+        if (!zipBuffer) { console.log(`[SINAPI Crawler] ❌ Download falhou: ${version} ${regime}`); results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
 
-        const excels = extractExcelFromZip(zipBuffer);
-        if (excels.length === 0) { results.push({ success: false, message: `ZIP sem Excel` }); continue; }
+        console.log(`[SINAPI Crawler] 📦 Extraindo planilhas do ZIP (${(zipBuffer.length / 1024 / 1024).toFixed(1)} MB)...`);
+        const excels = extractExcelFromZip(zipBuffer, uf);
+        if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel para UF=${uf}`); results.push({ success: false, message: `ZIP sem Excel para ${uf}` }); continue; }
 
+        console.log(`[SINAPI Crawler] 📊 Parseando ${excels.length} planilhas...`);
         const allItems = excels.flatMap(buf => parseExcelToItems(buf));
-        if (allItems.length === 0) { results.push({ success: false, message: `Nenhum item válido` }); continue; }
+        console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}`);
+        if (allItems.length === 0) { console.log(`[SINAPI Crawler] ❌ Nenhum item válido encontrado`); results.push({ success: false, message: `Nenhum item válido` }); continue; }
 
         results.push(await persistItems(baseName, uf, month, year, desonerado, allItems));
         await new Promise(r => setTimeout(r, 3000)); // Respect rate limits
