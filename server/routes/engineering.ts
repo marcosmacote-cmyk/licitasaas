@@ -1140,6 +1140,37 @@ async function enrichWithOfficialPrices(items: any[]): Promise<void> {
             if (!item.unit || item.unit === 'UN') item.unit = dbComp.unit || item.unit;
             item.type = 'COMPOSICAO';
             console.log(`[Engineering Match] ✅ Comp ${item.code} → ${dbComp.description?.substring(0, 50)} = R$ ${dbComp.totalPrice} (${item.sourceName})`);
+            continue;
+        }
+
+        // 3. Auto-register: If AI extracted a SINAPI/SEINFRA code with data, auto-create it
+        if (item.sourceName && ['SINAPI', 'SEINFRA', 'SICRO', 'ORSE'].includes(item.sourceName) && item.description && item.unitCost > 0) {
+            try {
+                let officialDb = await prisma.engineeringDatabase.findFirst({
+                    where: { name: item.sourceName, type: 'OFICIAL' }
+                });
+                if (!officialDb) {
+                    officialDb = await prisma.engineeringDatabase.create({
+                        data: { name: item.sourceName, uf: '', type: 'OFICIAL' }
+                    });
+                }
+                await prisma.engineeringComposition.create({
+                    data: {
+                        databaseId: officialDb.id,
+                        code: item.code,
+                        description: item.description,
+                        unit: item.unit || 'UN',
+                        totalPrice: item.unitCost,
+                    }
+                });
+                item.type = 'COMPOSICAO';
+                console.log(`[Engineering Auto-Register] 📝 ${item.sourceName} ${item.code} → ${item.description?.substring(0, 50)} = R$ ${item.unitCost} (auto-cadastrado)`);
+            } catch (e: any) {
+                // Ignore duplicates (race condition or already exists)
+                if (!e.message?.includes('Unique constraint')) {
+                    console.warn(`[Engineering Auto-Register] ⚠️ ${item.code}: ${e.message}`);
+                }
+            }
         }
     }
 }
@@ -1258,14 +1289,43 @@ router.post('/seed', async (req: any, res: any) => {
                     data: { name: cfg.name, uf: cfg.uf, version: cfg.version, type: 'OFICIAL' }
                 });
             }
+            // Create basic items (MATERIAL, MAO_DE_OBRA, EQUIPAMENTO)
+            const basicItems = cfg.items.filter(it => it.type !== 'SERVICO');
+            const serviceItems = cfg.items.filter(it => it.type === 'SERVICO');
+
             const r = await prisma.engineeringItem.createMany({
-                data: cfg.items.map(it => ({
+                data: basicItems.map(it => ({
                     databaseId: db!.id, code: it.code, description: it.desc,
                     unit: it.unit, price: it.price, type: it.type
                 })),
                 skipDuplicates: true,
             });
-            results[key] = r.count;
+
+            // Create compositions for SERVICO items (these are the real compositions)
+            // They need to be in EngineeringComposition for the CompositionDrawer to find them
+            await prisma.engineeringComposition.deleteMany({ where: { databaseId: db!.id } });
+            let compCount = 0;
+            for (const svc of serviceItems) {
+                try {
+                    await prisma.engineeringComposition.create({
+                        data: {
+                            databaseId: db!.id,
+                            code: svc.code,
+                            description: svc.desc,
+                            unit: svc.unit,
+                            totalPrice: svc.price,
+                        }
+                    });
+                    compCount++;
+                } catch (e: any) {
+                    // Skip duplicates
+                    if (!e.message?.includes('Unique constraint')) {
+                        console.warn(`[Seed] Composição ${svc.code} erro: ${e.message}`);
+                    }
+                }
+            }
+            results[key] = r.count + compCount;
+            console.log(`[Seed] ${key}: ${r.count} insumos + ${compCount} composições`);
         }
 
         const totalItems = Object.values(results).reduce((s, v) => s + v, 0);
