@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies (openssl for Prisma, ghostscript+graphicsmagick+poppler for Zerox)
-RUN apk add --no-cache openssl ghostscript graphicsmagick poppler-utils
+RUN apk add --no-cache openssl ghostscript graphicsmagick poppler-utils chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 # Build Backend
 # --ignore-scripts: Zerox postinstall uses apt-get/brew (incompatible with Alpine apk);
@@ -27,7 +27,11 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app/server
 # ghostscript + graphicsmagick + poppler: required by Zerox for PDF→image conversion
-RUN apk add --no-cache openssl postgresql16-client ghostscript graphicsmagick poppler-utils
+RUN apk add --no-cache openssl postgresql16-client ghostscript graphicsmagick poppler-utils chromium nss freetype harfbuzz ca-certificates ttf-freefont
+
+# Puppeteer config: use system Chromium instead of bundled
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/backend/node_modules ./node_modules

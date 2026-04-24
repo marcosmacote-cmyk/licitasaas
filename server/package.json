@@ -36,6 +36,7 @@
     "node-unrar-js": "^2.0.2",
     "openai": "^6.27.0",
     "pdf-parse": "^1.1.1",
+    "puppeteer-core": "^24.42.0",
     "qrcode": "^1.5.3",
     "resend": "^6.9.4",
     "speakeasy": "^2.0.0",
