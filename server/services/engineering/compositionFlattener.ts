@@ -31,6 +31,8 @@ export interface FlattenedComposition {
   totalEquipamento: number;
   valorBdi: number;
   valorComBdi: number;
+  proposalQuantity: number;
+  proposalTotal: number;
 }
 
 export interface FlattenedReport {
@@ -59,12 +61,24 @@ export class CompositionFlattener {
 
     const principalCompositions: FlattenedComposition[] = [];
 
+    // Aggregate quantities by code
+    const aggregatedItems = new Map<string, { code: string, sourceName: string, quantity: number }>();
     for (const pItem of proposalItems) {
       if (!pItem.code || pItem.code === 'N/A') continue;
+      const codeStr = pItem.code.toUpperCase();
+      const qty = typeof pItem.quantity === 'number' ? pItem.quantity : 1;
+      
+      if (aggregatedItems.has(codeStr)) {
+        aggregatedItems.get(codeStr)!.quantity += qty;
+      } else {
+        aggregatedItems.set(codeStr, { code: pItem.code, sourceName: pItem.sourceName || 'PROPRIA', quantity: qty });
+      }
+    }
 
+    for (const agg of aggregatedItems.values()) {
       // Find the top-level composition
       const composition = await prisma.engineeringComposition.findFirst({
-        where: { code: { equals: pItem.code, mode: 'insensitive' } },
+        where: { code: { equals: agg.code, mode: 'insensitive' } },
         include: {
           database: true,
           items: {
@@ -78,8 +92,10 @@ export class CompositionFlattener {
 
       if (!composition) continue;
 
-      const flattened = await this.resolveComposition(composition.id, false, composition.database?.name || pItem.sourceName || 'PROPRIA');
+      const flattened = await this.resolveComposition(composition.id, false, composition.database?.name || agg.sourceName);
       if (flattened) {
+        flattened.proposalQuantity = agg.quantity;
+        flattened.proposalTotal = agg.quantity * flattened.valorComBdi;
         principalCompositions.push(flattened);
       }
     }

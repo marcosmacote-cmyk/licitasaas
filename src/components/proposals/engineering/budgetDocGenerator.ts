@@ -283,7 +283,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
 
-    let html = `<h1>ORÇAMENTO ANALÍTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
+    let html = `<h1>COMPOSIÇÕES ANALÍTICAS DE PREÇO UNITÁRIO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
     html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
 
     try {
@@ -302,7 +302,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
                     <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
                 </div>
                 <table>
-                <thead><tr><th>Tipo</th><th>Código</th><th>Descrição</th><th class="c">Un.</th><th class="r">Coef.</th><th class="r">Preço Unit.</th><th class="r">Total</th></tr></thead>
+                <thead><tr><th>Tipo</th><th>Código</th><th>Banco</th><th>Descrição</th><th class="c">Und</th><th class="r">Coef.</th><th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
                 <tbody>`;
 
             for (const ci of comp.items) {
@@ -310,25 +310,33 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
                 ch += `<tr>
                     <td>${tipo}</td>
                     <td class="mono">${ci.code || ''}</td>
+                    <td>${ci.sourceName || ''}</td>
                     <td>${ci.description || '—'}</td>
                     <td class="c">${ci.unit || ''}</td>
-                    <td class="r mono">${ci.coefficient.toFixed(4)}</td>
+                    <td class="r mono">${ci.coefficient.toFixed(7)}</td>
                     <td class="r">${fmt(ci.unitPrice || 0)}</td>
                     <td class="r">${fmt(ci.totalPrice || 0)}</td>
                 </tr>`;
             }
 
             ch += `</tbody></table>
-            <div style="display:flex; justify-content:space-between; padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0;">
-                <div style="color:#475569;">
-                    MO sem LS: <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;|&nbsp; 
-                    LS: <b>${fmt(comp.totalLs || 0)}</b> &nbsp;|&nbsp; 
-                    MO com LS: <b>${fmt(comp.totalMoComLs || 0)}</b>
+            <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 2px;">
+                    <div style="color:#475569;">
+                        MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                        LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                        MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
+                    </div>
+                    <div style="color:#475569;">
+                        Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                        Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
+                    </div>
                 </div>
-                <div style="color:#475569;">
-                    Valor do BDI: <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;|&nbsp; 
-                    <span style="color:#1e40af; font-weight:bold;">Valor com BDI: ${fmt(comp.valorComBdi || 0)}</span>
-                </div>
+                ${comp.proposalQuantity ? `
+                <div style="display:flex; justify-content:flex-end; gap: 20px; color:#1e40af; font-weight:bold; font-size: 8.5px;">
+                    <div>Quant. => ${comp.proposalQuantity.toFixed(4)}</div>
+                    <div>Preço Total => ${fmt(comp.proposalTotal || 0)}</div>
+                </div>` : ''}
             </div>
             </div>`;
             return ch;
