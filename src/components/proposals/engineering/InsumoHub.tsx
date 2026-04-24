@@ -244,7 +244,9 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
                                     return (
                                         <tr key={ins.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                                             <td style={{ padding: '6px 8px', width: 28 }}>
-                                                <span title={meta.label} style={{ fontSize: '0.9rem' }}>{meta.icon}</span>
+                                                <span title={meta.label} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                    {(() => { const Ico = CAT_ICON[ins.categoria]; return <Ico size={16} color={meta.color} />; })()}
+                                                </span>
                                             </td>
                                             <td style={{ padding: '6px 8px' }}>
                                                 <span style={{ fontWeight: 700, color: meta.color, fontSize: '0.75rem' }}>{ins.codigo}</span>
@@ -315,7 +317,9 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
                             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 8 }}>Por Categoria</span>
                             {(Object.entries(CATEGORIA_META) as [InsumoCategoria, typeof CATEGORIA_META[InsumoCategoria]][]).map(([key, meta]) => (
                                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                    <span style={{ fontSize: '0.85rem', width: 20 }}>{meta.icon}</span>
+                                    <span style={{ fontSize: '0.85rem', width: 20, display: 'inline-flex', alignItems: 'center' }}>
+                                        {(() => { const Ico = CAT_ICON[key]; return <Ico size={14} color={meta.color} />; })()}
+                                    </span>
                                     <span style={{ flex: 1, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{meta.label}</span>
                                     <input type="number" min={0} max={100} step={0.5}
                                         value={descontoConfig.descontoPorCategoria[key]}

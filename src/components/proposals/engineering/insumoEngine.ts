@@ -62,10 +62,10 @@ export interface InsumoRaw {
 // ═══════════════════════════════════════════════════════════
 
 export const CATEGORIA_META: Record<InsumoCategoria, { label: string; color: string; icon: string; bgLight: string }> = {
-    MATERIAL:     { label: 'Material',        color: '#2563eb', icon: '📦', bgLight: 'rgba(37,99,235,0.08)' },
-    MAO_DE_OBRA:  { label: 'Mão de Obra',     color: '#7c3aed', icon: '👷', bgLight: 'rgba(124,58,237,0.08)' },
-    EQUIPAMENTO:  { label: 'Equipamento',     color: '#0891b2', icon: '🔧', bgLight: 'rgba(8,145,178,0.08)' },
-    SERVICO:      { label: 'Serviço',         color: '#059669', icon: '🏗️', bgLight: 'rgba(5,150,105,0.08)' },
+    MATERIAL:     { label: 'Material',        color: '#2563eb', icon: '', bgLight: 'rgba(37,99,235,0.08)' },
+    MAO_DE_OBRA:  { label: 'Mão de Obra',     color: '#7c3aed', icon: '', bgLight: 'rgba(124,58,237,0.08)' },
+    EQUIPAMENTO:  { label: 'Equipamento',     color: '#0891b2', icon: '', bgLight: 'rgba(8,145,178,0.08)' },
+    SERVICO:      { label: 'Serviço',         color: '#059669', icon: '', bgLight: 'rgba(5,150,105,0.08)' },
 };
 
 export const DEFAULT_DESCONTO_CONFIG: DescontoConfig = {

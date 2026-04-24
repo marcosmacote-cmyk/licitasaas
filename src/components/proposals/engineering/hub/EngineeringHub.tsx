@@ -111,7 +111,7 @@ export function EngineeringHub() {
             });
             
             if (res.ok) {
-                alert('🚀 Sync SINAPI iniciado em background!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.');
+                alert('Sync SINAPI iniciado em background!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.');
                 // Poll for updates
                 setTimeout(fetchBases, 30000);
                 setTimeout(fetchBases, 60000);

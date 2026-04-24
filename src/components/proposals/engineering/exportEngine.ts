@@ -175,10 +175,7 @@ function openPrintWindow(title: string, html: string) {
 ${html}
 <div class="footer">LicitaSaaS — Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</div>
 <div class="no-print" style="text-align:center;margin-top:16px;">
-  <button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;">
-    🖨️ Imprimir / Salvar PDF
-  </button>
-</div>
+    <div class="no-print"><button onclick="window.print()" style="padding:6px 20px;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:11px">Imprimir / Salvar PDF</button></div>
 </body></html>`);
     win.document.close();
 }

@@ -54,7 +54,7 @@ function openDoc(title: string, html: string) {
     w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${CSS}</style></head><body>
 ${html}
 <div class="footer">LicitaSaaS — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</div>
-<div class="no-print"><button onclick="window.print()" style="padding:6px 20px;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:11px">🖨️ Imprimir / Salvar PDF</button></div>
+<div class="no-print"><button onclick="window.print()" style="padding:6px 20px;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:11px">Imprimir / Salvar PDF</button></div>
 </body></html>`);
     w.document.close();
 }

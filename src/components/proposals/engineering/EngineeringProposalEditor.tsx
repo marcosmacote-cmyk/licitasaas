@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
@@ -44,7 +44,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
-    const [saveMsg, setSaveMsg] = useState('');
+    const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
 
     // Search modal
     const [showSearch, setShowSearch] = useState(false);
@@ -100,16 +100,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Save all items
     const handleSave = async () => {
-        setIsSaving(true); setSaveMsg('');
+        setIsSaving(true); setSaveMsg(null);
         try {
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
                 body: JSON.stringify({ items, bdiConfig })
             });
-            if (res.ok) { const d = await res.json(); setSaveMsg(`✅ ${d.message}`); }
-            else { setSaveMsg('❌ Erro ao salvar'); }
-        } catch { setSaveMsg('❌ Erro de rede'); }
-        finally { setIsSaving(false); setTimeout(() => setSaveMsg(''), 4000); }
+            if (res.ok) { const d = await res.json(); setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>); }
+            else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>); }
+        } catch { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro de rede</span>); }
+        finally { setIsSaving(false); setTimeout(() => setSaveMsg(null), 4000); }
     };
 
     // AI extraction
@@ -143,26 +143,26 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const comps = mapped.filter((m: EngItem) => m.type === 'COMPOSICAO').length;
                 const insumos = mapped.filter((m: EngItem) => m.type === 'INSUMO').length;
                 const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
-                setSaveMsg(`✅ ${mapped.length} itens: ${etapas} etapas, ${subs} subetapas, ${comps} composições, ${insumos} insumos${ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}`);
-            } else { setSaveMsg('⚠️ IA não encontrou itens orçamentários'); }
-        } catch (e: any) { setSaveMsg('❌ ' + e.message); }
-        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(''), 8000); }
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
+            } else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> IA não encontrou itens orçamentários</span>); }
+        } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
+        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(null), 8000); }
     };
 
     // AI composition extraction
     const [isExtractingComps, setIsExtractingComps] = useState(false);
     const handleExtractCompositions = async () => {
         setIsExtractingComps(true);
-        setSaveMsg('🔬 Extraindo composições do projeto básico via IA...');
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições do projeto básico via IA...</span>);
         try {
             const res = await fetch('/api/engineering/ai-extract-compositions', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
-            setSaveMsg(`✅ ${data.saved || 0} composições extraídas e salvas na base PRÓPRIA`);
-        } catch (e: any) { setSaveMsg('❌ ' + e.message); }
-        finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(''), 8000); }
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {data.saved || 0} composições extraídas e salvas na base PRÓPRIA</span>);
+        } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
+        finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(null), 8000); }
     };
 
     // Inline edit
