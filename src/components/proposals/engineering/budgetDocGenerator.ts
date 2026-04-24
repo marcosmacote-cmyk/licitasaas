@@ -317,6 +317,7 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
                 MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
             </div>
             <div style="color:#475569;">
+                Custo Unit. => <b>${fmt(comp.totalPrice || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
                 Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
                 Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
             </div>

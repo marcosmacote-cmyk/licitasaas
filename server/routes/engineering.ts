@@ -442,7 +442,7 @@ router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
         const { items, bdi } = req.body || {};
         
         // Obter configuração de BDI ou Encargos
-        const bdiValue = typeof bdi === 'number' ? bdi : 0.25;
+        const bdiValue = typeof bdi === 'number' ? (bdi > 1 ? bdi / 100 : bdi) : 0.25;
         const flattener = new CompositionFlattener(bdiValue, 0.8464); // Exemplo LS 84.64%
         
         const report = await flattener.flattenProposal(proposalId, items);
