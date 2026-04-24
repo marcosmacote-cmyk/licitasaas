@@ -155,16 +155,16 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
 }
 
 function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; description: string; unit: string; price: number; type: string }[] {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
   const targetUf = (uf || 'CE').toUpperCase();
 
   console.log(`[SINAPI Parse] 📄 ${workbook.SheetNames.length} abas: ${workbook.SheetNames.join(', ')}`);
 
-  // Target sheets: IND=Insumos NãoDesonerado, ICD=Insumos Desonerado
+  // Target sheets: IND/ISD=Insumos NãoDesonerado, ICD=Insumos Desonerado
   // CSD=Composições SemDesoneração, CCD=Composições ComDesoneração, CNE=Composições SemEncargos
-  const insumoSheets = ['IND', 'ICD', 'OE'];
-  const compSheets = ['CSD', 'CCD', 'CNE'];
+  const insumoSheets = ['IND', 'ICD', 'ISD', 'ISE'];
+  const compSheets = ['CSD', 'CCD', 'CNE', 'CSE'];
   const allTargets = [...insumoSheets, ...compSheets];
 
   for (const sheetName of workbook.SheetNames) {
@@ -190,7 +190,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; descrip
         // Find other columns in this row or previous rows
         for (let j = Math.max(0, i - 3); j <= i; j++) {
           const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
-          if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'CÓDIGO SINAPI');
+          if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'CÓDIGO SINAPI' || c.includes('COMPOSIÇÃO'));
           if (descCol < 0) descCol = r2.findIndex((c: string) => c.includes('DESCRI'));
           if (unitCol < 0) unitCol = r2.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UNIDADE');
           if (groupCol < 0) groupCol = r2.findIndex((c: string) => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO'));
@@ -214,10 +214,20 @@ function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; descrip
     let count = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      const code = String(r[codeCol] ?? '').trim();
+      let code = String(r[codeCol] ?? '').trim();
+      
+      // Handle Caixa's HYPERLINK formulas that evaluate to 0 in CSD/CCD
+      if (!code || code === '0' || code.length < 2) {
+        const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: i, c: codeCol })];
+        if (cell && cell.f) {
+          const match = cell.f.match(/,?(\d+)\s*\)$/);
+          if (match) code = match[1];
+        }
+      }
+
       const desc = String(r[descCol] ?? '').trim();
       const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
-      if (!code || !desc || code.length < 2) continue;
+      if (!code || !desc || code.length < 2 || code === '0') continue;
 
       // Read price from the UF column
       let price = 0;
@@ -247,31 +257,39 @@ function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; descrip
     console.log(`[SINAPI Parse] ✅ Aba "${sheetName}": ${count} itens para ${targetUf}`);
   }
 
-  // Fallback: if no target sheets found, try generic parsing (for mão_de_obra etc.)
+  // Fallback for isolated files (unlikely in national bundles but good for safety)
   if (items.length === 0) {
     for (const sheetName of workbook.SheetNames) {
+      if (!sheetName.toUpperCase().includes('DESONERA')) continue;
       const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
       if (rows.length < 5) continue;
       // Look for header with CODIGO + DESCRI + UF column
       for (let i = 0; i < Math.min(rows.length, 20); i++) {
         const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
         const ceIdx = row.indexOf(targetUf);
-        const cI = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO'));
+        const cI = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c.includes('COMPOSIÇÃO'));
         const dI = row.findIndex((c: string) => c.includes('DESCRI'));
         if (ceIdx >= 0 && cI >= 0 && dI >= 0) {
           const uI = row.findIndex((c: string) => c.includes('UNID'));
           console.log(`[SINAPI Parse] 🔄 Fallback aba "${sheetName}": UF col=${ceIdx}`);
           for (let j = i + 1; j < rows.length; j++) {
             const r = rows[j];
-            const code = String(r[cI] ?? '').trim();
+            let code = String(r[cI] ?? '').trim();
+            if (!code || code === '0' || code.length < 2) {
+              const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: j, c: cI })];
+              if (cell && cell.f) {
+                const match = cell.f.match(/,?(\d+)\s*\)$/);
+                if (match) code = match[1];
+              }
+            }
             const desc = String(r[dI] ?? '').trim();
-            if (!code || !desc || code.length < 2) continue;
+            if (!code || !desc || code.length < 2 || code === '0') continue;
             let price = 0;
             const raw = r[ceIdx];
             if (typeof raw === 'number') price = raw;
             else if (raw) { const c = String(raw).replace(/[^\d.,\-]/g, ''); price = parseFloat(c.replace(',', '.')) || 0; }
             if (price <= 0) continue;
-            items.push({ code, description: desc, unit: uI >= 0 ? String(r[uI] ?? 'UN').trim() : 'UN', price, type: 'MATERIAL' });
+            items.push({ code, description: desc, unit: uI >= 0 ? String(r[uI] ?? 'UN').trim() : 'UN', price, type: 'SERVICO' });
           }
           break;
         }
