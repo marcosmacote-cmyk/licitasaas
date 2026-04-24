@@ -1506,15 +1506,14 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
             SERVICO: allItems.filter(i => i.type === 'SERVICO').length,
             Total: insertedItems + insertedComps
         };
-        };
 
-        console.log(`[Eng Import] ✅ Concluído! ${inserted} itens na base "${db.name} ${db.uf}".`);
+        console.log(`[Eng Import] ✅ Concluído! ${stats.Total} itens na base "${db.name} ${db.uf}".`);
 
         res.json({
-            message: `Importação concluída: ${inserted} itens na base ${db.name} ${db.uf || ''}`,
+            message: `Importação concluída: ${stats.Total} itens na base ${db.name} ${db.uf || ''}`,
             databaseId: db.id,
             totalParsed: allItems.length,
-            totalInserted: inserted,
+            totalInserted: stats.Total,
             breakdown: stats,
             sheets: workbook.SheetNames,
         });
