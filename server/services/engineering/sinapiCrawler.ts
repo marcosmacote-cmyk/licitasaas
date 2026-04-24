@@ -480,7 +480,16 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         const existing = await prisma.engineeringDatabase.findFirst({
           where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL' }
         });
-        if (existing && existing.itemCount > 0 && existing.compositionCount > 0) { 
+        
+        let hasDependencies = false;
+        if (existing) {
+          const compItemCount = await prisma.engineeringCompositionItem.count({
+            where: { composition: { databaseId: existing.id } }
+          });
+          hasDependencies = compItemCount > 0;
+        }
+
+        if (existing && existing.itemCount > 0 && existing.compositionCount > 0 && hasDependencies) { 
           results.push({ success: true, message: `Já existente: ${existing.itemCount} itens, ${existing.compositionCount} composições` }); 
           continue; 
         }
