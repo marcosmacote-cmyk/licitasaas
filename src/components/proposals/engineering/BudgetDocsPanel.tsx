@@ -21,6 +21,7 @@ interface Props {
     effectiveBdi: number;
     insumos: InsumoConsolidado[];
     cronogramaResult: CronogramaResult | null;
+    proposalId: string;
 }
 
 const DOCS = [
@@ -34,7 +35,7 @@ const DOCS = [
     { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Detalhamento BDI (TCU) + tabela de encargos', icon: Calculator, color: '#475569' },
 ];
 
-export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult }: Props) {
+export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId }: Props) {
     const [generating, setGenerating] = useState<string | null>(null);
 
     const handleGenerate = async (docId: string) => {
@@ -43,7 +44,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             switch (docId) {
                 case 'resumido': docOrcamentoResumido(items, effectiveBdi); break;
                 case 'sintetico': docOrcamentoSintetico(items, effectiveBdi); break;
-                case 'analitico': await docOrcamentoAnalitico(items, effectiveBdi); break;
+                case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi); break;
                 case 'cpu': await docCpuBatch(items); break;
                 case 'abc_servicos': docCurvaAbcServicos(items); break;
                 case 'abc_insumos': docCurvaAbcInsumos(insumos); break;

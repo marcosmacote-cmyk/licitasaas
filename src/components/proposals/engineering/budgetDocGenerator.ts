@@ -276,39 +276,75 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 3. ORÇAMENTO ANALÍTICO (loads compositions from API)
+// 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard)
 // ═══════════════════════════════════════════════════════════
-export async function docOrcamentoAnalitico(items: EngItem[], bdi: number) {
+export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
 
     let html = `<h1>ORÇAMENTO ANALÍTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
+    html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
 
-    for (const it of items) {
-        html += `<h2>${it.itemNumber} — ${it.description}</h2>
-<div style="font-size:8px;color:#64748b;margin-bottom:4px">Código: ${it.code} · ${it.sourceName} · ${it.quantity} ${it.unit} · Custo: ${fmt(it.unitCost)} · Preço: ${fmt(it.unitPrice)} · Total: ${fmt(it.totalPrice)}</div>`;
+    try {
+        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { headers: hdrs });
+        if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+        const report = await res.json();
 
-        if (it.code && it.code !== 'N/A') {
-            try {
-                const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(it.code)}`, { headers: hdrs });
-                if (res.ok) {
-                    const d = await res.json();
-                    html += `<table><thead><tr><th>Grupo</th><th>Insumo</th><th>Un.</th><th class="r">Coef.</th><th class="r">Preço</th><th class="r">Subtotal</th></tr></thead><tbody>`;
-                    const groupLabels: Record<string,string> = { MATERIAL:'Material', MAO_DE_OBRA:'Mão de Obra', EQUIPAMENTO:'Equipamento', AUXILIAR:'Auxiliar' };
-                    for (const [gk, gl] of Object.entries(groupLabels)) {
-                        for (const ci of (d.groups?.[gk] || [])) {
-                            const id = ci.item || ci.auxiliaryComposition;
-                            html += `<tr><td>${gl}</td><td>${id?.description||'—'}</td><td class="c">${id?.unit||''}</td><td class="r mono">${ci.coefficient.toFixed(4)}</td><td class="r">${fmt(id?.price||0)}</td><td class="r">${fmt(ci.price)}</td></tr>`;
-                        }
-                    }
-                    html += `<tr class="total"><td colspan="5" class="r">Custo Unitário</td><td class="r">${fmt(d.totalPrice||d.totalDirect||0)}</td></tr></tbody></table>`;
-                } else {
-                    html += `<div style="font-size:8px;color:#94a3b8;font-style:italic">Composição não disponível na base.</div>`;
-                }
-            } catch { html += `<div style="font-size:8px;color:#94a3b8">Erro ao carregar composição.</div>`; }
+        const renderComposition = (comp: any) => {
+            let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0;">
+                <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
+                    <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
+                    <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
+                </div>
+                <table>
+                <thead><tr><th>Tipo</th><th>Código</th><th>Descrição</th><th class="c">Un.</th><th class="r">Coef.</th><th class="r">Preço Unit.</th><th class="r">Total</th></tr></thead>
+                <tbody>`;
+
+            for (const ci of comp.items) {
+                const tipo = ci.type === 'MAO_DE_OBRA' ? 'Mão de Obra' : ci.type === 'MATERIAL' ? 'Material' : ci.type === 'EQUIPAMENTO' ? 'Equipamento' : 'Comp. Auxiliar';
+                ch += `<tr>
+                    <td>${tipo}</td>
+                    <td class="mono">${ci.code || ''}</td>
+                    <td>${ci.description || '—'}</td>
+                    <td class="c">${ci.unit || ''}</td>
+                    <td class="r mono">${ci.coefficient.toFixed(4)}</td>
+                    <td class="r">${fmt(ci.unitPrice || 0)}</td>
+                    <td class="r">${fmt(ci.totalPrice || 0)}</td>
+                </tr>`;
+            }
+
+            ch += `</tbody></table>
+            <div style="display:flex; justify-content:space-between; padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0;">
+                <div style="color:#475569;">
+                    MO sem LS: <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;|&nbsp; 
+                    LS: <b>${fmt(comp.totalLs || 0)}</b> &nbsp;|&nbsp; 
+                    MO com LS: <b>${fmt(comp.totalMoComLs || 0)}</b>
+                </div>
+                <div style="color:#475569;">
+                    Valor do BDI: <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;|&nbsp; 
+                    <span style="color:#1e40af; font-weight:bold;">Valor com BDI: ${fmt(comp.valorComBdi || 0)}</span>
+                </div>
+            </div>
+            </div>`;
+            return ch;
+        };
+
+        for (const comp of report.principalCompositions) {
+            html += renderComposition(comp);
         }
+
+        if (report.auxiliaryCompositions.length > 0) {
+            html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed; page-break-before: always;">Composições Auxiliares</div>`;
+            for (const comp of report.auxiliaryCompositions) {
+                html += renderComposition(comp);
+            }
+        }
+        
+    } catch (e: any) {
+        html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
     }
+
     openDoc('Orçamento Analítico', html);
 }
 
