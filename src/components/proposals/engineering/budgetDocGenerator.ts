@@ -67,9 +67,10 @@ function groupByChapter(items: EngItem[]) {
         if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
         const g = map.get(prefix)!;
         
-        // If this item is exactly the chapter parent (e.g. "1", "2") and usually has no unit/price
-        if (it.itemNumber === prefix && (!it.unit || it.unit === '')) {
-            g.title = `${prefix} — ${it.description}`;
+        // If this item is a structural node (e.g. "1", "2.1") and has no valid unit
+        if (!it.unit || it.unit.trim() === '' || it.unit === '-') {
+            if (it.itemNumber === prefix) g.title = `${prefix} — ${it.description}`;
+            continue; // Skip adding this to the items list!
         }
 
         g.items.push(it);
@@ -121,8 +122,9 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number) {
 // 5. CURVA ABC DE SERVIÇOS
 // ═══════════════════════════════════════════════════════════
 export function docCurvaAbcServicos(items: EngItem[]) {
-    const total = items.reduce((s, i) => s + i.totalPrice, 0);
-    const sorted = [...items].sort((a, b) => b.totalPrice - a.totalPrice);
+    const validItems = items.filter(it => it.unit && it.unit.trim() !== '' && it.unit !== '-');
+    const total = validItems.reduce((s, i) => s + i.totalPrice, 0);
+    const sorted = [...validItems].sort((a, b) => b.totalPrice - a.totalPrice);
     let accum = 0;
     let rows = '';
     sorted.forEach((it, idx) => {
@@ -282,7 +284,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
 }
 
 // Helper para renderizar Composição no padrão TCU
-function renderComposition(comp: any) {
+function renderComposition(comp: any, showQuantities: boolean = false) {
     let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
             <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
@@ -319,7 +321,7 @@ function renderComposition(comp: any) {
                 Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
             </div>
         </div>
-        ${comp.proposalQuantity ? `
+        ${showQuantities && comp.proposalQuantity ? `
         <div style="display:flex; justify-content:flex-end; gap: 20px; color:#1e40af; font-weight:bold; font-size: 8.5px;">
             <div>Quant. => ${comp.proposalQuantity.toFixed(4)}</div>
             <div>Preço Total => ${fmt(comp.proposalTotal || 0)}</div>
@@ -349,7 +351,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         const report = await res.json();
 
         for (const comp of report.principalCompositions) {
-            html += renderComposition(comp);
+            html += renderComposition(comp, true);
         }
         
     } catch (e: any) {
@@ -379,13 +381,13 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
 
         html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
         for (const comp of report.principalCompositions) {
-            html += renderComposition(comp);
+            html += renderComposition(comp, false);
         }
 
         if (report.auxiliaryCompositions.length > 0) {
             html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
             for (const comp of report.auxiliaryCompositions) {
-                html += renderComposition(comp);
+                html += renderComposition(comp, false);
             }
         }
         
