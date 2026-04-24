@@ -821,6 +821,54 @@ router.post('/ai-populate', async (req: any, res: any) => {
         // Auto-lookup for prices against registered databases
         await enrichWithOfficialPrices(items);
 
+        // Auto-save composições PRÓPRIAS with insumos to the database
+        const ownComps = items.filter((it: any) => it.type === 'COMPOSICAO' && it.sourceName === 'PROPRIA' && Array.isArray(it.insumos) && it.insumos.length > 0);
+        if (ownComps.length > 0 && biddingId) {
+            try {
+                const bidding = await prisma.biddingProcess.findUnique({ where: { id: biddingId }, select: { tenantId: true } });
+                if (bidding?.tenantId) {
+                    let propriaDb = await prisma.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId: bidding.tenantId } });
+                    if (!propriaDb) {
+                        propriaDb = await prisma.engineeringDatabase.create({ data: { name: 'PROPRIA', uf: '', tenantId: bidding.tenantId, type: 'PROPRIA' } });
+                    }
+                    let saved = 0;
+                    for (const comp of ownComps) {
+                        try {
+                            const existing = await prisma.engineeringComposition.findFirst({ where: { code: comp.code || comp.item, databaseId: propriaDb.id } });
+                            let compTotal = 0;
+                            if (Array.isArray(comp.insumos)) {
+                                for (const ins of comp.insumos) compTotal += (ins.coefficient || 0) * (ins.unitPrice || 0);
+                            }
+                            const compRecord = existing
+                                ? await prisma.engineeringComposition.update({ where: { id: existing.id }, data: { description: comp.description, unit: comp.unit || 'UN', totalPrice: compTotal } })
+                                : await prisma.engineeringComposition.create({ data: { code: comp.code || comp.item, description: comp.description, unit: comp.unit || 'UN', databaseId: propriaDb.id, totalPrice: compTotal } });
+
+                            await prisma.engineeringCompositionItem.deleteMany({ where: { compositionId: compRecord.id } });
+                            for (const ins of (comp.insumos || [])) {
+                                const insCode = `INS-${comp.code || comp.item}-${saved + 1}`;
+                                let insumo = await prisma.engineeringItem.findFirst({ where: { code: insCode, databaseId: propriaDb.id } });
+                                if (!insumo) {
+                                    const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL' };
+                                    insumo = await prisma.engineeringItem.create({
+                                        data: { code: insCode, description: ins.description || '', unit: ins.unit || 'UN', price: ins.unitPrice || 0, type: typeMap[ins.type] || 'MATERIAL', databaseId: propriaDb.id }
+                                    });
+                                }
+                                await prisma.engineeringCompositionItem.create({
+                                    data: { compositionId: compRecord.id, itemId: insumo.id, coefficient: ins.coefficient || 0, price: (ins.coefficient || 0) * (ins.unitPrice || 0) }
+                                });
+                            }
+                            saved++;
+                        } catch (e: any) {
+                            console.warn(`[Engineering AI-Populate] ⚠️ Erro ao salvar comp própria ${comp.code}: ${e.message}`);
+                        }
+                    }
+                    console.log(`[Engineering AI-Populate] 💾 ${saved} composições próprias com insumos salvas`);
+                }
+            } catch (e: any) {
+                console.warn(`[Engineering AI-Populate] ⚠️ Erro ao salvar comps próprias: ${e.message}`);
+            }
+        }
+
         res.json({ items, source: 'ai_extraction', count: items.length });
 
     } catch (e: any) {
@@ -1004,14 +1052,24 @@ async function mapV2ToEngineering(itensV2: any[]): Promise<any[]> {
             sourceName = code.match(/^[CI]\d/i) ? 'SEINFRA' : 'SINAPI';
         }
 
+        // Infer type from item structure
+        const itemNum = item.itemNumber || '';
+        const hasPrice = (item.referencePrice || 0) > 0;
+        const depth = (itemNum.match(/\./g) || []).length;
+        let type = 'COMPOSICAO';
+        if (!hasPrice && depth === 0) type = 'ETAPA';
+        else if (!hasPrice && depth === 1 && !item.unit) type = 'SUBETAPA';
+        else if (sourceName === 'PROPRIA' && !code) type = 'INSUMO';
+
         return {
-            item: item.itemNumber || '',
-            sourceName,
-            code,
+            item: itemNum,
+            type,
+            sourceName: type === 'ETAPA' || type === 'SUBETAPA' ? '' : sourceName,
+            code: type === 'ETAPA' || type === 'SUBETAPA' ? '' : code,
             description: item.description || '',
-            unit: item.unit || 'UN',
-            quantity: item.quantity || 1,
-            unitCost: item.referencePrice || 0,
+            unit: type === 'ETAPA' || type === 'SUBETAPA' ? '' : (item.unit || 'UN'),
+            quantity: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.quantity || 1),
+            unitCost: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.referencePrice || 0),
         };
     });
 

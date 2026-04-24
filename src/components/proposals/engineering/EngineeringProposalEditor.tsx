@@ -10,11 +10,17 @@ import { BudgetDocsPanel } from './BudgetDocsPanel';
 
 type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
 
+interface EngInsumo {
+    description: string; type: string; unit: string;
+    coefficient: number; unitPrice: number;
+}
+
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
     type: EngItemType;
+    insumos?: EngInsumo[];
 }
 
 const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string; icon: typeof FolderOpen }> = {
@@ -51,6 +57,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     // Composition drawer
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
     const [compositionEditorIndex, setCompositionEditorIndex] = useState<number | null>(null);
+
+    const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+    const toggleExpand = (id: string) => {
+        setExpandedItems(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
 
     // Active tab
     const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
@@ -118,13 +134,19 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         quantity: qty, unitCost: cost, type: aiType,
                         unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi),
                         totalPrice: isGroup ? 0 : Math.round(qty * applyBdi(cost, effectiveBdi) * 100) / 100,
+                        insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
                 });
                 setItems(prev => [...prev, ...mapped]);
-                setSaveMsg(`✅ ${mapped.length} itens extraídos via IA`);
+                const etapas = mapped.filter((m: EngItem) => m.type === 'ETAPA').length;
+                const subs = mapped.filter((m: EngItem) => m.type === 'SUBETAPA').length;
+                const comps = mapped.filter((m: EngItem) => m.type === 'COMPOSICAO').length;
+                const insumos = mapped.filter((m: EngItem) => m.type === 'INSUMO').length;
+                const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
+                setSaveMsg(`✅ ${mapped.length} itens: ${etapas} etapas, ${subs} subetapas, ${comps} composições, ${insumos} insumos${ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}`);
             } else { setSaveMsg('⚠️ IA não encontrou itens orçamentários'); }
         } catch (e: any) { setSaveMsg('❌ ' + e.message); }
-        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(''), 5000); }
+        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(''), 8000); }
     };
 
     // AI composition extraction
@@ -370,10 +392,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 }
 
                                 // ── COMPOSIÇÃO / INSUMO ROW (data row) ──
-                                return (
-                                    <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                const hasInsumos = it.type === 'COMPOSICAO' && it.insumos && it.insumos.length > 0;
+                                const isExpanded = expandedItems.has(it.id);
+                                const rows = [];
+
+                                rows.push(
+                                    <tr key={it.id} style={{ borderBottom: (hasInsumos && isExpanded) ? 'none' : '1px solid var(--color-border)' }}>
                                         <td style={{ padding: '6px 12px' }}>
-                                            <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle('60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                {hasInsumos && (
+                                                    <button onClick={() => toggleExpand(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: meta.color, display: 'flex' }}>
+                                                        {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                                    </button>
+                                                )}
+                                                <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '48px' : '60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                            </div>
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -414,6 +447,60 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         </td>
                                     </tr>
                                 );
+
+                                // ── EXPANDED INSUMO DETAIL ROWS ──
+                                if (hasInsumos && isExpanded) {
+                                    const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+                                        'MATERIAL': { label: 'Material', color: '#b45309' },
+                                        'MAO_DE_OBRA': { label: 'Mão de Obra', color: '#0369a1' },
+                                        'EQUIPAMENTO': { label: 'Equipamento', color: '#7c3aed' },
+                                    };
+                                    rows.push(
+                                        <tr key={`${it.id}-insumos`} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td colSpan={10} style={{ padding: 0 }}>
+                                                <div style={{ margin: '0 16px 8px 40px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(14,116,144,0.12)', overflow: 'hidden', background: 'rgba(14,116,144,0.02)' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                                                        <thead>
+                                                            <tr style={{ background: 'rgba(14,116,144,0.06)' }}>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'left', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Tipo</th>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'left', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Descrição do Insumo</th>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'center', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Unid.</th>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Coef.</th>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Preço Unit.</th>
+                                                                <th style={{ padding: '5px 10px', textAlign: 'right', color: '#0e7490', fontWeight: 700, fontSize: '0.65rem' }}>Subtotal</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {it.insumos!.map((ins, idx) => {
+                                                                const tl = TYPE_LABELS[ins.type] || { label: ins.type, color: '#666' };
+                                                                return (
+                                                                    <tr key={idx} style={{ borderTop: '1px solid rgba(14,116,144,0.08)' }}>
+                                                                        <td style={{ padding: '4px 10px' }}>
+                                                                            <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: 3, background: `${tl.color}10`, color: tl.color, fontWeight: 600 }}>{tl.label}</span>
+                                                                        </td>
+                                                                        <td style={{ padding: '4px 10px', color: 'var(--color-text-primary)', fontWeight: 500 }}>{ins.description}</td>
+                                                                        <td style={{ padding: '4px 10px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>{ins.unit}</td>
+                                                                        <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 500 }}>{ins.coefficient.toFixed(4)}</td>
+                                                                        <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 500 }}>{fmt(ins.unitPrice)}</td>
+                                                                        <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 700, color: '#0e7490' }}>{fmt(ins.coefficient * ins.unitPrice)}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                            <tr style={{ borderTop: '1px solid rgba(14,116,144,0.15)', background: 'rgba(14,116,144,0.04)' }}>
+                                                                <td colSpan={5} style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 700, color: '#0e7490', fontSize: '0.7rem' }}>Total da Composição:</td>
+                                                                <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 800, color: '#0e7490', fontSize: '0.75rem' }}>
+                                                                    {fmt(it.insumos!.reduce((s, ins) => s + ins.coefficient * ins.unitPrice, 0))}
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+
+                                return rows;
                             })}
                             {items.length === 0 && (
                                 <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
