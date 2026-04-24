@@ -686,6 +686,17 @@ model EngineeringDatabase {
   version     String?  // "2026-04", "028.1"
   type        String   @default("OFICIAL") // OFICIAL, PROPRIA
   
+  // Regime de encargos sociais
+  payrollExemption  Boolean  @default(false)  // false = Onerado, true = Desonerado
+  
+  // Data-base de referência (para controle de versões mensais)
+  referenceMonth    Int?     // 1-12
+  referenceYear     Int?     // 2025, 2026
+  
+  // Contadores para exibição no Hub (atualizados após import)
+  itemCount         Int      @default(0)
+  compositionCount  Int      @default(0)
+  
   items         EngineeringItem[]
   compositions  EngineeringComposition[]
 
@@ -694,6 +705,7 @@ model EngineeringDatabase {
 
   @@index([tenantId])
   @@index([type])
+  @@index([name, uf, referenceYear, referenceMonth, payrollExemption])
 }
 
 model EngineeringItem {

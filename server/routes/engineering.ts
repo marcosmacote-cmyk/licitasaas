@@ -1525,6 +1525,41 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/sync-sinapi
+// Trigger SINAPI auto-download & import (Admin only)
+// ═══════════════════════════════════════════════════════════
+import { syncSinapi } from '../services/engineering/sinapiCrawler';
+
+router.post('/bases/sync-sinapi', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const { ufs = ['CE'], months = 3, includeDesonerado = true } = req.body;
+
+        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: UFs=${ufs.join(',')}, meses=${months}, desonerado=${includeDesonerado}`);
+
+        // Run in background — don't block the HTTP response
+        res.json({
+            message: `Sync SINAPI iniciado em background para ${ufs.join(', ')} (${months} meses, ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'})`,
+            status: 'started',
+        });
+
+        // Fire and forget
+        syncSinapi({ ufs, months, includeDesonerado }).then(report => {
+            console.log(`[SINAPI Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error(`[SINAPI Sync] ❌ Erro fatal:`, err);
+        });
+
+    } catch (e: any) {
+        console.error('[SINAPI Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/bases/scrape-seinfra
 // Scrape SEINFRA-CE SIPROCE portal and populate database
 // ═══════════════════════════════════════════════════════════
