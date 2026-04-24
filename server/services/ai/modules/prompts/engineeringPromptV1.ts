@@ -176,7 +176,7 @@ REGRAS FINAIS
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 `;
 
-export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = \`
+export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
 
 ATENÇÃO ESPECIAL:
@@ -186,5 +186,5 @@ ATENÇÃO ESPECIAL:
 4. Preserve a numeração hierárquica (1.0, 1.1, 1.1.1, etc.)
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e preços quando disponíveis
-\`;
 `;
+
