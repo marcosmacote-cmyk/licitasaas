@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
@@ -8,11 +8,24 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 
+type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
+
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
+    type: EngItemType;
 }
+
+const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string; icon: typeof FolderOpen }> = {
+    ETAPA:      { label: 'Etapa',       color: '#1e40af', bg: 'rgba(30,64,175,0.08)',  icon: FolderOpen },
+    SUBETAPA:   { label: 'Subetapa',    color: '#6d28d9', bg: 'rgba(109,40,217,0.06)', icon: GitBranch },
+    COMPOSICAO: { label: 'Composição',  color: '#0e7490', bg: 'rgba(14,116,144,0.06)', icon: Layers },
+    INSUMO:     { label: 'Insumo',      color: '#b45309', bg: 'rgba(180,83,9,0.06)',   icon: Package },
+};
+
+const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';
+const getDepth = (itemNumber: string) => (itemNumber.match(/\./g) || []).length;
 
 interface Props { proposalId: string; biddingId: string; }
 
@@ -93,14 +106,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
             if (data.items?.length > 0) {
-                const mapped = data.items.map((ai: any, i: number) => ({
-                    id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
-                    code: ai.code || 'N/A', sourceName: ai.sourceName || 'PROPRIA',
-                    description: ai.description || '', unit: ai.unit || 'UN',
-                    quantity: Number(ai.quantity) || 1, unitCost: Number(ai.unitCost) || 0,
-                    unitPrice: applyBdi(Number(ai.unitCost) || 0, effectiveBdi),
-                    totalPrice: Math.round((Number(ai.quantity) || 1) * applyBdi(Number(ai.unitCost) || 0, effectiveBdi) * 100) / 100,
-                }));
+                const mapped = data.items.map((ai: any, i: number) => {
+                    const aiType: EngItemType = (['ETAPA','SUBETAPA','COMPOSICAO','INSUMO'].includes(ai.type)) ? ai.type : 'COMPOSICAO';
+                    const isGroup = isGrouper(aiType);
+                    const cost = isGroup ? 0 : (Number(ai.unitCost) || 0);
+                    const qty = isGroup ? 0 : (Number(ai.quantity) || 1);
+                    return {
+                        id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
+                        code: ai.code || (isGroup ? '' : 'N/A'), sourceName: isGroup ? '' : (ai.sourceName || 'PROPRIA'),
+                        description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
+                        quantity: qty, unitCost: cost, type: aiType,
+                        unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi),
+                        totalPrice: isGroup ? 0 : Math.round(qty * applyBdi(cost, effectiveBdi) * 100) / 100,
+                    };
+                });
                 setItems(prev => [...prev, ...mapped]);
                 setSaveMsg(`✅ ${mapped.length} itens extraídos via IA`);
             } else { setSaveMsg('⚠️ IA não encontrou itens orçamentários'); }
@@ -139,10 +158,23 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     const removeItem = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
 
-    const addBlankItem = () => {
+    const addTypedItem = (type: EngItemType) => {
+        const isGroup = isGrouper(type);
+        const nextNum = items.length + 1;
+        let itemNumber = String(nextNum);
+        if (type === 'ETAPA') {
+            const etapaCount = items.filter(i => i.type === 'ETAPA').length + 1;
+            itemNumber = `${etapaCount}.0`;
+        } else if (type === 'SUBETAPA') {
+            const lastEtapa = [...items].reverse().find(i => i.type === 'ETAPA');
+            const etapaNum = lastEtapa?.itemNumber?.split('.')[0] || '1';
+            const subCount = items.filter(i => i.type === 'SUBETAPA' && i.itemNumber.startsWith(etapaNum + '.')).length + 1;
+            itemNumber = `${etapaNum}.${subCount}`;
+        }
         setItems(prev => [...prev, {
-            id: `new-${Date.now()}`, itemNumber: String(prev.length + 1), code: '', sourceName: 'PROPRIA',
-            description: '', unit: 'UN', quantity: 1, unitCost: 0, unitPrice: 0, totalPrice: 0,
+            id: `new-${Date.now()}`, itemNumber, code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
+            description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
+            unitCost: 0, unitPrice: 0, totalPrice: 0, type,
         }]);
     };
 
@@ -157,6 +189,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         } catch { } finally { setIsSearching(false); }
     };
 
+    const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
+
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
         const cost = Number(dbItem.price) || 0;
@@ -165,7 +199,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             code: dbItem.code, sourceName: base?.name || 'OFICIAL',
             description: dbItem.description, unit: dbItem.unit, quantity: 1,
             unitCost: cost, unitPrice: applyBdi(cost, effectiveBdi),
-            totalPrice: applyBdi(cost, effectiveBdi),
+            totalPrice: applyBdi(cost, effectiveBdi), type: insertType,
         }]);
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
     };
@@ -297,64 +331,121 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                {['Item','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 12px', textAlign: i >= 5 ? 'right' : 'left', color: i === 7 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 7 ? 700 : 600, width: i === 3 ? '30%' : undefined }}>{h}</th>
+                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)',''].map((h,i) => (
+                                    <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 8 ? 700 : 600, width: i === 4 ? '28%' : i === 1 ? 80 : undefined, fontSize: '0.72rem' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map(it => (
-                                <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                    <td style={{ padding: '6px 12px' }}>
-                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle('60px'), fontWeight: 700 }} />
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>{it.sourceName}</span>
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('65px'), color: 'var(--color-text-secondary)' }} />
-                                            {it.code && it.code !== 'N/A' && (
-                                                <button title="Editar composição (full-page)" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
-                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-                                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
-                                                >
-                                                    <Layers size={13} color="var(--color-primary)" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('55px'), textAlign: 'center' }} />
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
-                                    </td>
-                                    <td style={{ padding: '6px 8px' }}>
-                                        <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
-                                    </td>
-                                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
-                                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                                        <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {items.map(it => {
+                                const meta = TYPE_META[it.type || 'COMPOSICAO'];
+                                const isGroup = isGrouper(it.type);
+                                const depth = getDepth(it.itemNumber);
+                                const IconComp = meta.icon;
+
+                                // ── ETAPA / SUBETAPA ROW (header style) ──
+                                if (isGroup) {
+                                    return (
+                                        <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)', background: meta.bg }}>
+                                            <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
+                                                {it.itemNumber}
+                                            </td>
+                                            <td style={{ padding: '6px 8px' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.68rem', fontWeight: 700 }}>
+                                                    <IconComp size={11} /> {meta.label}
+                                                </span>
+                                            </td>
+                                            <td colSpan={6} style={{ padding: '8px 12px' }}>
+                                                <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
+                                                    style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
+                                                    onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
+                                                    onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+
+                                // ── COMPOSIÇÃO / INSUMO ROW (data row) ──
+                                return (
+                                    <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                        <td style={{ padding: '6px 12px' }}>
+                                            <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle('60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                <IconComp size={10} /> {meta.label}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            {it.sourceName && <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 700 }}>{it.sourceName}</span>}
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('65px'), color: 'var(--color-text-secondary)' }} />
+                                                {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && (
+                                                    <button title="Editar composição" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
+                                                    >
+                                                        <Layers size={13} color="var(--color-primary)" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('55px'), textAlign: 'center' }} />
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
+                                        </td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                            <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             {items.length === 0 && (
-                                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                     Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente
                                 </td></tr>
                             )}
                         </tbody>
                     </table>
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 8 }}>
-                        <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={addBlankItem}>
-                            <Plus size={14} /> Adicionar Item
+
+                    {/* ── INSERTION TOOLBAR (OrcaFascio style) ── */}
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4 }}>Inserir:</span>
+                        {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
+                            const m = TYPE_META[type];
+                            return (
+                                <button key={type} onClick={() => addTypedItem(type)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${m.color}20`, background: m.bg, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: m.color, transition: 'all 0.15s' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}18`; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}
+                                >
+                                    <Icon size={13} /> {m.label}
+                                </button>
+                            );
+                        })}
+                        <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
+                        <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
+                            onClick={() => { setInsertType('COMPOSICAO'); setShowSearch(true); }}>
+                            <Database size={13} /> Buscar Composição
                         </button>
-                        <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowSearch(true)}>
-                            <Search size={14} /> Buscar na Base Oficial
+                        <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
+                            onClick={() => { setInsertType('INSUMO'); setShowSearch(true); }}>
+                            <Search size={13} /> Buscar Insumo
                         </button>
                     </div>
                 </div>

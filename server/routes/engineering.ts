@@ -611,9 +611,10 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     itemNumber: item.itemNumber || String(index + 1),
                     code: item.code || null,
                     sourceName: item.sourceName || 'PROPRIA',
+                    type: item.type || 'COMPOSICAO',
                     description: item.description || '',
                     unit: item.unit || 'UN',
-                    quantity: Number(item.quantity) || 1,
+                    quantity: Number(item.quantity) || (item.type === 'ETAPA' || item.type === 'SUBETAPA' ? 0 : 1),
                     unitCost: Number(item.unitCost) || 0,
                     unitPrice: Number(item.unitPrice) || 0,
                     totalPrice: Number(item.totalPrice) || 0,
@@ -621,10 +622,10 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 }))
             });
 
-            // Calculate and update proposal totals
-            const totalValue = items.reduce((sum: number, it: any) =>
-                sum + (Number(it.totalPrice) || 0), 0
-            );
+            // Calculate and update proposal totals (excluding groupers)
+            const totalValue = items
+                .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
 
             await tx.priceProposal.update({
                 where: { id: proposalId },
@@ -1053,16 +1054,34 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
  */
 async function enrichWithOfficialPrices(items: any[]): Promise<void> {
     for (const item of items) {
-        if (item.code && item.code !== 'N/A') {
-            const dbItem = await prisma.engineeringItem.findFirst({
-                where: { code: { equals: item.code, mode: 'insensitive' } }
-            });
-            if (dbItem) {
-                item.unitCost = Number(dbItem.price) || item.unitCost || 0;
-                item.sourceName = item.sourceName || dbItem.type || 'SINAPI';
-                if (!item.unit || item.unit === 'UN') item.unit = dbItem.unit || item.unit;
-                console.log(`[Engineering Match] ✅ ${item.code} → ${dbItem.description?.substring(0, 50)} = R$ ${dbItem.price}`);
-            }
+        // Skip groupers (ETAPA/SUBETAPA)
+        if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+        if (!item.code || item.code === 'N/A') continue;
+
+        // 1. Search in EngineeringItem (insumos)
+        const dbItem = await prisma.engineeringItem.findFirst({
+            where: { code: { equals: item.code, mode: 'insensitive' } },
+            include: { database: { select: { name: true } } },
+        });
+        if (dbItem) {
+            item.unitCost = Number(dbItem.price) || item.unitCost || 0;
+            item.sourceName = dbItem.database?.name || item.sourceName || 'OFICIAL';
+            if (!item.unit || item.unit === 'UN') item.unit = dbItem.unit || item.unit;
+            console.log(`[Engineering Match] ✅ Item ${item.code} → ${dbItem.description?.substring(0, 50)} = R$ ${dbItem.price} (${item.sourceName})`);
+            continue;
+        }
+
+        // 2. Search in EngineeringComposition (composições)
+        const dbComp = await prisma.engineeringComposition.findFirst({
+            where: { code: { equals: item.code, mode: 'insensitive' } },
+            include: { database: { select: { name: true } } },
+        });
+        if (dbComp) {
+            item.unitCost = Number(dbComp.totalPrice) || item.unitCost || 0;
+            item.sourceName = dbComp.database?.name || item.sourceName || 'OFICIAL';
+            if (!item.unit || item.unit === 'UN') item.unit = dbComp.unit || item.unit;
+            item.type = 'COMPOSICAO';
+            console.log(`[Engineering Match] ✅ Comp ${item.code} → ${dbComp.description?.substring(0, 50)} = R$ ${dbComp.totalPrice} (${item.sourceName})`);
         }
     }
 }

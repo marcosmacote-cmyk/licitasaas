@@ -658,9 +658,10 @@ model EngineeringProposalItem {
   id              String   @id @default(uuid())
   proposalId      String
   
-  itemNumber      String   // "1.1", "1.2", "2.1" — hierarquia
+  itemNumber      String   // "1.0", "1.1", "1.1.1" — hierarquia
   code            String?  // Código oficial: "74209/1", "C0054"
   sourceName      String   @default("PROPRIA") // SINAPI, SEINFRA, SICRO, ORSE, PROPRIA
+  type            String   @default("COMPOSICAO") // ETAPA, SUBETAPA, COMPOSICAO, INSUMO
   description     String   @db.Text
   unit            String   @default("UN")
   quantity        Float    @default(1)
