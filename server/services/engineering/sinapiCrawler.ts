@@ -19,7 +19,7 @@ const prisma = new PrismaClient();
 
 const PORTAL_URL = 'https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx';
 
-async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
+export async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
   let browser: any = null;
   try {
     const puppeteer = await import('puppeteer-core');
@@ -154,9 +154,13 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
   return excels;
 }
 
-function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { code: string; description: string; unit: string; price: number; type: string }[] {
+export interface ParsedItem { code: string; description: string; unit: string; price: number; type: string; }
+export interface ParsedCompositionItem { parentCode: string; type: string; code: string; description: string; unit: string; quantity: number; }
+
+function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
-  const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
+  const items: ParsedItem[] = [];
+  const compositionItems: ParsedCompositionItem[] = [];
   const targetUf = (uf || 'CE').toUpperCase();
 
   console.log(`[SINAPI Parse] 📄 ${workbook.SheetNames.length} abas: ${workbook.SheetNames.join(', ')}`);
@@ -171,16 +175,64 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
     compSheets = desonerado ? ['CCD'] : ['CSD'];
   }
   
-  const allTargets = [...insumoSheets, ...compSheets];
+  const allTargets = [...insumoSheets, ...compSheets, 'ANALÍTICO', 'ANALITICO'];
 
   for (const sheetName of workbook.SheetNames) {
     const upper = sheetName.toUpperCase().trim();
     const isTarget = allTargets.includes(upper);
     if (!isTarget) continue;
 
-    const isComposition = compSheets.includes(upper);
     const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     if (rows.length < 5) continue;
+
+    if (upper === 'ANALÍTICO' || upper === 'ANALITICO') {
+      let headerIdx = -1;
+      let parentCodeCol = 1, typeCol = 2, codeCol = 3, descCol = 4, unitCol = 5, qtyCol = 6;
+      for (let i = 0; i < Math.min(rows.length, 20); i++) {
+        const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+        if (row.includes('GRUPO') && row.some((c: string) => c.includes('COEFICIENTE'))) {
+          headerIdx = i;
+          parentCodeCol = row.findIndex((c: string) => c.includes('COMPOSIÇÃO'));
+          typeCol = row.findIndex((c: string) => c.includes('TIPO ITEM'));
+          codeCol = row.findIndex((c: string) => c.includes('CÓDIGO DO ITEM') || c.includes('CÓDIGO DO\r\nITEM'));
+          descCol = row.findIndex((c: string) => c === 'DESCRIÇÃO');
+          unitCol = row.findIndex((c: string) => c === 'UNIDADE');
+          qtyCol = row.findIndex((c: string) => c === 'COEFICIENTE');
+          break;
+        }
+      }
+      
+      if (headerIdx >= 0) {
+        let count = 0;
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          const r = rows[i];
+          const parentCode = String(r[parentCodeCol] ?? '').trim();
+          const code = String(r[codeCol] ?? '').trim();
+          if (!parentCode || !code || code === '0') continue;
+          
+          const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
+          const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
+          const description = String(r[descCol] ?? '').trim();
+          const unit = String(r[unitCol] ?? '').trim() || 'UN';
+          
+          let qty = 0;
+          const rawQty = r[qtyCol];
+          if (typeof rawQty === 'number') qty = rawQty;
+          else if (rawQty) {
+            const c = String(rawQty).replace(/[^\d.,\-]/g, '');
+            if (c) qty = parseFloat(c.replace(',', '.')) || 0;
+          }
+          if (qty <= 0) continue;
+          
+          compositionItems.push({ parentCode, type, code, description, unit, quantity: qty });
+          count++;
+        }
+        console.log(`[SINAPI Parse] ✅ Aba "Analítico": ${count} itens de composição parseados`);
+      }
+      continue;
+    }
+
+    const isComposition = compSheets.includes(upper);
 
     // Find the header row with UF columns (AC, AL, AM, ..., CE, ..., TO)
     let headerIdx = -1, ufColIdx = -1;
@@ -303,7 +355,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
     }
   }
 
-  return items;
+  return { items, compositionItems };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -312,7 +364,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
 
 interface SyncResult { success: boolean; message: string; databaseId?: string; itemCount?: number; compositionCount?: number; }
 
-async function persistItems(baseName: string, uf: string, month: number, year: number, desonerado: boolean, items: { code: string; description: string; unit: string; price: number; type: string }[]): Promise<SyncResult> {
+async function persistItems(baseName: string, uf: string, month: number, year: number, desonerado: boolean, data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }): Promise<SyncResult> {
   const version = `${String(month).padStart(2, '0')}/${year}`;
   const regime = desonerado ? 'Desonerado' : 'Onerado';
 
@@ -329,8 +381,8 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     });
   }
 
-  const basicItems = items.filter(it => it.type !== 'SERVICO');
-  const serviceItems = items.filter(it => it.type === 'SERVICO');
+  const basicItems = data.items.filter(it => it.type !== 'SERVICO');
+  const serviceItems = data.items.filter(it => it.type === 'SERVICO');
 
   let insertedItems = 0;
   for (let i = 0; i < basicItems.length; i += 1000) {
@@ -347,9 +399,56 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     });
     insertedComps += r.count;
   }
+  
+  // Create a map to lookup prices for the items
+  const priceMap = new Map<string, number>();
+  for (const it of data.items) priceMap.set(it.code, it.price);
+  
+  let insertedCompItems = 0;
+  if (data.compositionItems && data.compositionItems.length > 0) {
+    // Fetch all composition IDs inserted
+    const comps = await prisma.engineeringComposition.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
+    const compIdMap = new Map<string, string>();
+    for (const c of comps) compIdMap.set(c.code, c.id);
+    
+    // Fetch all item IDs inserted
+    const itms = await prisma.engineeringItem.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
+    const itemIdMap = new Map<string, string>();
+    for (const c of itms) itemIdMap.set(c.code, c.id);
+    
+    const dbCompItems = [];
+    for (const ci of data.compositionItems) {
+      const compId = compIdMap.get(ci.parentCode);
+      if (!compId) continue;
+      
+      let unitPrice = priceMap.get(ci.code) || 0;
+      let totalPrice = unitPrice * ci.quantity;
+      
+      const isSvc = ci.type === 'SERVICO';
+      const itemId = isSvc ? null : (itemIdMap.get(ci.code) || null);
+      
+      dbCompItems.push({
+        compositionId: compId,
+        itemId: itemId,
+        type: ci.type,
+        code: ci.code,
+        description: ci.description,
+        unit: ci.unit,
+        quantity: ci.quantity,
+        unitPrice: unitPrice,
+        totalPrice: totalPrice
+      });
+    }
+    
+    for (let i = 0; i < dbCompItems.length; i += 2000) {
+      const chunk = dbCompItems.slice(i, i + 2000);
+      const r = await prisma.engineeringCompositionItem.createMany({ data: chunk, skipDuplicates: true });
+      insertedCompItems += r.count;
+    }
+  }
 
   await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
-  console.log(`[SINAPI Crawler] ✅ ${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições`);
+  console.log(`[SINAPI Crawler] ✅ ${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições + ${insertedCompItems} dependências`);
   return { success: true, message: `${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
 }
 
@@ -411,11 +510,14 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel`); results.push({ success: false, message: `ZIP sem Excel` }); continue; }
 
         console.log(`[SINAPI Crawler] 📊 Parseando ${excels.length} planilhas...`);
-        const allItems = excels.flatMap(buf => parseExcelToItems(buf, uf, desonerado));
-        console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}`);
+        const allExtracted = excels.map(buf => parseExcelToItems(buf, uf, desonerado));
+        const allItems = allExtracted.flatMap(e => e.items);
+        const allCompItems = allExtracted.flatMap(e => e.compositionItems);
+        
+        console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}, dependências: ${allCompItems.length}`);
         if (allItems.length === 0) { console.log(`[SINAPI Crawler] ❌ Nenhum item válido encontrado`); results.push({ success: false, message: `Nenhum item válido` }); continue; }
 
-        results.push(await persistItems(baseName, uf, month, year, desonerado, allItems));
+        results.push(await persistItems(baseName, uf, month, year, desonerado, { items: allItems, compositionItems: allCompItems }));
         await new Promise(r => setTimeout(r, 3000)); // Respect rate limits
       }
     }
@@ -427,7 +529,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
 }
 
 export async function importFromBuffer(buffer: Buffer, baseName: string, uf: string, month: number, year: number, desonerado: boolean): Promise<SyncResult> {
-  const items = parseExcelToItems(buffer, uf, desonerado);
-  if (items.length === 0) return { success: false, message: 'Nenhum item válido' };
-  return persistItems(baseName, uf, month, year, desonerado, items);
+  const data = parseExcelToItems(buffer, uf, desonerado);
+  if (data.items.length === 0) return { success: false, message: 'Nenhum item válido' };
+  return persistItems(baseName, uf, month, year, desonerado, data);
 }
