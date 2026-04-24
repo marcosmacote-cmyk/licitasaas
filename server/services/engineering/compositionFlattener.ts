@@ -130,7 +130,7 @@ export class CompositionFlattener {
     if (!composition) return null;
 
     const flattenedItems: FlattenedItem[] = [];
-    let totalMoSemLs = 0;
+    let totalMoComLs = 0;
     let totalMaterial = 0;
     let totalEquipamento = 0;
 
@@ -148,9 +148,9 @@ export class CompositionFlattener {
           totalPrice: ci.item.price * ci.coefficient,
         });
 
-        // Accumulate totals for the footer
+        // Accumulate totals for the footer (in SINAPI/SEINFRA, unit price already includes LS!)
         const itemTotal = ci.item.price * ci.coefficient;
-        if (ci.item.type === 'MAO_DE_OBRA') totalMoSemLs += itemTotal;
+        if (ci.item.type === 'MAO_DE_OBRA') totalMoComLs += itemTotal;
         else if (ci.item.type === 'MATERIAL') totalMaterial += itemTotal;
         else if (ci.item.type === 'EQUIPAMENTO') totalEquipamento += itemTotal;
         
@@ -176,17 +176,20 @@ export class CompositionFlattener {
           });
 
           // Recursively resolve and store the auxiliary composition
-          await this.resolveComposition(ci.auxiliaryCompositionId, true, auxSourceName);
+          const auxFlattened = await this.resolveComposition(ci.auxiliaryCompositionId, true, auxSourceName);
+          if (auxFlattened) {
+             totalMoComLs += auxFlattened.totalMoComLs * ci.coefficient;
+             totalMaterial += auxFlattened.totalMaterial * ci.coefficient;
+             totalEquipamento += auxFlattened.totalEquipamento * ci.coefficient;
+          }
         }
       }
     }
 
-    const totalLs = totalMoSemLs * this.lsPercentage;
-    const totalMoComLs = totalMoSemLs + totalLs;
+    // Leis Sociais already included in totalMoComLs. Extract backward.
+    const totalMoSemLs = totalMoComLs / (1 + this.lsPercentage);
+    const totalLs = totalMoComLs - totalMoSemLs;
     
-    // Recalculate total price to ensure it matches the items sum + LS (simplified approach)
-    // In reality, the database already has a totalPrice, but building it dynamically ensures consistency
-    const calculatedTotal = totalMoComLs + totalMaterial + totalEquipamento;
     // We will stick to the composition's provided totalPrice to respect the official bank, 
     // unless we strictly want dynamic calculation. Let's use the official one for the composition itself.
     
