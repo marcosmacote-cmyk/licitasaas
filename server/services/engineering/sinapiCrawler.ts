@@ -12,10 +12,14 @@ import os from 'os';
 const prisma = new PrismaClient();
 
 // ═══════════════════════════════════════════════════════════
-// Puppeteer-based download (bypasses Azion WAF)
+// Puppeteer portal navigation + CDP download interception
+// The Caixa WAF (Azion CDN) blocks direct file URLs.
+// Strategy: browse portal page first → get cookies → fetch file via CDP
 // ═══════════════════════════════════════════════════════════
 
-async function downloadViaPuppeteer(url: string, downloadDir: string): Promise<string | null> {
+const PORTAL_URL = 'https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx';
+
+async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
   let browser: any = null;
   try {
     const puppeteer = await import('puppeteer-core');
@@ -24,62 +28,83 @@ async function downloadViaPuppeteer(url: string, downloadDir: string): Promise<s
     browser = await puppeteer.default.launch({
       executablePath: execPath,
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
     });
     
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    // Configure download behavior
+    // Step 1: Visit portal page to establish session cookies
+    console.log(`[SINAPI Crawler] 🌐 Abrindo portal SINAPI da Caixa...`);
+    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await new Promise(r => setTimeout(r, 3000));
+    
+    // Step 2: Configure CDP for download interception
     const client = await page.createCDPSession();
-    await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir });
+    await client.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir, eventsEnabled: true });
     
-    console.log(`[SINAPI Crawler] 🌐 Navegando para: ${url.split('/').pop()}`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    // Step 3: Navigate to the UF-specific downloads page
+    const ufSlug = `sinapi-a-partir-jul-2009-${uf.toLowerCase()}`;
+    const downloadsPage = `https://www.caixa.gov.br/site/Paginas/downloads.aspx#categoria_702`;
+    console.log(`[SINAPI Crawler] 📂 Acessando página de downloads...`);
+    await page.goto(downloadsPage, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await new Promise(r => setTimeout(r, 2000));
     
-    // Wait for download to complete (check for file in downloadDir)
-    const maxWait = 120000; // 2 min
-    const start = Date.now();
-    let downloadedFile: string | null = null;
+    // Step 4: Try to fetch the ZIP directly using the session cookies
+    const mm = String(month).padStart(2, '0');
+    const regime = desonerado ? 'Desonerado' : 'NaoDesonerado';
+    const filePatterns = [
+      `SINAPI_ref_Insumos_Composicoes_${uf}_${mm}${year}_${regime}.zip`,
+      `SINAPI_Preco_Ref_Insumos_${uf}_${mm}${year}_${regime}.zip`,
+      `SINAPI_Custo_Ref_Composicoes_Sintetico_${uf}_${mm}${year}_${regime}.zip`,
+    ];
     
-    while (Date.now() - start < maxWait) {
-      await new Promise(r => setTimeout(r, 2000));
-      const files = fs.readdirSync(downloadDir).filter(f => f.endsWith('.zip') && !f.endsWith('.crdownload'));
-      if (files.length > 0) {
-        downloadedFile = path.join(downloadDir, files[0]);
-        break;
+    for (const fileName of filePatterns) {
+      const fileUrl = `https://www.caixa.gov.br/Downloads/${ufSlug}/${fileName}`;
+      console.log(`[SINAPI Crawler] 📥 Tentando via fetch in-page: ${fileName}`);
+      
+      try {
+        // Use page.evaluate to fetch with the browser's cookies
+        const result = await page.evaluate(async (url: string) => {
+          try {
+            const resp = await fetch(url, { redirect: 'follow', credentials: 'include' });
+            if (!resp.ok) return { ok: false, status: resp.status };
+            const buf = await resp.arrayBuffer();
+            // Convert to base64 for transport
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return { ok: true, data: btoa(binary), size: buf.byteLength };
+          } catch (e: any) {
+            return { ok: false, error: e.message };
+          }
+        }, fileUrl);
+        
+        if (result.ok && result.data && result.size > 1000) {
+          const buffer = Buffer.from(result.data, 'base64');
+          // Verify ZIP magic bytes
+          if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
+            const filePath = path.join(downloadDir, fileName);
+            fs.writeFileSync(filePath, buffer);
+            console.log(`[SINAPI Crawler] ✅ Download OK: ${fileName} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+            return filePath;
+          }
+          console.log(`[SINAPI Crawler] ⚠️ Não é ZIP: ${fileName} (${buffer.length} bytes)`);
+        } else {
+          console.log(`[SINAPI Crawler] ❌ Fetch falhou: ${fileName} (status=${result.status || result.error})`);
+        }
+      } catch (err: any) {
+        console.log(`[SINAPI Crawler] ❌ Erro: ${err.message}`);
       }
     }
     
-    if (downloadedFile) {
-      console.log(`[SINAPI Crawler] ✅ Download concluído: ${path.basename(downloadedFile)}`);
-    } else {
-      console.log(`[SINAPI Crawler] ❌ Download timeout`);
-    }
-    
-    return downloadedFile;
+    return null;
   } catch (err: any) {
     console.error(`[SINAPI Crawler] Puppeteer error:`, err.message);
     return null;
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
-}
-
-// ═══════════════════════════════════════════════════════════
-// URL Generation
-// ═══════════════════════════════════════════════════════════
-
-function generateSinapiUrls(uf: string, month: number, year: number, desonerado: boolean): string[] {
-  const mm = String(month).padStart(2, '0');
-  const mmyy = `${mm}${year}`;
-  const regime = desonerado ? 'Desonerado' : 'NaoDesonerado';
-  const base = `https://www.caixa.gov.br/Downloads/sinapi-a-partir-jul-2009-${uf.toLowerCase()}`;
-  return [
-    `${base}/SINAPI_ref_Insumos_Composicoes_${uf}_${mmyy}_${regime}.zip`,
-    `${base}/SINAPI_Preco_Ref_Insumos_${uf}_${mmyy}_${regime}.zip`,
-    `${base}/SINAPI_Custo_Ref_Composicoes_Sintetico_${uf}_${mmyy}_${regime}.zip`,
-  ];
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -219,21 +244,18 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         if (existing) { results.push({ success: true, message: `Já existente: ${existing.itemCount} itens` }); continue; }
 
         console.log(`\n[SINAPI Crawler] 📥 ${baseName} ${uf} ${version} ${regime}...`);
-        const urls = generateSinapiUrls(uf, month, year, desonerado);
         let zipBuffer: Buffer | null = null;
 
-        // Try Puppeteer download for each URL candidate
-        for (const url of urls) {
-          const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sinapi-'));
-          try {
-            const filePath = await downloadViaPuppeteer(url, tmpDir);
-            if (filePath && fs.existsSync(filePath)) {
-              const buf = fs.readFileSync(filePath);
-              if (buf.length > 100 && buf[0] === 0x50 && buf[1] === 0x4B) { zipBuffer = buf; break; }
-            }
-          } finally {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+        // Download via portal navigation (single browser session per UF+month+regime)
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sinapi-'));
+        try {
+          const filePath = await downloadSinapiViaBrowser(uf, month, year, desonerado, tmpDir);
+          if (filePath && fs.existsSync(filePath)) {
+            const buf = fs.readFileSync(filePath);
+            if (buf.length > 100 && buf[0] === 0x50 && buf[1] === 0x4B) zipBuffer = buf;
           }
+        } finally {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
         }
 
         if (!zipBuffer) { results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
