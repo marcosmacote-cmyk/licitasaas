@@ -80,7 +80,7 @@ async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]>
                 responseType: 'arraybuffer', httpsAgent: agent, timeout: 30000,
                 maxRedirects: 5,
             } as any);
-            const buffer = Buffer.from(fileRes.data);
+            const buffer = Buffer.from(fileRes.data as ArrayBuffer);
             const sizeKB = buffer.length / 1024;
 
             // Verify it's a PDF
