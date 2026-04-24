@@ -122,51 +122,61 @@ async function downloadSinapiViaBrowser(uf: string, month: number, year: number,
 // ZIP + Excel Processing (handles nested ZIPs for national bundles)
 // ═══════════════════════════════════════════════════════════
 
-function extractExcelFromZip(zipBuffer: Buffer, uf?: string): Buffer[] {
+function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
   
-  // Log what's inside for diagnostics
   const names = entries.map((e: any) => e.entryName);
-  console.log(`[SINAPI Parse] 📦 ZIP contém ${entries.length} arquivos:`);
-  names.slice(0, 15).forEach((n: string) => console.log(`  → ${n}`));
-  if (names.length > 15) console.log(`  ... e mais ${names.length - 15} arquivos`);
+  console.log(`[SINAPI Parse] 📦 ZIP contém ${entries.length} entradas:`);
+  names.forEach((n: string) => console.log(`  → ${n}`));
   
   const excels: Buffer[] = [];
   
   for (const entry of entries) {
     const name = (entry as any).entryName.toUpperCase();
     
-    // Filter by UF if specified (e.g. "/CE/" or "_CE_" in path)
-    if (uf && !name.includes(`/${uf}/`) && !name.includes(`_${uf}_`) && !name.includes(`_${uf}.`) && !name.includes(`${uf}/`)) continue;
-    
-    if (name.endsWith('.XLSX')) {
-      console.log(`[SINAPI Parse] 📋 Encontrado Excel: ${(entry as any).entryName} (${((entry as any).header.size / 1024).toFixed(0)} KB)`);
+    if (name.endsWith('.XLSX') && !name.startsWith('__MACOSX') && !name.includes('~$')) {
+      console.log(`[SINAPI Parse] 📋 Excel: ${(entry as any).entryName} (${((entry as any).header.size / 1024).toFixed(0)} KB)`);
       excels.push((entry as any).getData());
     } else if (name.endsWith('.ZIP')) {
-      // Nested ZIP — recursively extract (common in national bundles)
-      console.log(`[SINAPI Parse] 📦 ZIP aninhado: ${(entry as any).entryName} — extraindo...`);
+      console.log(`[SINAPI Parse] 📦 ZIP aninhado: ${(entry as any).entryName}`);
       try {
-        const innerBuf = (entry as any).getData();
-        const innerExcels = extractExcelFromZip(innerBuf, uf);
+        const innerExcels = extractExcelFromZip((entry as any).getData());
         excels.push(...innerExcels);
       } catch (err: any) {
-        console.log(`[SINAPI Parse] ⚠️ Erro ao ler ZIP aninhado: ${err.message}`);
+        console.log(`[SINAPI Parse] ⚠️ Erro ZIP aninhado: ${err.message}`);
       }
     }
   }
   
-  // Sort by size descending (larger files typically have more data)
   excels.sort((a, b) => b.length - a.length);
-  console.log(`[SINAPI Parse] ✅ ${excels.length} planilhas Excel encontradas${uf ? ` para UF=${uf}` : ''}`);
+  console.log(`[SINAPI Parse] ✅ ${excels.length} planilhas Excel extraídas`);
   return excels;
 }
 
-function parseExcelToItems(buffer: Buffer): { code: string; description: string; unit: string; price: number; type: string }[] {
+function parseExcelToItems(buffer: Buffer, uf?: string): { code: string; description: string; unit: string; price: number; type: string }[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
 
-  for (const sheetName of workbook.SheetNames) {
+  console.log(`[SINAPI Parse] 📄 Planilha com ${workbook.SheetNames.length} abas: ${workbook.SheetNames.slice(0, 10).join(', ')}${workbook.SheetNames.length > 10 ? '...' : ''}`);
+
+  // Determine which sheets to parse
+  let sheetsToProcess = workbook.SheetNames;
+  if (uf) {
+    // Try to find sheets matching the UF (exact match or contains)
+    const ufSheets = workbook.SheetNames.filter(s => {
+      const upper = s.toUpperCase().trim();
+      return upper === uf || upper.includes(uf) || upper.includes(`(${uf})`) || upper.endsWith(` ${uf}`);
+    });
+    if (ufSheets.length > 0) {
+      console.log(`[SINAPI Parse] 🎯 Abas filtradas por UF=${uf}: ${ufSheets.join(', ')}`);
+      sheetsToProcess = ufSheets;
+    } else {
+      console.log(`[SINAPI Parse] ⚠️ Nenhuma aba específica para UF=${uf}, processando todas`);
+    }
+  }
+
+  for (const sheetName of sheetsToProcess) {
     const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     if (rows.length < 2) continue;
 
@@ -304,11 +314,11 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         if (!zipBuffer) { console.log(`[SINAPI Crawler] ❌ Download falhou: ${version} ${regime}`); results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
 
         console.log(`[SINAPI Crawler] 📦 Extraindo planilhas do ZIP (${(zipBuffer.length / 1024 / 1024).toFixed(1)} MB)...`);
-        const excels = extractExcelFromZip(zipBuffer, uf);
-        if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel para UF=${uf}`); results.push({ success: false, message: `ZIP sem Excel para ${uf}` }); continue; }
+        const excels = extractExcelFromZip(zipBuffer);
+        if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel`); results.push({ success: false, message: `ZIP sem Excel` }); continue; }
 
         console.log(`[SINAPI Crawler] 📊 Parseando ${excels.length} planilhas...`);
-        const allItems = excels.flatMap(buf => parseExcelToItems(buf));
+        const allItems = excels.flatMap(buf => parseExcelToItems(buf, uf));
         console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}`);
         if (allItems.length === 0) { console.log(`[SINAPI Crawler] ❌ Nenhum item válido encontrado`); results.push({ success: false, message: `Nenhum item válido` }); continue; }
 
