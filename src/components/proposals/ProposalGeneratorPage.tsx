@@ -4,7 +4,7 @@ import {
     DollarSign, Package, AlertTriangle, Edit3,
     ChevronDown, ChevronUp, Briefcase, Cpu, ScanSearch,
     Building2, TrendingUp, ClipboardList, RotateCcw,
-    BarChart3, RefreshCw, CheckCircle2,
+    BarChart3, RefreshCw, CheckCircle2, Database, Layers
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
@@ -12,6 +12,7 @@ import { useProposal } from '../hooks/useProposal';
 import { ProposalLetterWizard } from './letter/ProposalLetterWizard';
 import { CompositionTab } from './composition';
 import { EngineeringProposalEditor } from './engineering/EngineeringProposalEditor';
+import { EngineeringHub } from './engineering/hub/EngineeringHub';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -212,6 +213,19 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     <button onClick={() => p.setActiveTab('letter')} className={`tab-btn${p.activeTab === 'letter' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <FileText size={16} /> Carta Proposta Redigida
+                    </button>
+                </div>
+            )}
+
+            {p.proposal && p.objectType === 'ENGENHARIA' && (
+                <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
+                    <button onClick={() => p.setActiveTab('items')} className={`tab-btn${p.activeTab === 'items' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
+                        <Layers size={16} /> Planilha Orçamentária
+                    </button>
+                    <button onClick={() => p.setActiveTab('hub')} className={`tab-btn${p.activeTab === 'hub' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
+                        <Database size={16} /> Hub de Bases (SINAPI/SEINFRA)
                     </button>
                 </div>
             )}
@@ -713,11 +727,16 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             )}
 
             {/* ── ENGINEERING MOTOR ── */}
-            {p.proposal && p.objectType === 'ENGENHARIA' && (
+            {p.activeTab === 'items' && p.proposal && p.objectType === 'ENGENHARIA' && (
                 <EngineeringProposalEditor 
                     proposalId={p.proposal.id} 
                     biddingId={p.selectedBiddingId} 
                 />
+            )}
+
+            {/* ── ENGINEERING HUB ── */}
+            {p.activeTab === 'hub' && p.proposal && p.objectType === 'ENGENHARIA' && (
+                <EngineeringHub />
             )}
 
             {/* ────────── EMPTY STATE ────────── */}
