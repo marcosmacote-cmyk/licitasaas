@@ -43,7 +43,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [adjustedLetterContent, setAdjustedLetterContent] = useState('');
 
     // Tab & letter
-    const [activeTab, setActiveTab] = useState<'items' | 'letter' | 'composition'>('items');
+    const [activeTab, setActiveTab] = useState<'items' | 'letter' | 'composition' | 'hub'>('items');
     const [letterContent, setLetterContent] = useState('');
 
     // Config states
