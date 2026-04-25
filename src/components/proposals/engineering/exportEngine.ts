@@ -119,7 +119,8 @@ export function exportCompositionExcel(
 
     const groupLabels: Record<string, string> = {
         MATERIAL: 'MATERIAL', MAO_DE_OBRA: 'MÃO DE OBRA',
-        EQUIPAMENTO: 'EQUIPAMENTO', AUXILIAR: 'COMPOSIÇÃO AUXILIAR',
+        EQUIPAMENTO: 'EQUIPAMENTO', SERVICO: 'SERVIÇOS',
+        AUXILIAR: 'COMPOSIÇÃO AUXILIAR', OBSERVACAO: 'OBSERVAÇÕES E TEXTOS'
     };
 
     for (const [groupKey, groupLabel] of Object.entries(groupLabels)) {
@@ -296,7 +297,9 @@ export function exportCompositionPdf(
         MATERIAL: { label: 'Materiais', color: '#2563eb' },
         MAO_DE_OBRA: { label: 'Mão de Obra', color: '#16a34a' },
         EQUIPAMENTO: { label: 'Equipamentos', color: '#d97706' },
+        SERVICO: { label: 'Serviços', color: '#0ea5e9' },
         AUXILIAR: { label: 'Composições Auxiliares', color: '#7c3aed' },
+        OBSERVACAO: { label: 'Observações e Textos', color: '#64748b' },
     };
 
     let html = `
