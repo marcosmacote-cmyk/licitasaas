@@ -58,6 +58,8 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
 
     const text = response.text;
     if (!text) throw new Error('Resposta vazia da IA');
+    
+    console.log('[AI Extract Composition] Raw response:', text);
 
     let extracted: any;
     try {
