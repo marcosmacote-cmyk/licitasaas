@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
+import { applyPrecision } from './precisionEngine';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -27,6 +28,7 @@ interface Props {
     initialIndex: number;
     onClose: () => void;
     onUpdateItem: (itemId: string, updates: Partial<EngItem>) => void;
+    engineeringConfig?: any;
 }
 
 const GROUP_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -36,7 +38,7 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
 };
 
-export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }: Props) {
+export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -72,7 +74,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         try {
             let url = '';
             if (searchType === 'item') {
-                url = `/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`;
+                const params = new URLSearchParams({ q: searchQuery });
+                if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
+                if (engineeringConfig?.dataBase) params.append('dataBase', engineeringConfig.dataBase);
+                url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
             } else {
                 url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(searchQuery)}`;
             }
@@ -134,7 +139,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 newTotal += ci.price || 0;
             }
         }
-        updated.totalPrice = Math.round(newTotal * 100) / 100;
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -235,7 +240,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                     return {
                         ...ci,
                         coefficient: newCoef,
-                        price: Math.round(newCoef * unitPrice * 100) / 100,
+                        price: applyPrecision(newCoef * unitPrice, { precision: engineeringConfig?.precision }),
                     };
                 } else {
                     // price edit
@@ -245,7 +250,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                         ...ci,
                         item: ci.item ? newItem : ci.item,
                         auxiliaryComposition: ci.auxiliaryComposition ? newItem : ci.auxiliaryComposition,
-                        price: Math.round(ci.coefficient * newPrice * 100) / 100,
+                        price: applyPrecision(ci.coefficient * newPrice, { precision: engineeringConfig?.precision }),
                     };
                 }
             });
@@ -263,7 +268,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 newTotal += ci.price || 0;
             }
         }
-        updated.totalPrice = Math.round(newTotal * 100) / 100;
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -686,7 +691,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                                                             newTotal += item.price || 0;
                                                                         }
                                                                     }
-                                                                    updated.totalPrice = Math.round(newTotal * 100) / 100;
+                                                                    updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
                                                                     updated.totalDirect = updated.totalPrice;
                                                                     
                                                                     setData(updated);

@@ -7,6 +7,7 @@ import { CurvaAbcPanel } from './CurvaAbcPanel';
 import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
+import { applyPrecision } from './precisionEngine';
 
 type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
 
@@ -83,15 +84,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
     const total = items.reduce((s, it) => s + it.totalPrice, 0);
 
-    // Recalculate all prices when BDI changes
-    const recalcAll = useCallback((its: EngItem[], bdi: number) => {
+    const recalcAll = useCallback((its: EngItem[], bdi: number, config: any) => {
         return its.map(it => {
             const up = applyBdi(it.unitCost, bdi);
-            return { ...it, unitPrice: up, totalPrice: Math.round(it.quantity * up * 100) / 100 };
+            return { ...it, unitPrice: up, totalPrice: applyPrecision(it.quantity * up, config) };
         });
     }, []);
 
-    useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi)); }, [effectiveBdi]);
+    useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
 
     // Load items on mount
     useEffect(() => {
@@ -132,7 +132,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setIsExtracting(true);
         try {
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -153,7 +153,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
                         unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi),
-                        totalPrice: isGroup ? 0 : Math.round(qty * applyBdi(cost, effectiveBdi) * 100) / 100,
+                        totalPrice: isGroup ? 0 : applyPrecision(qty * applyBdi(cost, effectiveBdi), { precision: engineeringConfig?.precision }),
                         insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
                 });
@@ -176,7 +176,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições do projeto básico via IA...</span>);
         try {
             const res = await fetch('/api/engineering/ai-extract-compositions', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -192,7 +192,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             const updated = { ...it, [field]: value };
             if (field === 'unitCost' || field === 'quantity') {
                 updated.unitPrice = applyBdi(updated.unitCost, effectiveBdi);
-                updated.totalPrice = Math.round(updated.quantity * updated.unitPrice * 100) / 100;
+                updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
             }
             return updated;
         }));
@@ -225,7 +225,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         if (!selectedBaseId || !searchQuery) return;
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, { headers: hdrs() });
+            const params = new URLSearchParams({ q: searchQuery });
+            if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
+            if (engineeringConfig?.dataBase) params.append('dataBase', engineeringConfig.dataBase);
+            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`, { headers: hdrs() });
             const data = await res.json();
             setSearchResults(data.items || []);
         } catch { } finally { setIsSearching(false); }
@@ -808,6 +811,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             updateItem(itemId, 'unitCost', updates.unitCost);
                         }
                     }}
+                    engineeringConfig={engineeringConfig}
                 />
             )}
         </div>

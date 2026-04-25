@@ -839,7 +839,7 @@ router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
-        const { textChunk, biddingId } = req.body;
+        const { textChunk, biddingId, engineeringConfig } = req.body;
         
         let extractionText = textChunk;
 
@@ -906,7 +906,13 @@ router.post('/ai-populate', async (req: any, res: any) => {
         //   B) Texto curto ou sem texto: baixar PDFs do PNCP e enviar inline
         // ═══════════════════════════════════════════════════
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
+        let prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
+        
+        if (engineeringConfig) {
+            prompt += `\n\n[REGRAS DE NEGÓCIO - CONFIGURAÇÃO MESTRE]
+1. Bases permitidas para mapeamento: ${engineeringConfig.basesConsideradas?.join(', ') || 'qualquer'}
+2. Considere estritamente essas bases para identificar códigos. Se a base não estiver na lista, categorize o item como PROPRIA.`;
+        }
         let result: any;
 
         const shouldTryPdfDirect = !extractionText || extractionText.length < 1000;
@@ -1046,7 +1052,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-extract-compositions', async (req: any, res: any) => {
     try {
-        const { biddingId } = req.body;
+        const { biddingId, engineeringConfig } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId obrigatório' });
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -1080,6 +1086,14 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
 
         const { COMPOSITION_EXTRACTION_SYSTEM_PROMPT, COMPOSITION_EXTRACTION_USER_INSTRUCTION } = await import('../services/ai/modules/prompts/engineeringCompositionPrompt');
 
+        let systemPrompt = COMPOSITION_EXTRACTION_SYSTEM_PROMPT;
+        if (engineeringConfig) {
+            systemPrompt += `\n\n[REGRAS DE NEGÓCIO - CONFIGURAÇÃO MESTRE]
+1. Bases permitidas para mapeamento de Composições: ${engineeringConfig.basesConsideradas?.join(', ') || 'qualquer'}
+2. Considere estritamente essas bases para identificar códigos de composições e insumos.
+3. Se a base não estiver na lista, ou for uma composição "P" (Própria), categorize com código "N/A" e informe os insumos.`;
+        }
+
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
@@ -1088,7 +1102,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                 parts: [{ text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + '\n\nDOCUMENTO:\n' + extractionText.slice(0, 120000) }]
             }],
             config: {
-                systemInstruction: { role: 'system', parts: [{ text: COMPOSITION_EXTRACTION_SYSTEM_PROMPT }] },
+                systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
                 temperature: 0.15,
                 maxOutputTokens: 65536,
             }
