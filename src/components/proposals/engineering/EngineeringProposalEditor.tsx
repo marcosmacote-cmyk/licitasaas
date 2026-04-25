@@ -487,7 +487,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             )}
 
             {activeTab === 'caderno' && (
-                <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={[]} cronogramaResult={null} proposalId={proposalId} />
+                <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={[]} cronogramaResult={null} proposalId={proposalId} engineeringConfig={engineeringConfig} />
             )}
 
             {/* Tab Content: Planilha */}

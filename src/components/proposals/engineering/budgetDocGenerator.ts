@@ -59,6 +59,23 @@ ${html}
     w.document.close();
 }
 
+function renderConfigTable(engineeringConfig?: any) {
+    if (!engineeringConfig) return '';
+    return `
+<table style="margin-bottom: 14px; border: 1px solid #e2e8f0;">
+  <tr>
+    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Obra</td>
+    <td colspan="3">${engineeringConfig.objeto || '—'}</td>
+  </tr>
+  <tr>
+    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Bancos</td>
+    <td style="width: 30%;">${engineeringConfig.basesConsideradas?.join(', ') || '—'}</td>
+    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Encargos Sociais</td>
+    <td style="width: 30%;">${engineeringConfig.regimeOneracao || '—'} (H: ${engineeringConfig.encargosSociais?.horista || 0}% / M: ${engineeringConfig.encargosSociais?.mensalista || 0}%)</td>
+  </tr>
+</table>`;
+}
+
 // Helper: group items by chapter prefix
 function groupByChapter(items: EngItem[]) {
     const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
@@ -82,7 +99,7 @@ function groupByChapter(items: EngItem[]) {
 // ═══════════════════════════════════════════════════════════
 // 1. ORÇAMENTO RESUMIDO
 // ═══════════════════════════════════════════════════════════
-export function docOrcamentoResumido(items: EngItem[], bdi: number) {
+export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringConfig?: any) {
     const chapters = groupByChapter(items);
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
     let rows = '';
@@ -93,6 +110,7 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number) {
     openDoc('Orçamento Resumido', `
 <h1>ORÇAMENTO RESUMIDO</h1>
 <div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>
+${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>`);
@@ -101,10 +119,10 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number) {
 // ═══════════════════════════════════════════════════════════
 // 2. ORÇAMENTO SINTÉTICO
 // ═══════════════════════════════════════════════════════════
-export function docOrcamentoSintetico(items: EngItem[], bdi: number) {
+export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any) {
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
     const chapters = groupByChapter(items);
-    let html = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>`;
+    let html = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>${renderConfigTable(engineeringConfig)}`;
 
     for (const [prefix, ch] of chapters) {
         html += `<h2>${ch.title}</h2>
@@ -121,7 +139,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number) {
 // ═══════════════════════════════════════════════════════════
 // 5. CURVA ABC DE SERVIÇOS
 // ═══════════════════════════════════════════════════════════
-export function docCurvaAbcServicos(items: EngItem[]) {
+export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
     const validItems = items.filter(it => it.unit && it.unit.trim() !== '' && it.unit !== '-');
     const total = validItems.reduce((s, i) => s + i.totalPrice, 0);
     const sorted = [...validItems].sort((a, b) => b.totalPrice - a.totalPrice);
@@ -138,6 +156,7 @@ export function docCurvaAbcServicos(items: EngItem[]) {
     openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${items.length} serviços · Total: ${fmt(total)}</div>
+${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
@@ -146,7 +165,7 @@ export function docCurvaAbcServicos(items: EngItem[]) {
 // ═══════════════════════════════════════════════════════════
 // 6. CURVA ABC DE INSUMOS
 // ═══════════════════════════════════════════════════════════
-export function docCurvaAbcInsumos(insumos: InsumoConsolidado[]) {
+export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConfig?: any) {
     const total = insumos.reduce((s, i) => s + i.custoTotal, 0);
     const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
     let accum = 0;
@@ -161,6 +180,7 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[]) {
     openDoc('Curva ABC de Insumos', `
 <h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(total)}</div>
+${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
@@ -205,6 +225,7 @@ export function docCronograma(result: CronogramaResult) {
     openDoc('Cronograma Físico-Financeiro', `
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
+${renderConfigTable((result as any).engineeringConfig)}
 <table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`);
 }
 
@@ -280,7 +301,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
     }
     esHtml += `<table><tfoot><tr class="grand"><td>TOTAL ENCARGOS SOCIAIS</td><td class="r">${fmtPct(totalES)}</td></tr></tfoot></table>`;
 
-    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode}</div>${bdiHtml}${esHtml}`);
+    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode}</div>${renderConfigTable((config as any).engineeringConfig)}${bdiHtml}${esHtml}`);
 }
 
 // Helper para renderizar Composição no padrão TCU
@@ -335,12 +356,12 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
 // ═══════════════════════════════════════════════════════════
 // 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard - Only Principals)
 // ═══════════════════════════════════════════════════════════
-export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number) {
+export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const total = items.reduce((s, i) => s + i.totalPrice, 0);
 
-    let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>`;
+    let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
         const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
@@ -365,11 +386,11 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
 // ═══════════════════════════════════════════════════════════
 // 4. CPU — COMPOSIÇÕES DE CUSTOS UNITÁRIOS (batch)
 // ═══════════════════════════════════════════════════════════
-export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number) {
+export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${items.length} serviços</div>`;
+    let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${items.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
         const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 

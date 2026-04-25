@@ -22,6 +22,7 @@ interface Props {
     insumos: InsumoConsolidado[];
     cronogramaResult: CronogramaResult | null;
     proposalId: string;
+    engineeringConfig?: any;
 }
 
 const DOCS = [
@@ -35,24 +36,24 @@ const DOCS = [
     { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Detalhamento BDI (TCU) + tabela de encargos', icon: Calculator, color: '#475569' },
 ];
 
-export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId }: Props) {
+export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId, engineeringConfig }: Props) {
     const [generating, setGenerating] = useState<string | null>(null);
 
     const handleGenerate = async (docId: string) => {
         setGenerating(docId);
         try {
             switch (docId) {
-                case 'resumido': docOrcamentoResumido(items, effectiveBdi); break;
-                case 'sintetico': docOrcamentoSintetico(items, effectiveBdi); break;
-                case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi); break;
-                case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi); break;
-                case 'abc_servicos': docCurvaAbcServicos(items); break;
-                case 'abc_insumos': docCurvaAbcInsumos(insumos); break;
+                case 'resumido': docOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
+                case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
+                case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engineeringConfig); break;
+                case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engineeringConfig); break;
+                case 'abc_servicos': docCurvaAbcServicos(items, engineeringConfig); break;
+                case 'abc_insumos': docCurvaAbcInsumos(insumos, engineeringConfig); break;
                 case 'cronograma':
-                    if (cronogramaResult) docCronograma(cronogramaResult);
+                    if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig } as any);
                     else alert('Configure o cronograma na aba "Cronograma" primeiro.');
                     break;
-                case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi); break;
+                case 'bdi': docBdiEncargos({ ...bdiConfig, engineeringConfig } as any, effectiveBdi); break;
             }
         } catch (e) { console.error('Erro ao gerar documento:', e); }
         setGenerating(null);
