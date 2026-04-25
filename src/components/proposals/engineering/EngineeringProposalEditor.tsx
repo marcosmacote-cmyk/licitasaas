@@ -587,7 +587,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
-                                                    <AlertCircle size={14} title="Composição vazia. Preencha no Módulo Livre." />
+                                                    <span title="Composição vazia. Preencha no Módulo Livre." style={{ display: 'flex' }}>
+                                                        <AlertCircle size={14} />
+                                                    </span>
                                                     <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
