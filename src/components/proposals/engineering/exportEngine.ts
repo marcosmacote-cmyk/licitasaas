@@ -36,7 +36,16 @@ export function exportHubExcel(
     insumos: InsumoConsolidado[],
     stats: InsumoHubStats | null,
     descontoConfig: DescontoConfig,
+    engineeringConfig?: any
 ) {
+    // Configurações Mestre
+    const headerTop = ['Obra', 'Bancos', 'Encargos Sociais'];
+    const headerTopValues = [
+        `"${(engineeringConfig?.objeto || 'Não informado').replace(/"/g, '""')}"`,
+        `"${(engineeringConfig?.basesConsideradas || []).join(', ') || 'Não informado'}"`,
+        `"${engineeringConfig?.regimeOneracao || 'Não informado'}\nHorista: ${engineeringConfig?.encargosSociais?.horista || 0}%\nMensalista: ${engineeringConfig?.encargosSociais?.mensalista || 0}%"`
+    ];
+
     const header = [
         'Classe ABC', 'Código', 'Descrição', 'Categoria', 'Unidade', 'Base',
         'Preço Original', 'Desconto (%)', 'Preço Final', 'Coef. Total',
@@ -79,7 +88,13 @@ export function exportHubExcel(
         if (val > 0) rows.push([CATEGORIA_META[cat as InsumoCategoria]?.label || cat, `${fmtNum(val)}%`]);
     }
 
-    const csv = BOM + [header.join(SEP), ...rows.map(r => r.join(SEP))].join('\n');
+    const csv = BOM + [
+        headerTop.join(SEP),
+        headerTopValues.join(SEP),
+        '',
+        header.join(SEP), 
+        ...rows.map(r => r.join(SEP))
+    ].join('\n');
     const date = new Date().toISOString().slice(0, 10);
     downloadCsv(csv, `hub_insumos_${date}.csv`);
 }
@@ -91,6 +106,7 @@ export function exportCompositionExcel(
     code: string,
     description: string,
     data: any,
+    engineeringConfig?: any
 ) {
     if (!data?.groups) return;
 
@@ -127,7 +143,17 @@ export function exportCompositionExcel(
 
     rows.push(['', '', '', 'CUSTO UNITÁRIO DO SERVIÇO (S/ BDI)', '', '', '', fmtNum(data.totalPrice || data.totalDirect || 0)]);
 
+    const headerTop = ['Obra', 'Bancos', 'Encargos Sociais'];
+    const headerTopValues = [
+        `"${(engineeringConfig?.objeto || 'Não informado').replace(/"/g, '""')}"`,
+        `"${(engineeringConfig?.basesConsideradas || []).join(', ') || 'Não informado'}"`,
+        `"${engineeringConfig?.regimeOneracao || 'Não informado'}\nHorista: ${engineeringConfig?.encargosSociais?.horista || 0}%\nMensalista: ${engineeringConfig?.encargosSociais?.mensalista || 0}%"`
+    ];
+
     const csv = BOM + [
+        headerTop.join(SEP),
+        headerTopValues.join(SEP),
+        '',
         `COMPOSIÇÃO DE PREÇOS UNITÁRIOS — ${code}`,
         `"${description}"`,
         '',
@@ -186,14 +212,28 @@ ${html}
 export function exportHubPdf(
     insumos: InsumoConsolidado[],
     stats: InsumoHubStats | null,
+    engineeringConfig?: any
 ) {
     const s = stats;
     const total = s?.totalCusto || 0;
 
     let html = `
 <h1>Hub de Insumos — Relatório Consolidado</h1>
-<div class="meta">Total: ${insumos.length} insumos · ${new Date().toLocaleDateString('pt-BR')}</div>
-
+<div class="meta" style="margin-bottom: 8px;">Total: ${insumos.length} insumos · ${new Date().toLocaleDateString('pt-BR')}</div>
+${engineeringConfig ? `
+<table style="margin-bottom: 16px; border: 1px solid #e2e8f0;">
+  <tr>
+    <td style="width: 25%; background: #f8fafc; font-weight: 600;">Obra</td>
+    <td colspan="3">${engineeringConfig.objeto || '—'}</td>
+  </tr>
+  <tr>
+    <td style="background: #f8fafc; font-weight: 600;">Bancos</td>
+    <td>${engineeringConfig.basesConsideradas?.join(', ') || '—'}</td>
+    <td style="background: #f8fafc; font-weight: 600;">Encargos Sociais</td>
+    <td>${engineeringConfig.regimeOneracao || '—'} (H: ${engineeringConfig.encargosSociais?.horista || 0}% / M: ${engineeringConfig.encargosSociais?.mensalista || 0}%)</td>
+  </tr>
+</table>
+` : ''}
 <div class="stats-grid">
   <div class="stat-card"><div class="stat-value" style="color:#2563eb">${fmt(s?.custoMaterial || 0)}</div><div class="stat-label">Material</div></div>
   <div class="stat-card"><div class="stat-value" style="color:#7c3aed">${fmt(s?.custoMaoDeObra || 0)}</div><div class="stat-label">Mão de Obra</div></div>
@@ -240,6 +280,7 @@ export function exportCompositionPdf(
     code: string,
     description: string,
     data: any,
+    engineeringConfig?: any
 ) {
     if (!data?.groups) return;
 
@@ -256,6 +297,20 @@ export function exportCompositionPdf(
   Código: <strong>${code}</strong>
   ${data.database ? ` · Base: ${data.database.name} ${data.database.uf || ''}` : ''}
 </div>
+${engineeringConfig ? `
+<table style="margin-bottom: 12px; border: 1px solid #e2e8f0;">
+  <tr>
+    <td style="width: 25%; background: #f8fafc; font-weight: 600;">Obra</td>
+    <td colspan="3">${engineeringConfig.objeto || '—'}</td>
+  </tr>
+  <tr>
+    <td style="background: #f8fafc; font-weight: 600;">Bancos</td>
+    <td>${engineeringConfig.basesConsideradas?.join(', ') || '—'}</td>
+    <td style="background: #f8fafc; font-weight: 600;">Encargos Sociais</td>
+    <td>${engineeringConfig.regimeOneracao || '—'} (H: ${engineeringConfig.encargosSociais?.horista || 0}% / M: ${engineeringConfig.encargosSociais?.mensalista || 0}%)</td>
+  </tr>
+</table>
+` : ''}
 <div style="margin-bottom:12px;font-size:11px;font-weight:600">${description}</div>`;
 
     for (const [groupKey, meta] of Object.entries(groupLabels)) {

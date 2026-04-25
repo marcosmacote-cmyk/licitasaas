@@ -13,6 +13,7 @@ interface ClientItem {
 interface Props {
     proposalId: string;
     clientItems?: ClientItem[];
+    engineeringConfig?: any;
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -35,7 +36,7 @@ function inferCategory(desc: string, unit: string): InsumoCategoria {
     return 'SERVICO';
 }
 
-export function InsumoHub({ proposalId, clientItems }: Props) {
+export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props) {
     const [insumos, setInsumos] = useState<InsumoConsolidado[]>([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
@@ -141,11 +142,11 @@ export function InsumoHub({ proposalId, clientItems }: Props) {
             {/* Export bar */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
                 <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
-                    onClick={() => exportHubExcel(insumos, stats, descontoConfig)}>
+                    onClick={() => exportHubExcel(insumos, stats, descontoConfig, engineeringConfig)}>
                     <Download size={13} /> Excel
                 </button>
                 <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
-                    onClick={() => exportHubPdf(insumos, stats)}>
+                    onClick={() => exportHubPdf(insumos, stats, engineeringConfig)}>
                     <FileText size={13} /> PDF
                 </button>
             </div>

@@ -487,11 +487,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         )}
                         {data && (
                             <>
-                                <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, data)}
+                                <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, data, engineeringConfig)}
                                     title="Exportar Excel" style={{ padding: 6, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
                                     <Download size={13} /> Excel
                                 </button>
-                                <button onClick={() => exportCompositionPdf(currentItem.code, currentItem.description, data)}
+                                <button onClick={() => exportCompositionPdf(currentItem.code, currentItem.description, data, engineeringConfig)}
                                     title="Exportar PDF" style={{ padding: 6, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
                                     <FileText size={13} /> PDF
                                 </button>

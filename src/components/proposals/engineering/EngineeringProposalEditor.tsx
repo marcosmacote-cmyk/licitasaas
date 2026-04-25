@@ -258,7 +258,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const handleExportExcel = () => {
         const BOM = '\uFEFF';
         const sep = ';';
+        
+        // 1. Configurações Mestre (Cabeçalho do Relatório)
+        const headerTop = ['Obra', 'Bancos', 'B.D.I.', 'Encargos Sociais'];
+        
+        const obraDesc = `"${(engineeringConfig?.objeto || 'Não informado').replace(/"/g, '""')}"`;
+        const bancos = `"${(engineeringConfig?.basesConsideradas || []).join(', ') || 'Não informado'}"`;
+        const bdiText = `${effectiveBdi.toFixed(2)}% (${bdiConfig.mode})`;
+        const encargosText = `"${engineeringConfig?.regimeOneracao || 'Não informado'}\nHorista: ${engineeringConfig?.encargosSociais?.horista || 0}%\nMensalista: ${engineeringConfig?.encargosSociais?.mensalista || 0}%"`;
+        
+        const headerTopValues = [obraDesc, bancos, bdiText, encargosText];
+
+        // 2. Cabeçalho da Tabela de Itens
         const header = ['Item', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unitário (S/ BDI)', 'Preço Unitário (C/ BDI)', 'Total (C/ BDI)'];
+        
+        // 3. Linhas da Tabela
         const rows = items.map(it => [
             it.itemNumber, it.sourceName, it.code, `"${it.description.replace(/"/g, '""')}"`,
             it.unit, it.quantity.toString().replace('.', ','),
@@ -266,12 +280,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             it.unitPrice.toFixed(2).replace('.', ','),
             it.totalPrice.toFixed(2).replace('.', ','),
         ]);
+        
         rows.push([]);
         rows.push(['', '', '', '', '', '', 'Subtotal (S/ BDI)', '', items.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2).replace('.', ',')]);
         rows.push(['', '', '', '', '', '', `BDI (${bdiConfig.mode})`, `${effectiveBdi.toFixed(2)}%`, '']);
         rows.push(['', '', '', '', '', '', 'TOTAL GLOBAL', '', items.reduce((s, i) => s + i.totalPrice, 0).toFixed(2).replace('.', ',')]);
 
-        const csv = BOM + [header.join(sep), ...rows.map(r => r.join(sep))].join('\n');
+        const csv = BOM + [
+            headerTop.join(sep), 
+            headerTopValues.join(sep),
+            '', // Linha em branco
+            header.join(sep), 
+            ...rows.map(r => r.join(sep))
+        ].join('\n');
+        
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -358,7 +380,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
             {/* Tab Content: Hub de Insumos */}
             {activeTab === 'hub_insumos' && (
-                <InsumoHub proposalId={proposalId} clientItems={items} />
+                <InsumoHub proposalId={proposalId} clientItems={items} engineeringConfig={engineeringConfig} />
             )}
 
             {/* Tab Content: Curva ABC */}
