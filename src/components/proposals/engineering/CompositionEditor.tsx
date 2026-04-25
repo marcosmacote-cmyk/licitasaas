@@ -239,6 +239,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             updated.totalDirect = updated.totalPrice;
             
             setData(updated);
+            setError('');
             setHasChanges(true);
             
             if (onUpdateItem && currentItem) {
