@@ -38,6 +38,7 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     EQUIPAMENTO: { label: 'Equipamentos', icon: Wrench, color: '#d97706' },
     SERVICO: { label: 'Serviços', icon: Wrench, color: '#0ea5e9' },
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
+    OBSERVACAO: { label: 'Observações e Textos', icon: FileText, color: '#64748b' },
 };
 
 export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig }: Props) {
