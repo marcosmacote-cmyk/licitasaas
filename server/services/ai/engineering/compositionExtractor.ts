@@ -49,7 +49,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
         }
     });
 
-    const text = response.text();
+    const text = response.text;
     if (!text) throw new Error('Resposta vazia da IA');
 
     let extracted: any;
