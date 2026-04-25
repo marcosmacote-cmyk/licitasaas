@@ -274,6 +274,52 @@ router.get('/compositions', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/compositions — Criar Composição (PRÓPRIA)
+// ═══════════════════════════════════════════════════════════
+router.post('/compositions', async (req: any, res: any) => {
+    try {
+        const { code, description, unit, tenantId } = req.body;
+        
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Código e descrição são obrigatórios' });
+        }
+
+        let propriaDb = await prisma.engineeringDatabase.findFirst({
+            where: { name: 'PROPRIA', tenantId }
+        });
+
+        if (!propriaDb) {
+            propriaDb = await prisma.engineeringDatabase.create({
+                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
+            });
+        }
+
+        const existing = await prisma.engineeringComposition.findFirst({
+            where: { code, databaseId: propriaDb.id }
+        });
+
+        if (existing) {
+            return res.status(400).json({ error: 'Já existe uma composição com este código na base própria' });
+        }
+
+        const comp = await prisma.engineeringComposition.create({
+            data: {
+                code,
+                description,
+                unit: unit || 'UN',
+                databaseId: propriaDb.id,
+                totalPrice: 0
+            }
+        });
+
+        res.json({ message: 'Composição criada com sucesso', composition: comp });
+    } catch (e: any) {
+        console.error('Error creating composition:', e);
+        res.status(500).json({ error: 'Erro ao criar composição própria' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // PUT /api/engineering/compositions/:id — Atualizar Composição (Write-Back PRÓPRIA)
 // ═══════════════════════════════════════════════════════════
 router.put('/compositions/:id', async (req: any, res: any) => {

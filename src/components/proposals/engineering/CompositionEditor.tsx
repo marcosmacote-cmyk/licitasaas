@@ -47,6 +47,77 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     const [hasChanges, setHasChanges] = useState(false);
     const [isSavingToBase, setIsSavingToBase] = useState(false);
 
+    // Search inside editor
+    const [showSearch, setShowSearch] = useState(false);
+    const [bases, setBases] = useState<any[]>([]);
+    const [selectedBaseId, setSelectedBaseId] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // Load bases once when opening search
+    useEffect(() => {
+        if (showSearch && bases.length === 0) {
+            fetch('/api/engineering/bases', { headers: hdrs() })
+                .then(r => r.json()).then(data => {
+                    if (Array.isArray(data)) { setBases(data); if (data.length > 0) setSelectedBaseId(data[0].id); }
+                }).catch(console.error);
+        }
+    }, [showSearch, bases.length]);
+
+    const handleSearch = async () => {
+        if (!selectedBaseId || !searchQuery) return;
+        setIsSearching(true);
+        try {
+            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, { headers: hdrs() });
+            const d = await res.json();
+            setSearchResults(d.items || []);
+        } catch { } finally { setIsSearching(false); }
+    };
+
+    const addFromSearch = (dbItem: any) => {
+        if (!data) return;
+        const typeKey = dbItem.type || 'MATERIAL'; // fallback to MATERIAL
+        
+        const newInsumo = {
+            id: `temp-${Date.now()}`,
+            coefficient: 1,
+            price: Number(dbItem.price) || 0,
+            item: {
+                id: dbItem.id,
+                code: dbItem.code,
+                description: dbItem.description,
+                unit: dbItem.unit,
+                type: typeKey,
+                price: Number(dbItem.price) || 0
+            }
+        };
+
+        const updated = { ...data, groups: { ...data.groups } };
+        if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
+        updated.groups[typeKey] = [...updated.groups[typeKey], newInsumo];
+
+        let newTotal = 0;
+        for (const groupKey of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[groupKey]) {
+                newTotal += ci.price || 0;
+            }
+        }
+        updated.totalPrice = Math.round(newTotal * 100) / 100;
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+
+        if (onUpdateItem && currentItem) {
+            onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        }
+
+        setShowSearch(false);
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
     const hasNext = currentIndex < items.length - 1;
@@ -68,7 +139,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
             const d = await res.json();
             setData(d);
         } catch {
-            setError('Composição não encontrada na base oficial.');
+            setError('not_found');
         }
         setLoading(false);
     }, []);
@@ -200,6 +271,34 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         }
     };
 
+    const handleCreateComposition = async () => {
+        if (!currentItem) return;
+        setLoading(true);
+        setError('');
+        try {
+            // Decodifica o payload do token para pegar o tenantId (simplificado, ou o backend pega pelo user)
+            // Na verdade o backend pega pelo JWT. Mas enviamos via req.body (pode ser mock ou o backend pega).
+            const tokenStr = token();
+            const payload = JSON.parse(atob(tokenStr.split('.')[1]));
+            
+            const res = await fetch('/api/engineering/compositions', {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({
+                    code: currentItem.code,
+                    description: currentItem.description,
+                    unit: currentItem.unit,
+                    tenantId: payload.tenantId
+                })
+            });
+            if (!res.ok) throw new Error('Erro ao criar composição');
+            await loadComposition(currentItem.code); // Reloads the newly created empty composition
+        } catch (e: any) {
+            alert(e.message || 'Erro ao criar composição própria');
+            setLoading(false);
+        }
+    };
+
     // Computed total from current data
     const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
 
@@ -294,6 +393,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {data && (
+                            <button onClick={() => setShowSearch(true)} title="Adicionar Insumo ou Serviço a esta composição"
+                                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                                <Package size={13} /> Adicionar Insumo
+                            </button>
+                        )}
                         {data && data.database?.name === 'PROPRIA' && hasChanges && (
                             <button onClick={saveToBase} disabled={isSavingToBase} title="Atualizar a base de dados com as modificações desta composição"
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
@@ -338,13 +443,33 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                         </div>
                     )}
 
-                    {error && (
+                    {error === 'not_found' && (
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                            <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
+                            <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>Composição não encontrada nas bases de dados</div>
+                            <div style={{ fontSize: '0.85rem', marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
+                                O código <strong>{currentItem.code}</strong> não foi encontrado nas bases oficiais e nem no seu banco de dados próprio.
+                            </div>
+                            
+                            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                                <button className="btn btn-primary" onClick={handleCreateComposition} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Layers size={15} /> Criar Composição Manualmente
+                                </button>
+                                {/* <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Cpu size={15} color="var(--color-ai)" /> Tentar Extrair via IA
+                                </button> */}
+                            </div>
+                            
+                            <div style={{ marginTop: 24, fontSize: '0.8rem', opacity: 0.7 }}>
+                                Ou use ◀ ▶ para navegar para outra composição.
+                            </div>
+                        </div>
+                    )}
+
+                    {error && error !== 'not_found' && (
                         <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                             <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{error}</div>
-                            <div style={{ fontSize: '0.8rem' }}>
-                                Use ◀ ▶ ou clique na sidebar para navegar para outra composição.
-                            </div>
                         </div>
                     )}
 
@@ -375,19 +500,19 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                             <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color }}>{fmt(groupTotal)}</span>
                                         </div>
 
-                                        {isExpanded && (
+                                        {isExpanded && groupItems.length > 0 && (
                                             <>
                                                 {/* Column headers */}
                                                 <div style={{
-                                                    display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px',
+                                                    display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                     gap: 8, padding: '8px 20px', background: 'var(--color-bg-base)',
                                                     borderBottom: '1px solid var(--color-border)',
                                                 }}>
-                                                    {['#', 'Insumo', 'Unid.', 'Coeficiente', 'Preço Unit.', 'Subtotal'].map((h, i) => (
+                                                    {['#', 'Insumo', 'Unid.', 'Coeficiente', 'Preço Unit.', 'Subtotal', ''].map((h, i) => (
                                                         <span key={i} style={{
                                                             fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase',
                                                             letterSpacing: '0.06em', color: 'var(--color-text-tertiary)',
-                                                            textAlign: i >= 3 ? 'right' : 'left',
+                                                            textAlign: (i >= 3 && i < 6) ? 'right' : (i === 6 ? 'center' : 'left'),
                                                         }}>{h}</span>
                                                     ))}
                                                 </div>
@@ -401,7 +526,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
                                                     return (
                                                         <div key={ci.id || idx} style={{
-                                                            display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px',
+                                                            display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                             gap: 8, padding: '8px 20px', alignItems: 'center',
                                                             borderBottom: '1px solid var(--color-border)',
                                                             background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)',
@@ -474,6 +599,28 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                                             <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: meta.color }}>
                                                                 {fmt(ci.price)}
                                                             </span>
+                                                            
+                                                            <div style={{ textAlign: 'center' }}>
+                                                                <button onClick={() => {
+                                                                    const updated = { ...data, groups: { ...data.groups } };
+                                                                    updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
+                                                                    
+                                                                    let newTotal = 0;
+                                                                    for (const k of Object.keys(updated.groups)) {
+                                                                        for (const item of updated.groups[k]) {
+                                                                            newTotal += item.price || 0;
+                                                                        }
+                                                                    }
+                                                                    updated.totalPrice = Math.round(newTotal * 100) / 100;
+                                                                    updated.totalDirect = updated.totalPrice;
+                                                                    
+                                                                    setData(updated);
+                                                                    setHasChanges(true);
+                                                                    if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.5 }}>
+                                                                    <X size={14} />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -515,6 +662,48 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                     </div>
                 )}
             </div>
+            {/* Search Modal */}
+            {showSearch && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0 }}>Buscar Insumo para Composição</h3>
+                            <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                {bases.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>)}
+                                {bases.length === 0 && <option value="">Nenhuma base cadastrada</option>}
+                            </select>
+                            <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                <thead><tr style={{ background: 'var(--color-bg-base)' }}>
+                                    {['Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>)}
+                                </tr></thead>
+                                <tbody>
+                                    {searchResults.map(r => (
+                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
+                                            <td style={{ padding: 8 }}>{r.description}</td>
+                                            <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>
+                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(r.price) || 0)}</td>
+                                            <td style={{ padding: 8, textAlign: 'center' }}>
+                                                <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {searchResults.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite uma busca para começar.'}
+                                    </td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 

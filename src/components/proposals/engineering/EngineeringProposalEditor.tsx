@@ -127,9 +127,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     const isGroup = isGrouper(aiType);
                     const cost = isGroup ? 0 : (Number(ai.unitCost) || 0);
                     const qty = isGroup ? 0 : (Number(ai.quantity) || 1);
+                    
+                    const extractedSource = ai.sourceName || '';
+                    const isKnownSource = bases.some(b => b.name.toUpperCase() === extractedSource.toUpperCase());
+                    const finalSource = isGroup ? '' : (isKnownSource ? extractedSource : 'PROPRIA');
+
                     return {
                         id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
-                        code: ai.code || (isGroup ? '' : 'N/A'), sourceName: isGroup ? '' : (ai.sourceName || 'PROPRIA'),
+                        code: ai.code || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
                         unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi),
