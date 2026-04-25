@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Database, UploadCloud, RefreshCw, Layers, MapPin, Calendar, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash } from 'lucide-react';
+import { CompositionEditor } from '../CompositionEditor';
 
 interface EngDatabase {
     id: string;
@@ -15,12 +16,33 @@ interface EngDatabase {
 }
 
 export function EngineeringHub() {
+    const [activeTab, setActiveTab] = useState<'oficiais' | 'propria'>('oficiais');
     const [bases, setBases] = useState<EngDatabase[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const propriaBase = bases.find(b => b.type === 'PROPRIA' || b.name === 'PROPRIA');
+    const [propriaComps, setPropriaComps] = useState<any[]>([]);
+    const [loadingPropria, setLoadingPropria] = useState(false);
+    const [propriaSearch, setPropriaSearch] = useState('');
+    const [editingComp, setEditingComp] = useState<any>(null);
+
+    const loadPropria = async () => {
+        if (!propriaBase) return;
+        setLoadingPropria(true);
+        try {
+            const res = await fetch(`/api/engineering/compositions?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+            if (res.ok) setPropriaComps(await res.json());
+        } catch (e) {}
+        setLoadingPropria(false);
+    };
+
+    useEffect(() => {
+        if (activeTab === 'propria') loadPropria();
+    }, [activeTab, propriaBase, propriaSearch]);
 
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -204,7 +226,33 @@ export function EngineeringHub() {
                 )}
             </div>
 
-            {/* Stats bar */}
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--color-border)', marginBottom: 24 }}>
+                <button 
+                    onClick={() => setActiveTab('oficiais')}
+                    style={{ 
+                        background: 'none', border: 'none', padding: '0 0 12px 0', fontSize: '0.95rem', fontWeight: activeTab === 'oficiais' ? 700 : 500,
+                        color: activeTab === 'oficiais' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'oficiais' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                        cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
+                    }}>
+                    <Database size={16} /> Bases Oficiais
+                </button>
+                <button 
+                    onClick={() => setActiveTab('propria')}
+                    style={{ 
+                        background: 'none', border: 'none', padding: '0 0 12px 0', fontSize: '0.95rem', fontWeight: activeTab === 'propria' ? 700 : 500,
+                        color: activeTab === 'propria' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'propria' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                        cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 8
+                    }}>
+                    <Layers size={16} /> Minha Base Própria
+                </button>
+            </div>
+
+            {activeTab === 'oficiais' && (
+                <>
+                    {/* Stats bar */}
             {bases.length > 0 && (
                 <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
                     <div style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
@@ -327,6 +375,89 @@ export function EngineeringHub() {
                         );
                     })}
                 </div>
+            )}
+            </>
+            )}
+
+            {activeTab === 'propria' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Minhas Composições Próprias</h3>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <input 
+                                placeholder="Buscar por código ou descrição..." 
+                                value={propriaSearch} 
+                                onChange={e => setPropriaSearch(e.target.value)}
+                                style={{ padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', width: 300, background: 'var(--color-bg-surface)' }}
+                            />
+                            <button style={{ background: 'var(--color-primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                <Layers size={14} /> Nova Composição
+                            </button>
+                        </div>
+                    </div>
+
+                    {!propriaBase ? (
+                        <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+                            <Layers size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
+                            <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Base Própria ainda não criada</h3>
+                            <p style={{ margin: '0 0 20px', color: 'var(--color-text-tertiary)', fontSize: '0.9rem', maxWidth: 400, marginInline: 'auto' }}>
+                                A base será criada automaticamente na primeira extração de edital via IA ou quando você criar a primeira composição.
+                            </p>
+                        </div>
+                    ) : loadingPropria ? (
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                            <RefreshCw size={24} className="spin" style={{ marginBottom: 12, opacity: 0.5 }} />
+                            <p>Carregando composições próprias...</p>
+                        </div>
+                    ) : propriaComps.length === 0 ? (
+                        <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+                            <Layers size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
+                            <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma composição encontrada</h3>
+                        </div>
+                    ) : (
+                        <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Código</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Descrição</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Unidade</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'right' }}>Itens</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'right' }}>Custo (R$)</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {propriaComps.map(comp => (
+                                        <tr key={comp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-primary)' }}>{comp.code}</td>
+                                            <td style={{ padding: '12px 16px', fontWeight: 500 }}>{comp.description}</td>
+                                            <td style={{ padding: '12px 16px' }}>{comp.unit}</td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>{comp._count?.items || 0}</td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{comp.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                <button onClick={() => setEditingComp({
+                                                    id: comp.id, code: comp.code, description: comp.description, 
+                                                    unit: comp.unit, quantity: 1, unitCost: comp.totalPrice, 
+                                                    itemNumber: '1', sourceName: 'PROPRIA'
+                                                })} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>Editar</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {editingComp && (
+                <CompositionEditor 
+                    items={[editingComp]} 
+                    initialIndex={0} 
+                    onClose={() => { setEditingComp(null); loadPropria(); }} 
+                    onUpdateItem={() => {}} 
+                />
             )}
         </div>
     );

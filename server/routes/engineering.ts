@@ -274,6 +274,83 @@ router.get('/compositions', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// PUT /api/engineering/compositions/:id — Atualizar Composição (Write-Back PRÓPRIA)
+// ═══════════════════════════════════════════════════════════
+router.put('/compositions/:id', async (req: any, res: any) => {
+    try {
+        const id = req.params.id;
+        const { composition } = req.body;
+
+        if (!composition || !composition.groups) {
+            return res.status(400).json({ error: 'Dados da composição inválidos' });
+        }
+
+        // Verify if it exists and belongs to a PROPRIA db
+        const existing = await prisma.engineeringComposition.findUnique({
+            where: { id },
+            include: { database: true }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: 'Composição não encontrada' });
+        }
+
+        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+            return res.status(403).json({ error: 'Apenas composições próprias podem ser alteradas' });
+        }
+
+        // Flatten all items from groups to update
+        const flatItems: any[] = [];
+        for (const group of Object.values(composition.groups)) {
+            if (Array.isArray(group)) {
+                flatItems.push(...group);
+            }
+        }
+
+        // Start a transaction to delete old items and recreate
+        await prisma.$transaction(async (tx: any) => {
+            // Update total price and description
+            await tx.engineeringComposition.update({
+                where: { id },
+                data: {
+                    totalPrice: composition.totalPrice,
+                    description: composition.description,
+                    unit: composition.unit,
+                }
+            });
+
+            // Delete existing items
+            await tx.engineeringCompositionItem.deleteMany({
+                where: { compositionId: id }
+            });
+
+            // Create new items
+            for (const item of flatItems) {
+                const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                const itemId = item.item ? item.item.id : item.itemId;
+                const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                
+                await tx.engineeringCompositionItem.create({
+                    data: {
+                        compositionId: id,
+                        itemId: isAux ? null : itemId,
+                        auxiliaryCompositionId: isAux ? auxId : null,
+                        coefficient: item.coefficient,
+                        price: item.price,
+                    }
+                });
+            }
+        });
+
+        res.json({ message: 'Composição atualizada com sucesso', id });
+
+    } catch (e: any) {
+        console.error('Error updating custom composition:', e);
+        res.status(500).json({ error: 'Erro ao atualizar composição própria', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/proposals/:id/insumos-hub
 // Consolida TODOS os insumos de todas as composições do orçamento
 // Para o Hub de Insumos (Fase 1 — Proposta de Obras)

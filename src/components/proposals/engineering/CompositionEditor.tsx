@@ -45,6 +45,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
     const [editingField, setEditingField] = useState<{ id: string; field: 'coef' | 'price' } | null>(null);
     const [editValue, setEditValue] = useState('');
     const [hasChanges, setHasChanges] = useState(false);
+    const [isSavingToBase, setIsSavingToBase] = useState(false);
 
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -179,6 +180,26 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         setEditValue(String(currentValue));
     };
 
+    const saveToBase = async () => {
+        if (!data || !data.id) return;
+        setIsSavingToBase(true);
+        try {
+            const res = await fetch(`/api/engineering/compositions/${data.id}`, {
+                method: 'PUT',
+                headers: hdrs(),
+                body: JSON.stringify({ composition: data })
+            });
+            if (!res.ok) throw new Error('Erro ao salvar composição na base');
+            await res.json();
+            alert('Composição atualizada com sucesso na base PRÓPRIA!');
+            setHasChanges(false);
+        } catch (e: any) {
+            alert(e.message || 'Erro de rede ao salvar');
+        } finally {
+            setIsSavingToBase(false);
+        }
+    };
+
     // Computed total from current data
     const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
 
@@ -273,6 +294,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {data && data.database?.name === 'PROPRIA' && hasChanges && (
+                            <button onClick={saveToBase} disabled={isSavingToBase} title="Atualizar a base de dados com as modificações desta composição"
+                                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                                {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} Salvar na Base
+                            </button>
+                        )}
                         {data && (
                             <>
                                 <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, data)}
