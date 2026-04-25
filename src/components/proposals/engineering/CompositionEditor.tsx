@@ -35,6 +35,7 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     MATERIAL: { label: 'Materiais', icon: Package, color: '#2563eb' },
     MAO_DE_OBRA: { label: 'Mão de Obra', icon: HardHat, color: '#16a34a' },
     EQUIPAMENTO: { label: 'Equipamentos', icon: Wrench, color: '#d97706' },
+    SERVICO: { label: 'Serviços', icon: Wrench, color: '#0ea5e9' },
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
 };
 
@@ -43,7 +44,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'AUXILIAR']));
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'SERVICO', 'AUXILIAR']));
     const [editingField, setEditingField] = useState<{ id: string; field: 'coef' | 'price' } | null>(null);
     const [editValue, setEditValue] = useState('');
     const [hasChanges, setHasChanges] = useState(false);
@@ -181,8 +182,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     }, []);
 
     useEffect(() => {
-        if (currentItem) loadComposition(currentItem.code);
-    }, [currentIndex, currentItem, loadComposition]);
+        if (currentItem?.code) loadComposition(currentItem.code);
+    }, [currentItem?.code, loadComposition]);
 
     const navigate = (dir: -1 | 1) => {
         const next = currentIndex + dir;
@@ -374,6 +375,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     // Computed total from current data
     const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
+    const compositionItemsCount = data ? Object.values(data.groups || {}).reduce((acc: number, group: any) => acc + (Array.isArray(group) ? group.length : 0), 0) : 0;
 
     if (!currentItem) return null;
 
@@ -727,7 +729,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 Custo Unitário do Serviço (S/ BDI)
                             </div>
                             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                {data.items?.length || 0} insumos · {currentItem.quantity} {currentItem.unit} no orçamento
+                                {compositionItemsCount} insumos · {currentItem.quantity} {currentItem.unit} no orçamento
                                 {hasChanges && <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 8 }}>✓ Cascade ativo</span>}
                             </div>
                         </div>
