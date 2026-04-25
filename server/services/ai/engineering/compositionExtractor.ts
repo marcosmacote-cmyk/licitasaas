@@ -40,7 +40,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
     const response = await callGeminiWithRetry(
         genAI.models,
         {
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: [
                 { role: 'user', parts: [
                     { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
