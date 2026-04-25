@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -69,6 +69,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     
     const [showDiscountModal, setShowDiscountModal] = useState(false);
     const [discountData, setDiscountData] = useState({ value: '10', target: 'ALL' });
+
+    const [showRateioModal, setShowRateioModal] = useState(false);
+    const [rateioData, setRateioData] = useState({ prazo: '2', fracao: '100' });
 
     const [isSearching, setIsSearching] = useState(false);
 
@@ -578,6 +581,65 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setShowDiscountModal(false);
     };
 
+    const handleApplyRateio = () => {
+        if (!data) return;
+        const prazoNum = evaluateMath(rateioData.prazo);
+        const fracaoNum = evaluateMath(rateioData.fracao);
+        if (isNaN(prazoNum) || isNaN(fracaoNum) || fracaoNum === 0) return;
+        
+        const factor = prazoNum / fracaoNum;
+
+        const updated = { ...data, groups: { ...data.groups } };
+        
+        // Ensure OBSERVACAO group exists
+        if (!updated.groups['OBSERVACAO']) updated.groups['OBSERVACAO'] = [];
+
+        // Apply factor to all non-observation items
+        for (const k of Object.keys(updated.groups)) {
+            if (k === 'OBSERVACAO') continue;
+            
+            updated.groups[k] = updated.groups[k].map((ci: any) => {
+                if (ci.item?.isObservation) return ci;
+                const newCoef = (ci.coefficient || 1) * factor;
+                const unitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                return {
+                    ...ci,
+                    coefficient: newCoef,
+                    price: applyPrecision(newCoef * unitPrice, { precision: engineeringConfig?.precision })
+                };
+            });
+        }
+
+        // Inject Observation explaining the conversion
+        updated.groups['OBSERVACAO'].push({
+            id: `temp-${Date.now()}`,
+            coefficient: 0,
+            price: 0,
+            item: {
+                id: `new-${Date.now()}`,
+                code: 'OBS',
+                description: `Rateio aplicado: Prazo = ${prazoNum} / Fração = ${fracaoNum}. Todos os coeficientes originais foram multiplicados por ${factor.toFixed(5)} para refletir o custo unitário da Fração.`,
+                unit: '',
+                type: 'OBSERVACAO',
+                price: 0,
+                isNew: true,
+                isObservation: true
+            }
+        });
+
+        let newTotal = 0;
+        for (const k of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
+        }
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        setShowRateioModal(false);
+    };
+
     // Computed total from current data
     const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
     const compositionItemsCount = data ? Object.values(data.groups || {}).reduce((acc: number, group: any) => acc + (Array.isArray(group) ? group.length : 0), 0) : 0;
@@ -743,6 +805,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <button onClick={() => setShowDiscountModal(true)} title="Aplicar desconto percentual em lote"
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                             <Percent size={13} color="var(--color-text-secondary)" /> Desconto
+                        </button>
+                        
+                        <button onClick={() => setShowRateioModal(true)} title="Converter custo para fração % (Ex: Administração Local)"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <Divide size={13} color="var(--color-text-secondary)" /> Rateio / Fração %
                         </button>
                         
                         <div style={{ flex: 1 }}></div>
@@ -1172,6 +1239,34 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                             <button className="btn" onClick={() => setShowDiscountModal(false)}>Cancelar</button>
                             <button className="btn btn-primary" onClick={handleApplyDiscount}>Aplicar Desconto</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showRateioModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 350, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Divide size={18} /> Rateio para Fração (%)</h3>
+                        
+                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                            Use para diluir o valor da composição de acordo com um prazo e representá-la como porcentagem (ex: Administração Local % do orçamento total).
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Prazo em Meses (Multiplicador)</label>
+                            <input autoFocus type="text" className="form-input" value={rateioData.prazo} onChange={e => setRateioData({...rateioData, prazo: e.target.value})} style={{ width: '100%' }} />
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Divisor da Fração (ex: 100 para %)</label>
+                            <input type="text" className="form-input" value={rateioData.fracao} onChange={e => setRateioData({...rateioData, fracao: e.target.value})} style={{ width: '100%' }} />
+                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>Os coeficientes de todos os insumos serão multiplicados por: (Prazo / Divisor).</div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button className="btn" onClick={() => setShowRateioModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleApplyRateio}>Aplicar Rateio</button>
                         </div>
                     </div>
                 </div>
