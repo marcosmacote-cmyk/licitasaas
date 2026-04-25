@@ -801,7 +801,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 <strong style={{color:'var(--color-primary)'}}>Dica Mágica:</strong> Você pode tirar um print da tabela no PDF e dar <strong>Ctrl+V</strong> em qualquer lugar desta tela. A IA extrairá tudo automaticamente!
                             </div>
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                                <button className="btn btn-primary" onClick={() => { setInsertType('INSUMO'); setShowSearch(true); }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <button className="btn btn-primary" onClick={() => { setSearchType('item'); setShowSearch(true); }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <Layers size={15} /> Inserir Manualmente
                                 </button>
                             </div>
