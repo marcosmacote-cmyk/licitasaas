@@ -222,7 +222,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.error || 'Falha na extração por IA');
+                throw new Error(err.error + (err.details ? `: ${err.details}` : ''));
             }
 
             const extracted = await res.json();

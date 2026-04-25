@@ -34,20 +34,27 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
     const genAI = new GoogleGenAI({ apiKey });
     
     // Using gemini-1.5-pro for better table extraction
-    const response = await genAI.models.generateContent({
-        model: 'gemini-1.5-pro',
-        contents: [
-            { role: 'user', parts: [
-                { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-                { text: `Extraia a composição da imagem.` + (expectedCode ? ` Se possível, foque no item com código ou descrição similar a ${expectedCode}.` : '') }
-            ]}
-        ],
-        config: {
-            systemInstruction: systemPrompt,
-            responseMimeType: 'application/json',
-            temperature: 0.1
-        }
-    });
+    // Import callGeminiWithRetry (dynamically or statically at the top)
+    const { callGeminiWithRetry } = require('../gemini.service');
+
+    const response = await callGeminiWithRetry(
+        genAI.models,
+        {
+            model: 'gemini-1.5-pro',
+            contents: [
+                { role: 'user', parts: [
+                    { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
+                    { text: `Extraia a composição da imagem.` + (expectedCode ? ` Se possível, foque no item com código ou descrição similar a ${expectedCode}.` : '') }
+                ]}
+            ],
+            config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: 'application/json',
+                temperature: 0.1
+            }
+        },
+        3 // retries
+    );
 
     const text = response.text;
     if (!text) throw new Error('Resposta vazia da IA');
