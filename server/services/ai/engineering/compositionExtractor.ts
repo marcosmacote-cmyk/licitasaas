@@ -22,7 +22,7 @@ Seu trabalho é ler a imagem/pdf fornecida, identificar a tabela de insumos e ex
 }
 
 REGRAS:
-1. "coefficient" e "price" DEVEM ser números (use ponto para decimais, ex: 1.5 e não 1,5).
+1. "coefficient" e "price" DEVEM ser números (use ponto para decimais, ex: 1.5 e não 1,5). Certifique-se de que "price" é o Preço Unitário e NÃO o Preço Total.
 2. Se o preço não for legível, coloque 0.
 3. Se não houver tipo claro, tente deduzir pelo nome (ex: "Servente" -> MAO_DE_OBRA, "Cimento" -> MATERIAL, "Caminhão" -> EQUIPAMENTO, "Concreto Usinado" -> AUXILIAR).
 4. Retorne APENAS o JSON, sem formatação Markdown.`;
@@ -101,17 +101,20 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
         }
 
         // Convert the schema to what CompositionEditor expects (which is the DB schema shape)
+        const unitPrice = item.price || (match as any)?.price || (match as any)?.totalPrice || 0;
+        const subtotal = unitPrice * (item.coefficient || 1);
+
         const enrichedItem = {
             id: `temp-${Date.now()}-${Math.random()}`,
             coefficient: item.coefficient || 1,
-            price: item.price || 0,
+            price: subtotal, // In the schema, ci.price is the subtotal
             item: item.type !== 'AUXILIAR' ? {
                 id: match ? match.id : `new-${Date.now()}`,
                 code: match ? match.code : (item.code || 'NOVO'),
                 description: match ? match.description : item.description,
                 unit: match ? match.unit : item.unit,
                 type: item.type,
-                price: item.price || (match as any)?.price || 0,
+                price: unitPrice,
                 isNew: !match
             } : undefined,
             auxiliaryComposition: item.type === 'AUXILIAR' ? {
@@ -119,7 +122,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
                 code: match ? match.code : (item.code || 'NOVO'),
                 description: match ? match.description : item.description,
                 unit: match ? match.unit : item.unit,
-                totalPrice: item.price || (match as any)?.totalPrice || 0,
+                totalPrice: unitPrice,
                 isNew: !match
             } : undefined,
             _ai_confidence: match ? 'high' : 'low'
@@ -145,7 +148,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
         code: extracted.code || expectedCode || 'NOVO',
         description: extracted.description || 'Composição Extraída via IA',
         unit: extracted.unit || 'UN',
-        totalPrice: itemsWithMatches.reduce((s, ci) => s + (ci.price || 0) * (ci.coefficient || 1), 0),
+        totalPrice: itemsWithMatches.reduce((s, ci) => s + (ci.price || 0), 0),
         items: itemsWithMatches,
         groups
     };
