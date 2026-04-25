@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
+import { SmartCpuDropzone } from './SmartCpuDropzone';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -49,6 +50,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [editValue, setEditValue] = useState('');
     const [hasChanges, setHasChanges] = useState(false);
     const [isSavingToBase, setIsSavingToBase] = useState(false);
+    const [isExtractingAi, setIsExtractingAi] = useState(false);
 
     // Search inside editor
     const [showSearch, setShowSearch] = useState(false);
@@ -201,6 +203,54 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, [currentIndex, hasPrev, hasNext, editingField]);
+
+    const handleExtractAi = async (file: File) => {
+        if (!currentItem) return;
+        setIsExtractingAi(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('code', currentItem.code);
+            formData.append('description', currentItem.description);
+            formData.append('unit', currentItem.unit);
+
+            const res = await fetch('/api/engineering/ai/extract-composition', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token()}` }, // No Content-Type so browser sets boundary
+                body: formData
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Falha na extração por IA');
+            }
+
+            const extracted = await res.json();
+            
+            // Re-calculate the total
+            let newTotal = 0;
+            for (const groupKey of Object.keys(extracted.groups || {})) {
+                for (const ci of extracted.groups[groupKey]) {
+                    newTotal += ci.price || 0;
+                }
+            }
+            const updated = { ...extracted };
+            updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+            updated.totalDirect = updated.totalPrice;
+            
+            setData(updated);
+            setHasChanges(true);
+            
+            if (onUpdateItem && currentItem) {
+                onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+            }
+
+        } catch (e: any) {
+            alert(e.message || 'Erro de rede na extração AI');
+        } finally {
+            setIsExtractingAi(false);
+        }
+    };
 
     const toggleGroup = (key: string) => {
         setExpandedGroups(prev => {
@@ -537,9 +587,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 <button className="btn btn-primary" onClick={handleCreateComposition} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <Layers size={15} /> Criar Composição Manualmente
                                 </button>
-                                {/* <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Cpu size={15} color="var(--color-ai)" /> Tentar Extrair via IA
-                                </button> */}
+                            </div>
+                            
+                            <div style={{ marginTop: 32, marginBottom: 16 }}>
+                                <SmartCpuDropzone onExtract={handleExtractAi} isExtracting={isExtractingAi} />
                             </div>
                             
                             <div style={{ marginTop: 24, fontSize: '0.8rem', opacity: 0.7 }}>
@@ -616,9 +667,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
                                                             <div>
                                                                 <div style={{ fontSize: '0.8rem', fontWeight: 500 }}>{itemData?.description || '—'}</div>
-                                                                {itemData?.code && (
-                                                                    <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
-                                                                )}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                                                    {itemData?.code && (
+                                                                        <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
+                                                                    )}
+                                                                    {itemData?.isNew && (
+                                                                        <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Novo Insumo Próprio</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
                                                                 {itemData?.unit || '—'}

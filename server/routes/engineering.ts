@@ -374,10 +374,44 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             });
 
             // Create new items
+            const tenantId = composition.tenantId; // Or get it from the parent composition
+            const basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA' } });
+
             for (const item of flatItems) {
-                const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                const itemId = item.item ? item.item.id : item.itemId;
-                const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                let itemId = item.item ? item.item.id : item.itemId;
+                let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                
+                // Dynamically create AI-extracted proprietary inputs
+                if (!isAux && itemId && itemId.startsWith('new-')) {
+                    const newItem = await tx.engineeringItem.create({
+                        data: {
+                            databaseId: basePropria?.id || null,
+                            code: item.item.code || `AI-${Date.now()}`,
+                            description: item.item.description || 'Novo Insumo Próprio (IA)',
+                            unit: item.item.unit || 'UN',
+                            type: item.item.type || 'MATERIAL',
+                            price: item.item.price || 0,
+                            tenantId: tenantId
+                        }
+                    });
+                    itemId = newItem.id;
+                }
+
+                // Dynamically create AI-extracted auxiliary compositions
+                if (isAux && auxId && auxId.startsWith('new-')) {
+                    const newAux = await tx.engineeringComposition.create({
+                        data: {
+                            databaseId: basePropria?.id || null,
+                            code: item.auxiliaryComposition.code || `AI-COMP-${Date.now()}`,
+                            description: item.auxiliaryComposition.description || 'Nova Composição Auxiliar Própria (IA)',
+                            unit: item.auxiliaryComposition.unit || 'UN',
+                            totalPrice: item.auxiliaryComposition.totalPrice || 0,
+                            tenantId: tenantId
+                        }
+                    });
+                    auxId = newAux.id;
+                }
                 
                 await tx.engineeringCompositionItem.create({
                     data: {
@@ -1883,6 +1917,29 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('[SEINFRA Import] Fatal:', e);
         res.status(500).json({ error: 'Erro na importação SEINFRA', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// AI EXTRACTION - SMART CPU BUILDER
+// ═══════════════════════════════════════════════════════════
+
+import { extractCompositionFromImage } from '../services/ai/engineering/compositionExtractor';
+const aiUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any, res: any) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        }
+
+        const { code } = req.body;
+        const result = await extractCompositionFromImage(req.file.buffer, req.file.mimetype, code);
+        
+        res.json(result);
+    } catch (e: any) {
+        console.error('[AI Extract Composition] Error:', e);
+        res.status(500).json({ error: 'Falha na extração por IA', details: e.message });
     }
 });
 
