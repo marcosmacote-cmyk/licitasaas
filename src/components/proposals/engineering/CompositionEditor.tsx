@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2 } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -59,6 +59,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [selectedBaseId, setSelectedBaseId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
+
+    // ── Phase 4: Free Mode States ──
+    const [showFreeItemModal, setShowFreeItemModal] = useState(false);
+    const [freeItemData, setFreeItemData] = useState({ description: '', unit: 'UN', coefficient: '1', price: '0', type: 'MATERIAL' });
+    
+    const [showFactorModal, setShowFactorModal] = useState(false);
+    const [factorData, setFactorData] = useState({ value: '1.05', target: 'ALL' });
+    
+    const [showDiscountModal, setShowDiscountModal] = useState(false);
+    const [discountData, setDiscountData] = useState({ value: '10', target: 'ALL' });
+
     const [isSearching, setIsSearching] = useState(false);
 
     // Load bases once when opening search
@@ -424,6 +435,132 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     };
 
+    // ── Phase 4: Free Mode Handlers ──
+    const handleAddFreeItem = () => {
+        if (!data) return;
+        
+        const typeKey = freeItemData.type as 'MATERIAL'|'MAO_DE_OBRA'|'EQUIPAMENTO'|'SERVICO'|'AUXILIAR';
+        const isAux = typeKey === 'AUXILIAR';
+        const priceNum = parseFloat(freeItemData.price) || 0;
+        const coefNum = parseFloat(freeItemData.coefficient) || 1;
+        
+        const newItem = {
+            id: `temp-${Date.now()}`,
+            coefficient: coefNum,
+            price: applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
+            item: !isAux ? {
+                id: `new-${Date.now()}`,
+                code: 'LIVRE',
+                description: freeItemData.description || 'Novo Insumo',
+                unit: freeItemData.unit,
+                type: typeKey,
+                price: priceNum,
+                isNew: true
+            } : undefined,
+            auxiliaryComposition: isAux ? {
+                id: `new-aux-${Date.now()}`,
+                code: 'LIVRE',
+                description: freeItemData.description || 'Nova Composição Auxiliar',
+                unit: freeItemData.unit,
+                totalPrice: priceNum,
+                isNew: true
+            } : undefined
+        };
+
+        const updated = { ...data, groups: { ...data.groups } };
+        if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
+        updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
+
+        let newTotal = 0;
+        for (const k of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[k]) {
+                newTotal += ci.price || 0;
+            }
+        }
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        
+        setShowFreeItemModal(false);
+        setFreeItemData({ description: '', unit: 'UN', coefficient: '1', price: '0', type: 'MATERIAL' });
+    };
+
+    const handleApplyFactor = () => {
+        if (!data) return;
+        const factor = parseFloat(factorData.value);
+        if (isNaN(factor) || factor < 0) return;
+
+        const updated = { ...data, groups: { ...data.groups } };
+        for (const k of Object.keys(updated.groups)) {
+            if (factorData.target !== 'ALL' && k !== factorData.target) continue;
+            
+            updated.groups[k] = updated.groups[k].map((ci: any) => {
+                const newCoef = (ci.coefficient || 1) * factor;
+                const unitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                return {
+                    ...ci,
+                    coefficient: newCoef,
+                    price: applyPrecision(newCoef * unitPrice, { precision: engineeringConfig?.precision })
+                };
+            });
+        }
+
+        let newTotal = 0;
+        for (const k of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
+        }
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        setShowFactorModal(false);
+    };
+
+    const handleApplyDiscount = () => {
+        if (!data) return;
+        const discountPercent = parseFloat(discountData.value);
+        if (isNaN(discountPercent) || discountPercent < 0 || discountPercent > 100) return;
+        
+        const multiplier = 1 - (discountPercent / 100);
+
+        const updated = { ...data, groups: { ...data.groups } };
+        for (const k of Object.keys(updated.groups)) {
+            if (discountData.target !== 'ALL' && k !== discountData.target) continue;
+            
+            updated.groups[k] = updated.groups[k].map((ci: any) => {
+                const oldUnitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                const newUnitPrice = oldUnitPrice * multiplier;
+                
+                const newItemObj = ci.item ? { ...ci.item, price: newUnitPrice } : undefined;
+                const newAuxObj = ci.auxiliaryComposition ? { ...ci.auxiliaryComposition, totalPrice: newUnitPrice } : undefined;
+                
+                return {
+                    ...ci,
+                    item: newItemObj,
+                    auxiliaryComposition: newAuxObj,
+                    price: applyPrecision((ci.coefficient || 1) * newUnitPrice, { precision: engineeringConfig?.precision })
+                };
+            });
+        }
+
+        let newTotal = 0;
+        for (const k of Object.keys(updated.groups)) {
+            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
+        }
+        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        setShowDiscountModal(false);
+    };
+
     // Computed total from current data
     const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
     const compositionItemsCount = data ? Object.values(data.groups || {}).reduce((acc: number, group: any) => acc + (Array.isArray(group) ? group.length : 0), 0) : 0;
@@ -565,6 +702,37 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     }}>
                         <ArrowDownUp size={13} />
                         <strong>Cascade ativo</strong> — Alterações refletidas na Planilha e Hub de Insumos em tempo real.
+                    </div>
+                )}
+
+                {/* Toolbar Módulo Livre */}
+                {data && !error && (
+                    <div style={{
+                        padding: '8px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
+                        display: 'flex', gap: 12, alignItems: 'center'
+                    }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', marginRight: 4 }}>MÓDULO LIVRE:</span>
+                        
+                        <button onClick={() => setShowFreeItemModal(true)} title="Adicionar um insumo ou serviço avulso sem buscar na base"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px dashed var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <PlusCircle size={13} color="var(--color-text-secondary)" /> Insumo Livre
+                        </button>
+
+                        <button onClick={() => setShowFactorModal(true)} title="Aplicar fator em lote (ex: perda material)"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <Calculator size={13} color="var(--color-text-secondary)" /> Fator / Perda
+                        </button>
+
+                        <button onClick={() => setShowDiscountModal(true)} title="Aplicar desconto percentual em lote"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <Percent size={13} color="var(--color-text-secondary)" /> Desconto
+                        </button>
+                        
+                        <div style={{ flex: 1 }}></div>
+                        <button onClick={() => { setFreeItemData(prev => ({ ...prev, description: 'Verba / Custo Indireto', unit: 'VB', type: 'SERVICO' })); setShowFreeItemModal(true); }} title="Adicionar linha de verba / custo indireto"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-primary)', background: 'transparent', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <Wand2 size={13} /> Inserir Verba
+                        </button>
                     </div>
                 )}
 
@@ -865,6 +1033,112 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
                 </div>
             )}
+
+            {/* Modals Módulo Livre */}
+            {showFreeItemModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><PlusCircle size={18} /> Novo Insumo Livre</h3>
+                        
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Descrição / Serviço</label>
+                            <input autoFocus type="text" className="form-input" value={freeItemData.description} onChange={e => setFreeItemData({...freeItemData, description: e.target.value})} style={{ width: '100%' }} />
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Tipo</label>
+                                <select className="form-select" value={freeItemData.type} onChange={e => setFreeItemData({...freeItemData, type: e.target.value})} style={{ width: '100%' }}>
+                                    <option value="MATERIAL">Material</option>
+                                    <option value="MAO_DE_OBRA">Mão de Obra</option>
+                                    <option value="EQUIPAMENTO">Equipamento</option>
+                                    <option value="SERVICO">Serviço Terceirizado</option>
+                                    <option value="AUXILIAR">Comp. Auxiliar</option>
+                                </select>
+                            </div>
+                            <div style={{ width: 80 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Unidade</label>
+                                <input type="text" className="form-input" value={freeItemData.unit} onChange={e => setFreeItemData({...freeItemData, unit: e.target.value})} style={{ width: '100%', textTransform: 'uppercase' }} />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Coeficiente</label>
+                                <input type="number" step="0.0001" className="form-input" value={freeItemData.coefficient} onChange={e => setFreeItemData({...freeItemData, coefficient: e.target.value})} style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Preço Unitário</label>
+                                <input type="number" step="0.01" className="form-input" value={freeItemData.price} onChange={e => setFreeItemData({...freeItemData, price: e.target.value})} style={{ width: '100%' }} />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button className="btn" onClick={() => setShowFreeItemModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleAddFreeItem} disabled={!freeItemData.description}>Inserir Insumo</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showFactorModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 350, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Calculator size={18} /> Aplicar Fator</h3>
+                        
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Alvo da Multiplicação</label>
+                            <select className="form-select" value={factorData.target} onChange={e => setFactorData({...factorData, target: e.target.value})} style={{ width: '100%' }}>
+                                <option value="ALL">Todos os Insumos</option>
+                                <option value="MATERIAL">Apenas Materiais (Ex: Perda)</option>
+                                <option value="MAO_DE_OBRA">Apenas Mão de Obra</option>
+                                <option value="EQUIPAMENTO">Apenas Equipamentos</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Fator de Multiplicação dos Coeficientes</label>
+                            <input autoFocus type="number" step="0.01" className="form-input" value={factorData.value} onChange={e => setFactorData({...factorData, value: e.target.value})} style={{ width: '100%' }} />
+                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>Ex: 1.05 = Adicionar 5% de perda</div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button className="btn" onClick={() => setShowFactorModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleApplyFactor}>Aplicar Fator</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showDiscountModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 350, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Percent size={18} /> Aplicar Desconto</h3>
+                        
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Alvo do Desconto</label>
+                            <select className="form-select" value={discountData.target} onChange={e => setDiscountData({...discountData, target: e.target.value})} style={{ width: '100%' }}>
+                                <option value="ALL">Todos os Insumos</option>
+                                <option value="MATERIAL">Apenas Materiais</option>
+                                <option value="MAO_DE_OBRA">Apenas Mão de Obra</option>
+                                <option value="EQUIPAMENTO">Apenas Equipamentos</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Porcentagem de Desconto (%)</label>
+                            <input autoFocus type="number" step="1" className="form-input" value={discountData.value} onChange={e => setDiscountData({...discountData, value: e.target.value})} style={{ width: '100%' }} />
+                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>Este valor reduzirá o preço unitário do insumo. Ex: 10 = -10%.</div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button className="btn" onClick={() => setShowDiscountModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleApplyDiscount}>Aplicar Desconto</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 
