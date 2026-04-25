@@ -1,8 +1,12 @@
 /**
  * CronogramaPanel — Cronograma Físico-Financeiro
  * Tabela interativa: etapas x meses, com edição de percentuais.
+ * 
+ * FIX ARQ-04: Agora recebe onDataChange callback para persistir dados
+ * no state do componente pai (EngineeringProposalEditor), evitando
+ * perda de dados ao trocar de aba.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Calendar, Plus, Minus } from 'lucide-react';
 import { calcularCronograma, gerarEtapasPadrao, type CronogramaEtapa } from './cronogramaEngine';
 
@@ -10,16 +14,27 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 interface Props {
     items: { itemNumber: string; description: string; totalPrice: number }[];
+    /** Dados previamente salvos do cronograma — FIX ARQ-04 */
+    savedData?: { meses: number; etapas: CronogramaEtapa[] } | null;
+    /** Callback para persistir mudanças no pai — FIX ARQ-04 */
+    onDataChange?: (data: { meses: number; etapas: CronogramaEtapa[] }) => void;
 }
 
-export function CronogramaPanel({ items }: Props) {
-    const [meses, setMeses] = useState(6);
+export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
+    // FIX ARQ-04: Inicializa a partir de dados salvos se disponíveis
+    const [meses, setMeses] = useState(() => savedData?.meses || 6);
     const [etapas, setEtapas] = useState<CronogramaEtapa[]>(() => {
+        if (savedData?.etapas && savedData.etapas.length > 0) return savedData.etapas;
         const auto = gerarEtapasPadrao(items);
         return auto.length > 0 ? auto.map(e => ({ ...e, percentuais: Array(12).fill(0) })) : [
             { id: '1', nome: 'Serviços Preliminares', valorTotal: 0, percentuais: Array(12).fill(0) },
         ];
     });
+
+    // FIX ARQ-04: Notifica o pai sempre que dados mudam
+    useEffect(() => {
+        onDataChange?.({ meses, etapas });
+    }, [meses, etapas]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const updatePct = useCallback((etapaId: string, mesIdx: number, val: number) => {
         setEtapas(prev => prev.map(e =>

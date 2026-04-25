@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
@@ -8,21 +8,9 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { applyPrecision } from './precisionEngine';
-
-type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
-
-interface EngInsumo {
-    description: string; type: string; unit: string;
-    coefficient: number; unitPrice: number;
-}
-
-interface EngItem {
-    id: string; itemNumber: string; code: string; sourceName: string;
-    description: string; unit: string; quantity: number;
-    unitCost: number; unitPrice: number; totalPrice: number;
-    type: EngItemType;
-    insumos?: EngInsumo[];
-}
+import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria } from './types';
+import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
+import * as XLSX from 'xlsx';
 
 const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string; icon: typeof FolderOpen }> = {
     ETAPA:      { label: 'Etapa',       color: '#1e40af', bg: 'rgba(30,64,175,0.08)',  icon: FolderOpen },
@@ -30,9 +18,6 @@ const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string;
     COMPOSICAO: { label: 'Composição',  color: '#0e7490', bg: 'rgba(14,116,144,0.06)', icon: Layers },
     INSUMO:     { label: 'Insumo',      color: '#b45309', bg: 'rgba(180,83,9,0.06)',   icon: Package },
 };
-
-const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';
-const getDepth = (itemNumber: string) => (itemNumber.match(/\./g) || []).length;
 
 interface Props { proposalId: string; biddingId: string; }
 
@@ -43,14 +28,7 @@ const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'app
 export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [items, setItems] = useState<EngItem[]>([]);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
-    const [engineeringConfig, setEngineeringConfig] = useState<any>({
-        objeto: '',
-        basesConsideradas: ['SINAPI', 'SEINFRA'],
-        dataBase: '',
-        regimeOneracao: 'DESONERADO',
-        encargosSociais: { horista: 114.3, mensalista: 47.8 },
-        precision: { tipo: 'ROUND', casasDecimais: 2 }
-    });
+    const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
@@ -80,18 +58,40 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     // Active tab
     const [activeTab, setActiveTab] = useState<'planilha' | 'balizamento' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
 
-    const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
-    const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
-    const total = items.reduce((s, it) => s + it.totalPrice, 0);
+    // FIX ARQ-04: Cronograma data persisted in parent state to survive tab switches
+    const [cronogramaData, setCronogramaData] = useState<{ meses: number; etapas: any[] } | null>(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-    const recalcAll = useCallback((its: EngItem[], bdi: number, config: any) => {
+    const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
+    
+    /** Resolve o BDI efetivo para um item (suporte a BDI diferenciado OBRA vs FORNECIMENTO) */
+    const resolveItemBdi = useCallback((it: EngItem) => {
+        if (!engineeringConfig.bdiDiferenciado) return effectiveBdi;
+        if (it.bdiCategoria === 'FORNECIMENTO') return engineeringConfig.bdiFornecimento || 14.02;
+        return effectiveBdi; // Default = OBRA
+    }, [effectiveBdi, engineeringConfig.bdiDiferenciado, engineeringConfig.bdiFornecimento]);
+
+    // FIX BUG-01: Filtra agrupadores (ETAPA/SUBETAPA) do cálculo de totais
+    const billableItems = items.filter(it => !isGrouper(it.type));
+    const subtotal = billableItems.reduce((s, it) => s + it.quantity * it.unitCost, 0);
+    const total = billableItems.reduce((s, it) => s + it.totalPrice, 0);
+
+    const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
         return its.map(it => {
-            const up = applyBdi(it.unitCost, bdi);
+            if (isGrouper(it.type)) return it;
+            // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
+            const itemBdi = config.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO'
+                ? (config.bdiFornecimento || 14.02)
+                : _bdi;
+            const up = applyBdi(it.unitCost, itemBdi, config.precision);
             return { ...it, unitPrice: up, totalPrice: applyPrecision(it.quantity * up, config) };
         });
     }, []);
 
     useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
+
+    // Ref para input de importação Excel oculto
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load items on mount
     useEffect(() => {
@@ -103,7 +103,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 } else if (data && data.items) {
                     setItems(data.items);
                     if (data.bdiConfig) setBdiConfig(data.bdiConfig);
-                    if (data.engineeringConfig) setEngineeringConfig(data.engineeringConfig);
+                    if (data.engineeringConfig) {
+                        // FIX ARQ-04: Restore cronograma data from saved config
+                        const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
+                        setEngineeringConfig(engConfig);
+                        if (savedCronograma) setCronogramaData(savedCronograma);
+                    }
                 }
             }).catch(console.error);
 
@@ -119,7 +124,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         try {
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items, bdiConfig, engineeringConfig })
+                body: JSON.stringify({ items, bdiConfig, engineeringConfig, cronogramaData })
             });
             if (res.ok) { const d = await res.json(); setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>); }
             else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>); }
@@ -152,8 +157,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         code: ai.code || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
-                        unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi),
-                        totalPrice: isGroup ? 0 : applyPrecision(qty * applyBdi(cost, effectiveBdi), { precision: engineeringConfig?.precision }),
+                        unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision),
+                        totalPrice: isGroup ? 0 : applyPrecision(qty * applyBdi(cost, effectiveBdi, engineeringConfig.precision), { precision: engineeringConfig.precision }),
                         insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
                 });
@@ -190,8 +195,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setItems(prev => prev.map(it => {
             if (it.id !== id) return it;
             const updated = { ...it, [field]: value };
-            if (field === 'unitCost' || field === 'quantity') {
-                updated.unitPrice = applyBdi(updated.unitCost, effectiveBdi);
+            if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') {
+                const itemBdi = resolveItemBdi(updated);
+                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
                 updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
             }
             return updated;
@@ -239,12 +245,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
         const cost = Number(dbItem.price) || 0;
+        const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
         setItems(prev => [...prev, {
             id: `db-${Date.now()}`, itemNumber: String(prev.length + 1),
             code: dbItem.code, sourceName: base?.name || 'OFICIAL',
             description: dbItem.description, unit: dbItem.unit, quantity: 1,
-            unitCost: cost, unitPrice: applyBdi(cost, effectiveBdi),
-            totalPrice: applyBdi(cost, effectiveBdi), type: insertType,
+            unitCost: cost, unitPrice,
+            // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
+            totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: insertType,
         }]);
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
     };
@@ -254,56 +262,163 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setBdiConfig(prev => ({ ...prev, tcu: { ...prev.tcu, [field]: val } }));
     };
 
-    // Excel Export (CSV with BOM for Excel compatibility)
+    // ═══════════════════════════════════════════════════════
+    // IMPORTAÇÃO EXCEL (.xlsx)
+    // ═══════════════════════════════════════════════════════
+    const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                if (rows.length < 2) {
+                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Planilha vazia ou sem dados</span>);
+                    return;
+                }
+
+                // Auto-detectar colunas pelo header
+                const header = rows[0].map((h: any) => String(h).toUpperCase().trim());
+                const findCol = (...aliases: string[]) => header.findIndex(h => aliases.some(a => h.includes(a)));
+
+                const colItem = findCol('ITEM', 'N°', 'NUM', 'NÚMERO');
+                const colDesc = findCol('DESCRI', 'SERVIÇO', 'SERVICO', 'ESPECIFICA');
+                const colUn = findCol('UNID', 'UN.');
+                const colQtd = findCol('QUANT', 'QTD');
+                const colCusto = findCol('CUSTO', 'PREÇO UNIT', 'PRECO UNIT', 'VL UNIT', 'P.U.', 'VALOR UNIT');
+                const colTotal = findCol('TOTAL', 'VALOR TOTAL', 'PREÇO TOTAL', 'PRECO TOTAL');
+                const colCodigo = findCol('CÓDIGO', 'CODIGO', 'CÓD', 'REF');
+                const colBase = findCol('BASE', 'FONTE', 'REFER');
+
+                if (colDesc < 0) {
+                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Coluna "Descrição" não encontrada no header</span>);
+                    return;
+                }
+
+                const imported: EngItem[] = [];
+                for (let r = 1; r < rows.length; r++) {
+                    const row = rows[r];
+                    if (!row || row.every((c: any) => !c && c !== 0)) continue; // skip empty rows
+
+                    const desc = String(row[colDesc] ?? '').trim();
+                    if (!desc) continue;
+
+                    const itemNum = colItem >= 0 ? String(row[colItem] ?? '').trim() : String(imported.length + 1);
+                    const unit = colUn >= 0 ? String(row[colUn] ?? '').trim() : '';
+                    const qty = colQtd >= 0 ? Number(row[colQtd]) || 0 : 0;
+                    const cost = colCusto >= 0 ? Number(row[colCusto]) || 0 : 0;
+                    const code = colCodigo >= 0 ? String(row[colCodigo] ?? '').trim() : '';
+                    const base = colBase >= 0 ? String(row[colBase] ?? '').trim() : '';
+
+                    // Detecção de tipo: item sem preço e sem unidade = agrupador
+                    let type: EngItemType = 'COMPOSICAO';
+                    const depth = (itemNum.match(/\./g) || []).length;
+                    if (cost === 0 && qty === 0 && !unit) {
+                        type = depth === 0 ? 'ETAPA' : 'SUBETAPA';
+                    } else if (code && code.length < 6 && !base) {
+                        type = 'INSUMO';
+                    }
+
+                    const isGroup = isGrouper(type);
+                    const up = isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision);
+
+                    imported.push({
+                        id: `xls-${Date.now()}-${r}`,
+                        itemNumber: itemNum || String(imported.length + 1),
+                        code: isGroup ? '' : (code || 'N/A'),
+                        sourceName: isGroup ? '' : (base || 'PROPRIA'),
+                        description: desc,
+                        unit: isGroup ? '' : (unit || 'UN'),
+                        quantity: isGroup ? 0 : qty,
+                        unitCost: isGroup ? 0 : cost,
+                        unitPrice: up,
+                        totalPrice: isGroup ? 0 : applyPrecision(qty * up, engineeringConfig),
+                        type,
+                    });
+                }
+
+                if (imported.length === 0) {
+                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> Nenhum item válido encontrado na planilha</span>);
+                    return;
+                }
+
+                setItems(prev => [...prev, ...imported]);
+                const etapas = imported.filter(i => i.type === 'ETAPA').length;
+                const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {imported.length} itens importados do Excel ({etapas} etapas, {comps} composições)</span>);
+            } catch (err: any) {
+                console.error('Erro ao importar Excel:', err);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao ler arquivo: {err.message}</span>);
+            }
+            // Reset input
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    // Excel Export — native .xlsx via SheetJS
     const handleExportExcel = () => {
-        const BOM = '\uFEFF';
-        const sep = ';';
-        
-        // 1. Configurações Mestre (Cabeçalho do Relatório)
-        const headerTop = ['Obra', 'Bancos', 'B.D.I.', 'Encargos Sociais'];
-        
-        const obraDesc = `"${(engineeringConfig?.objeto || 'Não informado').replace(/"/g, '""')}"`;
-        const bancos = `"${(engineeringConfig?.basesConsideradas || []).join(', ') || 'Não informado'}"`;
-        const bdiText = `${effectiveBdi.toFixed(2)}% (${bdiConfig.mode})`;
-        const encargosText = `"${engineeringConfig?.regimeOneracao || 'Não informado'}\nHorista: ${engineeringConfig?.encargosSociais?.horista || 0}%\nMensalista: ${engineeringConfig?.encargosSociais?.mensalista || 0}%"`;
-        
-        const headerTopValues = [obraDesc, bancos, bdiText, encargosText];
+        const wb = XLSX.utils.book_new();
 
-        // 2. Cabeçalho da Tabela de Itens
-        const header = ['Item', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unitário (S/ BDI)', 'Preço Unitário (C/ BDI)', 'Total (C/ BDI)'];
-        
-        // Pad the headerTop and headerTopValues to match the number of columns in the main table
-        const padLength = Math.max(0, header.length - headerTop.length);
-        const headerTopPadded = [...headerTop, ...Array(padLength).fill('')];
-        const headerTopValuesPadded = [...headerTopValues, ...Array(padLength).fill('')];
+        // 1. Cabeçalho com configurações mestre
+        const configRows = [
+            ['PLANILHA ORÇAMENTÁRIA DE OBRAS E SERVIÇOS DE ENGENHARIA'],
+            [''],
+            ['Obra/Objeto', engineeringConfig?.objeto || 'Não informado'],
+            ['Bancos Considerados', (engineeringConfig?.basesConsideradas || []).join(', ') || 'Não informado'],
+            ['Data Base', engineeringConfig?.dataBase || 'Não informado'],
+            ['Regime', engineeringConfig?.regimeOneracao || 'DESONERADO'],
+            ['BDI (' + bdiConfig.mode + ')', effectiveBdi.toFixed(2) + '%'],
+            ['Encargos Sociais Horista', (engineeringConfig?.encargosSociais?.horista || 0) + '%'],
+            ['Encargos Sociais Mensalista', (engineeringConfig?.encargosSociais?.mensalista || 0) + '%'],
+            ...(engineeringConfig.bdiDiferenciado ? [['BDI Fornecimento', (engineeringConfig.bdiFornecimento || 14.02).toFixed(2) + '%']] : []),
+            [''],
+        ];
 
-        // 3. Linhas da Tabela
-        const rows = items.map(it => [
-            it.itemNumber, it.sourceName, it.code, `"${it.description.replace(/"/g, '""')}"`,
-            it.unit, it.quantity.toString().replace('.', ','),
-            it.unitCost.toFixed(2).replace('.', ','),
-            it.unitPrice.toFixed(2).replace('.', ','),
-            it.totalPrice.toFixed(2).replace('.', ','),
-        ]);
-        
-        rows.push([]);
-        rows.push(['', '', '', '', '', '', 'Subtotal (S/ BDI)', '', items.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2).replace('.', ',')]);
-        rows.push(['', '', '', '', '', '', `BDI (${bdiConfig.mode})`, `${effectiveBdi.toFixed(2)}%`, '']);
-        rows.push(['', '', '', '', '', '', 'TOTAL GLOBAL', '', items.reduce((s, i) => s + i.totalPrice, 0).toFixed(2).replace('.', ',')]);
+        // 2. Header da tabela
+        const tableHeader = engineeringConfig.bdiDiferenciado
+            ? ['Item', 'Tipo', 'BDI Cat.', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unit. (S/ BDI)', 'Preço Unit. (C/ BDI)', 'Total (C/ BDI)']
+            : ['Item', 'Tipo', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unit. (S/ BDI)', 'Preço Unit. (C/ BDI)', 'Total (C/ BDI)'];
 
-        const csv = BOM + [
-            headerTopPadded.join(sep), 
-            headerTopValuesPadded.join(sep),
-            '', // Linha em branco
-            header.join(sep), 
-            ...rows.map(r => r.join(sep))
-        ].join('\n');
-        
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `planilha_orcamentaria_${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click(); URL.revokeObjectURL(url);
+        // 3. Dados dos itens
+        const dataRows = items.map(it => {
+            const base = engineeringConfig.bdiDiferenciado
+                ? [it.itemNumber, it.type, it.bdiCategoria || 'OBRA', it.sourceName, it.code, it.description, it.unit]
+                : [it.itemNumber, it.type, it.sourceName, it.code, it.description, it.unit];
+            return [...base, it.quantity, it.unitCost, it.unitPrice, it.totalPrice];
+        });
+
+        // 4. Totais
+        const emptyCol = engineeringConfig.bdiDiferenciado ? 9 : 8;
+        const footerRows = [
+            [],
+            [...Array(emptyCol - 1).fill(''), 'Subtotal (S/ BDI)', '', billableItems.reduce((s, i) => s + i.quantity * i.unitCost, 0)],
+            [...Array(emptyCol - 1).fill(''), `BDI (${bdiConfig.mode})`, effectiveBdi.toFixed(2) + '%', ''],
+            [...Array(emptyCol - 1).fill(''), 'TOTAL GLOBAL', '', billableItems.reduce((s, i) => s + i.totalPrice, 0)],
+        ];
+
+        const allRows = [...configRows, tableHeader, ...dataRows, ...footerRows];
+        const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+        // Auto-width
+        const colWidths = tableHeader.map((h, i) => {
+            let max = String(h).length;
+            for (const row of dataRows) {
+                const v = String(row[i] ?? '');
+                if (v.length > max) max = v.length;
+            }
+            return { wch: Math.min(max + 2, 60) };
+        });
+        ws['!cols'] = colWidths;
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Orçamento');
+        XLSX.writeFile(wb, `planilha_orcamentaria_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     const inputStyle = (w: string = '100%'): React.CSSProperties => ({
@@ -351,6 +466,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
                         {isExtractingComps ? 'Extraindo CPUs...' : 'Extrair Composições IA'}
                     </button>
+                    {/* Importar Excel */}
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.ods,.csv" style={{ display: 'none' }} onChange={handleImportExcel} />
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => fileInputRef.current?.click()}>
+                        <Upload size={14} color="#059669" /> Importar Excel
+                    </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExportExcel}>
                         <Download size={14} /> Exportar Excel
                     </button>
@@ -395,7 +515,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
             {/* Tab Content: Cronograma */}
             {activeTab === 'cronograma' && (
-                <CronogramaPanel items={items} />
+                <CronogramaPanel
+                    items={items}
+                    savedData={cronogramaData}
+                    onDataChange={setCronogramaData}
+                />
             )}
 
             {/* Tab Content: Caderno de Orçamento */}
@@ -436,7 +560,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             
                             <div>
                                 <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Regime de Oneração</label>
-                                <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => setEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value})} style={{ width: '100%' }}>
+                                <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => setEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%' }}>
                                     <option value="DESONERADO">Desonerado (Padrão)</option>
                                     <option value="ONERADO">Onerado</option>
                                 </select>
@@ -463,7 +587,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <div style={{ display: 'flex', gap: 16 }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Cálculo Multiplicação</label>
-                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value}})} style={{ width: '100%' }}>
+                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%' }}>
                                             <option value="ROUND">Arredondar</option>
                                             <option value="TRUNCATE">Truncar</option>
                                         </select>
@@ -474,6 +598,48 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* BDI Diferenciado — Acórdão TCU 2622/2013 */}
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16, marginBottom: 24, background: engineeringConfig.bdiDiferenciado ? 'rgba(37,99,235,0.02)' : 'transparent' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Split size={18} color="var(--color-primary)" />
+                                    <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-primary)' }}>BDI Diferenciado</h4>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
+                                        onChange={e => setEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} />
+                                    Ativar BDI por categoria
+                                </label>
+                            </div>
+
+                            {engineeringConfig.bdiDiferenciado && (
+                                <>
+                                    <p style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', marginBottom: 12 }}>
+                                        Conforme Acórdão TCU 2622/2013, itens de <strong>Fornecimento de Materiais/Equipamentos</strong> devem ter BDI inferior ao de serviços de obra.
+                                    </p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 12 }}>
+                                        <div style={{ padding: 12, borderRadius: 6, border: '1px solid rgba(37,99,235,0.15)', background: 'rgba(37,99,235,0.03)' }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 4 }}>BDI OBRA (serviços)</div>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>{effectiveBdi.toFixed(2)}%</div>
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>Calculado no modo {bdiConfig.mode}</div>
+                                        </div>
+                                        <div style={{ padding: 12, borderRadius: 6, border: '1px solid rgba(180,83,9,0.15)', background: 'rgba(180,83,9,0.03)' }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', marginBottom: 4 }}>BDI FORNECIMENTO</div>
+                                            <input type="number" step="0.01" className="form-input" style={{ width: '100%', fontSize: '1rem', fontWeight: 700 }}
+                                                value={engineeringConfig.bdiFornecimento || 14.02}
+                                                onChange={e => setEngineeringConfig({ ...engineeringConfig, bdiFornecimento: Number(e.target.value) })} />
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                                                TCU ref: {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].min}% – {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].max}% (mediana {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].median}%)
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', padding: '8px 12px', background: 'var(--color-bg-base)', borderRadius: 6 }}>
+                                        💡 Na planilha, cada item agora tem um seletor de categoria BDI na coluna "Tipo". Itens marcados como <strong style={{ color: '#b45309' }}>FORNECIMENTO</strong> usarão o BDI de {(engineeringConfig.bdiFornecimento || 14.02).toFixed(2)}%.
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
@@ -558,6 +724,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                                 <IconComp size={10} /> {meta.label}
                                             </span>
+                                            {engineeringConfig.bdiDiferenciado && !isGrouper(it.type) && (
+                                                <select
+                                                    value={it.bdiCategoria || 'OBRA'}
+                                                    onChange={e => updateItem(it.id, 'bdiCategoria', e.target.value as BdiCategoria)}
+                                                    style={{
+                                                        display: 'block', marginTop: 2, fontSize: '0.6rem', fontWeight: 700,
+                                                        padding: '1px 4px', border: '1px solid transparent', borderRadius: 3,
+                                                        background: (it.bdiCategoria || 'OBRA') === 'FORNECIMENTO' ? 'rgba(180,83,9,0.08)' : 'rgba(37,99,235,0.05)',
+                                                        color: (it.bdiCategoria || 'OBRA') === 'FORNECIMENTO' ? '#b45309' : 'var(--color-primary)',
+                                                        cursor: 'pointer', width: '100%',
+                                                    }}
+                                                >
+                                                    <option value="OBRA">Obra</option>
+                                                    <option value="FORNECIMENTO">Fornec.</option>
+                                                </select>
+                                            )}
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.sourceName && <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 700 }}>{it.sourceName}</span>}

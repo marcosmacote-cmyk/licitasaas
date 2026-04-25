@@ -43,8 +43,13 @@ export interface FlattenedReport {
 export class CompositionFlattener {
   private visitedAuxiliaries = new Map<string, FlattenedComposition>();
   private bdi: number;
-  private lsPercentage: number; // e.g., 0.8464 for 84.64%
+  private lsPercentage: number; // Caller-provided, e.g. 0.8464 for horista 84.64%
 
+  /**
+   * @param bdi BDI as decimal (e.g. 0.25 for 25%)
+   * @param lsPercentage Leis Sociais as decimal (e.g. 1.143 for horista 114.3%)
+   *   FIX ARQ-05: This is no longer hardcoded — the route passes the actual configured value.
+   */
   constructor(bdi: number = 0, lsPercentage: number = 0.8464) {
     this.bdi = bdi;
     this.lsPercentage = lsPercentage;

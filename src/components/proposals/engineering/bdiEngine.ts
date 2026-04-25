@@ -14,6 +14,9 @@
  *  I  = Tributos (PIS + COFINS + ISS + CPRB se aplicável)
  */
 
+import { applyPrecision } from './precisionEngine';
+import type { PrecisionConfig } from './types';
+
 export interface BdiTcuParams {
     adminCentral: number;   // AC — %
     seguros: number;        // S  — %
@@ -78,22 +81,26 @@ export function resolveEffectiveBdi(config: BdiConfig): number {
 }
 
 /**
- * Calcula preço unitário com BDI
+ * Calcula preço unitário com BDI.
+ * Respeita a configuração de precisão do edital (ROUND/TRUNCATE, N casas).
  */
-export function applyBdi(unitCost: number, bdiPercentage: number): number {
-    return Math.round(unitCost * (1 + bdiPercentage / 100) * 100) / 100;
+export function applyBdi(unitCost: number, bdiPercentage: number, precision?: PrecisionConfig): number {
+    const raw = unitCost * (1 + bdiPercentage / 100);
+    return applyPrecision(raw, { precision });
 }
 
 /**
- * Calcula o preço total de um item de engenharia
+ * Calcula o preço total de um item de engenharia.
+ * Respeita a configuração de precisão do edital.
  */
 export function calculateEngineeringItem(
     quantity: number,
     unitCost: number,
-    bdiPercentage: number
+    bdiPercentage: number,
+    precision?: PrecisionConfig
 ): { unitPrice: number; totalPrice: number } {
-    const unitPrice = applyBdi(unitCost, bdiPercentage);
-    const totalPrice = Math.round(quantity * unitPrice * 100) / 100;
+    const unitPrice = applyBdi(unitCost, bdiPercentage, precision);
+    const totalPrice = applyPrecision(quantity * unitPrice, { precision });
     return { unitPrice, totalPrice };
 }
 

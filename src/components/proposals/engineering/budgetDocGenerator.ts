@@ -11,15 +11,10 @@ import type { BdiConfig, BdiTcuParams } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
+import type { EngItem, EngineeringConfig, EncargosSociaisConfig } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
-
-interface EngItem {
-    id: string; itemNumber: string; code: string; sourceName: string;
-    description: string; unit: string; quantity: number;
-    unitCost: number; unitPrice: number; totalPrice: number;
-}
 
 // ═══════════════════════════════════════════════════════════
 // SHARED STYLES
@@ -231,11 +226,16 @@ ${renderConfigTable((result as any).engineeringConfig)}
 
 // ═══════════════════════════════════════════════════════════
 // 8. BDI E ENCARGOS SOCIAIS
+// FIX BUG-04: Encargos agora são dinâmicos a partir do engineeringConfig
 // ═══════════════════════════════════════════════════════════
 
-const ENCARGOS_SOCIAIS = {
-    grupo_a: [
-        { item: 'INSS', pct: 20.00 },
+/** Gera a tabela de encargos sociais padrão baseada no regime */
+function buildEncargosSociais(es: EncargosSociaisConfig, regime: string) {
+    const isDesonerado = regime === 'DESONERADO';
+    // Grupo A — Encargos Básicos e Obrigatórios
+    // Em regime DESONERADO, INSS patronal (20%) é substituído pela CPRB (inclusa no BDI)
+    const grupoA = [
+        { item: 'INSS', pct: isDesonerado ? 0.00 : 20.00 },
         { item: 'SESI', pct: 1.50 },
         { item: 'SENAI', pct: 1.00 },
         { item: 'INCRA', pct: 0.20 },
@@ -243,26 +243,40 @@ const ENCARGOS_SOCIAIS = {
         { item: 'Salário Educação', pct: 2.50 },
         { item: 'Seguro Acidente Trabalho (RAT)', pct: 3.00 },
         { item: 'FGTS', pct: 8.00 },
-    ],
-    grupo_b: [
+    ];
+    const grupoB = [
         { item: 'Férias (indenizadas)', pct: 14.06 },
         { item: '13º Salário', pct: 10.87 },
         { item: 'Auxílio Doença', pct: 0.79 },
         { item: 'Faltas Justificadas', pct: 0.69 },
         { item: 'Acidente de Trabalho', pct: 0.14 },
         { item: 'Aviso Prévio (indenizado)', pct: 5.57 },
-    ],
-    grupo_c: [
+    ];
+    const grupoC = [
         { item: 'Multa Rescisória FGTS', pct: 4.44 },
-    ],
-    grupo_d: [
-        { item: 'Reincidência Grupo A sobre Grupo B', pct: 11.74 },
-    ],
-};
+    ];
+    const subA = grupoA.reduce((s, i) => s + i.pct, 0);
+    const subB = grupoB.reduce((s, i) => s + i.pct, 0);
+    const grupoD = [
+        { item: 'Reincidência Grupo A sobre Grupo B', pct: Math.round(subA * subB / 100 * 100) / 100 },
+    ];
+    return {
+        horista: es.horista,
+        mensalista: es.mensalista,
+        groups: [
+            { key: 'grupo_a', label: 'Grupo A — Encargos Básicos e Obrigatórios', items: grupoA },
+            { key: 'grupo_b', label: 'Grupo B — Encargos que recebem incidência de A', items: grupoB },
+            { key: 'grupo_c', label: 'Grupo C — Encargos que não recebem incidência', items: grupoC },
+            { key: 'grupo_d', label: 'Grupo D — Reincidências', items: grupoD },
+        ],
+    };
+}
 
-export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
+export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?: EngineeringConfig) {
     const tcu = config.tcu;
     const isTcu = config.mode === 'TCU';
+    const regime = engConfig?.regimeOneracao || 'DESONERADO';
+    const esConfig = engConfig?.encargosSociais || { horista: 114.3, mensalista: 47.8 };
 
     let bdiHtml = `<h2>Composição do BDI</h2>`;
     if (isTcu) {
@@ -283,25 +297,21 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number) {
         bdiHtml += `<table><tbody><tr class="grand"><td>BDI SIMPLIFICADO</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tbody></table>`;
     }
 
-    // Encargos Sociais
-    const groups = [
-        { key: 'grupo_a', label: 'Grupo A — Encargos Básicos e Obrigatórios', items: ENCARGOS_SOCIAIS.grupo_a },
-        { key: 'grupo_b', label: 'Grupo B — Encargos que recebem incidência de A', items: ENCARGOS_SOCIAIS.grupo_b },
-        { key: 'grupo_c', label: 'Grupo C — Encargos que não recebem incidência', items: ENCARGOS_SOCIAIS.grupo_c },
-        { key: 'grupo_d', label: 'Grupo D — Reincidências', items: ENCARGOS_SOCIAIS.grupo_d },
-    ];
-    let esHtml = '<h2>Encargos Sociais sobre Mão de Obra</h2>';
+    // Encargos Sociais — dinâmicos conforme regime
+    const esData = buildEncargosSociais(esConfig, regime);
+    let esHtml = `<h2>Encargos Sociais sobre Mão de Obra</h2>`;
+    esHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Regime: <strong>${regime}</strong> | Taxas configuradas: Horista ${esData.horista.toFixed(2)}% · Mensalista ${esData.mensalista.toFixed(2)}%</p>`;
     let totalES = 0;
-    for (const g of groups) {
+    for (const g of esData.groups) {
         const subtotal = g.items.reduce((s, i) => s + i.pct, 0);
         totalES += subtotal;
         esHtml += `<h2 style="font-size:9px;color:#475569">${g.label}</h2><table><thead><tr><th>Descrição</th><th class="r">%</th></tr></thead><tbody>`;
         for (const i of g.items) esHtml += `<tr><td>${i.item}</td><td class="r">${fmtPct(i.pct)}</td></tr>`;
         esHtml += `<tr class="total"><td class="r">Subtotal ${g.key.replace('_', ' ').toUpperCase()}</td><td class="r">${fmtPct(subtotal)}</td></tr></tbody></table>`;
     }
-    esHtml += `<table><tfoot><tr class="grand"><td>TOTAL ENCARGOS SOCIAIS</td><td class="r">${fmtPct(totalES)}</td></tr></tfoot></table>`;
+    esHtml += `<table><tfoot><tr class="grand"><td>TOTAL ENCARGOS SOCIAIS (detalhado)</td><td class="r">${fmtPct(totalES)}</td></tr></tfoot></table>`;
 
-    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode}</div>${renderConfigTable((config as any).engineeringConfig)}${bdiHtml}${esHtml}`);
+    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`);
 }
 
 // Helper para renderizar Composição no padrão TCU

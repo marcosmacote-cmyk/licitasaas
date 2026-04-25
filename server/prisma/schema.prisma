@@ -671,6 +671,7 @@ model EngineeringProposalItem {
   unitCost        Float    @default(0) // Custo sem BDI
   unitPrice       Float    @default(0) // Preço com BDI aplicado
   totalPrice      Float    @default(0) // quantity * unitPrice
+  bdiCategoria    String?  @default("OBRA") // OBRA | FORNECIMENTO — para BDI diferenciado
   sortOrder       Int      @default(0)
   
   proposal        PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)

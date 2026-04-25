@@ -279,13 +279,43 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // ═══════════════════════════════════════════════════════
     // CASCADE ENGINE — Recalculates everything when a value changes
     // ═══════════════════════════════════════════════════════
+    /**
+     * Safe math expression evaluator — recursive descent parser.
+     * Supports: +, -, *, /, parentheses, decimal numbers.
+     * FIX SEC-01: Replaces new Function() (eval equivalent) to prevent code injection.
+     */
     const evaluateMath = (expr: string): number => {
         try {
-            const sanitized = expr.replace(/,/g, '.').replace(/[^0-9\.\+\-\*\/\(\) ]/g, '');
-            if (!sanitized) return NaN;
-            // eslint-disable-next-line no-new-func
-            const result = new Function(`return ${sanitized}`)();
-            return Number(result);
+            const s = expr.replace(/,/g, '.').replace(/\s/g, '');
+            if (!s) return NaN;
+            let pos = 0;
+            const peek = () => s[pos] || '';
+            const consume = (ch?: string) => { if (ch && s[pos] !== ch) throw new Error('x'); pos++; };
+            const parseNum = (): number => {
+                const st = pos;
+                if (peek() === '-') pos++;
+                while (/[0-9.]/.test(peek())) pos++;
+                const n = parseFloat(s.slice(st, pos));
+                if (isNaN(n)) throw new Error('NaN');
+                return n;
+            };
+            const parseFactor = (): number => {
+                if (peek() === '(') { consume('('); const v = parseE(); consume(')'); return v; }
+                return parseNum();
+            };
+            const parseT = (): number => {
+                let l = parseFactor();
+                while (peek() === '*' || peek() === '/') { const op = peek(); pos++; const r = parseFactor(); l = op === '*' ? l * r : l / r; }
+                return l;
+            };
+            const parseE = (): number => {
+                let l = parseT();
+                while (peek() === '+' || peek() === '-') { const op = peek(); pos++; const r = parseT(); l = op === '+' ? l + r : l - r; }
+                return l;
+            };
+            const result = parseE();
+            if (pos !== s.length) throw new Error('trailing');
+            return result;
         } catch {
             return NaN;
         }

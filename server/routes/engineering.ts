@@ -603,7 +603,10 @@ router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
         
         // Obter configuração de BDI ou Encargos
         const bdiValue = typeof bdi === 'number' ? (bdi > 1 ? bdi / 100 : bdi) : 0.25;
-        const flattener = new CompositionFlattener(bdiValue, 0.8464); // Exemplo LS 84.64%
+        // FIX ARQ-05: Leis Sociais dinâmico — usa valor do config ao invés de hardcoded
+        const engineeringConfig = req.body.engineeringConfig || {};
+        const lsHorista = (engineeringConfig?.encargosSociais?.horista || 84.64) / 100;
+        const flattener = new CompositionFlattener(bdiValue, lsHorista);
         
         const report = await flattener.flattenProposal(proposalId, items);
         
@@ -786,7 +789,7 @@ router.get('/proposals/:id/items', async (req: any, res: any) => {
 router.post('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
-        const { items, bdiConfig, engineeringConfig } = req.body;
+        const { items, bdiConfig, engineeringConfig, cronogramaData } = req.body;
 
         if (!Array.isArray(items)) {
             return res.status(400).json({ error: 'items deve ser um array' });
@@ -813,6 +816,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     unitCost: Number(item.unitCost) || 0,
                     unitPrice: Number(item.unitPrice) || 0,
                     totalPrice: Number(item.totalPrice) || 0,
+                    bdiCategoria: item.bdiCategoria || 'OBRA',
                     sortOrder: index,
                 }))
             });
@@ -822,12 +826,17 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
                 .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
 
+            // FIX ARQ-04: Persist cronograma data alongside engineering config
+            const engConfigToSave = cronogramaData 
+                ? { ...(engineeringConfig || {}), cronogramaData }
+                : (engineeringConfig || undefined);
+
             await tx.priceProposal.update({
                 where: { id: proposalId },
                 data: {
                     totalValue,
                     bdiConfig: bdiConfig || undefined,
-                    engineeringConfig: engineeringConfig || undefined,
+                    engineeringConfig: engConfigToSave,
                     bdiPercentage: Number(bdiConfig?.bdiGlobal) || 0,
                 }
             });

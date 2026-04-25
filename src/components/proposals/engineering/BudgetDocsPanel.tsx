@@ -8,12 +8,7 @@ import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, doc
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
-
-interface EngItem {
-    id: string; itemNumber: string; code: string; sourceName: string;
-    description: string; unit: string; quantity: number;
-    unitCost: number; unitPrice: number; totalPrice: number;
-}
+import type { EngItem, EngineeringConfig } from './types';
 
 interface Props {
     items: EngItem[];
@@ -22,7 +17,7 @@ interface Props {
     insumos: InsumoConsolidado[];
     cronogramaResult: CronogramaResult | null;
     proposalId: string;
-    engineeringConfig?: any;
+    engineeringConfig?: EngineeringConfig;
 }
 
 const DOCS = [
@@ -53,7 +48,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig } as any);
                     else alert('Configure o cronograma na aba "Cronograma" primeiro.');
                     break;
-                case 'bdi': docBdiEncargos({ ...bdiConfig, engineeringConfig } as any, effectiveBdi); break;
+                case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
             }
         } catch (e) { console.error('Erro ao gerar documento:', e); }
         setGenerating(null);
