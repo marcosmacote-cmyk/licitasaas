@@ -49,6 +49,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
     // Search inside editor
     const [showSearch, setShowSearch] = useState(false);
+    const [searchType, setSearchType] = useState<'item' | 'composition'>('item');
     const [bases, setBases] = useState<any[]>([]);
     const [selectedBaseId, setSelectedBaseId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -69,33 +70,63 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         if (!selectedBaseId || !searchQuery) return;
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, { headers: hdrs() });
+            let url = '';
+            if (searchType === 'item') {
+                url = `/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`;
+            } else {
+                url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(searchQuery)}`;
+            }
+            const res = await fetch(url, { headers: hdrs() });
             const d = await res.json();
-            setSearchResults(d.items || []);
+            setSearchResults(searchType === 'item' ? (d.items || []) : (Array.isArray(d) ? d : []));
         } catch { } finally { setIsSearching(false); }
     };
 
     const addFromSearch = (dbItem: any) => {
         if (!data) return;
-        const typeKey = dbItem.type || 'MATERIAL'; // fallback to MATERIAL
         
-        const newInsumo = {
-            id: `temp-${Date.now()}`,
-            coefficient: 1,
-            price: Number(dbItem.price) || 0,
-            item: {
-                id: dbItem.id,
-                code: dbItem.code,
-                description: dbItem.description,
-                unit: dbItem.unit,
-                type: typeKey,
-                price: Number(dbItem.price) || 0
-            }
-        };
+        let typeKey = 'MATERIAL';
+        let newItem: any = null;
+
+        if (searchType === 'composition') {
+            typeKey = 'AUXILIAR';
+            newItem = {
+                id: `temp-${Date.now()}`,
+                coefficient: 1,
+                price: Number(dbItem.totalPrice) || 0,
+                auxiliaryComposition: {
+                    id: dbItem.id,
+                    code: dbItem.code,
+                    description: dbItem.description,
+                    unit: dbItem.unit,
+                    totalPrice: Number(dbItem.totalPrice) || 0
+                }
+            };
+        } else {
+            const rawType = (dbItem.type || '').toUpperCase();
+            if (rawType.includes('MAO') || rawType.includes('MÃO')) typeKey = 'MAO_DE_OBRA';
+            else if (rawType.includes('EQUIP')) typeKey = 'EQUIPAMENTO';
+            else if (rawType.includes('SERVICO')) typeKey = 'SERVICO';
+            else typeKey = 'MATERIAL';
+
+            newItem = {
+                id: `temp-${Date.now()}`,
+                coefficient: 1,
+                price: Number(dbItem.price) || 0,
+                item: {
+                    id: dbItem.id,
+                    code: dbItem.code,
+                    description: dbItem.description,
+                    unit: dbItem.unit,
+                    type: typeKey,
+                    price: Number(dbItem.price) || 0
+                }
+            };
+        }
 
         const updated = { ...data, groups: { ...data.groups } };
         if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
-        updated.groups[typeKey] = [...updated.groups[typeKey], newInsumo];
+        updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
 
         let newTotal = 0;
         for (const groupKey of Object.keys(updated.groups)) {
@@ -255,7 +286,40 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
         if (!data || !data.id) return;
         setIsSavingToBase(true);
         try {
-            const res = await fetch(`/api/engineering/compositions/${data.id}`, {
+            let targetId = data.id;
+            
+            // If it's an official composition, create a copy in PROPRIA first
+            if (data.database?.name !== 'PROPRIA') {
+                const tokenStr = token();
+                const payload = JSON.parse(atob(tokenStr.split('.')[1]));
+                
+                const resCreate = await fetch('/api/engineering/compositions', {
+                    method: 'POST',
+                    headers: hdrs(),
+                    body: JSON.stringify({
+                        code: data.code,
+                        description: data.description,
+                        unit: data.unit,
+                        tenantId: payload.tenantId
+                    })
+                });
+                
+                if (!resCreate.ok) {
+                    const err = await resCreate.json();
+                    if (!err.error?.includes('Já existe')) {
+                        throw new Error('Erro ao criar cópia na base PRÓPRIA');
+                    }
+                    // Se já existe, vamos buscar a ID da que já existe
+                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(data.code)}`, { headers: hdrs() });
+                    const existingData = await resSearch.json();
+                    targetId = existingData.id;
+                } else {
+                    const created = await resCreate.json();
+                    targetId = created.composition.id;
+                }
+            }
+
+            const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
                 body: JSON.stringify({ composition: data })
@@ -264,6 +328,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
             await res.json();
             alert('Composição atualizada com sucesso na base PRÓPRIA!');
             setHasChanges(false);
+            
+            if (data.database?.name !== 'PROPRIA') {
+                await loadComposition(data.code);
+            }
         } catch (e: any) {
             alert(e.message || 'Erro de rede ao salvar');
         } finally {
@@ -394,15 +462,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {data && (
-                            <button onClick={() => setShowSearch(true)} title="Adicionar Insumo ou Serviço a esta composição"
-                                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
-                                <Package size={13} /> Adicionar Insumo
-                            </button>
+                            <>
+                                <button onClick={() => { setSearchType('composition'); setShowSearch(true); }} title="Adicionar Composição Auxiliar"
+                                    style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                                    <Layers size={13} /> Adicionar Comp. Auxiliar
+                                </button>
+                                <button onClick={() => { setSearchType('item'); setShowSearch(true); }} title="Adicionar Insumo ou Serviço a esta composição"
+                                    style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                                    <Package size={13} /> Adicionar Insumo
+                                </button>
+                            </>
                         )}
-                        {data && data.database?.name === 'PROPRIA' && hasChanges && (
-                            <button onClick={saveToBase} disabled={isSavingToBase} title="Atualizar a base de dados com as modificações desta composição"
+                        {data && hasChanges && (
+                            <button onClick={saveToBase} disabled={isSavingToBase} title={data.database?.name === 'PROPRIA' ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
-                                {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} Salvar na Base
+                                {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} 
+                                {data.database?.name === 'PROPRIA' ? 'Salvar na Base' : 'Salvar como Própria'}
                             </button>
                         )}
                         {data && (
@@ -667,7 +742,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0 }}>Buscar Insumo para Composição</h3>
+                            <h3 style={{ margin: 0 }}>{searchType === 'item' ? 'Buscar Insumo' : 'Buscar Composição Auxiliar'}</h3>
                             <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -689,7 +764,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem }
                                             <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
                                             <td style={{ padding: 8 }}>{r.description}</td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>
-                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(r.price) || 0)}</td>
+                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(searchType === 'composition' ? r.totalPrice : r.price) || 0)}</td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>
                                                 <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
                                             </td>

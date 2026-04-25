@@ -189,18 +189,21 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const where: any = { code };
         if (databaseId) where.databaseId = databaseId;
 
-        const composition = await prisma.engineeringComposition.findFirst({
-            where,
-            include: {
-                items: {
-                    include: {
-                        item: true // includes the linked EngineeringItem (material/labor)
-                    },
-                    orderBy: { createdAt: 'asc' }
-                },
-                database: { select: { name: true, uf: true } }
-            }
-        });
+        // Try to find in PROPRIA first, then fallback to others
+        let composition = null;
+        if (!databaseId) {
+            composition = await prisma.engineeringComposition.findFirst({
+                where: { code, database: { name: 'PROPRIA' } },
+                include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+            });
+        }
+
+        if (!composition) {
+            composition = await prisma.engineeringComposition.findFirst({
+                where,
+                include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+            });
+        }
 
         if (!composition) {
             return res.status(404).json({ error: 'Composição não encontrada', code });
