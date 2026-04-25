@@ -1024,7 +1024,12 @@ router.post('/ai-populate', async (req: any, res: any) => {
         await enrichWithOfficialPrices(items);
 
         // Auto-save composições PRÓPRIAS to the database
-        const ownComps = items.filter((it: any) => it.type === 'COMPOSICAO' && it.sourceName === 'PROPRIA');
+        const ownComps = items.filter((it: any) => {
+            if (it.type !== 'COMPOSICAO') return false;
+            const source = (it.sourceName || '').toUpperCase();
+            const isKnownSource = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SBC'].includes(source);
+            return !isKnownSource || source === 'PROPRIA';
+        });
         if (ownComps.length > 0 && biddingId) {
             try {
                 // Ensure empty ones are transformed into observation items with zero cost
