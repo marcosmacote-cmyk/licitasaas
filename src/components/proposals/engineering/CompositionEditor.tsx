@@ -752,8 +752,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                             <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
-                                {bases.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>)}
-                                {bases.length === 0 && <option value="">Nenhuma base cadastrada</option>}
+                                {(() => {
+                                    const allowed = engineeringConfig?.basesConsideradas || [];
+                                    const filtered = allowed.length > 0 
+                                        ? bases.filter(b => allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase())))
+                                        : bases;
+                                    
+                                    if (filtered.length === 0) return <option value="">Nenhuma base permitida</option>;
+                                    return filtered.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>);
+                                })()}
                             </select>
                             <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
                             <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
