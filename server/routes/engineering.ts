@@ -1023,10 +1023,30 @@ router.post('/ai-populate', async (req: any, res: any) => {
         // Auto-lookup for prices against registered databases
         await enrichWithOfficialPrices(items);
 
-        // Auto-save composições PRÓPRIAS with insumos to the database
-        const ownComps = items.filter((it: any) => it.type === 'COMPOSICAO' && it.sourceName === 'PROPRIA' && Array.isArray(it.insumos) && it.insumos.length > 0);
+        // Auto-save composições PRÓPRIAS to the database
+        const ownComps = items.filter((it: any) => it.type === 'COMPOSICAO' && it.sourceName === 'PROPRIA');
         if (ownComps.length > 0 && biddingId) {
             try {
+                // Ensure empty ones are transformed into observation items with zero cost
+                for (const comp of ownComps) {
+                    if (!Array.isArray(comp.insumos) || comp.insumos.length === 0) {
+                        const expectedPrice = comp.unitPrice || comp.unitCost || 0;
+                        comp.insumos = [{
+                            type: 'OBSERVACAO',
+                            description: `ATENÇÃO: O item no edital possui o valor de R$ ${expectedPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Nenhuma composição analítica foi encontrada. Importe a imagem da CPU ou construa os custos manualmente no Módulo Livre.`,
+                            unit: 'UN',
+                            quantity: 0,
+                            unitCost: 0,
+                            unitPrice: 0,
+                            coefficient: 0
+                        }];
+                        // Force cost to zero in the budget
+                        comp.unitCost = 0;
+                        comp.unitPrice = 0;
+                        comp.totalPrice = 0;
+                    }
+                }
+
                 const bidding = await prisma.biddingProcess.findUnique({ where: { id: biddingId }, select: { tenantId: true } });
                 if (bidding?.tenantId) {
                     let propriaDb = await prisma.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId: bidding.tenantId } });
@@ -1039,7 +1059,11 @@ router.post('/ai-populate', async (req: any, res: any) => {
                             const existing = await prisma.engineeringComposition.findFirst({ where: { code: comp.code || comp.item, databaseId: propriaDb.id } });
                             let compTotal = 0;
                             if (Array.isArray(comp.insumos)) {
-                                for (const ins of comp.insumos) compTotal += (ins.coefficient || 0) * (ins.unitPrice || 0);
+                                for (const ins of comp.insumos) {
+                                    if (ins.type !== 'OBSERVACAO') {
+                                        compTotal += (ins.coefficient || 0) * (ins.unitPrice || 0);
+                                    }
+                                }
                             }
                             const compRecord = existing
                                 ? await prisma.engineeringComposition.update({ where: { id: existing.id }, data: { description: comp.description, unit: comp.unit || 'UN', totalPrice: compTotal } })
@@ -1050,13 +1074,13 @@ router.post('/ai-populate', async (req: any, res: any) => {
                                 const insCode = `INS-${comp.code || comp.item}-${saved + 1}`;
                                 let insumo = await prisma.engineeringItem.findFirst({ where: { code: insCode, databaseId: propriaDb.id } });
                                 if (!insumo) {
-                                    const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL' };
+                                    const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL', 'OBSERVACAO': 'OBSERVACAO' };
                                     insumo = await prisma.engineeringItem.create({
                                         data: { code: insCode, description: ins.description || '', unit: ins.unit || 'UN', price: ins.unitPrice || 0, type: typeMap[ins.type] || 'MATERIAL', databaseId: propriaDb.id }
                                     });
                                 }
                                 await prisma.engineeringCompositionItem.create({
-                                    data: { compositionId: compRecord.id, itemId: insumo.id, coefficient: ins.coefficient || 0, price: (ins.coefficient || 0) * (ins.unitPrice || 0) }
+                                    data: { compositionId: compRecord.id, itemId: insumo.id, coefficient: ins.coefficient || 0, price: ins.type === 'OBSERVACAO' ? 0 : (ins.coefficient || 0) * (ins.unitPrice || 0) }
                                 });
                             }
                             saved++;

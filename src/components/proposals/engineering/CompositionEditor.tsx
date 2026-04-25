@@ -795,13 +795,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     {data && !error && data.items?.length === 0 && (
                         <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                             <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
-                            <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>Nenhum insumo encontrado na imagem</div>
-                            <div style={{ fontSize: '0.85rem', marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
-                                A IA analisou o seu print, mas não conseguiu extrair nenhuma tabela de insumos com coeficientes e preços. 
+                            <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--color-text-primary)' }}>Composição Vazia</div>
+                            <div style={{ fontSize: '0.9rem', marginBottom: 24, maxWidth: 450, margin: '0 auto 24px', lineHeight: 1.5 }}>
+                                Esta composição ainda não possui insumos ou custos detalhados.<br/><br/>
+                                <strong style={{color:'var(--color-primary)'}}>Dica Mágica:</strong> Você pode tirar um print da tabela no PDF e dar <strong>Ctrl+V</strong> em qualquer lugar desta tela. A IA extrairá tudo automaticamente!
                             </div>
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                                 <button className="btn btn-primary" onClick={handleCreateComposition} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Layers size={15} /> Preencher Manualmente
+                                    <Layers size={15} /> Inserir Manualmente
                                 </button>
                             </div>
                         </div>

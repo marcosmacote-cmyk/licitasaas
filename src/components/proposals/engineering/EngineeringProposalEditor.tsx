@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
@@ -585,9 +585,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                            {it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
+                                                    <AlertCircle size={14} title="Composição vazia. Preencha no Módulo Livre." />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                </div>
+                                            ) : (
+                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                            )}
                                         </td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                             <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                         </td>
