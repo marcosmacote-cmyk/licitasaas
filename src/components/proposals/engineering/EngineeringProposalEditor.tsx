@@ -272,6 +272,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         // 2. Cabeçalho da Tabela de Itens
         const header = ['Item', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unitário (S/ BDI)', 'Preço Unitário (C/ BDI)', 'Total (C/ BDI)'];
         
+        // Pad the headerTop and headerTopValues to match the number of columns in the main table
+        const padLength = Math.max(0, header.length - headerTop.length);
+        const headerTopPadded = [...headerTop, ...Array(padLength).fill('')];
+        const headerTopValuesPadded = [...headerTopValues, ...Array(padLength).fill('')];
+
         // 3. Linhas da Tabela
         const rows = items.map(it => [
             it.itemNumber, it.sourceName, it.code, `"${it.description.replace(/"/g, '""')}"`,
@@ -287,8 +292,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         rows.push(['', '', '', '', '', '', 'TOTAL GLOBAL', '', items.reduce((s, i) => s + i.totalPrice, 0).toFixed(2).replace('.', ',')]);
 
         const csv = BOM + [
-            headerTop.join(sep), 
-            headerTopValues.join(sep),
+            headerTopPadded.join(sep), 
+            headerTopValuesPadded.join(sep),
             '', // Linha em branco
             header.join(sep), 
             ...rows.map(r => r.join(sep))

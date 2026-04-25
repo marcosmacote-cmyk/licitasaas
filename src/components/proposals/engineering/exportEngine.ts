@@ -88,9 +88,13 @@ export function exportHubExcel(
         if (val > 0) rows.push([CATEGORIA_META[cat as InsumoCategoria]?.label || cat, `${fmtNum(val)}%`]);
     }
 
+    const padLength = Math.max(0, header.length - headerTop.length);
+    const headerTopPadded = [...headerTop, ...Array(padLength).fill('')];
+    const headerTopValuesPadded = [...headerTopValues, ...Array(padLength).fill('')];
+
     const csv = BOM + [
-        headerTop.join(SEP),
-        headerTopValues.join(SEP),
+        headerTopPadded.join(SEP),
+        headerTopValuesPadded.join(SEP),
         '',
         header.join(SEP), 
         ...rows.map(r => r.join(SEP))
@@ -150,9 +154,13 @@ export function exportCompositionExcel(
         `"${engineeringConfig?.regimeOneracao || 'Não informado'}\nHorista: ${engineeringConfig?.encargosSociais?.horista || 0}%\nMensalista: ${engineeringConfig?.encargosSociais?.mensalista || 0}%"`
     ];
 
+    const padLength = Math.max(0, header.length - headerTop.length);
+    const headerTopPadded = [...headerTop, ...Array(padLength).fill('')];
+    const headerTopValuesPadded = [...headerTopValues, ...Array(padLength).fill('')];
+
     const csv = BOM + [
-        headerTop.join(SEP),
-        headerTopValues.join(SEP),
+        headerTopPadded.join(SEP),
+        headerTopValuesPadded.join(SEP),
         '',
         `COMPOSIÇÃO DE PREÇOS UNITÁRIOS — ${code}`,
         `"${description}"`,
