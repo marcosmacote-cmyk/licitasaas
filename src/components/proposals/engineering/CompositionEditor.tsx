@@ -275,13 +275,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // ═══════════════════════════════════════════════════════
     // CASCADE ENGINE — Recalculates everything when a value changes
     // ═══════════════════════════════════════════════════════
+    const evaluateMath = (expr: string): number => {
+        try {
+            const sanitized = expr.replace(/,/g, '.').replace(/[^0-9\.\+\-\*\/\(\) ]/g, '');
+            if (!sanitized) return NaN;
+            // eslint-disable-next-line no-new-func
+            const result = new Function(`return ${sanitized}`)();
+            return Number(result);
+        } catch {
+            return NaN;
+        }
+    };
+
     const commitEdit = useCallback(() => {
         if (!editingField || !data) {
             setEditingField(null);
             return;
         }
 
-        const newVal = parseFloat(editValue);
+        const newVal = evaluateMath(editValue);
         if (isNaN(newVal) || newVal < 0) {
             setEditingField(null);
             return;
@@ -439,23 +451,26 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const handleAddFreeItem = () => {
         if (!data) return;
         
-        const typeKey = freeItemData.type as 'MATERIAL'|'MAO_DE_OBRA'|'EQUIPAMENTO'|'SERVICO'|'AUXILIAR';
+        const typeKey = freeItemData.type as 'MATERIAL'|'MAO_DE_OBRA'|'EQUIPAMENTO'|'SERVICO'|'AUXILIAR'|'OBSERVACAO';
         const isAux = typeKey === 'AUXILIAR';
-        const priceNum = parseFloat(freeItemData.price) || 0;
-        const coefNum = parseFloat(freeItemData.coefficient) || 1;
+        const isObs = typeKey === 'OBSERVACAO';
+        
+        const priceNum = isObs ? 0 : (evaluateMath(freeItemData.price) || 0);
+        const coefNum = isObs ? 0 : (evaluateMath(freeItemData.coefficient) || 1);
         
         const newItem = {
             id: `temp-${Date.now()}`,
             coefficient: coefNum,
-            price: applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
+            price: isObs ? 0 : applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
             item: !isAux ? {
                 id: `new-${Date.now()}`,
-                code: 'LIVRE',
+                code: isObs ? 'OBS' : 'LIVRE',
                 description: freeItemData.description || 'Novo Insumo',
-                unit: freeItemData.unit,
+                unit: isObs ? '' : freeItemData.unit,
                 type: typeKey,
                 price: priceNum,
-                isNew: true
+                isNew: true,
+                isObservation: isObs
             } : undefined,
             auxiliaryComposition: isAux ? {
                 id: `new-aux-${Date.now()}`,
@@ -468,8 +483,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         };
 
         const updated = { ...data, groups: { ...data.groups } };
-        if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
-        updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
+        const targetGroup = isObs ? 'SERVICO' : typeKey; 
+        if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
+        updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
         let newTotal = 0;
         for (const k of Object.keys(updated.groups)) {
@@ -490,7 +506,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     const handleApplyFactor = () => {
         if (!data) return;
-        const factor = parseFloat(factorData.value);
+        const factor = evaluateMath(factorData.value);
         if (isNaN(factor) || factor < 0) return;
 
         const updated = { ...data, groups: { ...data.groups } };
@@ -498,6 +514,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (factorData.target !== 'ALL' && k !== factorData.target) continue;
             
             updated.groups[k] = updated.groups[k].map((ci: any) => {
+                if (ci.item?.isObservation) return ci; // skip observations
                 const newCoef = (ci.coefficient || 1) * factor;
                 const unitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
                 return {
@@ -846,80 +863,95 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                             gap: 8, padding: '8px 20px', alignItems: 'center',
                                                             borderBottom: '1px solid var(--color-border)',
-                                                            background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)',
+                                                            background: itemData?.isObservation ? 'rgba(0,0,0,0.03)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)'),
                                                         }}>
                                                             <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
-                                                            <div>
-                                                                <div style={{ fontSize: '0.8rem', fontWeight: 500 }}>{itemData?.description || '—'}</div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                                                    {itemData?.code && (
-                                                                        <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
-                                                                    )}
-                                                                    {itemData?.isNew && (
-                                                                        <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Novo Insumo Próprio</span>
-                                                                    )}
-                                                                </div>
+                                                            <div style={itemData?.isObservation ? { gridColumn: '2 / 6', fontStyle: 'italic', color: 'var(--color-text-secondary)', fontSize: '0.75rem' } : {}}>
+                                                                {!itemData?.isObservation ? (
+                                                                    <>
+                                                                        <div style={{ fontSize: '0.8rem', fontWeight: 500 }}>{itemData?.description || '—'}</div>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                                                            {itemData?.code && (
+                                                                                <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
+                                                                            )}
+                                                                            {itemData?.isNew && (
+                                                                                <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Novo Insumo Próprio</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <div>{itemData?.description}</div>
+                                                                )}
                                                             </div>
-                                                            <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                                                                {itemData?.unit || '—'}
-                                                            </span>
+                                                            
+                                                            {!itemData?.isObservation && (
+                                                                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                                                                    {itemData?.unit || '—'}
+                                                                </span>
+                                                            )}
 
                                                             {/* Editable coefficient */}
-                                                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                                                {isEditingCoef ? (
-                                                                    <>
-                                                                        <input type="number" step="0.0001" autoFocus
-                                                                            value={editValue}
-                                                                            onChange={e => setEditValue(e.target.value)}
-                                                                            onKeyDown={e => {
-                                                                                if (e.key === 'Enter') commitEdit();
-                                                                                if (e.key === 'Escape') setEditingField(null);
-                                                                            }}
-                                                                            onBlur={commitEdit}
-                                                                            style={{ width: 65, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
-                                                                        />
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <span style={{ fontSize: '0.78rem', fontFamily: 'monospace' }}>{fmtCoef(ci.coefficient)}</span>
-                                                                        <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient)}
-                                                                            style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                            title="Editar coeficiente">
-                                                                            <Pencil size={10} />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
+                                                            {!itemData?.isObservation && (
+                                                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                                                    {isEditingCoef ? (
+                                                                        <>
+                                                                            <input type="text" autoFocus
+                                                                                value={editValue}
+                                                                                onChange={e => setEditValue(e.target.value)}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter') commitEdit();
+                                                                                    if (e.key === 'Escape') setEditingField(null);
+                                                                                }}
+                                                                                onBlur={commitEdit}
+                                                                                placeholder="Ex: 1 * 32"
+                                                                                style={{ width: 85, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
+                                                                            />
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span style={{ fontSize: '0.78rem', fontFamily: 'monospace' }}>{fmtCoef(ci.coefficient)}</span>
+                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient)}
+                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                title="Editar coeficiente">
+                                                                                <Pencil size={10} />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            )}
 
                                                             {/* Editable price */}
-                                                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                                                {isEditingPrice ? (
-                                                                    <>
-                                                                        <input type="number" step="0.01" autoFocus
-                                                                            value={editValue}
-                                                                            onChange={e => setEditValue(e.target.value)}
-                                                                            onKeyDown={e => {
-                                                                                if (e.key === 'Enter') commitEdit();
-                                                                                if (e.key === 'Escape') setEditingField(null);
-                                                                            }}
-                                                                            onBlur={commitEdit}
-                                                                            style={{ width: 75, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
-                                                                        />
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <span style={{ fontSize: '0.78rem' }}>{fmt(unitPrice)}</span>
-                                                                        <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
-                                                                            style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                            title="Editar preço">
-                                                                            <Pencil size={10} />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
+                                                            {!itemData?.isObservation && (
+                                                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                                                    {isEditingPrice ? (
+                                                                        <>
+                                                                            <input type="text" autoFocus
+                                                                                value={editValue}
+                                                                                onChange={e => setEditValue(e.target.value)}
+                                                                                onKeyDown={e => {
+                                                                                    if (e.key === 'Enter') commitEdit();
+                                                                                    if (e.key === 'Escape') setEditingField(null);
+                                                                                }}
+                                                                                onBlur={commitEdit}
+                                                                                placeholder="Ex: 114.40"
+                                                                                style={{ width: 85, padding: '2px 4px', border: '1px solid var(--color-primary)', borderRadius: 3, fontSize: '0.75rem', textAlign: 'right' }}
+                                                                            />
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{fmt(unitPrice)}</span>
+                                                                            <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
+                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                title="Editar preço unitário">
+                                                                                <Pencil size={10} />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            )}
 
-                                                            <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: meta.color }}>
-                                                                {fmt(ci.price)}
+                                                            <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: itemData?.isObservation ? 'transparent' : meta.color }}>
+                                                                {!itemData?.isObservation && fmt(ci.price)}
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center' }}>
@@ -1054,6 +1086,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     <option value="EQUIPAMENTO">Equipamento</option>
                                     <option value="SERVICO">Serviço Terceirizado</option>
                                     <option value="AUXILIAR">Comp. Auxiliar</option>
+                                    <option value="OBSERVACAO">Observação / Texto</option>
                                 </select>
                             </div>
                             <div style={{ width: 80 }}>
@@ -1065,11 +1098,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <div style={{ display: 'flex', gap: 12 }}>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Coeficiente</label>
-                                <input type="number" step="0.0001" className="form-input" value={freeItemData.coefficient} onChange={e => setFreeItemData({...freeItemData, coefficient: e.target.value})} style={{ width: '100%' }} />
+                                <input type="text" className="form-input" value={freeItemData.coefficient} onChange={e => setFreeItemData({...freeItemData, coefficient: e.target.value})} placeholder="Ex: 1 * 32" style={{ width: '100%' }} />
                             </div>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Preço Unitário</label>
-                                <input type="number" step="0.01" className="form-input" value={freeItemData.price} onChange={e => setFreeItemData({...freeItemData, price: e.target.value})} style={{ width: '100%' }} />
+                                <input type="text" className="form-input" value={freeItemData.price} onChange={e => setFreeItemData({...freeItemData, price: e.target.value})} placeholder="Ex: 114.40" style={{ width: '100%' }} />
                             </div>
                         </div>
 
@@ -1098,8 +1131,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
                         <div>
                             <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Fator de Multiplicação dos Coeficientes</label>
-                            <input autoFocus type="number" step="0.01" className="form-input" value={factorData.value} onChange={e => setFactorData({...factorData, value: e.target.value})} style={{ width: '100%' }} />
-                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>Ex: 1.05 = Adicionar 5% de perda</div>
+                            <input autoFocus type="text" className="form-input" value={factorData.value} onChange={e => setFactorData({...factorData, value: e.target.value})} placeholder="Ex: 6 / 300" style={{ width: '100%' }} />
+                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>Ex: 1.05 = Adicionar 5% de perda | Ex: 6 / 300 = Diluição</div>
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
