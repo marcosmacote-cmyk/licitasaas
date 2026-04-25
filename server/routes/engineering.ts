@@ -727,11 +727,21 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 router.get('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
-        const items = await prisma.engineeringProposalItem.findMany({
-            where: { proposalId },
-            orderBy: { sortOrder: 'asc' }
+        const [items, proposal] = await Promise.all([
+            prisma.engineeringProposalItem.findMany({
+                where: { proposalId },
+                orderBy: { sortOrder: 'asc' }
+            }),
+            prisma.priceProposal.findUnique({
+                where: { id: proposalId },
+                select: { bdiConfig: true, engineeringConfig: true }
+            })
+        ]);
+        res.json({ 
+            items, 
+            bdiConfig: proposal?.bdiConfig,
+            engineeringConfig: proposal?.engineeringConfig
         });
-        res.json(items);
     } catch (e: any) {
         console.error('Error loading engineering items:', e);
         res.status(500).json({ error: 'Erro ao carregar itens de engenharia' });
@@ -742,7 +752,7 @@ router.get('/proposals/:id/items', async (req: any, res: any) => {
 router.post('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
-        const { items, bdiConfig } = req.body;
+        const { items, bdiConfig, engineeringConfig } = req.body;
 
         if (!Array.isArray(items)) {
             return res.status(400).json({ error: 'items deve ser um array' });
@@ -783,6 +793,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 data: {
                     totalValue,
                     bdiConfig: bdiConfig || undefined,
+                    engineeringConfig: engineeringConfig || undefined,
                     bdiPercentage: Number(bdiConfig?.bdiGlobal) || 0,
                 }
             });

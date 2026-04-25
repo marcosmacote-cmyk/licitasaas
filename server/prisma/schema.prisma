@@ -313,6 +313,9 @@ model PriceProposal {
 
   // ── BDI TCU Config (JSON) ──
   bdiConfig             Json?  // {ac, s, g, r, df, l, i, mode: 'SIMPLIFICADO'|'TCU'}
+  
+  // ── Balizamento Mestre (Engenharia) ──
+  engineeringConfig     Json?  // Configuração global do orçamento (Data Base, Oneração, Arredondamento, Encargos)
 
   items                 ProposalItem[]
   engineeringItems      EngineeringProposalItem[]

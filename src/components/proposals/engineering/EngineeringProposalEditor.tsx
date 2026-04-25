@@ -42,6 +42,14 @@ const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'app
 export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [items, setItems] = useState<EngItem[]>([]);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
+    const [engineeringConfig, setEngineeringConfig] = useState<any>({
+        objeto: '',
+        basesConsideradas: ['SINAPI', 'SEINFRA'],
+        dataBase: '',
+        regimeOneracao: 'DESONERADO',
+        encargosSociais: { horista: 114.3, mensalista: 47.8 },
+        precision: { tipo: 'ROUND', casasDecimais: 2 }
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
@@ -69,7 +77,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     };
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
+    const [activeTab, setActiveTab] = useState<'planilha' | 'balizamento' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
 
     const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
@@ -89,7 +97,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     useEffect(() => {
         fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
             .then(r => r.json()).then(data => {
-                if (Array.isArray(data) && data.length > 0) setItems(data);
+                if (Array.isArray(data)) {
+                    // Fallback for old data structure
+                    if (data.length > 0) setItems(data);
+                } else if (data && data.items) {
+                    setItems(data.items);
+                    if (data.bdiConfig) setBdiConfig(data.bdiConfig);
+                    if (data.engineeringConfig) setEngineeringConfig(data.engineeringConfig);
+                }
             }).catch(console.error);
 
         fetch('/api/engineering/bases', { headers: hdrs() })
@@ -104,7 +119,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         try {
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items, bdiConfig })
+                body: JSON.stringify({ items, bdiConfig, engineeringConfig })
             });
             if (res.ok) { const d = await res.json(); setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>); }
             else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>); }
@@ -289,6 +304,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         disabled={items.length === 0}>
                         <Layers size={14} color="var(--color-primary)" /> Editar Composições
                     </button>
+                    <button className={`btn ${activeTab === 'planilha' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('planilha')}>
+                        <TableProperties size={15} /> Planilha Orçamentária
+                    </button>
+                    <button className={`btn ${activeTab === 'balizamento' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('balizamento')}>
+                        <Wrench size={15} /> Balizamento Mestre
+                    </button>
+                    <button className={`btn ${activeTab === 'hub_insumos' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('hub_insumos')}>
+                        <Package size={15} /> Insumos & CPU
+                    </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
                         {isExtracting ? 'Extraindo...' : 'Extrair Itens IA'}
@@ -345,6 +369,93 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             )}
 
             {/* Tab Content: Caderno de Orçamento */}
+            {activeTab === 'balizamento' && (
+                <div style={{ padding: 24 }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, border: '1px solid var(--color-border)', maxWidth: 800 }}>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1.2rem', marginBottom: 24, color: 'var(--color-primary)' }}>
+                            <Wrench size={24} /> Configuração Mestre de Orçamento
+                        </h2>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Objeto / Descrição</label>
+                                <textarea className="form-input" rows={3} value={engineeringConfig.objeto} onChange={e => setEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Descrição do orçamento..." style={{ width: '100%', resize: 'none' }} />
+                            </div>
+                            
+                            <div>
+                                <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Bases Consideradas</label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => (
+                                        <label key={base} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', background: 'var(--color-bg-base)', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)' }}>
+                                            <input type="checkbox" checked={engineeringConfig.basesConsideradas.includes(base)} onChange={e => {
+                                                const b = engineeringConfig.basesConsideradas;
+                                                setEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
+                                            }} />
+                                            {base}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Data Base Principal</label>
+                                <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => setEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%' }} />
+                            </div>
+                            
+                            <div>
+                                <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Regime de Oneração</label>
+                                <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => setEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value})} style={{ width: '100%' }}>
+                                    <option value="DESONERADO">Desonerado (Padrão)</option>
+                                    <option value="ONERADO">Onerado</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
+                                <h4 style={{ margin: '0 0 16px 0', fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>Encargos Sociais</h4>
+                                <div style={{ display: 'flex', gap: 16 }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Horista (%)</label>
+                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.horista} onChange={e => setEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, horista: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Mensalista (%)</label>
+                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.mensalista} onChange={e => setEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, mensalista: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
+                                <h4 style={{ margin: '0 0 16px 0', fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>Política de Arredondamento</h4>
+                                <div style={{ display: 'flex', gap: 16 }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Cálculo Multiplicação</label>
+                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value}})} style={{ width: '100%' }}>
+                                            <option value="ROUND">Arredondar</option>
+                                            <option value="TRUNCATE">Truncar</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Casas Decimais</label>
+                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
+                            <button className="btn btn-primary" onClick={handleSave} disabled={isSaving}>
+                                {isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                                Salvar Configurações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {activeTab === 'caderno' && (
                 <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={[]} cronogramaResult={null} proposalId={proposalId} />
             )}
