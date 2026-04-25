@@ -76,9 +76,9 @@ export class CompositionFlattener {
     }
 
     for (const agg of aggregatedItems.values()) {
-      // Find the top-level composition
-      const composition = await prisma.engineeringComposition.findFirst({
-        where: { code: { equals: agg.code, mode: 'insensitive' } },
+      // Try to find in PROPRIA first (overridden composition)
+      let composition = await prisma.engineeringComposition.findFirst({
+        where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: 'PROPRIA' } },
         include: {
           database: true,
           items: {
@@ -89,6 +89,38 @@ export class CompositionFlattener {
           }
         }
       });
+
+      // Fallback to the one matching the sourceName
+      if (!composition) {
+          composition = await prisma.engineeringComposition.findFirst({
+            where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: agg.sourceName } },
+            include: {
+              database: true,
+              items: {
+                include: {
+                  item: true,
+                  composition: { include: { database: true } }
+                }
+              }
+            }
+          });
+      }
+
+      // Final fallback to any
+      if (!composition) {
+          composition = await prisma.engineeringComposition.findFirst({
+            where: { code: { equals: agg.code, mode: 'insensitive' } },
+            include: {
+              database: true,
+              items: {
+                include: {
+                  item: true,
+                  composition: { include: { database: true } }
+                }
+              }
+            }
+          });
+      }
 
       if (!composition) continue;
 

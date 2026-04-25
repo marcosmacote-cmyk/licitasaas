@@ -316,16 +316,22 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
         <tbody>`;
 
     for (const ci of comp.items) {
-        const tipo = ci.type === 'MAO_DE_OBRA' ? 'Mão de Obra' : ci.type === 'MATERIAL' ? 'Material' : ci.type === 'EQUIPAMENTO' ? 'Equipamento' : 'Comp. Auxiliar';
+        let tipo = 'Comp. Auxiliar';
+        if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
+        else if (ci.type === 'MATERIAL') tipo = 'Material';
+        else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
+        else if (ci.type === 'SERVICO') tipo = 'Serviço';
+        else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
+
         ch += `<tr>
             <td>${tipo}</td>
             <td class="mono">${ci.code || ''}</td>
             <td>${ci.sourceName || ''}</td>
             <td>${ci.description || '—'}</td>
-            <td class="c">${ci.unit || ''}</td>
-            <td class="r mono">${ci.coefficient.toFixed(7)}</td>
-            <td class="r">${fmt(ci.unitPrice || 0)}</td>
-            <td class="r">${fmt(ci.totalPrice || 0)}</td>
+            <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
+            <td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : ci.coefficient.toFixed(7)}</td>
+            <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
+            <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
         </tr>`;
     }
 
