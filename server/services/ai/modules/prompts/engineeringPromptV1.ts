@@ -182,9 +182,9 @@ REGRAS FINAIS
 - Se o documento mencionar serviços como objeto da licitação mas sem planilha detalhada,
   crie um item para CADA serviço principal mencionado como COMPOSICAO
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
-\`;
+`;
 
-export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = \`
+export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
 
 ATENÇÃO ESPECIAL:
@@ -195,5 +195,5 @@ ATENÇÃO ESPECIAL:
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO (sem BDI)
 7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global. Se o total não bater, revise a extração dos valores unitários.
-\`;
+`;
 
