@@ -286,7 +286,9 @@ router.get('/compositions', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/compositions', async (req: any, res: any) => {
     try {
-        const { code, description, unit, tenantId } = req.body;
+        const { code, description, unit } = req.body;
+        // SEC-02 FIX: Always use authenticated tenantId from middleware
+        const tenantId = req.user?.tenantId || req.body.tenantId;
         
         if (!code || !description) {
             return res.status(400).json({ error: 'Código e descrição são obrigatórios' });

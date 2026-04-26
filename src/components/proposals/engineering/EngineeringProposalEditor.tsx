@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
@@ -11,6 +14,41 @@ import { applyPrecision } from './precisionEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria } from './types';
 import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
 import * as XLSX from 'xlsx';
+
+// ── Renumeração hierárquica automática ──
+function renumberItems(items: EngItem[]): EngItem[] {
+    let etapaIdx = 0;
+    let subetapaIdx = 0;
+    let itemIdx = 0;
+    let currentEtapa = 0;
+    let currentSubetapa = 0;
+
+    return items.map(it => {
+        if (it.type === 'ETAPA') {
+            etapaIdx++;
+            subetapaIdx = 0;
+            itemIdx = 0;
+            currentEtapa = etapaIdx;
+            currentSubetapa = 0;
+            return { ...it, itemNumber: `${etapaIdx}.0` };
+        }
+        if (it.type === 'SUBETAPA') {
+            subetapaIdx++;
+            itemIdx = 0;
+            currentSubetapa = subetapaIdx;
+            return { ...it, itemNumber: `${currentEtapa || 1}.${subetapaIdx}` };
+        }
+        // COMPOSICAO / INSUMO
+        itemIdx++;
+        if (currentSubetapa > 0) {
+            return { ...it, itemNumber: `${currentEtapa || 1}.${currentSubetapa}.${itemIdx}` };
+        }
+        if (currentEtapa > 0) {
+            return { ...it, itemNumber: `${currentEtapa}.${itemIdx}` };
+        }
+        return { ...it, itemNumber: String(itemIdx) };
+    });
+}
 
 const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string; icon: typeof FolderOpen }> = {
     ETAPA:      { label: 'Etapa',       color: '#1e40af', bg: 'rgba(30,64,175,0.08)',  icon: FolderOpen },
@@ -217,26 +255,29 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         }));
     };
 
-    const removeItem = (id: string) => { setHasUnsavedChanges(true); setItems(prev => prev.filter(it => it.id !== id)); };
+    const removeItem = (id: string) => { setHasUnsavedChanges(true); setItems(prev => renumberItems(prev.filter(it => it.id !== id))); };
 
     const addTypedItem = (type: EngItemType) => {
         const isGroup = isGrouper(type);
-        const nextNum = items.length + 1;
-        let itemNumber = String(nextNum);
-        if (type === 'ETAPA') {
-            const etapaCount = items.filter(i => i.type === 'ETAPA').length + 1;
-            itemNumber = `${etapaCount}.0`;
-        } else if (type === 'SUBETAPA') {
-            const lastEtapa = [...items].reverse().find(i => i.type === 'ETAPA');
-            const etapaNum = lastEtapa?.itemNumber?.split('.')[0] || '1';
-            const subCount = items.filter(i => i.type === 'SUBETAPA' && i.itemNumber.startsWith(etapaNum + '.')).length + 1;
-            itemNumber = `${etapaNum}.${subCount}`;
-        }
-        setItems(prev => [...prev, {
-            id: `new-${Date.now()}`, itemNumber, code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
+        setHasUnsavedChanges(true);
+        setItems(prev => renumberItems([...prev, {
+            id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
             description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
             unitCost: 0, unitPrice: 0, totalPrice: 0, type,
-        }]);
+        }]));
+    };
+
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setItems(prev => {
+                const oldIndex = prev.findIndex(item => item.id === active.id);
+                const newIndex = prev.findIndex(item => item.id === over.id);
+                setHasUnsavedChanges(true);
+                return renumberItems(arrayMove(prev, oldIndex, newIndex));
+            });
+        }
     };
 
     // Search
@@ -686,7 +727,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={items.map(it => it.id)} strategy={verticalListSortingStrategy}>
+                            <tbody>
                             {items.map(it => {
                                 const meta = TYPE_META[it.type || 'COMPOSICAO'];
                                 const isGroup = isGrouper(it.type);
@@ -694,12 +737,27 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 const IconComp = meta.icon;
 
                                 // ── ETAPA / SUBETAPA ROW (header style) ──
+                                const SortableRow = ({ id, isGroup, meta, hasInsumos, isExpanded, children }: any) => {
+                                    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+                                    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined };
+                                    return (
+                                        <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}>
+                                            {children(listeners)}
+                                        </tr>
+                                    );
+                                };
+
                                 if (isGroup) {
                                     return (
-                                        <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)', background: meta.bg }}>
-                                            <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
-                                                {it.itemNumber}
-                                            </td>
+                                        <SortableRow key={it.id} id={it.id} isGroup={true} meta={meta} hasInsumos={false} isExpanded={false}>
+                                            {(listeners: any) => (
+                                                <>
+                                                    <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: meta.color, opacity: 0.5, display: 'flex' }}><GripVertical size={14} /></button>
+                                                            {it.itemNumber}
+                                                        </div>
+                                                    </td>
                                             <td style={{ padding: '6px 8px' }}>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.68rem', fontWeight: 700 }}>
                                                     <IconComp size={11} /> {meta.label}
@@ -712,30 +770,35 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
                                                 />
                                             </td>
-                                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                                                <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
-                                            </td>
-                                        </tr>
+                                                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                        <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
+                                                    </td>
+                                                </>
+                                            )}
+                                        </SortableRow>
                                     );
                                 }
 
-                                // ── COMPOSIÇÃO / INSUMO ROW (data row) ──
+                                // ── COMPOSICAO / INSUMO ROW (data row) ──
                                 const hasInsumos = it.type === 'COMPOSICAO' && it.insumos && it.insumos.length > 0;
                                 const isExpanded = expandedItems.has(it.id);
                                 const rows = [];
 
                                 rows.push(
-                                    <tr key={it.id} style={{ borderBottom: (hasInsumos && isExpanded) ? 'none' : '1px solid var(--color-border)' }}>
-                                        <td style={{ padding: '6px 12px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                {hasInsumos && (
-                                                    <button onClick={() => toggleExpand(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: meta.color, display: 'flex' }}>
-                                                        {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                                                    </button>
-                                                )}
-                                                <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '48px' : '60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
-                                            </div>
-                                        </td>
+                                    <SortableRow key={it.id} id={it.id} isGroup={false} meta={meta} hasInsumos={hasInsumos} isExpanded={isExpanded}>
+                                        {(listeners: any) => (
+                                            <>
+                                                <td style={{ padding: '6px 12px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                        <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: 'var(--color-text-tertiary)', display: 'flex', marginRight: 4 }}><GripVertical size={14} /></button>
+                                                        {hasInsumos && (
+                                                            <button onClick={() => toggleExpand(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: meta.color, display: 'flex' }}>
+                                                                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                                            </button>
+                                                        )}
+                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '48px' : '60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                                    </div>
+                                                </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                                 <IconComp size={10} /> {meta.label}
@@ -783,9 +846,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            {it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? (
+                                            {it.unitCost === 0 ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
-                                                    <span title="Composição vazia. Preencha no Módulo Livre." style={{ display: 'flex' }}>
+                                                    <span title={it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' ? "Composição vazia. Preencha no Módulo Livre." : "Item sem preço unitário."} style={{ display: 'flex' }}>
                                                         <AlertCircle size={14} />
                                                     </span>
                                                     <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
@@ -794,12 +857,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                 <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
                                             )}
                                         </td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                                            <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
-                                        </td>
-                                    </tr>
+                                                <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                    <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
+                                                </td>
+                                            </>
+                                        )}
+                                    </SortableRow>
                                 );
 
                                 // ── EXPANDED INSUMO DETAIL ROWS ──
@@ -861,7 +926,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente
                                 </td></tr>
                             )}
-                        </tbody>
+                            </tbody>
+                            </SortableContext>
+                        </DndContext>
                     </table>
 
                     {/* ── INSERTION TOOLBAR (OrcaFascio style) ── */}

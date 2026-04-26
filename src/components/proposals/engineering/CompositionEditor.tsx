@@ -404,9 +404,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             
             // If it's an official composition, create a copy in PROPRIA first
             if (data.database?.name !== 'PROPRIA') {
-                const tokenStr = token();
-                const payload = JSON.parse(atob(tokenStr.split('.')[1]));
-                
                 const resCreate = await fetch('/api/engineering/compositions', {
                     method: 'POST',
                     headers: hdrs(),
@@ -414,7 +411,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         code: data.code,
                         description: data.description,
                         unit: data.unit,
-                        tenantId: payload.tenantId
                     })
                 });
                 
@@ -458,11 +454,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setLoading(true);
         setError('');
         try {
-            // Decodifica o payload do token para pegar o tenantId (simplificado, ou o backend pega pelo user)
-            // Na verdade o backend pega pelo JWT. Mas enviamos via req.body (pode ser mock ou o backend pega).
-            const tokenStr = token();
-            const payload = JSON.parse(atob(tokenStr.split('.')[1]));
-            
+            // SEC-02 FIX: Backend extracts tenantId from req.user (auth middleware)
             const res = await fetch('/api/engineering/compositions', {
                 method: 'POST',
                 headers: hdrs(),
@@ -470,7 +462,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     code: currentItem.code,
                     description: currentItem.description,
                     unit: currentItem.unit,
-                    tenantId: payload.tenantId
                 })
             });
             if (!res.ok) throw new Error('Erro ao criar composição');

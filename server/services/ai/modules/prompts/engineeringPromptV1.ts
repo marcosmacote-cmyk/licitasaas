@@ -63,10 +63,18 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 5. UNIDADES DE MEDIDA: Use exatamente como estão no documento.
    Comuns: M2, M3, M, KG, UN, VB, CJ, L, H, MÊS, GL, etc.
 
-6. PREÇOS: Se houver preço unitário ou referência, inclua em unitCost.
-   Se houver apenas o preço total, calcule o unitário (total ÷ quantidade).
+6. PREÇOS E CUSTOS (CRÍTICO): 
+   - Obras públicas diferenciam "Custo Direto" (sem encargos), "Custo com Leis Sociais (LS)" e "Preço com BDI".
+   - Extraia SEMPRE o Custo (com Leis Sociais se houver, mas SEMPRE SEM BDI) para o campo "unitCost".
+   - Se a planilha informar apenas o "Preço com BDI" e a taxa do BDI, calcule o Custo: unitCost = Preço / (1 + BDI/100).
+   - Se a planilha tiver colunas separadas para Material, Mão de Obra e Equipamento, o "unitCost" é a SOMA dos três.
 
-7. COMPOSIÇÕES PRÓPRIAS: Para qualquer composição que NÃO referencie um banco oficial
+7. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
+   - Antes de gerar a saída, faça a conta: para cada item, (quantidade × unitCost).
+   - A soma de todos os totais (ou a soma com BDI aplicado) DEVE bater exatamente com o valor global estimado do edital.
+   - Ajuste possíveis erros de OCR verificando se a matemática fecha.
+
+8. COMPOSIÇÕES PRÓPRIAS: Para qualquer composição que NÃO referencie um banco oficial
    (SINAPI, SEINFRA, SICRO, ORSE), extraia os insumos detalhados no campo "insumos".
    Cada insumo deve ter: description, type (MATERIAL/MAO_DE_OBRA/EQUIPAMENTO), 
    unit, coefficient, unitPrice.
@@ -174,9 +182,9 @@ REGRAS FINAIS
 - Se o documento mencionar serviços como objeto da licitação mas sem planilha detalhada,
   crie um item para CADA serviço principal mencionado como COMPOSICAO
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
-`;
+\`;
 
-export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
+export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = \`
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
 
 ATENÇÃO ESPECIAL:
@@ -185,6 +193,7 @@ ATENÇÃO ESPECIAL:
 3. Se encontrar referências a códigos SINAPI, SEINFRA ou SICRO, extraia-os EXATAMENTE
 4. Preserve a numeração hierárquica (1.0, 1.1, 1.1.1, etc.)
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
-6. Inclua quantitativos e preços quando disponíveis
-`;
+6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO (sem BDI)
+7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global. Se o total não bater, revise a extração dos valores unitários.
+\`;
 
