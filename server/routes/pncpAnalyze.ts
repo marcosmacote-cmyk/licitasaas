@@ -176,6 +176,16 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                 `A API do PNCP retornou erro: ${fetchError}. URL: ${arquivosUrl}`
             );
         }
+        let pncpObjetoCompra = '';
+        try {
+            const procUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+            const procRes = await axios.get(procUrl, { httpsAgent: agent, timeout: 5000 } as any);
+            if (procRes.data?.objetoCompra) {
+                pncpObjetoCompra = procRes.data.objetoCompra;
+            }
+        } catch (e) {
+            logger.warn(`[PNCP-AI] Falha ao buscar metadados básicos do processo: ${e}`);
+        }
 
         // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
         // Sort by legal/technical priority: Edital > TR > Projeto Básico > Planilhas > Proposta > Minuta > outros
@@ -750,6 +760,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         let stage1Models: string[] = [];
         const quickTitles = arquivos.map(a => (a.titulo || a.nomeArquivo || '').toLowerCase());
         if (objeto_resumido) quickTitles.push(objeto_resumido.toLowerCase());
+        if (pncpObjetoCompra) quickTitles.push(pncpObjetoCompra.toLowerCase());
         const isEngineeringHeuristic = quickTitles.some(t => t.includes('engenharia') || t.includes('obra') || t.includes('reforma') || t.includes('planilha') || t.includes('arquitetura') || t.includes('pavimenta') || t.includes('construc'));
 
         try {
