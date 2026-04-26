@@ -761,7 +761,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            }, zeroxUsed ? 3 : 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: zeroxUsed ? 'zerox_extraction' : 'raw_extraction' } });
+            }, zeroxUsed ? 2 : 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: zeroxUsed ? 'zerox_extraction' : 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
             const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');

@@ -152,7 +152,7 @@ export async function callGeminiWithRetry(
 ): Promise<any> {
     let lastError: any;
     const requestedModel = options.model || 'gemini-2.5-flash';
-    const TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes per attempt (was 5 — too long)
+    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — engineering PDFs need 3-4 min to process
 
     // Global outage fast-fail: if ALL models are circuit-open, skip entirely
     if (isGlobalOutage(requestedModel)) {
