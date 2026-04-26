@@ -832,10 +832,12 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS} mínimo. Disparando extração dedicada...`);
+            const ENG_BUDGET_TIMEOUT_MS = 90_000; // 90s hard cap — Etapa 1.5 is non-critical
+            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS} mínimo. Disparando extração dedicada (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
-                const engExtractionResponse = await callGeminiWithRetry(ai.models, {
+                // Race the extraction against a hard timeout to prevent pipeline hangs
+                const engExtractionPromise = callGeminiWithRetry(ai.models, {
                     model: PIPELINE_MODELS.extraction,
                     contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
                     config: {
@@ -844,61 +846,63 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                         maxOutputTokens: 65536,
                         responseMimeType: 'application/json'
                     }
-                }, 3, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'engineering_budget_extraction' } });
+                }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'engineering_budget_extraction' } });
+                // 1 retry only — this is a bonus step, not critical path. 
+                // With 3 retries × 3 min timeout + fallback cascade = 15+ min hang.
 
-                const engText = engExtractionResponse.text;
-                if (engText) {
-                    const engParseResult = robustJsonParseDetailed(engText, 'PNCP-V2-Engineering-Budget');
-                    if (engParseResult.repaired) pipelineHealth.parseRepairs++;
-                    const engData = engParseResult.data;
-                    const engItems = engData?.engineeringItems || [];
+                const engTimeoutPromise = new Promise<null>((resolve) => {
+                    setTimeout(() => {
+                        logger.warn(`[PNCP-V2] ⏱️ Etapa 1.5 TIMEOUT (${ENG_BUDGET_TIMEOUT_MS / 1000}s) — continuando com itens da Etapa 1`);
+                        resolve(null);
+                    }, ENG_BUDGET_TIMEOUT_MS);
+                });
 
-                    if (engItems.length > stage1ItensCount) {
-                        // Convert engineeringPromptV1 format → itens_licitados format
-                        const convertedItens = engItems
-                            .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
-                            .map((it: any) => ({
+                const engExtractionResponse = await Promise.race([engExtractionPromise, engTimeoutPromise]);
+
+                if (engExtractionResponse) {
+                    const engText = engExtractionResponse.text;
+                    if (engText) {
+                        const engParseResult = robustJsonParseDetailed(engText, 'PNCP-V2-Engineering-Budget');
+                        if (engParseResult.repaired) pipelineHealth.parseRepairs++;
+                        const engData = engParseResult.data;
+                        const engItems = engData?.engineeringItems || [];
+
+                        if (engItems.length > stage1ItensCount) {
+                            // Also include ETAPA/SUBETAPA as groupers (preserving hierarchy)
+                            const allItensWithGroupers = engItems.map((it: any) => ({
                                 itemNumber: it.item || '',
-                                sourceCode: it.code || '',
-                                sourceBase: it.sourceName || '',
+                                sourceCode: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.code || ''),
+                                sourceBase: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.sourceName || ''),
                                 description: it.description || '',
-                                unit: it.unit || 'UN',
-                                quantity: Number(it.quantity) || 1,
-                                referencePrice: Number(it.unitCost) || 0,
+                                unit: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.unit || 'UN'),
+                                quantity: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.quantity) || 1),
+                                referencePrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitCost) || 0),
                                 multiplier: 1,
                                 multiplierLabel: '',
+                                _engineeringType: it.type, // Preserve type info for downstream
                             }));
 
-                        // Also include ETAPA/SUBETAPA as groupers (preserving hierarchy)
-                        const allItensWithGroupers = engItems.map((it: any) => ({
-                            itemNumber: it.item || '',
-                            sourceCode: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.code || ''),
-                            sourceBase: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.sourceName || ''),
-                            description: it.description || '',
-                            unit: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.unit || 'UN'),
-                            quantity: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.quantity) || 1),
-                            referencePrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitCost) || 0),
-                            multiplier: 1,
-                            multiplierLabel: '',
-                            _engineeringType: it.type, // Preserve type info for downstream
-                        }));
+                            // Replace itens_licitados with the complete extraction
+                            if (!v2Result.proposal_analysis) {
+                                v2Result.proposal_analysis = {} as any;
+                            }
+                            v2Result.proposal_analysis.itens_licitados = allItensWithGroupers;
 
-                        // Replace itens_licitados with the complete extraction
-                        if (!v2Result.proposal_analysis) {
-                            v2Result.proposal_analysis = {} as any;
+                            // Also store the full engineering extraction for ai-populate to use directly
+                            (v2Result as any)._engineeringBudgetItems = engItems;
+
+                            stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                            modelsUsed.push(`${PIPELINE_MODELS.extraction}(eng-budget)`);
+                            logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} na Etapa 1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}`);
+                        } else {
+                            stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                            logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não melhorou: ${engItems.length} itens (Etapa 1 tinha ${stage1ItensCount}). Mantendo Etapa 1.`);
                         }
-                        v2Result.proposal_analysis.itens_licitados = allItensWithGroupers;
-
-                        // Also store the full engineering extraction for ai-populate to use directly
-                        (v2Result as any)._engineeringBudgetItems = engItems;
-
-                        stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                        modelsUsed.push(`${PIPELINE_MODELS.extraction}(eng-budget)`);
-                        logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} na Etapa 1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}`);
-                    } else {
-                        stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                        logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não melhorou: ${engItems.length} itens (Etapa 1 tinha ${stage1ItensCount}). Mantendo Etapa 1.`);
                     }
+                } else {
+                    // Timeout hit — engExtractionPromise still running in background but we move on
+                    stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                    v2Result.confidence.warnings.push(`Extração dedicada de engenharia excedeu ${ENG_BUDGET_TIMEOUT_MS / 1000}s. Planilha pode estar incompleta — use "Popular via IA" no módulo de Proposta.`);
                 }
             } catch (engErr: any) {
                 stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
