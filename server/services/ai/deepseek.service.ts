@@ -113,6 +113,7 @@ export async function callDeepSeek(opts: {
     const client = new OpenAI({
         apiKey,
         baseURL: DEEPSEEK_BASE_URL,
+        timeout: 180000, // 3 minutes timeout to prevent JobWorker hang
     });
 
     let userContent = opts.userPrompt;
