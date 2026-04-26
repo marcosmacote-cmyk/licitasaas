@@ -656,17 +656,17 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
         // ═══════════════════════════════════════════════════════════════════════
         
-        // ── MODEL CONFIGURATION (V5.1 — DeepSeek primary) ──
-        // V5.1: DeepSeek-V4 as primary extraction engine (faster text processing)
-        //       Gemini as fallback (multimodal for scanned PDFs)
-        //       Risk review stays on Gemini (not latency-critical)
+        // ── MODEL CONFIGURATION (V5.2 — Hybrid: Gemini multimodal + DeepSeek text) ──
+        // V5.2: Each engine where it excels:
+        //   E1 (Extraction): Gemini — ONLY model that reads scanned PDF tables
+        //   E3 (Risk Review): DeepSeek — text-only, 2x faster, cheaper
         const useDeepSeek = isDeepSeekAvailable();
         const PIPELINE_MODELS = {
-            extraction: useDeepSeek ? 'deepseek-v4' : 'gemini-2.5-flash',  // Etapa 1: primary extraction
-            extractionFallback: 'gemini-2.5-flash',                         // Etapa 1: fallback (multimodal)
-            riskReview: 'gemini-2.5-flash',                                 // Etapa 3: text-only risk analysis
+            extraction: 'gemini-2.5-flash',                                     // Etapa 1: multimodal PDF parsing (irreplaceable)
+            riskReview: useDeepSeek ? 'deepseek-v4' : 'gemini-2.5-flash',       // Etapa 3: text-only → DeepSeek preferred
+            riskReviewFallback: 'gemini-2.5-flash',                             // Etapa 3: fallback if DeepSeek fails
         };
-        logger.info(`[PNCP-V2] 🤖 V5.1 Modelos: E1=${PIPELINE_MODELS.extraction}${useDeepSeek ? ' (DeepSeek primary)' : ''} | E1-fallback=${PIPELINE_MODELS.extractionFallback} | E3=${PIPELINE_MODELS.riskReview}`);
+        logger.info(`[PNCP-V2] 🤖 V5.2 Híbrido: E1=${PIPELINE_MODELS.extraction} (multimodal) | E3=${PIPELINE_MODELS.riskReview}${useDeepSeek ? ' (DeepSeek)' : ''}`);
 
         sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
 
@@ -748,95 +748,61 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         let extractionJson: any;
         const t1Start = Date.now();
 
-        // ── STRATEGY: DeepSeek (fast) → Gemini (multimodal) → OpenAI (last resort) ──
-        const extractionUserPrompt = V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '');
+        try {
+            // If Zerox produced Markdown, send TEXT to Gemini (faster, cheaper)
+            // Otherwise, fall back to sending raw PDF base64 inline
+            const extractionUserPrompt = V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '');
+            const extractionParts: any[] = zeroxUsed
+                ? [{ text: `${extractionUserPrompt}\n\n── CONTEÚDO DO EDITAL (extraído via OCR de alta fidelidade) ──\n\n${zeroxMarkdown}` }]
+                : [...pdfParts, { text: extractionUserPrompt }];
 
-        // Attempt 1: DeepSeek (if available) — ~10-30s expected
-        if (useDeepSeek) {
+            const extractionResponse = await callGeminiWithRetry(ai.models, {
+                model: PIPELINE_MODELS.extraction,
+                contents: [{ role: 'user', parts: extractionParts }],
+                config: {
+                    systemInstruction: V2_EXTRACTION_PROMPT,
+                    temperature: 0.05,
+                    maxOutputTokens: 65536,
+                    responseMimeType: 'application/json'
+                }
+            }, zeroxUsed ? 3 : 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: zeroxUsed ? 'zerox_extraction' : 'raw_extraction' } });
+            const extractionText = extractionResponse.text;
+            if (!extractionText) throw new Error('Etapa 1 retornou vazio');
+            const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
+            extractionJson = parseResult1.data;
+            if (parseResult1.repaired) pipelineHealth.parseRepairs++;
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
+            modelsUsed.push(zeroxUsed ? `${PIPELINE_MODELS.extraction}(zerox)` : PIPELINE_MODELS.extraction);
+            stageTimes.extraction = (Date.now() - t1Start) / 1000;
+            (v2Result.analysis_meta as any).zerox_used = zeroxUsed;
+            logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s [${zeroxUsed ? 'ZEROX' : 'INLINE'}] — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+        } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
+            pipelineHealth.fallbacksUsed++;
             try {
-                logger.info(`[PNCP-V2] 🚀 Etapa 1 — Tentando DeepSeek-V4 (motor primário)...`);
-                const deepSeekResult = await callDeepSeek({
+                const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_EXTRACTION_PROMPT,
-                    userPrompt: extractionUserPrompt,
+                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
                     pdfParts,
-                    zeroxMarkdown: zeroxUsed ? zeroxMarkdown || undefined : undefined,
                     temperature: 0.05,
                     maxTokens: 65536,
-                    stageName: 'PNCP Etapa 1 (Extração)',
+                    stageName: 'PNCP Etapa 1 (Extração)'
                 });
-                if (!deepSeekResult.text) throw new Error('DeepSeek retornou vazio');
-                const parseResult1 = robustJsonParseDetailed(deepSeekResult.text, 'PNCP-V2-Extraction-DeepSeek');
-                extractionJson = parseResult1.data;
-                if (parseResult1.repaired) pipelineHealth.parseRepairs++;
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                extractionJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Extraction-OpenAI');
                 v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-                modelsUsed.push('deepseek-v4');
+                modelsUsed.push(openAiResult.model);
                 stageTimes.extraction = (Date.now() - t1Start) / 1000;
-                (v2Result.analysis_meta as any).zerox_used = zeroxUsed;
-                logger.info(`[PNCP-V2] ✅ Etapa 1 via DeepSeek em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
-            } catch (deepSeekErr: any) {
-                logger.warn(`[PNCP-V2] ⚠️ DeepSeek falhou: ${deepSeekErr.message}. Caindo para Gemini...`);
-                pipelineHealth.fallbacksUsed++;
-                // Fall through to Gemini attempt below
-            }
-        }
-
-        // Attempt 2: Gemini (if DeepSeek failed or unavailable)
-        if (!extractionJson) {
-            try {
-                const extractionParts: any[] = zeroxUsed
-                    ? [{ text: `${extractionUserPrompt}\n\n── CONTEÚDO DO EDITAL (extraído via OCR de alta fidelidade) ──\n\n${zeroxMarkdown}` }]
-                    : [...pdfParts, { text: extractionUserPrompt }];
-
-                const extractionResponse = await callGeminiWithRetry(ai.models, {
-                    model: PIPELINE_MODELS.extractionFallback,
-                    contents: [{ role: 'user', parts: extractionParts }],
-                    config: {
-                        systemInstruction: V2_EXTRACTION_PROMPT,
-                        temperature: 0.05,
-                        maxOutputTokens: 65536,
-                        responseMimeType: 'application/json'
-                    }
-                }, zeroxUsed ? 3 : 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: zeroxUsed ? 'zerox_extraction' : 'raw_extraction' } });
-                const extractionText = extractionResponse.text;
-                if (!extractionText) throw new Error('Etapa 1 retornou vazio');
-                const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
-                extractionJson = parseResult1.data;
-                if (parseResult1.repaired) pipelineHealth.parseRepairs++;
-                v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-                modelsUsed.push(zeroxUsed ? `${PIPELINE_MODELS.extractionFallback}(zerox)` : PIPELINE_MODELS.extractionFallback);
-                stageTimes.extraction = (Date.now() - t1Start) / 1000;
-                (v2Result.analysis_meta as any).zerox_used = zeroxUsed;
-                logger.info(`[PNCP-V2] ✅ Etapa 1 via Gemini${useDeepSeek ? ' (fallback)' : ''} em ${stageTimes.extraction.toFixed(1)}s [${zeroxUsed ? 'ZEROX' : 'INLINE'}] — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
-            } catch (err: any) {
-                const errMsg = err?.message || String(err);
-                const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
-                logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
-                pipelineHealth.fallbacksUsed++;
-
-                // Attempt 3: OpenAI (last resort)
-                try {
-                    const openAiResult = await fallbackToOpenAiV2({
-                        systemPrompt: V2_EXTRACTION_PROMPT,
-                        userPrompt: extractionUserPrompt,
-                        pdfParts,
-                        temperature: 0.05,
-                        maxTokens: 65536,
-                        stageName: 'PNCP Etapa 1 (Extração)'
-                    });
-                    if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                    extractionJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Extraction-OpenAI');
-                    v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-                    modelsUsed.push(openAiResult.model);
-                    stageTimes.extraction = (Date.now() - t1Start) / 1000;
-                    logger.info(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
-                } catch (openAiErr: any) {
-                    logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (todos os modelos)`);
-                    if (isServiceOverload) {
-                        throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
-                            `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
-                    }
-                    throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${errMsg} | OpenAI: ${openAiErr.message}`);
+                logger.info(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
+            } catch (openAiErr: any) {
+                logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
+                if (isServiceOverload) {
+                    throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
+                        `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
                 }
+                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${errMsg} | OpenAI: ${openAiErr.message}`);
             }
         }
 
@@ -1314,16 +1280,39 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         const normalizationJsonCompact = JSON.stringify(normalizationJson);
 
         const [riskSettled, itemsSettled] = await Promise.allSettled([
-            // ── Stage 3: Risk Review (now with real normalization data) ──
+            // ── Stage 3: Risk Review — DeepSeek (fast) → Gemini → OpenAI ──
             (async () => {
                 const t3Start = Date.now();
                 const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
                     .replace('{extractionJson}', extractionJsonCompact)
-                    .replace('{normalizationJson}', normalizationJsonCompact)  // V5.0: REAL data instead of '{}'
+                    .replace('{normalizationJson}', normalizationJsonCompact)
                     + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+
+                // Attempt 1: DeepSeek (text-only, ~20-30s)
+                if (useDeepSeek) {
+                    try {
+                        const deepSeekResult = await callDeepSeek({
+                            systemPrompt: V2_RISK_REVIEW_PROMPT,
+                            userPrompt: riskUserInstruction,
+                            temperature: 0.2,
+                            maxTokens: 16384,
+                            stageName: 'PNCP Etapa 3 (Risco)',
+                        });
+                        if (!deepSeekResult.text) throw new Error('DeepSeek retornou vazio');
+                        const parseR = robustJsonParseDetailed(deepSeekResult.text, 'PNCP-V2-RiskReview-DeepSeek');
+                        const json = parseR.data;
+                        stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                        logger.info(`[PNCP-V2] ✅ Etapa 3 via DeepSeek em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
+                        return { json, model: 'deepseek-v4', repaired: parseR.repaired, fallback: false };
+                    } catch (deepSeekErr: any) {
+                        logger.warn(`[PNCP-V2] ⚠️ Etapa 3 DeepSeek falhou: ${deepSeekErr.message}. Caindo para Gemini...`);
+                    }
+                }
+
+                // Attempt 2: Gemini
                 try {
                     const riskResponse = await callGeminiWithRetry(ai.models, {
-                        model: PIPELINE_MODELS.riskReview,
+                        model: PIPELINE_MODELS.riskReviewFallback,
                         contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
                         config: {
                             systemInstruction: V2_RISK_REVIEW_PROMPT,
@@ -1337,9 +1326,10 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
                     const json = parseR.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-                    logger.info(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
-                    return { json, model: PIPELINE_MODELS.riskReview, repaired: parseR.repaired, fallback: false };
+                    logger.info(`[PNCP-V2] ✅ Etapa 3 via Gemini${useDeepSeek ? ' (fallback)' : ''} em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
+                    return { json, model: PIPELINE_MODELS.riskReviewFallback, repaired: parseR.repaired, fallback: useDeepSeek };
                 } catch (err: any) {
+                    // Attempt 3: OpenAI
                     logger.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
                     const openAiResult = await fallbackToOpenAiV2({
                         systemPrompt: V2_RISK_REVIEW_PROMPT,
