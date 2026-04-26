@@ -2,7 +2,7 @@ import { logger } from '../../lib/logger';
 export interface ParseResult {
     data: any;
     repaired: boolean;
-    strategy: 'direct' | 'depth_truncation' | 'lastBrace_truncation' | 'string_sanitize' | 'stack_repair';
+    strategy: 'direct' | 'depth_truncation' | 'lastBrace_truncation' | 'stack_repair';
 }
 
 export function robustJsonParse(rawText: string, label = 'AI'): any {
@@ -63,19 +63,6 @@ export function robustJsonParseDetailed(rawText: string, label = 'AI'): ParseRes
         }
     } catch { /* continue */ }
 
-    // Step 4.5: String sanitization — fix unescaped quotes inside JSON string values
-    // This handles the common case where Gemini embeds raw edital text containing " into JSON strings
-    // Strategy: scan char-by-char and escape quotes that appear inside string values
-    logger.info(`[${label}] Attempting string sanitization repair...`);
-    try {
-        const sanitized = sanitizeJsonStrings(cleaned);
-        try {
-            const result = JSON.parse(sanitized);
-            logger.info(`[${label}] ✅ JSON parsed after string sanitization`);
-            return { data: result, repaired: true, strategy: 'string_sanitize' };
-        } catch { /* continue to next strategy */ }
-    } catch { /* continue */ }
-
     // Step 5: Stack-based bracket repair
     logger.info(`[${label}] Attempting stack-based bracket repair...`);
     let repaired = cleaned;
@@ -105,70 +92,4 @@ export function robustJsonParseDetailed(rawText: string, label = 'AI'): ParseRes
         logger.error(`[${label}] Last 200 chars: ${cleaned.substring(cleaned.length - 200)}`);
         throw new Error(`Falha ao interpretar resposta da IA (JSON inválido após múltiplas tentativas de reparo)`);
     }
-}
-
-/**
- * Sanitizes unescaped quotes inside JSON string values.
- * 
- * Approach: We parse the JSON character-by-character, tracking whether we're
- * inside a string. When inside a string, we check if a quote character is
- * actually the end of the string (next non-whitespace is : , ] } ) or a
- * rogue unescaped quote (should be escaped).
- */
-function sanitizeJsonStrings(json: string): string {
-    const chars = [...json];
-    const result: string[] = [];
-    let i = 0;
-    let inStr = false;
-    
-    while (i < chars.length) {
-        const c = chars[i];
-        
-        if (!inStr) {
-            result.push(c);
-            if (c === '"') inStr = true;
-            i++;
-            continue;
-        }
-        
-        // Inside a string
-        if (c === '\\') {
-            // Escaped character — push both
-            result.push(c);
-            if (i + 1 < chars.length) {
-                result.push(chars[i + 1]);
-                i += 2;
-            } else {
-                i++;
-            }
-            continue;
-        }
-        
-        if (c === '"') {
-            // Is this the real end of the string or an unescaped quote?
-            // Look ahead: skip whitespace, then check the next char.
-            // If it's : , } ] or end-of-string, it's a real string terminator.
-            // Otherwise, it's an unescaped quote inside the value.
-            let j = i + 1;
-            while (j < chars.length && (chars[j] === ' ' || chars[j] === '\t' || chars[j] === '\n' || chars[j] === '\r')) j++;
-            const nextChar = j < chars.length ? chars[j] : '';
-            
-            if (nextChar === ':' || nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === '"' || nextChar === '') {
-                // This is a real string terminator
-                result.push(c);
-                inStr = false;
-            } else {
-                // This is an unescaped quote inside a string — escape it
-                result.push('\\', '"');
-            }
-            i++;
-            continue;
-        }
-        
-        // Regular character inside string
-        result.push(c);
-        i++;
-    }
-    
-    return result.join('');
 }
