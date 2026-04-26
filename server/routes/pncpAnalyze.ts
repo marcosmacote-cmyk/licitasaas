@@ -180,8 +180,8 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         try {
             const procUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
             const procRes = await axios.get(procUrl, { httpsAgent: agent, timeout: 5000 } as any);
-            if (procRes.data?.objetoCompra) {
-                pncpObjetoCompra = procRes.data.objetoCompra;
+            if ((procRes.data as any)?.objetoCompra) {
+                pncpObjetoCompra = (procRes.data as any).objetoCompra;
             }
         } catch (e) {
             logger.warn(`[PNCP-AI] Falha ao buscar metadados básicos do processo: ${e}`);
