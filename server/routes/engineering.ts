@@ -63,44 +63,49 @@ async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]>
         return { arq, score, name };
     }).filter(s => s.score < 99).sort((a, b) => a.score - b.score);
 
-    // Download top 4 most relevant PDFs (budget limit)
+    // Download top PDFs in parallel (PERF-02 fix: was sequential, now ~4x faster)
     const MAX_PDFS = 4;
     const MAX_SIZE_KB = 12000;
-    let totalSizeKB = 0;
-    const pdfParts: any[] = [];
+    const candidates = scored.slice(0, MAX_PDFS + 2);
 
-    for (const { arq, name } of scored.slice(0, MAX_PDFS + 2)) {
-        if (pdfParts.length >= MAX_PDFS) break;
-
+    const downloadResults = await Promise.allSettled(candidates.map(async ({ arq, name }) => {
         let fileUrl = arq.url || arq.uri || '';
         if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
-        if (!fileUrl) continue;
+        if (!fileUrl) return null;
 
-        try {
-            const fileRes = await axios.get(fileUrl, {
-                responseType: 'arraybuffer', httpsAgent: agent, timeout: 30000,
-                maxRedirects: 5,
-            } as any);
-            const buffer = Buffer.from(fileRes.data as ArrayBuffer);
-            const sizeKB = buffer.length / 1024;
+        const fileRes = await axios.get(fileUrl, {
+            responseType: 'arraybuffer', httpsAgent: agent, timeout: 30000,
+            maxRedirects: 5,
+        } as any);
+        const buffer = Buffer.from(fileRes.data as ArrayBuffer);
 
-            // Verify it's a PDF
-            if (buffer[0] !== 0x25 || buffer[1] !== 0x50) {
-                console.log(`[PNCP-PDF] ⏭️ "${name}" não é PDF, ignorando`);
-                continue;
-            }
-
-            if (totalSizeKB + sizeKB > MAX_SIZE_KB) {
-                console.log(`[PNCP-PDF] ⏭️ Budget de ${MAX_SIZE_KB}KB atingido, parando`);
-                break;
-            }
-
-            totalSizeKB += sizeKB;
-            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
-            console.log(`[PNCP-PDF] ✅ "${name}" (${Math.round(sizeKB)}KB) adicionado`);
-        } catch (dlErr: any) {
-            console.warn(`[PNCP-PDF] ⚠️ Falha ao baixar "${name}": ${dlErr.message}`);
+        // Verify it's a PDF (magic bytes %P)
+        if (buffer[0] !== 0x25 || buffer[1] !== 0x50) {
+            console.log(`[PNCP-PDF] ⏭️ "${name}" não é PDF, ignorando`);
+            return null;
         }
+
+        const sizeKB = buffer.length / 1024;
+        console.log(`[PNCP-PDF] ✅ "${name}" (${Math.round(sizeKB)}KB) baixado`);
+        return { name, sizeKB, part: { inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } } };
+    }));
+
+    // Collect successful downloads respecting size budget
+    let totalSizeKB = 0;
+    const pdfParts: any[] = [];
+    for (const result of downloadResults) {
+        if (pdfParts.length >= MAX_PDFS) break;
+        if (result.status !== 'fulfilled' || !result.value) {
+            if (result.status === 'rejected') console.warn(`[PNCP-PDF] ⚠️ Download falhou: ${(result as any).reason?.message}`);
+            continue;
+        }
+        const { sizeKB, part } = result.value;
+        if (totalSizeKB + sizeKB > MAX_SIZE_KB) {
+            console.log(`[PNCP-PDF] ⏭️ Budget de ${MAX_SIZE_KB}KB atingido, parando`);
+            break;
+        }
+        totalSizeKB += sizeKB;
+        pdfParts.push(part);
     }
 
     console.log(`[PNCP-PDF] 📦 ${pdfParts.length} PDFs prontos (${Math.round(totalSizeKB)}KB total)`);
@@ -1359,16 +1364,36 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
  * Busca por código exato no EngineeringItem
  */
 async function enrichWithOfficialPrices(items: any[]): Promise<void> {
-    for (const item of items) {
-        // Skip groupers (ETAPA/SUBETAPA)
-        if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
-        if (!item.code || item.code === 'N/A') continue;
+    // PERF-01 FIX: Batch query instead of N+1 sequential findFirst
+    const enrichable = items.filter(it =>
+        it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A'
+    );
+    if (enrichable.length === 0) return;
 
-        // 1. Search in EngineeringItem (insumos)
-        const dbItem = await prisma.engineeringItem.findFirst({
-            where: { code: { equals: item.code, mode: 'insensitive' } },
+    const codes = enrichable.map(it => it.code);
+
+    // 1. Batch fetch all matching items (2 queries total instead of 2N)
+    const [dbItems, dbComps] = await Promise.all([
+        prisma.engineeringItem.findMany({
+            where: { code: { in: codes, mode: 'insensitive' } },
             include: { database: { select: { name: true } } },
-        });
+        }),
+        prisma.engineeringComposition.findMany({
+            where: { code: { in: codes, mode: 'insensitive' } },
+            include: { database: { select: { name: true } } },
+        }),
+    ]);
+
+    // Build lookup maps (case-insensitive)
+    const itemMap = new Map(dbItems.map(di => [di.code.toLowerCase(), di]));
+    const compMap = new Map(dbComps.map(dc => [dc.code.toLowerCase(), dc]));
+
+    // 2. Enrich items from maps
+    for (const item of enrichable) {
+        const codeLower = item.code.toLowerCase();
+
+        // Match against items first
+        const dbItem = itemMap.get(codeLower);
         if (dbItem) {
             item.unitCost = Number(dbItem.price) || item.unitCost || 0;
             item.sourceName = dbItem.database?.name || item.sourceName || 'OFICIAL';
@@ -1377,11 +1402,8 @@ async function enrichWithOfficialPrices(items: any[]): Promise<void> {
             continue;
         }
 
-        // 2. Search in EngineeringComposition (composições)
-        const dbComp = await prisma.engineeringComposition.findFirst({
-            where: { code: { equals: item.code, mode: 'insensitive' } },
-            include: { database: { select: { name: true } } },
-        });
+        // Match against compositions
+        const dbComp = compMap.get(codeLower);
         if (dbComp) {
             item.unitCost = Number(dbComp.totalPrice) || item.unitCost || 0;
             item.sourceName = dbComp.database?.name || item.sourceName || 'OFICIAL';
@@ -1391,7 +1413,7 @@ async function enrichWithOfficialPrices(items: any[]): Promise<void> {
             continue;
         }
 
-        // 3. Auto-register: If AI extracted a SINAPI/SEINFRA code with data, auto-create it
+        // 3. Auto-register: If AI extracted a known source code with data, auto-create it
         if (item.sourceName && ['SINAPI', 'SEINFRA', 'SICRO', 'ORSE'].includes(item.sourceName) && item.description && item.unitCost > 0) {
             try {
                 let officialDb = await prisma.engineeringDatabase.findFirst({
@@ -1414,7 +1436,6 @@ async function enrichWithOfficialPrices(items: any[]): Promise<void> {
                 item.type = 'COMPOSICAO';
                 console.log(`[Engineering Auto-Register] 📝 ${item.sourceName} ${item.code} → ${item.description?.substring(0, 50)} = R$ ${item.unitCost} (auto-cadastrado)`);
             } catch (e: any) {
-                // Ignore duplicates (race condition or already exists)
                 if (!e.message?.includes('Unique constraint')) {
                     console.warn(`[Engineering Auto-Register] ⚠️ ${item.code}: ${e.message}`);
                 }

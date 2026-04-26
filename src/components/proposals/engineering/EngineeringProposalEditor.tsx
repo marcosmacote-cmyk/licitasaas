@@ -126,11 +126,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 method: 'POST', headers: hdrs(),
                 body: JSON.stringify({ items, bdiConfig, engineeringConfig, cronogramaData })
             });
-            if (res.ok) { const d = await res.json(); setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>); }
+            if (res.ok) {
+                const d = await res.json();
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>);
+                setHasUnsavedChanges(false);
+            }
             else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>); }
         } catch { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro de rede</span>); }
         finally { setIsSaving(false); setTimeout(() => setSaveMsg(null), 4000); }
     };
+
+    // Warn on page leave with unsaved changes
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => { if (hasUnsavedChanges) { e.preventDefault(); } };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [hasUnsavedChanges]);
 
     // AI extraction
     const handleExtractAI = async () => {
@@ -163,6 +174,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     };
                 });
                 setItems(prev => [...prev, ...mapped]);
+                setHasUnsavedChanges(true);
                 const etapas = mapped.filter((m: EngItem) => m.type === 'ETAPA').length;
                 const subs = mapped.filter((m: EngItem) => m.type === 'SUBETAPA').length;
                 const comps = mapped.filter((m: EngItem) => m.type === 'COMPOSICAO').length;
@@ -192,6 +204,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Inline edit
     const updateItem = (id: string, field: keyof EngItem, value: any) => {
+        setHasUnsavedChanges(true);
         setItems(prev => prev.map(it => {
             if (it.id !== id) return it;
             const updated = { ...it, [field]: value };
@@ -204,7 +217,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         }));
     };
 
-    const removeItem = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
+    const removeItem = (id: string) => { setHasUnsavedChanges(true); setItems(prev => prev.filter(it => it.id !== id)); };
 
     const addTypedItem = (type: EngItemType) => {
         const isGroup = isGrouper(type);
@@ -474,9 +487,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExportExcel}>
                         <Download size={14} /> Exportar Excel
                     </button>
-                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleSave} disabled={isSaving}>
+                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={handleSave} disabled={isSaving}>
                         {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                         {isSaving ? 'Salvando...' : 'Salvar Planilha'}
+                        {hasUnsavedChanges && !isSaving && (
+                            <span style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', border: '2px solid var(--color-bg-surface)', animation: 'pulse 2s infinite' }} title="Alterações não salvas" />
+                        )}
                     </button>
                 </div>
             </div>
@@ -665,8 +681,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 8 ? 700 : 600, width: i === 4 ? '28%' : i === 1 ? 80 : undefined, fontSize: '0.72rem' }}>{h}</th>
+                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total',''].map((h,i) => (
+                                    <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, width: i === 4 ? '24%' : i === 1 ? 80 : undefined, fontSize: '0.72rem' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -689,7 +705,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     <IconComp size={11} /> {meta.label}
                                                 </span>
                                             </td>
-                                            <td colSpan={6} style={{ padding: '8px 12px' }}>
+                                            <td colSpan={7} style={{ padding: '8px 12px' }}>
                                                 <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
                                                     style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
                                                     onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
@@ -779,6 +795,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' && it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                             <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                         </td>
@@ -794,7 +811,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     };
                                     rows.push(
                                         <tr key={`${it.id}-insumos`} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td colSpan={10} style={{ padding: 0 }}>
+                                            <td colSpan={11} style={{ padding: 0 }}>
                                                 <div style={{ margin: '0 16px 8px 40px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(14,116,144,0.12)', overflow: 'hidden', background: 'rgba(14,116,144,0.02)' }}>
                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
                                                         <thead>
