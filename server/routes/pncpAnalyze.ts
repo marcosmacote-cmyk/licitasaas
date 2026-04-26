@@ -918,7 +918,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS && !stage1Models.some(m => m.includes('budget'))) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 150_000; 
+            const ENG_BUDGET_TIMEOUT_MS = 300_000; 
             logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS}. Disparando extração dedicada Safety Net (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
