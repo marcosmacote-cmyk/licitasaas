@@ -4,6 +4,7 @@ import { Sentry, sentryErrorHandler, captureError, setSentryUser } from '../lib/
 import { robustJsonParse, robustJsonParseDetailed } from "../services/ai/parser.service";
 import { callGeminiWithRetry } from "../services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, MANUAL_EXTRACTION_ADDON } from "../services/ai/prompt.service";
+import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from "../services/ai/modules/prompts/engineeringPromptV1";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "../services/ai/analysis-schema-v1";
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from "../services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "../services/ai/rag.service";
@@ -814,8 +815,100 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (extractionJson.evidence_registry) v2Result.evidence_registry = extractionJson.evidence_registry;
 
         // Diagnostic: check itens_licitados extraction
-        const extractedItens = v2Result.proposal_analysis?.itens_licitados || [];
-        logger.info(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
+        const extractedItensFromStage1 = v2Result.proposal_analysis?.itens_licitados || [];
+        const stage1ItensCount = Array.isArray(extractedItensFromStage1) ? extractedItensFromStage1.length : 0;
+        logger.info(`[PNCP-V2] 📋 itens_licitados: ${stage1ItensCount} itens extraídos pela Etapa 1`);
+
+        // ── ETAPA 1.5: EXTRAÇÃO DEDICADA DE PLANILHA ORÇAMENTÁRIA (ENGENHARIA) ──
+        // O V2_EXTRACTION_PROMPT (83KB) pede 14 seções simultâneas. Para editais de engenharia,
+        // a planilha orçamentária (que pode ter 50-200 itens) compete por tokens de output com
+        // habilitação, prazos e evidências — e quase sempre é truncada.
+        // Solução: uma segunda chamada Gemini com o prompt especializado (engineeringPromptV1)
+        // que foca EXCLUSIVAMENTE na extração tabular da planilha.
+        const detectedTipoObjeto = (extractionJson.process_identification?.tipo_objeto || '').toLowerCase();
+        const isEngineeringProcess = detectedTipoObjeto.includes('engenharia') || detectedTipoObjeto.includes('obra');
+        const MIN_ENGINEERING_ITEMS = 10; // Planilhas de engenharia têm tipicamente 20-200 itens
+
+        if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS) {
+            sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
+            const t15Start = Date.now();
+            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS} mínimo. Disparando extração dedicada...`);
+
+            try {
+                const engExtractionResponse = await callGeminiWithRetry(ai.models, {
+                    model: PIPELINE_MODELS.extraction,
+                    contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
+                    config: {
+                        systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                        temperature: 0.1,
+                        maxOutputTokens: 65536,
+                        responseMimeType: 'application/json'
+                    }
+                }, 3, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'engineering_budget_extraction' } });
+
+                const engText = engExtractionResponse.text;
+                if (engText) {
+                    const engParseResult = robustJsonParseDetailed(engText, 'PNCP-V2-Engineering-Budget');
+                    if (engParseResult.repaired) pipelineHealth.parseRepairs++;
+                    const engData = engParseResult.data;
+                    const engItems = engData?.engineeringItems || [];
+
+                    if (engItems.length > stage1ItensCount) {
+                        // Convert engineeringPromptV1 format → itens_licitados format
+                        const convertedItens = engItems
+                            .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                            .map((it: any) => ({
+                                itemNumber: it.item || '',
+                                sourceCode: it.code || '',
+                                sourceBase: it.sourceName || '',
+                                description: it.description || '',
+                                unit: it.unit || 'UN',
+                                quantity: Number(it.quantity) || 1,
+                                referencePrice: Number(it.unitCost) || 0,
+                                multiplier: 1,
+                                multiplierLabel: '',
+                            }));
+
+                        // Also include ETAPA/SUBETAPA as groupers (preserving hierarchy)
+                        const allItensWithGroupers = engItems.map((it: any) => ({
+                            itemNumber: it.item || '',
+                            sourceCode: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.code || ''),
+                            sourceBase: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.sourceName || ''),
+                            description: it.description || '',
+                            unit: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.unit || 'UN'),
+                            quantity: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.quantity) || 1),
+                            referencePrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitCost) || 0),
+                            multiplier: 1,
+                            multiplierLabel: '',
+                            _engineeringType: it.type, // Preserve type info for downstream
+                        }));
+
+                        // Replace itens_licitados with the complete extraction
+                        if (!v2Result.proposal_analysis) {
+                            v2Result.proposal_analysis = {} as any;
+                        }
+                        v2Result.proposal_analysis.itens_licitados = allItensWithGroupers;
+
+                        // Also store the full engineering extraction for ai-populate to use directly
+                        (v2Result as any)._engineeringBudgetItems = engItems;
+
+                        stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                        modelsUsed.push(`${PIPELINE_MODELS.extraction}(eng-budget)`);
+                        logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} na Etapa 1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}`);
+                    } else {
+                        stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                        logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não melhorou: ${engItems.length} itens (Etapa 1 tinha ${stage1ItensCount}). Mantendo Etapa 1.`);
+                    }
+                }
+            } catch (engErr: any) {
+                stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
+                logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou (${engErr.message}) — mantendo ${stage1ItensCount} itens da Etapa 1. Pipeline continua.`);
+                // Non-fatal: pipeline continues with whatever Stage 1 extracted
+                v2Result.confidence.warnings.push(`Extração dedicada de engenharia falhou: ${engErr.message}. Planilha pode estar incompleta.`);
+            }
+        } else if (isEngineeringProcess) {
+            logger.info(`[PNCP-V2] 🏗️ Engenharia detectada, mas Etapa 1 já extraiu ${stage1ItensCount} itens (≥ ${MIN_ENGINEERING_ITEMS}). Etapa 1.5 dispensada.`);
+        }
 
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
         // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).

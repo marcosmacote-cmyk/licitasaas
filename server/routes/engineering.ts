@@ -900,18 +900,34 @@ router.post('/ai-populate', async (req: any, res: any) => {
             });
 
             // ═══════════════════════════════════════════════════
-            // PASSO 1: Tentar usar itens_licitados do V2 (JÁ extraídos pela análise PNCP)
-            // Isso evita chamar a IA novamente e usa dados estruturados com códigos
+            // PASSO 1: Tentar usar dados de engenharia pré-extraídos (Etapa 1.5)
+            // A Etapa 1.5 do pipeline PNCP usa o engineeringPromptV1 dedicado
+            // para extrair a planilha completa. Se disponível, é SEMPRE superior.
             // ═══════════════════════════════════════════════════
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
-            const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
             
-            if (Array.isArray(itensV2) && itensV2.length > 1) {
-                console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2`);
+            // Priority 1: Use _engineeringBudgetItems from Etapa 1.5 (dedicated extraction)
+            const engBudgetItems = schemaV2?._engineeringBudgetItems;
+            if (Array.isArray(engBudgetItems) && engBudgetItems.length > 5) {
+                console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
+                await enrichWithOfficialPrices(engBudgetItems);
+                return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
+            }
+
+            // Priority 2: Use V2 itens_licitados if they have enough items
+            // Threshold raised from >1 to >=10 to prevent partial extractions from
+            // being accepted as valid (e.g., 2 of 59 items would pass the old guard)
+            const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
+            const MIN_V2_ITEMS_FOR_ENGINEERING = 10;
+            
+            if (Array.isArray(itensV2) && itensV2.length >= MIN_V2_ITEMS_FOR_ENGINEERING) {
+                console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING})`);
                 
                 const items = await mapV2ToEngineering(itensV2);
                 return res.json({ items, source: 'v2_itens_licitados', count: items.length });
             }
+
+            console.log(`[Engineering AI-Populate] ⚠️ Dados V2 insuficientes (engBudget=${engBudgetItems?.length || 0}, itensV2=${itensV2?.length || 0}). Usando fallback IA.`);
 
             // ═══════════════════════════════════════════════════
             // PASSO 2: Fallback — combinar TODAS as fontes de texto para AI extraction
