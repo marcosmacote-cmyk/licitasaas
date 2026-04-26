@@ -820,20 +820,19 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         logger.info(`[PNCP-V2] 📋 itens_licitados: ${stage1ItensCount} itens extraídos pela Etapa 1`);
 
         // ── ETAPA 1.5: EXTRAÇÃO DEDICADA DE PLANILHA ORÇAMENTÁRIA (ENGENHARIA) ──
-        // O V2_EXTRACTION_PROMPT (83KB) pede 14 seções simultâneas. Para editais de engenharia,
-        // a planilha orçamentária (que pode ter 50-200 itens) compete por tokens de output com
-        // habilitação, prazos e evidências — e quase sempre é truncada.
-        // Solução: uma segunda chamada Gemini com o prompt especializado (engineeringPromptV1)
-        // que foca EXCLUSIVAMENTE na extração tabular da planilha.
+        // A E1 extrai itens em formato genérico (itemNumber, description, unit, referencePrice).
+        // O módulo de engenharia precisa de metadados ricos: sourceCode (SINAPI/SEINFRA),
+        // sourceName, type (ETAPA/SUBETAPA/COMPOSICAO), e insumos detalhados.
+        // Portanto, para processos de engenharia, SEMPRE executamos a E1.5 — ela não compete
+        // com a E1, ela ENRIQUECE os dados com metadados que só o prompt especializado extrai.
         const detectedTipoObjeto = (extractionJson.process_identification?.tipo_objeto || '').toLowerCase();
         const isEngineeringProcess = detectedTipoObjeto.includes('engenharia') || detectedTipoObjeto.includes('obra');
-        const MIN_ENGINEERING_ITEMS = 10; // Planilhas de engenharia têm tipicamente 20-200 itens
 
-        if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS) {
+        if (isEngineeringProcess) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
             const ENG_BUDGET_TIMEOUT_MS = 120_000; // 120s — planilhas pesadas (100+ itens) precisam de ~60-100s no Gemini
-            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS} mínimo. Disparando extração dedicada (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
+            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
                 // Race the extraction against a hard timeout to prevent pipeline hangs
@@ -848,7 +847,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     }
                 }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'engineering_budget_extraction' } });
                 // 1 retry only — this is a bonus step, not critical path. 
-                // With 3 retries × 3 min timeout + fallback cascade = 15+ min hang.
+                // With 3 retries × 5 min timeout + fallback cascade = 15+ min hang.
 
                 const engTimeoutPromise = new Promise<null>((resolve) => {
                     setTimeout(() => {
@@ -867,7 +866,14 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                         const engData = engParseResult.data;
                         const engItems = engData?.engineeringItems || [];
 
-                        if (engItems.length > stage1ItensCount) {
+                        // Accept E1.5 result if it has engineering metadata (codes, sources, types)
+                        // Even if E1 had more items, E1.5 items are richer for engineering
+                        const hasEngMetadata = engItems.some((it: any) => 
+                            it.sourceName && it.sourceName !== 'PROPRIA' || it.code || it.type
+                        );
+                        const shouldReplace = engItems.length > 0 && (hasEngMetadata || engItems.length > stage1ItensCount);
+
+                        if (shouldReplace) {
                             // Also include ETAPA/SUBETAPA as groupers (preserving hierarchy)
                             const allItensWithGroupers = engItems.map((it: any) => ({
                                 itemNumber: it.item || '',
@@ -893,10 +899,11 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
 
                             stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
                             modelsUsed.push(`${PIPELINE_MODELS.extraction}(eng-budget)`);
-                            logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} na Etapa 1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}`);
+                            const withCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
+                            logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} genéricos na E1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}, Com código oficial: ${withCodes}`);
                         } else {
                             stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                            logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não melhorou: ${engItems.length} itens (Etapa 1 tinha ${stage1ItensCount}). Mantendo Etapa 1.`);
+                            logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não trouxe metadados de engenharia: ${engItems.length} itens, hasEngMetadata=${hasEngMetadata}. Mantendo ${stage1ItensCount} itens da Etapa 1.`);
                         }
                     }
                 } else {
@@ -910,8 +917,6 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                 // Non-fatal: pipeline continues with whatever Stage 1 extracted
                 v2Result.confidence.warnings.push(`Extração dedicada de engenharia falhou: ${engErr.message}. Planilha pode estar incompleta.`);
             }
-        } else if (isEngineeringProcess) {
-            logger.info(`[PNCP-V2] 🏗️ Engenharia detectada, mas Etapa 1 já extraiu ${stage1ItensCount} itens (≥ ${MIN_ENGINEERING_ITEMS}). Etapa 1.5 dispensada.`);
         }
 
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
