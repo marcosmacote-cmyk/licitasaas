@@ -656,17 +656,16 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
         // ═══════════════════════════════════════════════════════════════════════
         
-        // ── MODEL CONFIGURATION (V5.2 — Hybrid: Gemini multimodal + DeepSeek text) ──
-        // V5.2: Each engine where it excels:
-        //   E1 (Extraction): Gemini — ONLY model that reads scanned PDF tables
-        //   E3 (Risk Review): DeepSeek — text-only, 2x faster, cheaper
+        // ── MODEL CONFIGURATION (V5.3 — Flash-Lite + DeepSeek hybrid) ──
+        // V5.3: gemini-2.5-flash-lite for E1 (faster extraction, ~30-50% less latency)
+        //       DeepSeek for E3 (text-only risk analysis, 2x faster)
         const useDeepSeek = isDeepSeekAvailable();
         const PIPELINE_MODELS = {
-            extraction: 'gemini-2.5-flash',                                     // Etapa 1: multimodal PDF parsing (irreplaceable)
+            extraction: 'gemini-2.5-flash-lite',                                // Etapa 1: faster multimodal PDF parsing
             riskReview: useDeepSeek ? 'deepseek-v4' : 'gemini-2.5-flash',       // Etapa 3: text-only → DeepSeek preferred
             riskReviewFallback: 'gemini-2.5-flash',                             // Etapa 3: fallback if DeepSeek fails
         };
-        logger.info(`[PNCP-V2] 🤖 V5.2 Híbrido: E1=${PIPELINE_MODELS.extraction} (multimodal) | E3=${PIPELINE_MODELS.riskReview}${useDeepSeek ? ' (DeepSeek)' : ''}`);
+        logger.info(`[PNCP-V2] 🤖 V5.3 Flash-Lite+DeepSeek: E1=${PIPELINE_MODELS.extraction} | E3=${PIPELINE_MODELS.riskReview}${useDeepSeek ? ' (DeepSeek)' : ''}`);
 
         sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
 
@@ -1392,7 +1391,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     const pdfBuffer = Buffer.from(pdfResp.data as ArrayBuffer);
                     logger.info(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
 
-                    const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras.
+                    const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras. (V5.3)
 
 Analise o PDF e extraia TODOS os itens/lotes com preço.
 
