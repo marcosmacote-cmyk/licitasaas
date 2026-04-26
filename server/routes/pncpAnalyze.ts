@@ -139,7 +139,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
     res.on('finish', () => clearInterval(sseKeepAlive));
 
     try {
-        const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
+        const { orgao_cnpj, ano, numero_sequencial, link_sistema, objeto_resumido } = req.body;
         if (!orgao_cnpj || !ano || !numero_sequencial) {
             return sendError('orgao_cnpj, ano e numero_sequencial são obrigatórios');
         }
@@ -749,6 +749,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         const t1Start = Date.now();
         let stage1Models: string[] = [];
         const quickTitles = arquivos.map(a => (a.titulo || a.nomeArquivo || '').toLowerCase());
+        if (objeto_resumido) quickTitles.push(objeto_resumido.toLowerCase());
         const isEngineeringHeuristic = quickTitles.some(t => t.includes('engenharia') || t.includes('obra') || t.includes('reforma') || t.includes('planilha') || t.includes('arquitetura') || t.includes('pavimenta') || t.includes('construc'));
 
         try {
@@ -906,7 +907,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS && !stage1Models.some(m => m.includes('budget'))) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 60_000; 
+            const ENG_BUDGET_TIMEOUT_MS = 150_000; 
             logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS}. Disparando extração dedicada Safety Net (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
