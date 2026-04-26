@@ -477,6 +477,20 @@ router.get('/jobs/', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ── Cancel a running/queued job ──
+router.delete('/jobs/:jobId/cancel', authenticateToken, async (req: any, res) => {
+    try {
+        const { cancelJob } = require('../services/backgroundJobService');
+        const cancelled = await cancelJob(req.params.jobId, req.user.tenantId);
+        if (!cancelled) {
+            return res.status(404).json({ error: 'Job não encontrado ou já finalizado' });
+        }
+        res.json({ ok: true, message: 'Job cancelado com sucesso' });
+    } catch (err: any) {
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LEGACY: Synchronous V2 Pipeline (preserved as fallback)
 // ═══════════════════════════════════════════════════════════════════════════

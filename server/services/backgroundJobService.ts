@@ -308,21 +308,54 @@ export async function pickNextJob(): Promise<any | null> {
 }
 
 /**
- * Cleanup: expire stuck PROCESSING jobs (>5 min) and old completed jobs (>7 days)
+ * Cancel a specific job (mark as FAILED with user-cancelled reason)
+ */
+export async function cancelJob(jobId: string, tenantId: string): Promise<boolean> {
+    const job = await prisma.backgroundJob.findFirst({
+        where: { id: jobId, tenantId, status: { in: ['QUEUED', 'PROCESSING'] } }
+    });
+    if (!job) return false;
+
+    await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: {
+            status: 'FAILED',
+            error: 'Cancelado pelo usuário',
+            completedAt: new Date(),
+        }
+    });
+
+    logger.info(`[BackgroundJob] Cancelled by user: ${jobId}`);
+
+    pushEventToTenant(tenantId, {
+        type: 'job_failed',
+        jobId,
+        jobType: job.type as JobType,
+        targetId: job.targetId || undefined,
+        targetTitle: job.targetTitle || undefined,
+        error: 'Cancelado pelo usuário',
+        timestamp: new Date().toISOString(),
+    });
+
+    return true;
+}
+
+/**
+ * Cleanup: expire stuck PROCESSING jobs (>15 min) and old completed jobs (>7 days)
  */
 export async function cleanupStalledJobs(): Promise<number> {
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     // Expire stuck jobs
     const stalled = await prisma.backgroundJob.updateMany({
         where: {
             status: 'PROCESSING',
-            updatedAt: { lt: fiveMinAgo }
+            updatedAt: { lt: fifteenMinAgo }
         },
         data: {
             status: 'FAILED',
-            error: 'Timeout — job exceeded 5 minute limit',
+            error: 'Timeout — job exceeded 15 minute limit',
             completedAt: new Date(),
         }
     });

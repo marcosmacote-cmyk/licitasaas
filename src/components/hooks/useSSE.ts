@@ -178,3 +178,15 @@ export async function fetchJobList(): Promise<any[]> {
     if (!res.ok) return [];
     return res.json();
 }
+
+/**
+ * Cancel a running/queued job.
+ */
+export async function cancelJob(jobId: string): Promise<boolean> {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs/${jobId}/cancel`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return res.ok;
+}

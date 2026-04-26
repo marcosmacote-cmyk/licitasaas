@@ -7,8 +7,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Bell, CheckCircle, AlertCircle, Loader2, Brain, FileText, Gavel, ScanSearch, X } from 'lucide-react';
-import { useSSE, fetchJobList, type JobEvent } from './hooks/useSSE';
+import { Bell, CheckCircle, AlertCircle, Loader2, Brain, FileText, Gavel, ScanSearch, X, StopCircle } from 'lucide-react';
+import { useSSE, fetchJobList, cancelJob, type JobEvent } from './hooks/useSSE';
 import { useToast } from './ui';
 
 interface NotificationItem {
@@ -215,6 +215,19 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
         if (notif.status === 'completed' && notif.targetId && onNavigateToProcess) {
             onNavigateToProcess(notif.targetId, notif.type, notif.jobId);
             setIsOpen(false);
+        }
+    };
+
+    const handleCancelJob = async (e: React.MouseEvent, notif: NotificationItem) => {
+        e.stopPropagation();
+        const ok = await cancelJob(notif.jobId);
+        if (ok) {
+            toast.info('Tarefa cancelada');
+            setNotifications(prev =>
+                prev.map(n => n.jobId === notif.jobId ? { ...n, status: 'failed' as const, message: 'Cancelado pelo usuário', read: true } : n)
+            );
+        } else {
+            toast.error('Não foi possível cancelar a tarefa');
         }
     };
 
@@ -435,6 +448,32 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                                                     transition: 'width 0.5s ease',
                                                 }} />
                                             </div>
+                                        )}
+                                        {(notif.status === 'processing' || notif.status === 'queued') && (
+                                            <button
+                                                onClick={(e) => handleCancelJob(e, notif)}
+                                                title="Cancelar tarefa"
+                                                style={{
+                                                    marginTop: '6px',
+                                                    padding: '3px 10px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 600,
+                                                    color: 'var(--color-danger)',
+                                                    background: 'rgba(239,68,68,0.08)',
+                                                    border: '1px solid rgba(239,68,68,0.2)',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                onMouseOver={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
+                                                onMouseOut={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                                            >
+                                                <StopCircle size={12} />
+                                                Cancelar
+                                            </button>
                                         )}
                                     </div>
                                 </div>
