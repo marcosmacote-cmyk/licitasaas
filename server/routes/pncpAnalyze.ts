@@ -759,7 +759,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     systemPrompt: V2_EXTRACTION_PROMPT,
                     userPrompt: extractionUserPrompt,
                     pdfParts,
-                    zeroxMarkdown: zeroxUsed ? zeroxMarkdown : undefined,
+                    zeroxMarkdown: zeroxUsed ? zeroxMarkdown || undefined : undefined,
                     temperature: 0.05,
                     maxTokens: 65536,
                     stageName: 'PNCP Etapa 1 (Extração)',
