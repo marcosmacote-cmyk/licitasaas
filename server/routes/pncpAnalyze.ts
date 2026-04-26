@@ -657,11 +657,11 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         
         // ── MODEL CONFIGURATION (V5.3 — Flash-Lite + DeepSeek hybrid) ──
-        // V5.3: gemini-2.5-flash-lite for E1 (faster extraction, ~30-50% less latency)
+        // V5.3: gemini-2.0-flash-lite for E1 (faster extraction, ~30-50% less latency)
         //       DeepSeek for E3 (text-only risk analysis, 2x faster)
         const useDeepSeek = isDeepSeekAvailable();
         const PIPELINE_MODELS = {
-            extraction: 'gemini-2.5-flash-lite',                                // Etapa 1: faster multimodal PDF parsing
+            extraction: 'gemini-2.0-flash-lite',                                // Etapa 1: faster multimodal PDF parsing
             riskReview: useDeepSeek ? 'deepseek-v4' : 'gemini-2.5-flash',       // Etapa 3: text-only → DeepSeek preferred
             riskReviewFallback: 'gemini-2.5-flash',                             // Etapa 3: fallback if DeepSeek fails
         };
