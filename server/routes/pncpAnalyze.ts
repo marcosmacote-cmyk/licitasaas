@@ -832,7 +832,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess && stage1ItensCount < MIN_ENGINEERING_ITEMS) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 30_000; // 30s hard cap — total pipeline must stay under 120s
+            const ENG_BUDGET_TIMEOUT_MS = 120_000; // 120s — planilhas pesadas (100+ itens) precisam de ~60-100s no Gemini
             logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_licitados=${stage1ItensCount} < ${MIN_ENGINEERING_ITEMS} mínimo. Disparando extração dedicada (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
