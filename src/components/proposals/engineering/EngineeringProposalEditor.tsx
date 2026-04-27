@@ -11,7 +11,7 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { applyPrecision } from './precisionEngine';
-import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria } from './types';
+import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
 import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
 import * as XLSX from 'xlsx';
 
@@ -76,16 +76,36 @@ function parseLocaleNumber(value: unknown, fallback = 0): number {
 
 const AUDIT_META = {
     OK: { label: 'OK', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.08)' },
-    DIVERGENT: { label: 'Divergente', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
-    BASE_INCOMPATIVEL: { label: 'Base', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
+    DIVERGENT: { label: 'Divergente', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
+    BASE_INCOMPATIVEL: { label: 'Base incompat.', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
     SEM_MATCH: { label: 'Sem match', color: '#64748b', bg: 'rgba(100,116,139,0.10)' },
 } as const;
 
-function renderPriceAudit(item: EngItem) {
+function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
     const audit = item.priceAudit;
+    if (!audit || typeof audit.matchedUnitCost !== 'number' || audit.matchedUnitCost <= 0) return audit;
+
+    const extractedUnitCost = Number(item.unitCost) || 0;
+    const matchedUnitCost = audit.matchedUnitCost;
+    const deltaValue = extractedUnitCost - matchedUnitCost;
+    const deltaPercent = matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+    const hasRelevantDelta = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue) > 0.01;
+    const hasBaseWarnings = (audit.warnings || []).length > 0;
+
+    return {
+        ...audit,
+        extractedUnitCost,
+        deltaValue,
+        deltaPercent,
+        status: hasRelevantDelta ? 'DIVERGENT' : hasBaseWarnings ? 'BASE_INCOMPATIVEL' : 'OK',
+    };
+}
+
+function renderPriceAudit(item: EngItem) {
+    const audit = refreshPriceAudit(item);
     if (!audit) return <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>-</span>;
     const meta = AUDIT_META[audit.status] || AUDIT_META.SEM_MATCH;
-    const delta = typeof audit.deltaPercent === 'number' ? ` (${audit.deltaPercent.toFixed(2)}%)` : '';
+    const delta = typeof audit.deltaPercent === 'number' ? ` (${audit.deltaPercent > 0 ? '+' : ''}${audit.deltaPercent.toFixed(2)}%)` : '';
     const title = [
         audit.matchedSourceName ? `Base: ${audit.matchedSourceName} ${audit.matchedReference || ''}` : '',
         typeof audit.matchedUnitCost === 'number' ? `Preço base: ${fmt(audit.matchedUnitCost)}` : '',
@@ -160,12 +180,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
         return its.map(it => {
             if (isGrouper(it.type)) return it;
+            const audited = { ...it, priceAudit: refreshPriceAudit(it) };
             // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
-            const itemBdi = config.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO'
+            const itemBdi = config.bdiDiferenciado && audited.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
                 : _bdi;
-            const up = applyBdi(it.unitCost, itemBdi, config.precision);
-            return { ...it, unitPrice: up, totalPrice: applyPrecision(it.quantity * up, config) };
+            const up = applyBdi(audited.unitCost, itemBdi, config.precision);
+            return { ...audited, unitPrice: up, totalPrice: applyPrecision(audited.quantity * up, config) };
         });
     }, []);
 
@@ -325,6 +346,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const itemBdi = resolveItemBdi(updated);
                 updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
                 updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                updated.priceAudit = refreshPriceAudit(updated);
             }
             return updated;
         }));

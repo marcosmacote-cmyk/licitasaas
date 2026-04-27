@@ -1544,10 +1544,10 @@ async function enrichWithOfficialPrices(items: any[], engineeringConfig?: any): 
         const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
         const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
         const hasRelevantDelta = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue || 0) > 0.01;
-        const status: EngineeringPriceAuditStatus = best.warnings.length > 0
-            ? 'BASE_INCOMPATIVEL'
-            : hasRelevantDelta
-                ? 'DIVERGENT'
+        const status: EngineeringPriceAuditStatus = hasRelevantDelta
+            ? 'DIVERGENT'
+            : best.warnings.length > 0
+                ? 'BASE_INCOMPATIVEL'
                 : 'OK';
 
         // Mantém o preço extraído do edital. Só completa metadados seguros.
