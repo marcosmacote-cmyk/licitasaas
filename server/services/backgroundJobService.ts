@@ -23,7 +23,7 @@ const prisma = new PrismaClient();
 // Types
 // ═══════════════════════════════════════════
 
-export type JobType = 'edital_analysis' | 'pncp_analysis' | 'oracle' | 'proposal_populate' | 'petition' | 'declaration';
+export type JobType = 'edital_analysis' | 'pncp_analysis' | 'oracle' | 'proposal_populate' | 'petition' | 'declaration' | 'engineering_extraction';
 export type JobStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface JobSubmission {

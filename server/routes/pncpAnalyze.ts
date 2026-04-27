@@ -53,6 +53,7 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import https from 'https';
 import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -829,94 +830,39 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         const isEngineeringProcess = detectedTipoObjeto.includes('engenharia') || detectedTipoObjeto.includes('obra');
 
         if (isEngineeringProcess) {
-            sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
-            const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 300_000; // 300s (5min) — R2-R6 analysis: extração leva 200-270s para PDFs de 22MB com 250+ itens. 120s/180s/240s todos insuficientes.
-            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5-A: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
-
-            try {
-                // Race the extraction against a hard timeout to prevent pipeline hangs
-                const engExtractionPromise = callGeminiWithRetry(ai.models, {
-                    model: PIPELINE_MODELS.extraction,
-                    contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
-                    config: {
-                        systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                        temperature: 0.1,
-                        maxOutputTokens: 65536,
-                        responseMimeType: 'application/json'
-                    }
-                }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'engineering_budget_extraction' } });
-                // 1 retry only — this is a bonus step, not critical path. 
-                // With 3 retries × 5 min timeout + fallback cascade = 15+ min hang.
-
-                const engTimeoutPromise = new Promise<null>((resolve) => {
-                    setTimeout(() => {
-                        logger.warn(`[PNCP-V2] ⏱️ Etapa 1.5 TIMEOUT (${ENG_BUDGET_TIMEOUT_MS / 1000}s) — continuando com itens da Etapa 1`);
-                        resolve(null);
-                    }, ENG_BUDGET_TIMEOUT_MS);
-                });
-
-                const engExtractionResponse = await Promise.race([engExtractionPromise, engTimeoutPromise]);
-
-                if (engExtractionResponse) {
-                    const engText = engExtractionResponse.text;
-                    if (engText) {
-                        const engParseResult = robustJsonParseDetailed(engText, 'PNCP-V2-Engineering-Budget');
-                        if (engParseResult.repaired) pipelineHealth.parseRepairs++;
-                        const engData = engParseResult.data;
-                        const engItems = engData?.engineeringItems || [];
-
-                        // Accept E1.5 result if it has engineering metadata (codes, sources, types)
-                        // Even if E1 had more items, E1.5 items are richer for engineering
-                        const hasEngMetadata = engItems.some((it: any) => 
-                            it.sourceName && it.sourceName !== 'PROPRIA' || it.code || it.type
-                        );
-                        const shouldReplace = engItems.length > 0 && (hasEngMetadata || engItems.length > stage1ItensCount);
-
-                        if (shouldReplace) {
-                            // Also include ETAPA/SUBETAPA as groupers (preserving hierarchy)
-                            const allItensWithGroupers = engItems.map((it: any) => ({
-                                itemNumber: it.item || '',
-                                sourceCode: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.code || ''),
-                                sourceBase: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.sourceName || ''),
-                                description: it.description || '',
-                                unit: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.unit || 'UN'),
-                                quantity: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.quantity) || 1),
-                                referencePrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitCost) || 0),
-                                multiplier: 1,
-                                multiplierLabel: '',
-                                _engineeringType: it.type, // Preserve type info for downstream
-                            }));
-
-                            // Replace itens_licitados with the complete extraction
-                            if (!v2Result.proposal_analysis) {
-                                v2Result.proposal_analysis = {} as any;
-                            }
-                            v2Result.proposal_analysis.itens_licitados = allItensWithGroupers;
-
-                            // Also store the full engineering extraction for ai-populate to use directly
-                            (v2Result as any)._engineeringBudgetItems = engItems;
-
-                            stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                            modelsUsed.push(`${PIPELINE_MODELS.extraction}(eng-budget)`);
-                            const withCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
-                            logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${stageTimes.engineering_budget.toFixed(1)}s — ${engItems.length} itens de engenharia (era ${stage1ItensCount} genéricos na E1). Composições: ${engItems.filter((it: any) => it.type === 'COMPOSICAO').length}, Etapas: ${engItems.filter((it: any) => it.type === 'ETAPA').length}, Com código oficial: ${withCodes}`);
-                        } else {
-                            stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                            logger.info(`[PNCP-V2] ℹ️ Etapa 1.5 não trouxe metadados de engenharia: ${engItems.length} itens, hasEngMetadata=${hasEngMetadata}. Mantendo ${stage1ItensCount} itens da Etapa 1.`);
-                        }
-                    }
-                } else {
-                    // Timeout hit — engExtractionPromise still running in background but we move on
-                    stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                    v2Result.confidence.warnings.push(`Extração dedicada de engenharia excedeu ${ENG_BUDGET_TIMEOUT_MS / 1000}s. Planilha pode estar incompleta — use "Popular via IA" no módulo de Proposta.`);
-                }
-            } catch (engErr: any) {
-                stageTimes.engineering_budget = (Date.now() - t15Start) / 1000;
-                logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou (${engErr.message}) — mantendo ${stage1ItensCount} itens da Etapa 1. Pipeline continua.`);
-                // Non-fatal: pipeline continues with whatever Stage 1 extracted
-                v2Result.confidence.warnings.push(`Extração dedicada de engenharia falhou: ${engErr.message}. Planilha pode estar incompleta.`);
-            }
+            // ═══════════════════════════════════════════════════════════════
+            // E1.5-A ASYNC: Extração de engenharia desacoplada do pipeline principal
+            // 
+            // MOTIVO: A extração de 250+ itens com códigos (SINAPI/SEINFRA) de PDFs 
+            // de 22MB leva 200-300s. Isso bloqueava o pipeline por 5-9 minutos.
+            // Resultados de 7 rodadas: apenas 29% de sucesso com timeout síncrono.
+            // 
+            // NOVA ABORDAGEM: O pipeline retorna as funções vitais em ~200s.
+            // Um background job processa a planilha SEM timeout de race.
+            // Quando completa, auto-atualiza o schemaV2 e notifica via SSE.
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`[PNCP-V2] 🏗️ Engenharia detectada (tipo=${detectedTipoObjeto}). Extração de planilha será feita em BACKGROUND (sem bloqueio).`);
+            
+            // Flag para disparar job APÓS o pipeline salvar o resultado
+            (v2Result as any)._pendingEngineeringExtraction = true;
+            
+            // Collect PDF URLs for the background job
+            const planilhaUrls = pncpAttachments
+                .filter((a: any) => a.ativo && a.url && (
+                    a.purpose === 'planilha_orcamentaria' ||
+                    a.purpose === 'composicao_custos' ||
+                    a.purpose === 'anexo_geral'
+                ))
+                .map((a: any) => a.url);
+            (v2Result as any)._engineeringPdfUrls = planilhaUrls;
+            
+            // Inform the user
+            if (!v2Result.confidence.warnings) v2Result.confidence.warnings = [];
+            v2Result.confidence.warnings.push(
+                'Planilha orçamentária de engenharia será extraída em background (~3-5 min). ' +
+                'Você será notificado quando estiver pronta.'
+            );
+            sendProgress(5, 'Engenharia detectada — extração de planilha em background', 'Etapa 1.5 — Background Job');
         }
 
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
@@ -2082,6 +2028,51 @@ Responda APENAS com JSON array:
         }).catch(() => {}); // Never block pipeline
 
         sendResult(finalPayload);
+
+        // ── Engineering Background Job (fire-and-forget) ──
+        // If engineering was detected, dispatch a background job to extract the full planilha.
+        // This runs AFTER the user gets their analysis result (~200s) and does NOT block anything.
+        if ((v2Result as any)._pendingEngineeringExtraction) {
+            const pdfUrls = (v2Result as any)._engineeringPdfUrls || [];
+            // We need the biddingId — it's saved by the frontend after receiving the result.
+            // Use a short delay to ensure the frontend has persisted the analysis.
+            setTimeout(async () => {
+                try {
+                    // Find the bidding that was just saved (by PNCP source data)
+                    const processNumber = v2Result.process_identification?.numero_processo || '';
+                    const orgao = v2Result.process_identification?.orgao || '';
+                    
+                    // Look for the most recently updated bidding matching this process
+                    const recentBidding = await prisma.biddingProcess.findFirst({
+                        where: {
+                            tenantId: req.user.tenantId,
+                            aiAnalysis: { isNot: null },
+                        },
+                        orderBy: { updatedAt: 'desc' },
+                        select: { id: true, title: true },
+                    });
+                    
+                    if (recentBidding) {
+                        const engJob = await submitJob({
+                            tenantId: req.user.tenantId,
+                            userId: req.user.id,
+                            type: 'engineering_extraction' as any,
+                            targetId: recentBidding.id,
+                            targetTitle: `Planilha Orçamentária — ${recentBidding.title || processNumber}`,
+                            input: {
+                                biddingId: recentBidding.id,
+                                pdfUrls,
+                            }
+                        });
+                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.id} for bidding ${recentBidding.id} (${pdfUrls.length} PDFs)`);
+                    } else {
+                        logger.warn(`[PNCP-V2] ⚠️ Could not find recently saved bidding to dispatch engineering job`);
+                    }
+                } catch (err: any) {
+                    logger.warn(`[PNCP-V2] ⚠️ Failed to dispatch engineering BG job: ${err.message}`);
+                }
+            }, 5000); // 5s delay to allow frontend save
+        }
 
     } catch (error: any) {
         logger.error('[PNCP-V2] Error:', error?.message || error);

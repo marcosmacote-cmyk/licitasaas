@@ -47,6 +47,7 @@ import { startOpportunityScanner } from "./services/monitoring/opportunity-scann
 import { startAllPollers } from "./services/monitoring/pollers";
 import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "./services/backgroundJobService";
 import { registerJobHandler, startJobWorker } from "./services/backgroundJobWorker";
+import { engineeringExtractionHandler } from "./services/engineeringExtractionHandler";
 import { handleApiError } from "./middlewares/errorHandler";
 import express from 'express';
 import dotenv from 'dotenv';
@@ -935,6 +936,8 @@ app.listen(PORT, async () => {
             clearInterval(progressTimer);
         }
     });
+
+    registerJobHandler('engineering_extraction', engineeringExtractionHandler);
 
     startJobWorker();
     logger.info('[BackgroundJob] 🚀 Worker started — async AI operations enabled');
