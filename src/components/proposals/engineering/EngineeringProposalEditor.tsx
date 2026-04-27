@@ -219,9 +219,30 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const insumos = mapped.filter((m: EngItem) => m.type === 'INSUMO').length;
                 const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
-            } else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> IA não encontrou itens orçamentários</span>); }
-        } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
-        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(null), 8000); }
+            } else if (data.source === 'pending_background_job') {
+                setSaveMsg(
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
+                        <Loader2 size={14} className="spin" /> {data.message}
+                    </span>
+                );
+            } else { 
+                setSaveMsg(
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
+                        <AlertTriangle size={14} /> IA não encontrou itens orçamentários
+                    </span>
+                ); 
+            }
+        } catch (e: any) { 
+            setSaveMsg(
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}>
+                    <XCircle size={14} /> {e.message}
+                </span>
+            ); 
+        }
+        finally { 
+            setIsExtracting(false); 
+            setTimeout(() => setSaveMsg(null), 8000); 
+        }
     };
 
     // AI composition extraction

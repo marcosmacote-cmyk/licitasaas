@@ -959,40 +959,43 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 });
             }
 
-            console.log(`[Engineering AI-Populate] ⚠️ Sem job ativo. Usando fallback IA.`);
+            console.log(`[Engineering AI-Populate] ⚠️ Sem job ativo. Iniciando extração em background.`);
 
-            // ═══════════════════════════════════════════════════
-            // PASSO 2: Fallback — combinar TODAS as fontes de texto para AI extraction
-            // Engenharia precisa do máximo de contexto possível
-            // ═══════════════════════════════════════════════════
-            const textParts: string[] = [];
-            
-            // Priority 1: Full summary has the most comprehensive text
-            if (bidding?.aiAnalysis?.fullSummary) textParts.push(bidding.aiAnalysis.fullSummary);
-            // Priority 2: Bidding items (planilha, quantitativos)
-            if (bidding?.aiAnalysis?.biddingItems) textParts.push(bidding.aiAnalysis.biddingItems);
-            // Priority 3: Pricing considerations (BDI, custos)
-            if (bidding?.aiAnalysis?.pricingConsiderations) textParts.push(bidding.aiAnalysis.pricingConsiderations);
-            // Priority 4: Required documents (pode conter referências a itens)
-            if (bidding?.aiAnalysis?.requiredDocuments) textParts.push(bidding.aiAnalysis.requiredDocuments);
-            
-            // Priority 5: V2 structured data (serialize as context)
-            if (schemaV2) {
-                const v2Parts: string[] = [];
-                if (schemaV2.proposal_analysis?.itens_licitados?.length > 0) {
-                    v2Parts.push('ITENS LICITADOS (V2):\n' + JSON.stringify(schemaV2.proposal_analysis.itens_licitados, null, 2));
-                }
-                if (schemaV2.proposal_analysis?.proposta_comercial?.length > 0) {
-                    v2Parts.push('PROPOSTA COMERCIAL:\n' + JSON.stringify(schemaV2.proposal_analysis.proposta_comercial, null, 2));
-                }
-                if (v2Parts.length > 0) textParts.push(v2Parts.join('\n\n'));
-            }
-            
-            extractionText = textParts.join('\n\n═══════════════════════════════════════\n\n');
+            // PASSO 2: Criar o job em background se ainda não existe
+            const pdfUrls = schemaV2?.pncp_source?.attachments
+                ?.filter((a: any) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' || a.purpose === 'composicao_custos' || a.purpose === 'anexo_geral' || a.title?.toLowerCase().includes('planilha')))
+                ?.map((a: any) => a.url) || [];
 
-            console.log(`[Engineering AI-Populate] ⚠️ V2 itens_licitados insuficiente (${itensV2?.length || 0}), usando fallback IA com ${textParts.length} fontes, ${extractionText?.length || 0} chars`);
+            const user = req.user || { tenantId: bidding.tenantId, id: 'system' };
+            const { submitJob } = require('../services/backgroundJobService');
+            
+            const newJob = await submitJob({
+                tenantId: user.tenantId,
+                userId: user.id,
+                type: 'engineering_extraction',
+                targetId: biddingId,
+                targetTitle: `Planilha Orçamentária — ${bidding.processNumber || bidding.title || 'Edital'}`,
+                input: {
+                    biddingId,
+                    pdfUrls
+                }
+            });
+
+            return res.status(202).json({
+                items: [],
+                source: 'pending_background_job',
+                count: 0,
+                pendingJob: {
+                    jobId: newJob.jobId,
+                    status: 'QUEUED',
+                    progress: 0,
+                    progressMsg: 'Iniciando extração da planilha de engenharia em background...',
+                },
+                message: 'A planilha orçamentária de engenharia está sendo extraída em background. Aguarde a conclusão e clique em "Extrair" novamente.'
+            });
         }
 
+        // Se NÃO tem biddingId (ex: texto colado direto no front), usa o fallback IA
         if (!extractionText || extractionText.length < 200) {
             // If even combined text is too short, try direct PDF extraction
             console.log(`[Engineering AI-Populate] ⚠️ Texto combinado insuficiente (${extractionText?.length || 0} chars), tentando extração direta dos PDFs do PNCP...`);
