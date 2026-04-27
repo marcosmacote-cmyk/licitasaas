@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -101,11 +101,12 @@ function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
     };
 }
 
-function renderPriceAudit(item: EngItem) {
+function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     const audit = refreshPriceAudit(item);
     if (!audit) return <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>-</span>;
     const meta = AUDIT_META[audit.status] || AUDIT_META.SEM_MATCH;
     const delta = typeof audit.deltaPercent === 'number' ? ` (${audit.deltaPercent > 0 ? '+' : ''}${audit.deltaPercent.toFixed(2)}%)` : '';
+    const hasBasePrice = typeof audit.matchedUnitCost === 'number' && audit.matchedUnitCost > 0;
     const title = [
         audit.matchedSourceName ? `Base: ${audit.matchedSourceName} ${audit.matchedReference || ''}` : '',
         typeof audit.matchedUnitCost === 'number' ? `Preço base: ${fmt(audit.matchedUnitCost)}` : '',
@@ -114,10 +115,22 @@ function renderPriceAudit(item: EngItem) {
     ].filter(Boolean).join('\n');
 
     return (
-        <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
-            {audit.status === 'OK' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
-            {meta.label}{delta}
-        </span>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                {audit.status === 'OK' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                {meta.label}{delta}
+            </span>
+            {hasBasePrice && audit.status !== 'OK' && (
+                <button
+                    type="button"
+                    onClick={onApplyBase}
+                    title={`Aplicar preço da base: ${fmt(audit.matchedUnitCost || 0)}`}
+                    style={{ border: 'none', background: 'transparent', color: meta.color, cursor: 'pointer', fontSize: '0.6rem', fontWeight: 800, padding: 0, lineHeight: 1 }}
+                >
+                    usar base {fmt(audit.matchedUnitCost || 0)}
+                </button>
+            )}
+        </div>
     );
 }
 
@@ -355,6 +368,29 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     };
 
     const removeItem = (id: string) => { setHasUnsavedChanges(true); setItems(prev => renumberItems(prev.filter(it => it.id !== id))); };
+
+    const applyBasePriceToItem = (id: string) => {
+        setHasUnsavedChanges(true);
+        setItems(prev => prev.map(it => {
+            if (it.id !== id) return it;
+            const audit = refreshPriceAudit(it);
+            const matchedUnitCost = Number(audit?.matchedUnitCost) || 0;
+            if (matchedUnitCost <= 0) return it;
+            const updated = { ...it, unitCost: matchedUnitCost, priceOrigin: 'BASE' as const };
+            const itemBdi = resolveItemBdi(updated);
+            updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+            updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig.precision });
+            updated.priceAudit = refreshPriceAudit(updated);
+            return updated;
+        }));
+    };
+
+    const refreshAllAudits = () => {
+        setHasUnsavedChanges(true);
+        setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig));
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><RefreshCw size={14} /> Auditoria recalculada</span>);
+        setTimeout(() => setSaveMsg(null), 3000);
+    };
 
     const addTypedItem = (type: EngItemType) => {
         const isGroup = isGrouper(type);
@@ -617,6 +653,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </button>
                     <button className={`btn ${activeTab === 'hub_insumos' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('hub_insumos')}>
                         <Package size={15} /> Insumos & CPU
+                    </button>
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={refreshAllAudits} disabled={items.length === 0}>
+                        <RefreshCw size={14} /> Reauditar
                     </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
@@ -965,7 +1004,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it, () => applyBasePriceToItem(it.id))}</td>
                                                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                                     <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                 </td>
