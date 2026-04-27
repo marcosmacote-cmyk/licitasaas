@@ -15,6 +15,26 @@ import { parseAndNormalizeEngineeringExtraction } from '../services/engineering/
 const router = Router();
 const prisma = new PrismaClient();
 
+function refreshSubmittedPriceAudit(item: any) {
+    const audit = item?.priceAudit;
+    const matchedUnitCost = Number(audit?.matchedUnitCost) || 0;
+    if (!audit || matchedUnitCost <= 0) return audit || undefined;
+
+    const extractedUnitCost = Number(item.unitCost) || 0;
+    const deltaValue = extractedUnitCost - matchedUnitCost;
+    const deltaPercent = matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+    const hasPriceDelta = Math.abs(deltaValue) > 0.01;
+    const hasBaseWarnings = Array.isArray(audit.warnings) && audit.warnings.length > 0;
+
+    return {
+        ...audit,
+        extractedUnitCost,
+        deltaValue,
+        deltaPercent,
+        status: hasPriceDelta ? 'DIVERGENT' : hasBaseWarnings ? 'BASE_INCOMPATIVEL' : 'OK',
+    };
+}
+
 /**
  * Baixa os PDFs do edital diretamente do PNCP e prepara para envio inline ao Gemini.
  * Prioriza: Projeto Básico > Planilha Orçamentária > Edital > outros anexos
@@ -826,7 +846,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     officialUnitCost: item.officialUnitCost === undefined ? null : Number(item.officialUnitCost) || 0,
                     officialUnitPrice: item.officialUnitPrice === undefined ? null : Number(item.officialUnitPrice) || 0,
                     officialTotalPrice: item.officialTotalPrice === undefined ? null : Number(item.officialTotalPrice) || 0,
-                    priceAudit: item.priceAudit || undefined,
+                    priceAudit: refreshSubmittedPriceAudit(item),
                     sortOrder: index,
                 }))
             });
@@ -1543,7 +1563,7 @@ async function enrichWithOfficialPrices(items: any[], engineeringConfig?: any): 
         const matchedUnitCost = Number(matched.matchedPrice) || 0;
         const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
         const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-        const hasRelevantDelta = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue || 0) > 0.01;
+        const hasRelevantDelta = Math.abs(deltaValue || 0) > 0.01;
         const status: EngineeringPriceAuditStatus = hasRelevantDelta
             ? 'DIVERGENT'
             : best.warnings.length > 0

@@ -89,7 +89,7 @@ function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
     const matchedUnitCost = audit.matchedUnitCost;
     const deltaValue = extractedUnitCost - matchedUnitCost;
     const deltaPercent = matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-    const hasRelevantDelta = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue) > 0.01;
+    const hasRelevantDelta = Math.abs(deltaValue) > 0.01;
     const hasBaseWarnings = (audit.warnings || []).length > 0;
 
     return {
@@ -224,9 +224,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const handleSave = async () => {
         setIsSaving(true); setSaveMsg(null);
         try {
+            const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
+            setItems(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items, bdiConfig, engineeringConfig, cronogramaData })
+                body: JSON.stringify({ items: itemsToSave, bdiConfig, engineeringConfig, cronogramaData })
             });
             if (res.ok) {
                 const d = await res.json();
@@ -341,7 +343,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setItems(prev => prev.map(it => {
             if (it.id !== id) return it;
             const updated = { ...it, [field]: value };
-            if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') {
+            if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria' || field === 'sourceName' || field === 'code') {
                 if (field === 'unitCost' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
                 const itemBdi = resolveItemBdi(updated);
                 updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
