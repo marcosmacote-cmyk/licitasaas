@@ -263,7 +263,7 @@ async function mergeEngineeringResults(biddingId: string, engItems: any[]): Prom
         ).join('\n');
 
     // 4. Persist to database
-    await prisma.aiAnalysisReport.update({
+    await prisma.aiAnalysis.update({
         where: { id: bidding.aiAnalysis.id },
         data: {
             schemaV2,

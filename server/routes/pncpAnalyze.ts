@@ -2048,7 +2048,7 @@ Responda APENAS com JSON array:
                             tenantId: req.user.tenantId,
                             aiAnalysis: { isNot: null },
                         },
-                        orderBy: { updatedAt: 'desc' },
+                        orderBy: { sessionDate: 'desc' },
                         select: { id: true, title: true },
                     });
                     
@@ -2064,7 +2064,7 @@ Responda APENAS com JSON array:
                                 pdfUrls,
                             }
                         });
-                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.id} for bidding ${recentBidding.id} (${pdfUrls.length} PDFs)`);
+                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${recentBidding.id} (${pdfUrls.length} PDFs)`);
                     } else {
                         logger.warn(`[PNCP-V2] ⚠️ Could not find recently saved bidding to dispatch engineering job`);
                     }
