@@ -831,8 +831,8 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 180_000; // 180s — prompt refinado com extração de códigos é mais pesado para PDFs densos (250+ itens)
-            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
+            const ENG_BUDGET_TIMEOUT_MS = 240_000; // 240s — prompt refinado com extração de códigos denso; R3/R5 timed out em 120s/180s
+            logger.info(`[PNCP-V2] 🏗️ Etapa 1.5-A: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
                 // Race the extraction against a hard timeout to prevent pipeline hangs
@@ -1329,9 +1329,15 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             // download and extract items NOW instead of waiting for ai-populate
             (async () => {
                 const currentItens = v2Result.proposal_analysis?.itens_licitados || [];
+                // Skip if E1.5-A (engineering path) already populated items, OR if E1 found items
                 if (Array.isArray(currentItens) && currentItens.length > 0) {
-                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5-B SKIP — itens_licitados já tem ${currentItens.length} itens`);
                     return { items: currentItens, skipped: true };
+                }
+                // Also skip for engineering processes — E1.5-A handles those with the specialized prompt
+                if (isEngineeringProcess) {
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5-B SKIP — processo de engenharia já tratado pela E1.5-A`);
+                    return { items: [], skipped: true };
                 }
 
                 // Find planilha/budget PDFs from catalog (including excluded-due-to-size ones)
