@@ -425,9 +425,9 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - Se o edital NÃO especificar quantidade mínima, registre: "sem quantitativo mínimo definido"
    EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação asfáltica (parcela de maior relevância) — Quantidade mínima exigida: 3.500,00 m²"
    EXEMPLO ERRADO: "Atestado de capacidade técnica com serviços similares e parcelas de maior relevância"
-8. VISITA TÉCNICA: Pertence a QTO. Deve ser uma exigência com obligation_type="obrigatoria_universal". NUNCA coloque em QTP.
+8. VISITA TÉCNICA: Pertence a QTO. Se o edital permitir "vistoria OU declaração de conhecimento do local", o título deve deixar clara a alternativa ("Visita Técnica ou Declaração do Responsável Técnico") e obligation_type="alternativa". Use "obrigatoria_universal" apenas quando a vistoria presencial for realmente a única forma aceita. NUNCA coloque em QTP.
 9. GARANTIAS: Garantia de proposta, execução, seguro ou caução vão SEMPRE em QEF, nunca em Documentos Complementares (DC).
-10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão. Use "condicional", "se_aplicavel" ou "alternativa" APENAS se o edital for literal sobre a condição ("somente para consórcio", "quando aplicável").
+10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão para exigências que todo licitante deve cumprir. Use "se_aplicavel" para documentos dependentes da forma jurídica do licitante (pessoa física, empresário individual, MEI, sociedade simples, empresa estrangeira, filial/sucursal/agência, cooperativa). Use "condicional", "alternativa", "consorcio" ou "me_epp" quando o edital for literal sobre a condição. Cooperativa NÃO é consórcio.
 11. MULTIPLAS PARCELAS EM QTP: Se o edital exige CAT para 3 parcelas diferentes, crie 3 ITENS de exigência_principal em QTP. Proibido item guarda-chuva.
 12. OBRIGATÓRIOS RFT — A ORDEM HIERÁRQUICA ABAIXO É ESTRITA E INEGOCIÁVEL:
     🚨 ALERTA VERMELHO: É absolutamente INACEITÁVEL omitir Certidões Negativas (CNDs). Você DEVE ler toda a seção de "Regularidade Fiscal e Trabalhista" e transcrever cada uma:
@@ -447,7 +447,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     - NUNCA omita a CND Estadual — se o edital menciona "Fazenda Estadual" ou "tributos estaduais", extraia como item separado.
     ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
     ⚠️ CROSS-CHECK OBRIGATÓRIO: Após preencher RFT, conte os itens. Se RFT tem MENOS de 5 itens para um edital que NÃO é pré-qualificação, ALGO ESTÁ ERRADO — releia a seção de Regularidade Fiscal.
-13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
+13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica". Documentos por tipo societário (PF, MEI, empresário individual, sociedade simples, cooperativa, estrangeira, filial) devem ser extraídos como "se_aplicavel", não como obrigação universal simultânea.
 14. OBRIGATÓRIOS QEF — EXTRAÇÃO COMPLETA INEGOCIÁVEL:
     🚨 ALERTA VERMELHO: QEF com APENAS "Certidão de Falência" é INCOMPLETO. A GRANDE MAIORIA dos editais exige os 3 pilares abaixo. VASCULHE o edital inteiro:
     QEF-01: Balanço Patrimonial e DRE do último exercício social (art. 69, I, Lei 14.133/21)
@@ -484,7 +484,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
     b) Use "prazo_envio_proposta" para datas/horários fixos (ex: "até 09:00 do dia 15/04").
-    c) EXTRAIA SEMPRE os prazos de impugnação e esclarecimento. Se o edital não fixar data específica, calcule: para Pregão/Concorrência (Lei 14.133), impugnação = 3 dias úteis antes da sessão, esclarecimento = 3 dias úteis antes da sessão. Registre como "Até 3 dias úteis antes da sessão (DD/MM/AAAA)" com a data calculada.
+    c) EXTRAIA SEMPRE os prazos de impugnação e esclarecimento. Se o edital não fixar data específica, calcule: para Pregão/Concorrência (Lei 14.133), impugnação = 3 dias úteis antes da sessão, esclarecimento = 3 dias úteis antes da sessão. Conte dias úteis retroativamente sem contar sábado/domingo; a data calculada nunca deve cair em fim de semana. Registre como "Até 3 dias úteis antes da sessão (DD/MM/AAAA)" com a data calculada.
 19. PROPOSTA COMERCIAL ("proposta_comercial") — CLASSIFICAÇÃO ESTRITA:
     ⛔ PC deve conter SOMENTE exigências cuja AUSÊNCIA causa DESCLASSIFICAÇÃO DA PROPOSTA.
     INCLUIR em PC: planilha de preços, composição BDI, catálogos/fichas técnicas exigidos NA PROPOSTA, declarações de garantia de fabricante, carta-proposta, cronograma exigido na proposta, certificações técnicas de PRODUTO (INMETRO, PROCEL) quando exigidos junto à proposta.
@@ -532,7 +532,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "exige_garantia_proposta": null, "garantia_proposta_detalhes": "valor/percentual + fonte do edital (ex: 1% do valor estimado, conforme item 10.3)",
     "exige_garantia_contratual": null, "garantia_contratual_detalhes": "percentual + modalidades + fonte do edital (ex: 5% do valor do contrato, conforme item 15.1)",
     "exige_amostra": null, "amostra_detalhes": "",
-    "tratamento_me_epp": "", "participacao_restrita": "listar vedações separadas por ponto-e-vírgula (ex: Empresas suspensas; Em recuperação judicial sem plano aprovado; Consórcios)",
+    "tratamento_me_epp": "", "participacao_restrita": "listar vedações separadas por ponto-e-vírgula (ex: Empresas suspensas; Em recuperação judicial sem plano aprovado; Consórcios). Não duplique a mesma vedação com sinônimos.",
     "outras_condicoes": []
   },
   "technical_analysis": {
@@ -719,6 +719,7 @@ Você DEVE avaliar CADA um dos seguintes pontos e reportar quando identificar al
 ── REGRAS DE QUALIDADE ──
 
 - Cada ponto crítico DEVE ter source_ref com referência normativa visível (ex: "Edital, item 8.3" ou "TR, seção 5.2.1"). NUNCA deixe vazio.
+- Quando citar IDs de exigências (QTO-11, QTP-01 etc.), confira se o ID existe na estrutura recebida e corresponde ao conteúdo citado. Se houver dúvida, cite apenas source_ref/evidence_refs, não invente ID.
 - Cada ponto DEVE ter evidence_refs vinculando ao evidence_registry.
 - NÃO gere pontos genéricos. Seja ESPECÍFICO: cite o item, a cláusula, o quantitativo.
 - Severidade: baixa (informativo), media (atenção), alta (exige ação), critica (pode inabilitar/desclassificar).

@@ -28,26 +28,131 @@ function stripCodeFences(rawText: string): string {
     return rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 }
 
-function parseLooseJson(rawText: string): unknown {
+function tryParseJson<T = unknown>(value: string): T | null {
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return null;
+    }
+}
+
+function findTopLevelArrayObjects(rawText: string, arrayKey?: string): Array<Record<string, unknown>> {
+    const cleaned = stripCodeFences(rawText);
+    const searchStart = arrayKey ? cleaned.search(new RegExp(`"${arrayKey}"\\s*:`)) : 0;
+    if (searchStart < 0) return [];
+
+    const arrayStart = cleaned.indexOf('[', searchStart);
+    if (arrayStart < 0) return [];
+
+    const objects: Array<Record<string, unknown>> = [];
+    let depth = 0;
+    let objectStart = -1;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = arrayStart + 1; i < cleaned.length; i++) {
+        const char = cleaned[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (char === '\\' && inString) {
+            escaped = true;
+            continue;
+        }
+
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+
+        if (inString) continue;
+
+        if (char === '{') {
+            if (depth === 0) objectStart = i;
+            depth++;
+            continue;
+        }
+
+        if (char === '}') {
+            if (depth <= 0) continue;
+            depth--;
+            if (depth === 0 && objectStart >= 0) {
+                const candidate = cleaned.substring(objectStart, i + 1)
+                    .replace(/,\s*([}\]])/g, '$1');
+                const parsed = tryParseJson<Record<string, unknown>>(candidate);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    objects.push(parsed);
+                }
+                objectStart = -1;
+            }
+        }
+
+        if (char === ']' && depth === 0 && objects.length > 0) break;
+    }
+
+    const seen = new Set(objects.map(object => JSON.stringify(object)));
+    const arrayEnd = cleaned.indexOf(']', arrayStart + 1);
+    const arrayBody = cleaned.substring(arrayStart + 1, arrayEnd > arrayStart ? arrayEnd : cleaned.length);
+    const flatObjectMatches = arrayBody.match(/\{[^{}]*\}/gs) || [];
+
+    for (const match of flatObjectMatches) {
+        const candidate = match.replace(/,\s*([}\]])/g, '$1');
+        const parsed = tryParseJson<Record<string, unknown>>(candidate);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+
+        const signature = JSON.stringify(parsed);
+        if (!seen.has(signature)) {
+            objects.push(parsed);
+            seen.add(signature);
+        }
+    }
+
+    return objects;
+}
+
+function salvageItemsFromMalformedJson(rawText: string, repairs: string[]): unknown | null {
+    for (const key of ITEM_ARRAY_KEYS) {
+        const objects = findTopLevelArrayObjects(rawText, key);
+        if (objects.length > 0) {
+            repairs.push(`salvaged_array:${key}:${objects.length}`);
+            return { engineeringItems: objects };
+        }
+    }
+
+    const objects = findTopLevelArrayObjects(rawText);
+    if (objects.length > 0) {
+        repairs.push(`salvaged_array:unknown:${objects.length}`);
+        return objects;
+    }
+
+    return null;
+}
+
+function parseLooseJson(rawText: string, repairs: string[]): unknown {
     const cleaned = stripCodeFences(rawText);
 
-    try {
-        return JSON.parse(cleaned);
-    } catch { /* continue */ }
+    const direct = tryParseJson(cleaned);
+    if (direct) return direct;
 
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
-        try {
-            return JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
-        } catch { /* continue */ }
+        const parsed = tryParseJson(cleaned.substring(firstBrace, lastBrace + 1));
+        if (parsed) return parsed;
     }
 
     const firstBracket = cleaned.indexOf('[');
     const lastBracket = cleaned.lastIndexOf(']');
     if (firstBracket !== -1 && lastBracket > firstBracket) {
-        return JSON.parse(cleaned.substring(firstBracket, lastBracket + 1));
+        const parsed = tryParseJson(cleaned.substring(firstBracket, lastBracket + 1));
+        if (parsed) return parsed;
     }
+
+    const salvaged = salvageItemsFromMalformedJson(cleaned, repairs);
+    if (salvaged) return salvaged;
 
     throw new Error('Resposta da IA não é JSON válido');
 }
@@ -159,7 +264,7 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
 
 export function parseAndNormalizeEngineeringExtraction(rawText: string): NormalizedEngineeringExtraction {
     const repairs: string[] = [];
-    const payload = parseLooseJson(rawText);
+    const payload = parseLooseJson(rawText, repairs);
     const items = extractItems(payload, repairs);
     const normalized = normalizeEngineeringItems(items);
 

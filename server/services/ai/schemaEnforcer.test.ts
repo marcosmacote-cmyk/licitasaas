@@ -267,6 +267,67 @@ describe('enforceSchema — Normalization', () => {
         const result = enforceSchema(schema);
         expect(result.schema.timeline.data_sessao).toBe('15/03/2026 às 09:00');
     });
+
+    it('should recalculate relative deadlines using business days', () => {
+        const schema = makeSchema({
+            timeline: {
+                data_sessao: '21/05/2026 às 14:00',
+                prazo_impugnacao: 'Até 3 dias úteis antes da sessão (16/05/2026)',
+                prazo_esclarecimento: 'Até 3 dias úteis antes da sessão (16/05/2026)',
+            }
+        });
+        const result = enforceSchema(schema);
+        expect(result.schema.timeline.prazo_impugnacao).toBe('Até 3 dias úteis antes da sessão (18/05/2026)');
+        expect(result.schema.timeline.prazo_esclarecimento).toBe('Até 3 dias úteis antes da sessão (18/05/2026)');
+    });
+});
+
+describe('enforceSchema — Applicability Cleanup', () => {
+    it('marks entity-specific legal habilitation documents as applicable-only', () => {
+        const schema = makeSchema({
+            requirements: {
+                habilitacao_juridica: [
+                    {
+                        requirement_id: 'HJ-01',
+                        title: 'Pessoa física: cédula de identidade (RG)',
+                        description: 'Cédula de identidade ou documento equivalente',
+                        obligation_type: 'obrigatoria_universal',
+                        risk_if_missing: 'inabilitacao',
+                        evidence_refs: [],
+                    },
+                    {
+                        requirement_id: 'HJ-02',
+                        title: 'Documentos acompanhados de alterações ou consolidação',
+                        description: 'Documentos acompanhados de alterações ou consolidação',
+                        obligation_type: 'obrigatoria_universal',
+                        risk_if_missing: 'inabilitacao',
+                        evidence_refs: [],
+                    },
+                ],
+            },
+        });
+        const result = enforceSchema(schema);
+        expect((result.schema.requirements.habilitacao_juridica[0] as any).obligation_type).toBe('se_aplicavel');
+        expect((result.schema.requirements.habilitacao_juridica[1] as any).obligation_type).toBe('obrigatoria_universal');
+    });
+
+    it('deduplicates repeated municipal registration RFT requirements', () => {
+        const schema = makeSchema({
+            requirements: {
+                regularidade_fiscal_trabalhista: [
+                    { requirement_id: 'RFT-01', title: 'CNPJ', description: 'Prova de inscrição no CNPJ', evidence_refs: [] },
+                    { requirement_id: 'RFT-02', title: 'Inscrição Municipal', description: 'Prova de inscrição no cadastro de contribuintes municipal', evidence_refs: [] },
+                    { requirement_id: 'RFT-03', title: 'Inscrição municipal no cadastro de contribuintes', description: 'Prova de inscrição municipal pertinente ao ramo', evidence_refs: [] },
+                ],
+            },
+        });
+        const result = enforceSchema(schema);
+        const municipalRegistrations = result.schema.requirements.regularidade_fiscal_trabalhista.filter((req: any) => {
+            const text = `${req.title || ''} ${req.description || ''}`.toLowerCase();
+            return text.includes('inscrição municipal') || text.includes('cadastro de contribuintes municipal');
+        });
+        expect(municipalRegistrations).toHaveLength(1);
+    });
 });
 
 // ── Operational Outputs Defaults ──

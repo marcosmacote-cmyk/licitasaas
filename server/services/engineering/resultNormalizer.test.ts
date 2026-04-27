@@ -56,4 +56,25 @@ describe('parseAndNormalizeEngineeringExtraction', () => {
         });
         expect(result.repairs).toContain('array_key:itens->engineeringItems');
     });
+
+    it('salvages valid items from a malformed large JSON response', () => {
+        const result = parseAndNormalizeEngineeringExtraction(`
+            {
+              "engineeringItems": [
+                {"item":"1.1","description":"ATERRO COMPACTADO","unit":"m3","quantity":"10,00","unitCost":"25,50"},
+                {"item":"1.2","description":"texto quebrado " sem escape","unit":"m2","quantity":1},
+                {"item":"1.3","descricao":"FORMA PLANA","unidade":"m2","quantidade":"2.000,00","precoUnitario":"R$ 15,25"}
+              ]
+            }
+        `);
+
+        expect(result.engineeringItems).toHaveLength(2);
+        expect(result.engineeringItems.map(item => item.item)).toEqual(['1.1', '1.3']);
+        expect(result.engineeringItems[1]).toMatchObject({
+            description: 'FORMA PLANA',
+            quantity: 2000,
+            unitCost: 15.25,
+        });
+        expect(result.repairs).toContain('salvaged_array:engineeringItems:2');
+    });
 });

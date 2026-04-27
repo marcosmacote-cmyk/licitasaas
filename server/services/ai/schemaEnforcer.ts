@@ -164,6 +164,71 @@ function normalizeDateField(value: string | null | undefined): string {
     return v;
 }
 
+function normalizePlainText(value: string): string {
+    return (value || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function parseBrazilianDate(value: string | null | undefined): Date | null {
+    if (!value || typeof value !== 'string') return null;
+    const match = value.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!match) return null;
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        return null;
+    }
+    return date;
+}
+
+function formatBrazilianDate(date: Date): string {
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    return `${day}/${month}/${date.getUTCFullYear()}`;
+}
+
+function isBusinessDay(date: Date): boolean {
+    const day = date.getUTCDay();
+    return day !== 0 && day !== 6;
+}
+
+function subtractBusinessDays(date: Date, days: number): Date {
+    const result = new Date(date.getTime());
+    let remaining = days;
+    while (remaining > 0) {
+        result.setUTCDate(result.getUTCDate() - 1);
+        if (isBusinessDay(result)) remaining--;
+    }
+    return result;
+}
+
+function normalizeRelativeDeadline(value: string, sessionDate: string | undefined): string {
+    const text = normalizePlainText(value);
+    if (!text.includes('dias uteis') || !text.includes('antes da sessao')) return value;
+
+    const daysMatch = text.match(/(\d+)\s+dias?\s+uteis/);
+    const session = parseBrazilianDate(sessionDate);
+    if (!daysMatch || !session) return value;
+
+    const days = Number(daysMatch[1]);
+    if (!Number.isFinite(days) || days <= 0) return value;
+
+    const calculated = formatBrazilianDate(subtractBusinessDays(session, days));
+    const currentDate = parseBrazilianDate(value);
+    if (currentDate && formatBrazilianDate(currentDate) === calculated) return value;
+
+    return `Até ${days} dias úteis antes da sessão (${calculated})`;
+}
+
 /**
  * Normalizes modalidade to standard enum value.
  */
@@ -873,6 +938,81 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── CLEANUP 7: Applicability sanity for entity-specific HJ/DC items ──
+    // Legal-entity alternatives are often marked as universally mandatory. They are
+    // requirements, but only for the matching legal form (PF, MEI, cooperative, etc.).
+    if (schema.requirements) {
+        const hjItems = (schema.requirements as any).habilitacao_juridica;
+        if (Array.isArray(hjItems)) {
+            const entitySpecificPatterns = [
+                /pessoa fisica|cedula de identidade|\brg\b/,
+                /empresario individual/,
+                /microempreendedor individual|\bmei\b/,
+                /sociedade empresaria estrangeira|empresa estrangeira/,
+                /sociedade simples/,
+                /filial|sucursal|agencia/,
+                /sociedade cooperativa|cooperativa/,
+            ];
+
+            for (const req of hjItems as any[]) {
+                const text = normalizePlainText(`${req.title || ''} ${req.description || ''}`);
+                if (entitySpecificPatterns.some(pattern => pattern.test(text)) && req.obligation_type !== 'se_aplicavel') {
+                    correct(`${req.requirement_id}.obligation_type`, req.obligation_type || '', 'se_aplicavel');
+                    req.obligation_type = 'se_aplicavel';
+                }
+            }
+        }
+
+        const dcItems = (schema.requirements as any).documentos_complementares;
+        if (Array.isArray(dcItems)) {
+            for (const req of dcItems as any[]) {
+                const text = normalizePlainText(`${req.title || ''} ${req.description || ''}`);
+                if (/cooperativa|sociedade cooperativa|lei n?\.?\s*5764/.test(text) && req.obligation_type === 'consorcio') {
+                    correct(`${req.requirement_id}.obligation_type`, 'consorcio', 'se_aplicavel');
+                    req.obligation_type = 'se_aplicavel';
+                    req.applies_to = 'licitante';
+                }
+            }
+        }
+    }
+
+    // ── CLEANUP 8: Deterministic RFT de-dup for IE/IM registration variants ──
+    // Keeps one "inscrição municipal/estadual no cadastro de contribuintes" item when
+    // the model restates the same requirement with slightly different wording.
+    if (schema.requirements) {
+        const rftItems = (schema.requirements as any).regularidade_fiscal_trabalhista;
+        if (Array.isArray(rftItems) && rftItems.length > 1) {
+            const seenRegistration = new Set<string>();
+            const deduped: any[] = [];
+            let removed = 0;
+
+            for (const req of rftItems as any[]) {
+                const text = normalizePlainText(`${req.title || ''} ${req.description || ''}`);
+                let key = '';
+                if (/inscricao.*cadastro.*contribuintes.*municipal|inscricao municipal/.test(text)) {
+                    key = 'inscricao_municipal';
+                } else if (/inscricao.*cadastro.*contribuintes.*estadual|inscricao estadual/.test(text)) {
+                    key = 'inscricao_estadual';
+                }
+
+                if (key && seenRegistration.has(key)) {
+                    removed++;
+                    continue;
+                }
+                if (key) seenRegistration.add(key);
+                deduped.push(req);
+            }
+
+            if (removed > 0) {
+                deduped.forEach((req: any, idx: number) => {
+                    req.requirement_id = `RFT-${String(idx + 1).padStart(2, '0')}`;
+                });
+                (schema.requirements as any).regularidade_fiscal_trabalhista = deduped;
+                correct('RFT', `${removed} inscrição(ões) IE/IM duplicada(s)`, 'removida(s) por normalização determinística');
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════
     // NÍVEL 2: Normalização de process_identification
     // ═══════════════════════════════════════════
@@ -952,7 +1092,10 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         for (const field of dateFields) {
             const val = tl[field];
             if (typeof val === 'string' && val.trim()) {
-                const normalized = normalizeDateField(val);
+                const dateNormalized = normalizeDateField(val);
+                const normalized = field === 'prazo_impugnacao' || field === 'prazo_esclarecimento'
+                    ? normalizeRelativeDeadline(dateNormalized, tl.data_sessao)
+                    : dateNormalized;
                 if (normalized !== val) {
                     correct(`timeline.${field}`, val, normalized);
                     (tl as any)[field] = normalized;
