@@ -18,13 +18,12 @@
  *   6. Emit SSE notification to connected clients
  */
 
-import { PrismaClient } from '@prisma/client';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import { updateJobProgress } from './backgroundJobService';
 import { logger } from '../lib/logger';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import { fallbackToOpenAiV2 } from './ai/openai.service';
 
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
@@ -134,24 +133,48 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }, 30000);
 
     let engItems: any[] = [];
+    let modelUsed = 'gemini-2.5-flash';
 
     try {
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
-            config: {
-                systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+        let text = '';
+
+        // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
+        try {
+            const result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
+                config: {
+                    systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    maxOutputTokens: 65536,
+                    responseMimeType: 'application/json'
+                }
+            }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
+            text = result.text || '';
+            logger.info(`[Engineering-BG] ✅ Gemini respondeu (${text.length} chars)`);
+        } catch (geminiErr: any) {
+            // ── FALLBACK: DeepSeek V4 → gpt-4o-mini → gpt-4o ──
+            logger.warn(`[Engineering-BG] ⚠️ Gemini falhou: ${geminiErr.message}. Tentando fallback DeepSeek/OpenAI...`);
+            await updateJobProgress(job.id, tenantId, {
+                progress: progressPercent,
+                progressMsg: 'Gemini indisponível — usando modelo alternativo...'
+            }).catch(() => {});
+
+            const fallbackResult = await fallbackToOpenAiV2({
+                systemPrompt: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                userPrompt: ENGINEERING_PROPOSAL_USER_INSTRUCTION,
+                pdfParts,
                 temperature: 0.1,
-                maxOutputTokens: 65536,
-                responseMimeType: 'application/json'
-            }
-        }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
-        // 2 retries — this is a dedicated background job, can afford more retries
+                maxTokens: 65536,
+                stageName: 'Engineering BG Extraction'
+            });
+            text = fallbackResult.text;
+            modelUsed = fallbackResult.model;
+            logger.info(`[Engineering-BG] ✅ Fallback ${modelUsed} respondeu (${text.length} chars)`);
+        }
 
         clearInterval(progressTimer);
-
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-        const text = result.text || '';
 
         // Parse JSON
         let parsed: any;
@@ -163,7 +186,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             if (match) {
                 parsed = JSON.parse(match[0]);
             } else {
-                throw new Error('Resposta do Gemini não é JSON válido');
+                throw new Error('Resposta da IA não é JSON válido');
             }
         }
 
@@ -172,10 +195,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         const etapas = engItems.filter((it: any) => it.type === 'ETAPA').length;
         const composicoes = engItems.filter((it: any) => it.type === 'COMPOSICAO').length;
 
-        logger.info(`[Engineering-BG] ✅ Extração em ${elapsed}s — ${engItems.length} itens (${etapas} etapas, ${composicoes} composições, ${withCodes} com código oficial)`);
+        logger.info(`[Engineering-BG] ✅ Extração em ${elapsed}s via ${modelUsed} — ${engItems.length} itens (${etapas} etapas, ${composicoes} composições, ${withCodes} com código oficial)`);
     } catch (err: any) {
         clearInterval(progressTimer);
-        logger.error(`[Engineering-BG] ❌ Gemini failed: ${err.message}`);
+        logger.error(`[Engineering-BG] ❌ Extração falhou (todos modelos): ${err.message}`);
         throw new Error(`Extração de engenharia falhou: ${err.message}`);
     }
 
@@ -208,12 +231,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         progressMsg: `✅ ${engItems.length} itens extraídos com sucesso`
     });
 
-    const withCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
+    const finalWithCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
     return {
         itemCount: engItems.length,
-        withCodes,
+        withCodes: finalWithCodes,
         elapsed: ((Date.now() - t0) / 1000).toFixed(1),
-        source: 'engineering_bg_extraction'
+        source: 'engineering_bg_extraction',
+        model: modelUsed
     };
 }
 

@@ -52,8 +52,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import https from 'https';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -2038,35 +2037,48 @@ Responda APENAS com JSON array:
             // Use a short delay to ensure the frontend has persisted the analysis.
             setTimeout(async () => {
                 try {
-                    // Find the bidding that was just saved (by PNCP source data)
                     const processNumber = v2Result.process_identification?.numero_processo || '';
                     const orgao = v2Result.process_identification?.orgao || '';
                     
-                    // Look for the most recently updated bidding matching this process
-                    const recentBidding = await prisma.biddingProcess.findFirst({
+                    // Find the EXACT bidding by processNumber + tenant (not "most recent")
+                    let matchedBidding = processNumber ? await prisma.biddingProcess.findFirst({
                         where: {
                             tenantId: req.user.tenantId,
+                            processNumber: processNumber,
                             aiAnalysis: { isNot: null },
                         },
                         orderBy: { sessionDate: 'desc' },
                         select: { id: true, title: true },
-                    });
+                    }) : null;
+
+                    // Fallback: if no exact match by processNumber, try by title containing orgao
+                    if (!matchedBidding && orgao) {
+                        matchedBidding = await prisma.biddingProcess.findFirst({
+                            where: {
+                                tenantId: req.user.tenantId,
+                                title: { contains: orgao.substring(0, 30), mode: 'insensitive' },
+                                aiAnalysis: { isNot: null },
+                            },
+                            orderBy: { sessionDate: 'desc' },
+                            select: { id: true, title: true },
+                        });
+                    }
                     
-                    if (recentBidding) {
+                    if (matchedBidding) {
                         const engJob = await submitJob({
                             tenantId: req.user.tenantId,
                             userId: req.user.id,
                             type: 'engineering_extraction' as any,
-                            targetId: recentBidding.id,
-                            targetTitle: `Planilha Orçamentária — ${recentBidding.title || processNumber}`,
+                            targetId: matchedBidding.id,
+                            targetTitle: `Planilha Orçamentária — ${matchedBidding.title || processNumber}`,
                             input: {
-                                biddingId: recentBidding.id,
+                                biddingId: matchedBidding.id,
                                 pdfUrls,
                             }
                         });
-                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${recentBidding.id} (${pdfUrls.length} PDFs)`);
+                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${matchedBidding.id} (${pdfUrls.length} PDFs) [matched by ${processNumber ? 'processNumber' : 'orgao'}]`);
                     } else {
-                        logger.warn(`[PNCP-V2] ⚠️ Could not find recently saved bidding to dispatch engineering job`);
+                        logger.warn(`[PNCP-V2] ⚠️ Could not find bidding for engineering job (process=${processNumber}, orgao=${orgao})`);
                     }
                 } catch (err: any) {
                     logger.warn(`[PNCP-V2] ⚠️ Failed to dispatch engineering BG job: ${err.message}`);

@@ -927,7 +927,39 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 return res.json({ items, source: 'v2_itens_licitados', count: items.length });
             }
 
-            console.log(`[Engineering AI-Populate] ⚠️ Dados V2 insuficientes (engBudget=${engBudgetItems?.length || 0}, itensV2=${itensV2?.length || 0}). Usando fallback IA.`);
+            console.log(`[Engineering AI-Populate] ⚠️ Dados V2 insuficientes (engBudget=${engBudgetItems?.length || 0}, itensV2=${itensV2?.length || 0}).`);
+
+            // ═══════════════════════════════════════════════════
+            // GUARDA: Se há um job de engenharia ativo, NÃO re-extrair
+            // O background job vai popular _engineeringBudgetItems quando concluir.
+            // Re-extrair aqui duplica custo de IA e cria duas fontes de verdade.
+            // ═══════════════════════════════════════════════════
+            const activeJob = await prisma.backgroundJob.findFirst({
+                where: {
+                    targetId: biddingId,
+                    type: 'engineering_extraction',
+                    status: { in: ['QUEUED', 'PROCESSING'] },
+                },
+                select: { id: true, status: true, progress: true, progressMsg: true },
+            });
+
+            if (activeJob) {
+                console.log(`[Engineering AI-Populate] ⏳ Job ativo detectado (${activeJob.id}, ${activeJob.status}, ${activeJob.progress}%). Aguardando conclusão...`);
+                return res.status(202).json({
+                    items: [],
+                    source: 'pending_background_job',
+                    count: 0,
+                    pendingJob: {
+                        jobId: activeJob.id,
+                        status: activeJob.status,
+                        progress: activeJob.progress,
+                        progressMsg: activeJob.progressMsg || 'Extração em andamento...',
+                    },
+                    message: 'A planilha orçamentária está sendo extraída em background. Aguarde a conclusão e tente novamente.',
+                });
+            }
+
+            console.log(`[Engineering AI-Populate] ⚠️ Sem job ativo. Usando fallback IA.`);
 
             // ═══════════════════════════════════════════════════
             // PASSO 2: Fallback — combinar TODAS as fontes de texto para AI extraction
