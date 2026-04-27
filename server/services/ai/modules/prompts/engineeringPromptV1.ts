@@ -39,6 +39,11 @@ REGRAS DE CLASSIFICAÇÃO
 - Se o item tem preço e descreve um MATERIAL/MÃO DE OBRA/EQUIPAMENTO isolado → INSUMO
 - Na dúvida entre COMPOSICAO e INSUMO → use COMPOSICAO
 
+🚨 REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
+- IGNORE ABSOLUTAMENTE todo e qualquer texto narrativo, regras do edital, exigências de habilitação, sanções, multas, ou descrições de atestados de capacidade técnica.
+- NUNCA crie itens baseados em "O licitante deverá comprovar...", "Multa de 2%...", "Prazo de entrega...".
+- EXTRAIA APENAS dados que estejam claramente formatados em ESTRUTURA DE PLANILHA ORÇAMENTÁRIA (tabelas com código, descrição, unidade, quantidade e preço).
+
 ═══════════════════════════════════════════════════════════
 REGRAS DE EXTRAÇÃO — CRÍTICAS
 ═══════════════════════════════════════════════════════════
@@ -48,8 +53,8 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    'Quantitativos', 'Planilha de Custos', 'Orçamento Base', 'Estimativa de Custos',
    'Planilha Analítica', 'Planilha Sintética' ou similar.
 
-2. EXTRAIA TODOS OS ITENS, MESMO QUE PARCIAIS. Se encontrar apenas a descrição dos 
-   serviços sem quantitativos, ainda assim extraia com quantity=0 e unitCost=0.
+2. EXTRAIA TODOS OS ITENS DA PLANILHA. Se encontrar a descrição dos serviços sem quantitativos (mas claramente em formato de tabela orçamentária), extraia com quantity=0 e unitCost=0.
+   🚨 ALERTA: NÃO confunda checklists de documentos, cronogramas físico-financeiros ou listas de exigências com a Planilha Orçamentária. Itens de orçamento sempre descrevem serviços de engenharia tangíveis.
 
 3. CÓDIGOS OFICIAIS SÃO PRIORIDADE MÁXIMA. A coluna "CÓDIGO" da planilha contém a referência
    oficial do serviço. Identifique o BANCO DE ORIGEM pelo padrão do código:

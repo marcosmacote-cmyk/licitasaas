@@ -18,6 +18,10 @@ server/.env
 uploads/
 server/uploads/
 
+# Build outputs
+dist/
+server/dist/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -8,6 +8,7 @@ import { downloadAndParseSeinfra } from '../services/engineering/seinfra-scraper
 import { CompositionFlattener } from '../services/engineering/compositionFlattener';
 import axios from 'axios';
 import https from 'https';
+import { submitJob } from '../services/backgroundJobService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -967,7 +968,6 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 ?.map((a: any) => a.url) || [];
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', id: 'system' };
-            const { submitJob } = require('../services/backgroundJobService');
             
             const newJob = await submitJob({
                 tenantId: user.tenantId,
@@ -1171,7 +1171,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
     } catch (e: any) {
         console.error('Error in AI engineering extraction:', e);
-        res.status(500).json({ error: 'Falha ao extrair itens via Inteligência Artificial', details: e.message });
+        res.status(500).json({ error: e.message || 'Falha ao extrair itens via Inteligência Artificial' });
     }
 });
 
