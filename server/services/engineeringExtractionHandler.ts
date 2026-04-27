@@ -25,6 +25,7 @@ import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { fallbackToOpenAiV2 } from './ai/openai.service';
 import { targetBudgetPages } from './engineering/pageTargeting';
+import { validateEngineeringExtraction, type EngineeringValidationReport } from './engineering/extractionValidator';
 
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
@@ -267,7 +268,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }
 
     await updateJobProgress(job.id, tenantId, {
-        progress: 85,
+        progress: 80,
         progressMsg: `Enriquecendo ${engItems.length} itens com preços oficiais...`
     });
 
@@ -278,17 +279,38 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         logger.warn(`[Engineering-BG] ⚠️ Enrichment partial: ${err.message}`);
     }
 
+    // ── Step 3.5: Validate extraction quality ──
     await updateJobProgress(job.id, tenantId, {
-        progress: 90,
-        progressMsg: 'Salvando resultados na análise...'
+        progress: 85,
+        progressMsg: 'Validando qualidade da extração...'
     });
 
-    // ── Step 4: Merge into schemaV2 ──
-    await mergeEngineeringResults(biddingId, engItems);
+    // Fetch the estimated value from the bidding for reconciliation
+    let estimatedValue: number | null = null;
+    try {
+        const biddingForValue = await prisma.biddingProcess.findUnique({
+            where: { id: biddingId },
+            select: { estimatedValue: true },
+        });
+        estimatedValue = biddingForValue?.estimatedValue || null;
+    } catch { /* ignore */ }
+
+    const validationReport = validateEngineeringExtraction(engItems, estimatedValue);
 
     await updateJobProgress(job.id, tenantId, {
+        progress: 90,
+        progressMsg: validationReport.publishable
+            ? `Validação OK (${validationReport.qualityScore}%) — Salvando resultados...`
+            : `⚠️ Qualidade baixa (${validationReport.qualityScore}%) — Salvando com ressalvas...`
+    });
+
+    // ── Step 4: Merge into schemaV2 (include validation report) ──
+    await mergeEngineeringResults(biddingId, engItems, validationReport);
+
+    const warningCount = validationReport.issues.filter(i => i.severity === 'warning' || i.severity === 'error').length;
+    await updateJobProgress(job.id, tenantId, {
         progress: 100,
-        progressMsg: `✅ ${engItems.length} itens extraídos com sucesso`
+        progressMsg: `✅ ${engItems.length} itens extraídos (qualidade: ${validationReport.qualityScore}%${warningCount > 0 ? `, ${warningCount} alertas` : ''})`
     });
 
     const finalWithCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
@@ -297,14 +319,26 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         withCodes: finalWithCodes,
         elapsed: ((Date.now() - t0) / 1000).toFixed(1),
         source: 'engineering_bg_extraction',
-        model: modelUsed
+        model: modelUsed,
+        pageTargeting: targetingUsed,
+        validation: {
+            qualityScore: validationReport.qualityScore,
+            publishable: validationReport.publishable,
+            codeCoveragePercent: validationReport.codeCoveragePercent,
+            totalDivergencePercent: validationReport.totalDivergencePercent,
+            issueCount: validationReport.issues.length,
+        }
     };
 }
 
 /**
  * Merge engineering items into the saved schemaV2.
  */
-async function mergeEngineeringResults(biddingId: string, engItems: any[]): Promise<void> {
+async function mergeEngineeringResults(
+    biddingId: string,
+    engItems: any[],
+    validationReport?: EngineeringValidationReport
+): Promise<void> {
     const bidding = await prisma.biddingProcess.findUnique({
         where: { id: biddingId },
         include: { aiAnalysis: true }
@@ -319,6 +353,20 @@ async function mergeEngineeringResults(biddingId: string, engItems: any[]): Prom
 
     // 1. Store raw engineering items for ai-populate to use directly
     schemaV2._engineeringBudgetItems = engItems;
+
+    // 1.5. Store validation report
+    if (validationReport) {
+        schemaV2._engineeringValidation = {
+            qualityScore: validationReport.qualityScore,
+            publishable: validationReport.publishable,
+            codeCoveragePercent: validationReport.codeCoveragePercent,
+            calculatedTotal: validationReport.calculatedTotal,
+            totalDivergencePercent: validationReport.totalDivergencePercent,
+            typeCounts: validationReport.typeCounts,
+            issues: validationReport.issues,
+            validatedAt: new Date().toISOString(),
+        };
+    }
 
     // 2. Convert to itens_licitados format (for the UI report)
     const itensLicitados = engItems.map((it: any) => ({
@@ -356,7 +404,10 @@ async function mergeEngineeringResults(biddingId: string, engItems: any[]): Prom
     });
 
     const withCodes = engItems.filter((it: any) => it.code && it.sourceName !== 'PROPRIA').length;
-    logger.info(`[Engineering-BG] ✅ Merge: ${engItems.length} itens salvos no schemaV2 (${withCodes} com código oficial)`);
+    logger.info(
+        `[Engineering-BG] ✅ Merge: ${engItems.length} itens salvos no schemaV2 (${withCodes} com código oficial)` +
+        (validationReport ? ` | Quality: ${validationReport.qualityScore}%` : '')
+    );
 }
 
 /**
