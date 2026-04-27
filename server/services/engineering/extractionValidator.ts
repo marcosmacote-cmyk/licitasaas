@@ -29,6 +29,26 @@ export interface ValidationIssue {
     affectedItems?: string[];  // item numbers
 }
 
+export type EngineeringItemClassification =
+    | 'valid_budget_item'
+    | 'section_header'
+    | 'subtotal'
+    | 'narrative_noise'
+    | 'ambiguous';
+
+export interface EngineeringItemQuality {
+    item: string;
+    classification: EngineeringItemClassification;
+    confidence: number;
+    reasons: string[];
+}
+
+export interface EngineeringItemScreeningResult {
+    acceptedItems: any[];
+    rejectedItems: any[];
+    itemQuality: EngineeringItemQuality[];
+}
+
 export interface EngineeringValidationReport {
     /** Quality score 0-100 */
     qualityScore: number;
@@ -50,11 +70,173 @@ export interface EngineeringValidationReport {
     issues: ValidationIssue[];
     /** Counts by type */
     typeCounts: Record<string, number>;
+    /** Item-level diagnostics generated before scoring */
+    itemQuality?: EngineeringItemQuality[];
+    /** Rejected non-budget/noise rows */
+    rejectedItems?: any[];
 }
 
 // ═══════════════════════════════════════════
 // Validation checks
 // ═══════════════════════════════════════════
+
+const VALID_UNITS = new Set([
+    'UN', 'UND', 'UNID', 'VB', 'CJ', 'GL', 'M', 'M2', 'M²', 'M3', 'M³',
+    'KG', 'G', 'T', 'TON', 'L', 'ML', 'H', 'HR', 'HORA', 'MES', 'MÊS',
+    'DIA', 'KM', 'HA', 'PCT', 'PAR', 'JG', 'KWH',
+]);
+
+const NARRATIVE_PATTERNS = [
+    /\blicitante\b/i,
+    /\bcontratada\b|\bcontratante\b/i,
+    /\bdever[aá]\b|\bdeverão\b|\bdeve\b/i,
+    /\bcomprovar\b|\bcomprova[cç][aã]o\b/i,
+    /\bhabilita[cç][aã]o\b|\batestado\b/i,
+    /\bmulta\b|\bsan[cç][aã]o\b|\bpenalidade\b/i,
+    /\bprazo\b|\bvig[eê]ncia\b/i,
+    /\bedital\b|\btermo de refer[eê]ncia\b/i,
+    /\bdeclara[cç][aã]o\b|\bdocumenta[cç][aã]o\b/i,
+];
+
+const BUDGET_DESCRIPTION_PATTERNS = [
+    /\bfornecimento\b|\binstala[cç][aã]o\b|\bexecu[cç][aã]o\b/i,
+    /\bescava[cç][aã]o\b|\balvenaria\b|\bconcreto\b|\bargamassa\b|\bpintura\b/i,
+    /\btransporte\b|\bcarga\b|\bdescarga\b|\bdemoli[cç][aã]o\b/i,
+    /\bcabo\b|\btubo\b|\bporta\b|\bjanela\b|\brevestimento\b|\bcobertura\b/i,
+    /\bservi[cç]os?\b|\bobras?\b|\bmaterial\b|\bequipamento\b/i,
+];
+
+const SUBTOTAL_PATTERNS = [
+    /^subtotal\b/i,
+    /^sub-total\b/i,
+    /^total\b/i,
+    /\btotal geral\b/i,
+    /\bvalor global\b/i,
+];
+
+function normalizeUnit(unit: any): string {
+    return String(unit || '').trim().toUpperCase();
+}
+
+function classifyEngineeringItem(item: any): EngineeringItemQuality {
+    const description = String(item?.description || '').trim();
+    const type = String(item?.type || '').toUpperCase();
+    const unit = normalizeUnit(item?.unit);
+    const quantity = Number(item?.quantity) || 0;
+    const unitCost = Number(item?.unitCost) || 0;
+    const code = String(item?.code || '').trim();
+    const itemNumber = String(item?.item || '');
+    const reasons: string[] = [];
+    let confidence = 45;
+
+    if (!description || description.length < 3) {
+        reasons.push('descrição ausente/curta');
+        confidence -= 35;
+    }
+
+    const isHeader = type === 'ETAPA' || type === 'SUBETAPA';
+    if (isHeader) {
+        reasons.push('agrupador hierárquico');
+        confidence += 25;
+        return {
+            item: itemNumber,
+            classification: 'section_header',
+            confidence: Math.max(0, Math.min(100, confidence)),
+            reasons,
+        };
+    }
+
+    if (SUBTOTAL_PATTERNS.some(pattern => pattern.test(description))) {
+        reasons.push('linha de total/subtotal');
+        return {
+            item: itemNumber,
+            classification: 'subtotal',
+            confidence: 88,
+            reasons,
+        };
+    }
+
+    const narrativeHits = NARRATIVE_PATTERNS.filter(pattern => pattern.test(description)).length;
+    if (narrativeHits > 0) {
+        reasons.push(`${narrativeHits} sinal(is) de texto narrativo`);
+        confidence -= narrativeHits * 24;
+    }
+
+    if (quantity > 0) {
+        reasons.push('quantidade numérica');
+        confidence += 18;
+    }
+    if (unitCost > 0) {
+        reasons.push('preço unitário numérico');
+        confidence += 18;
+    }
+    if (unit && VALID_UNITS.has(unit)) {
+        reasons.push(`unidade reconhecida (${unit})`);
+        confidence += 12;
+    }
+    if (code && code !== 'N/A') {
+        reasons.push('código presente');
+        confidence += 10;
+    }
+    if (BUDGET_DESCRIPTION_PATTERNS.some(pattern => pattern.test(description))) {
+        reasons.push('descrição parece serviço/insumo de engenharia');
+        confidence += 12;
+    }
+
+    confidence = Math.max(0, Math.min(100, confidence));
+
+    if (narrativeHits > 0 && quantity === 0 && unitCost === 0) {
+        return { item: itemNumber, classification: 'narrative_noise', confidence, reasons };
+    }
+
+    if (quantity === 0 && unitCost === 0 && !unit && !code) {
+        return { item: itemNumber, classification: 'ambiguous', confidence, reasons };
+    }
+
+    if (confidence < 35) {
+        return { item: itemNumber, classification: 'narrative_noise', confidence, reasons };
+    }
+
+    if (confidence < 55) {
+        return { item: itemNumber, classification: 'ambiguous', confidence, reasons };
+    }
+
+    return { item: itemNumber, classification: 'valid_budget_item', confidence, reasons };
+}
+
+/**
+ * Remove obvious non-budget rows before enrichment/persistence while keeping
+ * ambiguous rows available for validation diagnostics.
+ */
+export function screenEngineeringItems(items: any[]): EngineeringItemScreeningResult {
+    const itemQuality = items.map(classifyEngineeringItem);
+    const acceptedItems: any[] = [];
+    const rejectedItems: any[] = [];
+
+    items.forEach((item, index) => {
+        const quality = itemQuality[index];
+        const itemWithQuality = {
+            ...item,
+            _quality: {
+                classification: quality.classification,
+                confidence: quality.confidence,
+                reasons: quality.reasons,
+            },
+        };
+
+        if (quality.classification === 'narrative_noise' || quality.classification === 'subtotal') {
+            rejectedItems.push(itemWithQuality);
+        } else {
+            acceptedItems.push(itemWithQuality);
+        }
+    });
+
+    if (rejectedItems.length > 0) {
+        logger.warn(`[EngValidator] Screening rejeitou ${rejectedItems.length}/${items.length} linha(s) não orçamentárias antes do merge.`);
+    }
+
+    return { acceptedItems, rejectedItems, itemQuality };
+}
 
 /**
  * Validate an engineering extraction result.
@@ -65,7 +247,8 @@ export interface EngineeringValidationReport {
  */
 export function validateEngineeringExtraction(
     items: any[],
-    expectedTotal?: number | null
+    expectedTotal?: number | null,
+    screening?: EngineeringItemScreeningResult
 ): EngineeringValidationReport {
     const issues: ValidationIssue[] = [];
     let score = 100; // Start at 100, deduct for problems
@@ -98,6 +281,16 @@ export function validateEngineeringExtraction(
             message: `${items.length} itens extraídos. Planilhas típicas têm 50-300 itens.`,
         });
         score -= 10;
+    }
+
+    if (screening?.rejectedItems?.length) {
+        issues.push({
+            code: 'EV00',
+            severity: screening.rejectedItems.length > 10 ? 'warning' : 'info',
+            message: `${screening.rejectedItems.length} linha(s) descartadas como ruído narrativo/total antes de publicar.`,
+            affectedItems: screening.rejectedItems.map(it => it.item).filter(Boolean),
+        });
+        score -= Math.min(screening.rejectedItems.length, 8);
     }
 
     // ── Check 2: Code coverage ──
@@ -280,6 +473,8 @@ export function validateEngineeringExtraction(
         totalDivergencePercent,
         issues,
         typeCounts,
+        itemQuality: screening?.itemQuality,
+        rejectedItems: screening?.rejectedItems,
     };
 
     const issuesSummary = issues

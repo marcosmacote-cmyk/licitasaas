@@ -9,6 +9,8 @@ import { CompositionFlattener } from '../services/engineering/compositionFlatten
 import axios from 'axios';
 import https from 'https';
 import { submitJob } from '../services/backgroundJobService';
+import { classifyEngineeringAttachments } from '../services/engineering/documentClassifier';
+import { parseAndNormalizeEngineeringExtraction } from '../services/engineering/resultNormalizer';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -49,28 +51,23 @@ async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]>
 
     if (arquivos.length === 0) return [];
 
-    // Prioritize engineering-relevant docs
-    const scored = arquivos.map((arq: any) => {
-        const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase();
-        let score = 10;
-        if (/projeto.?b[aá]sico/i.test(name)) score = 1;
-        if (/planilha|or[cç]amento|quantitativ/i.test(name)) score = 2;
-        if (/composi[cç][aã]o|cpu|bdi/i.test(name)) score = 3;
-        if (/cronograma/i.test(name)) score = 4;
-        if (/edital/i.test(name)) score = 5;
-        if (/memorial|especifica[cç]/i.test(name)) score = 6;
-        // Exclude irrelevant files
-        if (/ata|aviso|decreto|portaria|lei|certid|retifica|resultado|homologa/i.test(name)) score = 99;
-        return { arq, score, name };
-    }).filter(s => s.score < 99).sort((a, b) => a.score - b.score);
+    const classifiedDocs = classifyEngineeringAttachments(arquivos, { maxDocuments: 6 });
+    const selectedDocs = classifiedDocs.selected.length > 0
+        ? classifiedDocs.selected
+        : classifiedDocs.all.filter(doc => doc.score > -20).slice(0, 6);
+
+    console.log(
+        `[PNCP-PDF] 📎 Classificador selecionou ${selectedDocs.length}/${classifiedDocs.summary.total} anexo(s): ` +
+        selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ')
+    );
 
     // Download top PDFs in parallel (PERF-02 fix: was sequential, now ~4x faster)
     const MAX_PDFS = 4;
     const MAX_SIZE_KB = 12000;
-    const candidates = scored.slice(0, MAX_PDFS + 2);
+    const candidates = selectedDocs.slice(0, MAX_PDFS + 2);
 
-    const downloadResults = await Promise.allSettled(candidates.map(async ({ arq, name }) => {
-        let fileUrl = arq.url || arq.uri || '';
+    const downloadResults = await Promise.allSettled(candidates.map(async ({ url, title }) => {
+        let fileUrl = url || '';
         if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
         if (!fileUrl) return null;
 
@@ -82,13 +79,13 @@ async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]>
 
         // Verify it's a PDF (magic bytes %P)
         if (buffer[0] !== 0x25 || buffer[1] !== 0x50) {
-            console.log(`[PNCP-PDF] ⏭️ "${name}" não é PDF, ignorando`);
+            console.log(`[PNCP-PDF] ⏭️ "${title}" não é PDF, ignorando`);
             return null;
         }
 
         const sizeKB = buffer.length / 1024;
-        console.log(`[PNCP-PDF] ✅ "${name}" (${Math.round(sizeKB)}KB) baixado`);
-        return { name, sizeKB, part: { inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } } };
+        console.log(`[PNCP-PDF] ✅ "${title}" (${Math.round(sizeKB)}KB) baixado`);
+        return { name: title, sizeKB, part: { inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } } };
     }));
 
     // Collect successful downloads respecting size budget
@@ -962,10 +959,20 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
             console.log(`[Engineering AI-Populate] ⚠️ Sem job ativo. Iniciando extração em background.`);
 
-            // PASSO 2: Criar o job em background se ainda não existe
-            const pdfUrls = schemaV2?.pncp_source?.attachments
-                ?.filter((a: any) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' || a.purpose === 'composicao_custos' || a.purpose === 'anexo_geral' || a.title?.toLowerCase().includes('planilha')))
-                ?.map((a: any) => a.url) || [];
+            // PASSO 2: Criar o job em background se ainda não existe.
+            // Antes de submeter, ranqueia anexos para evitar mandar edital/atas
+            // genéricos ao extrator multimodal de engenharia.
+            const attachments = schemaV2?.pncp_source?.attachments || [];
+            const classifiedDocs = classifyEngineeringAttachments(attachments, { maxDocuments: 4 });
+            const selectedDocs = classifiedDocs.selected.length > 0
+                ? classifiedDocs.selected
+                : classifiedDocs.all.filter(doc => doc.score > -20).slice(0, 4);
+            const pdfUrls = selectedDocs.map(doc => doc.url);
+
+            console.log(
+                `[Engineering AI-Populate] 📎 Classificador selecionou ${selectedDocs.length}/${classifiedDocs.summary.total} anexo(s): ` +
+                selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ')
+            );
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', userId: 'system' };
             
@@ -977,7 +984,13 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 targetTitle: `Planilha Orçamentária — ${bidding?.processNumber || bidding?.title || 'Edital'}`,
                 input: {
                     biddingId,
-                    pdfUrls
+                    pdfUrls,
+                    documentSelection: {
+                        total: classifiedDocs.summary.total,
+                        selected: selectedDocs.length,
+                        titles: selectedDocs.map(doc => doc.title),
+                        scores: selectedDocs.map(doc => doc.score),
+                    }
                 }
             });
 
@@ -1057,9 +1070,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
         }
 
         const rawResponse = result?.text || '';
-        const extractedData = robustJsonParse(rawResponse);
-        
-        let items = extractedData?.engineeringItems || [];
+        let items = parseAndNormalizeEngineeringExtraction(rawResponse).engineeringItems as any[];
 
         // If text mode yielded ≤1 item and we haven't tried PDF mode, try it now
         if (items.length <= 1 && biddingId && !shouldTryPdfDirect) {
@@ -1075,8 +1086,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                             temperature: 0.15, maxOutputTokens: 65536,
                         }
                     });
-                    const pdfData = robustJsonParse(pdfResult?.text || '');
-                    const pdfItems = pdfData?.engineeringItems || [];
+                    const pdfItems = parseAndNormalizeEngineeringExtraction(pdfResult?.text || '').engineeringItems as any[];
                     if (pdfItems.length > items.length) {
                         console.log(`[Engineering AI-Populate] ✅ PDF direto retornou ${pdfItems.length} itens (melhor que texto: ${items.length})`);
                         items = pdfItems;

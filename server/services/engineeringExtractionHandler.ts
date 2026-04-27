@@ -24,8 +24,16 @@ import { updateJobProgress } from './backgroundJobService';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { fallbackToOpenAiV2 } from './ai/openai.service';
+import { extractMarkdownFromMultiplePdfs, isZeroxAvailable } from './ai/zeroxExtractor';
 import { targetBudgetPages } from './engineering/pageTargeting';
-import { validateEngineeringExtraction, type EngineeringValidationReport } from './engineering/extractionValidator';
+import { classifyEngineeringAttachments, urlsToEngineeringAttachments } from './engineering/documentClassifier';
+import { parseAndNormalizeEngineeringExtraction } from './engineering/resultNormalizer';
+import {
+    screenEngineeringItems,
+    validateEngineeringExtraction,
+    type EngineeringItemScreeningResult,
+    type EngineeringValidationReport,
+} from './engineering/extractionValidator';
 import { autoEvaluateIfBenchmarkCase } from './ai/benchmark/engineeringBenchmarkRunner';
 
 // Import the engineering prompt (same used by the old E1.5-A)
@@ -39,10 +47,16 @@ import { callGeminiWithRetry } from './ai/gemini.service';
  * Main handler — registered as 'engineering_extraction' in the job worker.
  */
 export async function engineeringExtractionHandler(job: any): Promise<any> {
-    const { biddingId, pdfUrls } = job.input;
+    const { biddingId, pdfUrls, documentSelection } = job.input;
     const tenantId = job.tenantId;
 
     logger.info(`[Engineering-BG] 🏗️ Starting extraction for bidding ${biddingId} (${pdfUrls?.length || 0} PDF URLs)`);
+    if (documentSelection) {
+        logger.info(
+            `[Engineering-BG] 📎 Document classifier selected ${documentSelection.selected || 0}/${documentSelection.total || 0} attachment(s): ` +
+            `${(documentSelection.titles || []).join(' | ')}`
+        );
+    }
 
     await updateJobProgress(job.id, tenantId, {
         progress: 5,
@@ -79,15 +93,17 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             });
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
             const attachments = schemaV2?.pncp_source?.attachments || [];
-            const planilhas = attachments.filter((a: any) =>
-                a.ativo && a.url && (
-                    a.purpose === 'planilha_orcamentaria' ||
-                    a.purpose === 'composicao_custos' ||
-                    a.purpose === 'anexo_geral'
-                )
+            const classified = classifyEngineeringAttachments(attachments, { maxDocuments: 4 });
+            const selectedAttachments = classified.selected.length > 0
+                ? classified.selected.map(doc => ({ url: doc.url, titulo: doc.title }))
+                : urlsToEngineeringAttachments(pdfUrls).slice(0, 3);
+
+            logger.info(
+                `[Engineering-BG] 📎 Fallback classifier selected ${selectedAttachments.length}/${classified.summary.total} attachment(s): ` +
+                `${selectedAttachments.map((att: any) => att.titulo || att.url).join(' | ')}`
             );
 
-            for (const att of planilhas.slice(0, 3)) { // Max 3 PDFs
+            for (const att of selectedAttachments.slice(0, 4)) { // Max 4 PDFs
                 try {
                     const resp = await axios.get(att.url, {
                         responseType: 'arraybuffer',
@@ -123,9 +139,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     });
 
     const pdfParts: any[] = [];
+    const zeroxFallbackCandidates: Array<{ buffer: Buffer; fileName: string; reason: string }> = [];
     let totalOriginalKB = 0;
     let totalTrimmedKB = 0;
     let targetingUsed = false;
+    let zeroxFallbackUsed = false;
+    let zeroxFallbackMeta: any = null;
 
     for (const { buffer, source } of rawPdfBuffers) {
         totalOriginalKB += buffer.length / 1024;
@@ -157,6 +176,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 pdfParts.push({
                     inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                 });
+                if (targeting.totalPages >= 15 && targeting.strategy === 'full' && !targeting.trimmedPdfBuffer) {
+                    zeroxFallbackCandidates.push({
+                        buffer,
+                        fileName: source,
+                        reason: 'page_targeting_full_document',
+                    });
+                }
                 logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages)`);
             }
         } catch (err: any) {
@@ -166,6 +192,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             pdfParts.push({
                 inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
             });
+            zeroxFallbackCandidates.push({
+                buffer,
+                fileName: source,
+                reason: 'page_targeting_error',
+            });
         }
     }
 
@@ -174,9 +205,63 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         logger.info(`[Engineering-BG] 🎯 Overall: ${totalOriginalKB.toFixed(0)}KB → ${totalTrimmedKB.toFixed(0)}KB (${overallReduction}% reduction)`);
     }
 
+    let ocrContext = '';
+    if (zeroxFallbackCandidates.length > 0 && process.env.ENGINEERING_ZEROX_FALLBACK !== 'false') {
+        await updateJobProgress(job.id, tenantId, {
+            progress: 22,
+            progressMsg: 'PDF sem texto tabular claro — tentando OCR estruturado como apoio...'
+        });
+
+        try {
+            const available = await isZeroxAvailable();
+            if (available) {
+                const zeroxResult = await extractMarkdownFromMultiplePdfs(
+                    zeroxFallbackCandidates.map(candidate => ({
+                        buffer: candidate.buffer,
+                        fileName: candidate.fileName,
+                    })),
+                    {
+                        concurrency: 2,
+                        maintainFormat: true,
+                        temperature: 0.1,
+                    }
+                );
+
+                if (zeroxResult && zeroxResult.markdown.trim().length > 500) {
+                    zeroxFallbackUsed = true;
+                    zeroxFallbackMeta = {
+                        totalPages: zeroxResult.totalPages,
+                        documentsProcessed: zeroxResult.documentsProcessed,
+                        documentsFailed: zeroxResult.documentsFailed,
+                        totalDurationMs: zeroxResult.totalDurationMs,
+                        reasons: zeroxFallbackCandidates.map(candidate => ({
+                            fileName: candidate.fileName,
+                            reason: candidate.reason,
+                        })),
+                    };
+                    ocrContext =
+                        '\n\n── OCR ESTRUTURADO DE APOIO (Zerox) ──\n' +
+                        'Use este conteúdo para reconstruir tabelas quando o PDF inline estiver escaneado, distorcido ou sem texto pesquisável. ' +
+                        'Continue extraindo APENAS linhas de planilha orçamentária real.\n\n' +
+                        zeroxResult.markdown;
+                    logger.info(
+                        `[Engineering-BG] ✅ Zerox fallback: ${zeroxResult.documentsProcessed}/${zeroxFallbackCandidates.length} doc(s), ` +
+                        `${zeroxResult.totalPages} páginas, ${zeroxResult.markdown.length} chars`
+                    );
+                } else {
+                    logger.info('[Engineering-BG] Zerox fallback não gerou markdown suficiente; mantendo apenas PDF inline.');
+                }
+            } else {
+                logger.info('[Engineering-BG] Zerox fallback indisponível; mantendo apenas PDF inline.');
+            }
+        } catch (err: any) {
+            logger.warn(`[Engineering-BG] ⚠️ Zerox fallback falhou: ${err.message}. Mantendo PDF inline.`);
+        }
+    }
+
     await updateJobProgress(job.id, tenantId, {
         progress: 25,
-        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}`
+        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (OCR de apoio)' : ''}`
     });
 
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
@@ -195,16 +280,18 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }, 30000);
 
     let engItems: any[] = [];
+    let screening: EngineeringItemScreeningResult | null = null;
     let modelUsed = 'gemini-2.5-flash';
 
     try {
         let text = '';
+        const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}`;
 
         // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
         try {
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
+                contents: [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }],
                 config: {
                     systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
                     temperature: 0.1,
@@ -224,8 +311,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
             const fallbackResult = await fallbackToOpenAiV2({
                 systemPrompt: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                userPrompt: ENGINEERING_PROPOSAL_USER_INSTRUCTION,
-                pdfParts,
+                userPrompt: userInstruction,
+                pdfParts: ocrContext ? undefined : pdfParts,
                 temperature: 0.1,
                 maxTokens: 65536,
                 stageName: 'Engineering BG Extraction'
@@ -238,26 +325,30 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         clearInterval(progressTimer);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-        // Parse JSON
-        let parsed: any;
-        try {
-            parsed = JSON.parse(text);
-        } catch {
-            // Try to extract JSON from markdown code blocks
-            const match = text.match(/\{[\s\S]*\}/);
-            if (match) {
-                parsed = JSON.parse(match[0]);
-            } else {
-                throw new Error('Resposta da IA não é JSON válido');
-            }
+        const normalizedExtraction = parseAndNormalizeEngineeringExtraction(text);
+        engItems = normalizedExtraction.engineeringItems;
+        if (normalizedExtraction.repaired) {
+            logger.info(
+                `[Engineering-BG] 🛠️ Normalização da resposta aplicou ${normalizedExtraction.repairs.length} reparo(s): ` +
+                normalizedExtraction.repairs.slice(0, 12).join(', ')
+            );
+        }
+        const rawItemCount = engItems.length;
+        screening = screenEngineeringItems(engItems);
+        engItems = screening.acceptedItems;
+
+        if (screening.rejectedItems.length > 0) {
+            logger.warn(
+                `[Engineering-BG] 🧹 Domain screening removed ${screening.rejectedItems.length}/${rawItemCount} row(s) ` +
+                `before enrichment/persistence.`
+            );
         }
 
-        engItems = parsed?.engineeringItems || [];
         const withCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
         const etapas = engItems.filter((it: any) => it.type === 'ETAPA').length;
         const composicoes = engItems.filter((it: any) => it.type === 'COMPOSICAO').length;
 
-        logger.info(`[Engineering-BG] ✅ Extração em ${elapsed}s via ${modelUsed} — ${engItems.length} itens (${etapas} etapas, ${composicoes} composições, ${withCodes} com código oficial)`);
+        logger.info(`[Engineering-BG] ✅ Extração em ${elapsed}s via ${modelUsed} — ${engItems.length}/${rawItemCount} itens aceitos (${etapas} etapas, ${composicoes} composições, ${withCodes} com código oficial)`);
     } catch (err: any) {
         clearInterval(progressTimer);
         logger.error(`[Engineering-BG] ❌ Extração falhou (todos modelos): ${err.message}`);
@@ -296,7 +387,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         estimatedValue = biddingForValue?.estimatedValue || null;
     } catch { /* ignore */ }
 
-    const validationReport = validateEngineeringExtraction(engItems, estimatedValue);
+    const validationReport = validateEngineeringExtraction(engItems, estimatedValue, screening || undefined);
 
     await updateJobProgress(job.id, tenantId, {
         progress: 90,
@@ -306,7 +397,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     });
 
     // ── Step 4: Merge into schemaV2 (include validation report) ──
-    await mergeEngineeringResults(biddingId, engItems, validationReport);
+    await mergeEngineeringResults(biddingId, engItems, validationReport, {
+        pageTargetingUsed: targetingUsed,
+        zeroxFallbackUsed,
+        zeroxFallback: zeroxFallbackMeta,
+        originalSizeKB: Math.round(totalOriginalKB),
+        submittedSizeKB: Math.round(totalTrimmedKB),
+    });
 
     const warningCount = validationReport.issues.filter(i => i.severity === 'warning' || i.severity === 'error').length;
     await updateJobProgress(job.id, tenantId, {
@@ -336,12 +433,14 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         source: 'engineering_bg_extraction',
         model: modelUsed,
         pageTargeting: targetingUsed,
+        zeroxFallback: zeroxFallbackUsed ? zeroxFallbackMeta : null,
         validation: {
             qualityScore: validationReport.qualityScore,
             publishable: validationReport.publishable,
             codeCoveragePercent: validationReport.codeCoveragePercent,
             totalDivergencePercent: validationReport.totalDivergencePercent,
             issueCount: validationReport.issues.length,
+            rejectedItems: validationReport.rejectedItems?.length || 0,
         },
         benchmark: benchmarkResult ? {
             caseId: benchmarkResult.caseId,
@@ -357,7 +456,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 async function mergeEngineeringResults(
     biddingId: string,
     engItems: any[],
-    validationReport?: EngineeringValidationReport
+    validationReport?: EngineeringValidationReport,
+    extractionMeta?: Record<string, any>
 ): Promise<void> {
     const bidding = await prisma.biddingProcess.findUnique({
         where: { id: biddingId },
@@ -384,7 +484,16 @@ async function mergeEngineeringResults(
             totalDivergencePercent: validationReport.totalDivergencePercent,
             typeCounts: validationReport.typeCounts,
             issues: validationReport.issues,
+            itemQuality: validationReport.itemQuality,
+            rejectedItems: validationReport.rejectedItems,
             validatedAt: new Date().toISOString(),
+        };
+    }
+
+    if (extractionMeta) {
+        schemaV2._engineeringExtractionMeta = {
+            ...extractionMeta,
+            extractedAt: new Date().toISOString(),
         };
     }
 
