@@ -831,7 +831,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 120_000; // 120s — planilhas pesadas (100+ itens) precisam de ~60-100s no Gemini
+            const ENG_BUDGET_TIMEOUT_MS = 180_000; // 180s — prompt refinado com extração de códigos é mais pesado para PDFs densos (250+ itens)
             logger.info(`[PNCP-V2] 🏗️ Etapa 1.5: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
