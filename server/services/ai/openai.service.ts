@@ -154,9 +154,32 @@ export async function fallbackToOpenAiV2(opts: {
         }
     }
 
-    // gpt-4o-mini: 128k context, higher TPM → primary for large extractions
-    // gpt-4o: better quality but 30k TPM limit → fallback for smaller payloads
-    // Model-specific max output token limits (OpenAI enforces these strictly)
+    // ═══════════════════════════════════════════════════
+    // Fallback chain: DeepSeek V4 → gpt-4o-mini → gpt-4o
+    // DeepSeek V4 (128k context, superior reasoning) is tried first
+    // ═══════════════════════════════════════════════════
+
+    // 1. Try DeepSeek V4 first (if available)
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+    if (deepseekKey) {
+        try {
+            const { callDeepSeek } = require('./deepseek.service');
+            logger.info(`[Fallback] ${opts.stageName} → tentando DeepSeek V4 primeiro (128k context, superior ao gpt-4o-mini)...`);
+            const dsResult = await callDeepSeek({
+                systemPrompt: opts.systemPrompt,
+                userPrompt: opts.userPrompt,
+                pdfParts: opts.pdfParts,
+                temperature: opts.temperature,
+                maxTokens: opts.maxTokens || 16384,
+                stageName: opts.stageName,
+            });
+            return { text: dsResult.text, model: dsResult.model };
+        } catch (dsErr: any) {
+            logger.warn(`[Fallback] DeepSeek V4 falhou: ${dsErr.message}. Caindo para OpenAI...`);
+        }
+    }
+
+    // 2. OpenAI models (gpt-4o-mini → gpt-4o)
     const MODEL_MAX_TOKENS: Record<string, number> = {
         'gpt-4o-mini': 16384,
         'gpt-4o': 16384,
@@ -203,6 +226,6 @@ export async function fallbackToOpenAiV2(opts: {
         }
     }
 
-    throw lastError || new Error('Todos os modelos OpenAI falharam');
+    throw lastError || new Error('Todos os modelos de fallback falharam (DeepSeek + OpenAI)');
 }
 
