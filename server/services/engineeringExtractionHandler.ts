@@ -24,6 +24,7 @@ import { updateJobProgress } from './backgroundJobService';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { fallbackToOpenAiV2 } from './ai/openai.service';
+import { targetBudgetPages } from './engineering/pageTargeting';
 
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
@@ -42,12 +43,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     logger.info(`[Engineering-BG] 🏗️ Starting extraction for bidding ${biddingId} (${pdfUrls?.length || 0} PDF URLs)`);
 
     await updateJobProgress(job.id, tenantId, {
-        progress: 10,
+        progress: 5,
         progressMsg: 'Baixando planilha orçamentária do PNCP...'
     });
 
-    // ── Step 1: Download PDFs ──
-    const pdfParts: any[] = [];
+    // ── Step 1: Download PDFs (keep raw buffers for page targeting) ──
+    const rawPdfBuffers: Array<{ buffer: Buffer; source: string }> = [];
     const agent = new (require('https').Agent)({ rejectUnauthorized: false });
 
     for (const url of (pdfUrls || [])) {
@@ -59,9 +60,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 maxContentLength: 50 * 1024 * 1024 // 50MB
             } as any);
             const buf = Buffer.from(resp.data as ArrayBuffer);
-            pdfParts.push({
-                inlineData: { data: buf.toString('base64'), mimeType: 'application/pdf' }
-            });
+            rawPdfBuffers.push({ buffer: buf, source: url.substring(0, 80) });
             logger.info(`[Engineering-BG] 📄 PDF downloaded (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)}...`);
         } catch (err: any) {
             logger.warn(`[Engineering-BG] ⚠️ Failed to download PDF: ${err.message}`);
@@ -69,7 +68,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }
 
     // Fallback: if no PDFs from URLs, try to get from the bidding's PNCP attachments
-    if (pdfParts.length === 0) {
+    if (rawPdfBuffers.length === 0) {
         logger.info(`[Engineering-BG] 📄 No PDFs from URLs, trying PNCP attachments from DB...`);
         try {
             const bidding = await prisma.biddingProcess.findUnique({
@@ -95,9 +94,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         maxContentLength: 50 * 1024 * 1024
                     } as any);
                     const buf = Buffer.from(resp.data as ArrayBuffer);
-                    pdfParts.push({
-                        inlineData: { data: buf.toString('base64'), mimeType: 'application/pdf' }
-                    });
+                    rawPdfBuffers.push({ buffer: buf, source: att.titulo || att.url });
                     logger.info(`[Engineering-BG] 📄 PDF from attachments: "${att.titulo}" (${(buf.length / 1024).toFixed(0)} KB)`);
                 } catch (err: any) {
                     logger.warn(`[Engineering-BG] ⚠️ Failed: ${err.message}`);
@@ -108,13 +105,76 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         }
     }
 
-    if (pdfParts.length === 0) {
+    if (rawPdfBuffers.length === 0) {
         throw new Error('Nenhum PDF de planilha orçamentária disponível para extração');
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Step 1.5: PAGE TARGETING — reduce PDF to budget-relevant pages
+    // Instead of sending 200 pages / 22MB to Gemini, we identify
+    // the ~20-30 pages that contain the actual budget table and
+    // create a trimmed PDF. This cuts tokens by ~85%.
+    // ══════════════════════════════════════════════════════════════
     await updateJobProgress(job.id, tenantId, {
-        progress: 30,
-        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA... (pode levar 3-5 min)`
+        progress: 15,
+        progressMsg: 'Localizando páginas da planilha orçamentária...'
+    });
+
+    const pdfParts: any[] = [];
+    let totalOriginalKB = 0;
+    let totalTrimmedKB = 0;
+    let targetingUsed = false;
+
+    for (const { buffer, source } of rawPdfBuffers) {
+        totalOriginalKB += buffer.length / 1024;
+        
+        try {
+            const targeting = await targetBudgetPages(buffer, {
+                minScore: 8,
+                maxPages: 40,
+                contextPages: 1,
+                minPagesForTargeting: 15,
+            });
+
+            if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
+                // Use the trimmed PDF
+                const trimmedBuf = targeting.trimmedPdfBuffer;
+                totalTrimmedKB += trimmedBuf.length / 1024;
+                pdfParts.push({
+                    inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' }
+                });
+                targetingUsed = true;
+                logger.info(
+                    `[Engineering-BG] 🎯 Page Targeting: "${source}" — ` +
+                    `${targeting.totalPages} pgs → ${targeting.selectedPageIndices.length} pgs ` +
+                    `(${targeting.reductionPercent}% redução, ${(buffer.length / 1024).toFixed(0)}KB → ${(trimmedBuf.length / 1024).toFixed(0)}KB)`
+                );
+            } else {
+                // Targeting not applicable or failed — use full PDF
+                totalTrimmedKB += buffer.length / 1024;
+                pdfParts.push({
+                    inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+                });
+                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages)`);
+            }
+        } catch (err: any) {
+            // Page targeting failed — fall back to full PDF
+            logger.warn(`[Engineering-BG] ⚠️ Page targeting failed for "${source}": ${err.message}. Using full PDF.`);
+            totalTrimmedKB += buffer.length / 1024;
+            pdfParts.push({
+                inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+            });
+        }
+    }
+
+    if (targetingUsed) {
+        const overallReduction = Math.round((1 - totalTrimmedKB / totalOriginalKB) * 100);
+        logger.info(`[Engineering-BG] 🎯 Overall: ${totalOriginalKB.toFixed(0)}KB → ${totalTrimmedKB.toFixed(0)}KB (${overallReduction}% reduction)`);
+    }
+
+    await updateJobProgress(job.id, tenantId, {
+        progress: 25,
+        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}`
     });
 
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
