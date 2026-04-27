@@ -477,20 +477,10 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     e) Se o edital/TR não detalhar itens individuais (ex: licitação por preço global sem planilha), retorne um único item com a descrição do objeto completo.
     f) Para editais de SERVIÇO GLOBAL (ex: limpeza pública, vigilância), extraia como único item com descrição completa e valor estimado global como referencePrice.
     g) 🚨 REGRA ESPECIAL — PLANILHA ORÇAMENTÁRIA DE ENGENHARIA (OBRAS E SERVIÇOS DE ENGENHARIA):
-       Para obras e serviços de engenharia, o edital/projeto básico SEMPRE contém uma Planilha Orçamentária com CÓDIGOS OFICIAIS de bases referenciais (SINAPI, SEINFRA, ORSE, SICRO, SETOP, EMOP, etc.).
-       Você DEVE:
-       - LOCALIZAR a planilha orçamentária no documento (pode estar no Projeto Básico, Anexo ou Orçamento Estimado)
-       - Extrair CADA ITEM INDIVIDUAL da planilha (NÃO agrupe, NÃO resuma)
-       - Preservar a HIERARQUIA (ex: "1.0 Serviços Preliminares" como grupo, "1.1 Placa de obra" como item)
-       - Extrair o CÓDIGO OFICIAL no campo "sourceCode" (ex: "C0054", "74209/1", "I1234")
-       - Extrair a BASE REFERENCIAL no campo "sourceBase" (ex: "SINAPI", "SEINFRA", "ORSE")
-       - Manter descrição EXATA como consta na planilha
-       - Manter unidade EXATA (M2, M3, KG, UN, ML, CJ, VB, etc.)
-       - Manter quantidade e preço unitário EXATOS
-       EXEMPLO CORRETO para planilha SEINFRA:
-       {"itemNumber": "1.1", "sourceCode": "C0XXX", "sourceBase": "SEINFRA", "description": "ADMINISTRAÇÃO LOCAL DA OBRA", "unit": "MÊS", "quantity": 100, "referencePrice": 269.65}
-       {"itemNumber": "6.1", "sourceCode": "C0089", "sourceBase": "SEINFRA", "description": "ANEL DE IMPERMEABILIZAÇÃO C/ARMAÇÃO EM FERRO", "unit": "M2", "quantity": 4.11, "referencePrice": 934.79}
-       ⚠️ É ABSOLUTAMENTE INACEITÁVEL extrair apenas 1 item genérico (ex: "Construção de quadra poliesportiva") quando a planilha tem 50+ itens detalhados. EXTRAIA TODOS.
+       Para obras e serviços de engenharia, o edital possui uma extensa Planilha Orçamentária. 
+       ⚠️ PROIBIDO EXTRAIR A PLANILHA AQUI: NÃO extraia os itens individuais da planilha orçamentária (SINAPI/SEINFRA, etc.). O sistema possui um módulo dedicado em background para isso.
+       Você DEVE extrair APENAS 1 item genérico representando a obra como um todo (ex: "Construção de escola" ou "Pavimentação"), colocando o valor global no referencePrice.
+       NÃO gaste tokens listando dezenas/centenas de etapas de engenharia.
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
     b) Use "prazo_envio_proposta" para datas/horários fixos (ex: "até 09:00 do dia 15/04").
