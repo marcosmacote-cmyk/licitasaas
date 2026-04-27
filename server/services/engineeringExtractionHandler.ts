@@ -26,6 +26,7 @@ import { prisma } from '../lib/prisma';
 import { fallbackToOpenAiV2 } from './ai/openai.service';
 import { targetBudgetPages } from './engineering/pageTargeting';
 import { validateEngineeringExtraction, type EngineeringValidationReport } from './engineering/extractionValidator';
+import { autoEvaluateIfBenchmarkCase } from './ai/benchmark/engineeringBenchmarkRunner';
 
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
@@ -313,6 +314,20 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         progressMsg: `✅ ${engItems.length} itens extraídos (qualidade: ${validationReport.qualityScore}%${warningCount > 0 ? `, ${warningCount} alertas` : ''})`
     });
 
+    // ── Step 5: Auto-benchmark (if this bidding matches a known case) ──
+    let benchmarkResult: any = null;
+    try {
+        const biddingMeta = await prisma.biddingProcess.findUnique({
+            where: { id: biddingId },
+            include: { aiAnalysis: true },
+        });
+        const schemaV2 = biddingMeta?.aiAnalysis?.schemaV2 as any;
+        const pncpRef = schemaV2?.pncp_source?.pncp_ref || null;
+        if (pncpRef) {
+            benchmarkResult = autoEvaluateIfBenchmarkCase(pncpRef, engItems, estimatedValue || undefined);
+        }
+    } catch { /* benchmark is optional, never blocks */ }
+
     const finalWithCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
     return {
         itemCount: engItems.length,
@@ -327,7 +342,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             codeCoveragePercent: validationReport.codeCoveragePercent,
             totalDivergencePercent: validationReport.totalDivergencePercent,
             issueCount: validationReport.issues.length,
-        }
+        },
+        benchmark: benchmarkResult ? {
+            caseId: benchmarkResult.caseId,
+            score: benchmarkResult.totalScore,
+            details: benchmarkResult.details,
+        } : null,
     };
 }
 
