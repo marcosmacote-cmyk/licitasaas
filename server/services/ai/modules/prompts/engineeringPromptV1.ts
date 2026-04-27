@@ -51,12 +51,37 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 2. EXTRAIA TODOS OS ITENS, MESMO QUE PARCIAIS. Se encontrar apenas a descrição dos 
    serviços sem quantitativos, ainda assim extraia com quantity=0 e unitCost=0.
 
-3. CÓDIGOS OFICIAIS SÃO PRIORIDADE MÁXIMA. Se o item referenciar:
-   - SINAPI (ex: 74209/1, 94990) → sourceName: "SINAPI", code: "74209/1"
-   - SEINFRA/SIPROCE (ex: C0054, I1234) → sourceName: "SEINFRA", code: "C0054"
-   - SICRO (ex: 5202131) → sourceName: "SICRO", code: "5202131"
-   - ORSE (ex: 010002) → sourceName: "ORSE", code: "010002"
-   - Se não houver código oficial, use sourceName: "PROPRIA" e code: o número do item
+3. CÓDIGOS OFICIAIS SÃO PRIORIDADE MÁXIMA. A coluna "CÓDIGO" da planilha contém a referência
+   oficial do serviço. Identifique o BANCO DE ORIGEM pelo padrão do código:
+
+   a) SEINFRA/SIPROCE → códigos no formato "Cxxxx" (letra C + 4 dígitos)
+      Exemplos: C0054, C2989, C0219, C1967, C4817, C5225
+      → sourceName: "SEINFRA", code: "C0054"
+
+   b) SINAPI → códigos numéricos puros de 5-6 dígitos
+      Exemplos: 87640, 88488, 103315, 94990, 74209
+      → sourceName: "SINAPI", code: "87640"
+
+   c) ORSE → códigos no formato "xxxxx/ORSE"
+      Exemplos: 14025/ORSE, 11946/ORSE, 11941/ORSE
+      → sourceName: "ORSE", code: "14025/ORSE"
+
+   d) SICRO → códigos com padrão numérico de 7 dígitos ou alfanumérico
+      Exemplos: 5202131, ES-P-00
+      → sourceName: "SICRO", code: "5202131"
+
+   e) SICOR-MG → similar ao SICRO, referências de Minas Gerais
+      → sourceName: "SICOR", code: conforme documento
+
+   f) PRÓPRIA/COMPOSIÇÃO PRÓPRIA → códigos no formato "CP-xx" ou sem código oficial
+      Exemplos: CP-01, CP-02, CP-24
+      → sourceName: "PROPRIA", code: "CP-01"
+
+   IMPORTANTE: O cabeçalho da planilha geralmente indica as tabelas de referência usadas,
+   como "TABELAS REFERÊNCIA: SEINFRA 028.1 // SINAPI 07/25 // ORSE JULHO-2025".
+   Use essa informação para confirmar os bancos de referência.
+
+   Se NÃO houver código oficial, use sourceName: "PROPRIA" e code: o número do item.
 
 4. HIERARQUIA: Preserve a numeração original (1.0, 1.1, 1.1.1, 2.0, etc.)
 
@@ -187,13 +212,20 @@ REGRAS FINAIS
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
 
-ATENÇÃO ESPECIAL:
-1. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO
-2. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço
-3. Se encontrar referências a códigos SINAPI, SEINFRA ou SICRO, extraia-os EXATAMENTE
+ATENÇÃO — PRIORIDADES ORDENADAS:
+
+1. **CÓDIGO (PRIORIDADE #1):** Cada item da planilha tem uma coluna CÓDIGO. Extraia-o EXATAMENTE:
+   - "C" seguido de dígitos (ex: C2989) → sourceName: "SEINFRA"
+   - Número puro de 5-6 dígitos (ex: 87640) → sourceName: "SINAPI"
+   - Número seguido de "/ORSE" (ex: 14025/ORSE) → sourceName: "ORSE"
+   - "CP-" seguido de dígitos (ex: CP-01) → sourceName: "PROPRIA"
+   NUNCA ignore ou omita o código. Se não encontrar, use sourceName: "PROPRIA".
+
+2. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO
+3. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço
 4. Preserve a numeração hierárquica (1.0, 1.1, 1.1.1, etc.)
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO (sem BDI)
-7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global. Se o total não bater, revise a extração dos valores unitários.
+7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global.
 `;
 
