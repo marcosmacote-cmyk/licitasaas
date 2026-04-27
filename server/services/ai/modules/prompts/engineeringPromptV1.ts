@@ -88,11 +88,19 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 5. UNIDADES DE MEDIDA: Use exatamente como estão no documento.
    Comuns: M2, M3, M, KG, UN, VB, CJ, L, H, MÊS, GL, etc.
 
-6. PREÇOS E CUSTOS (CRÍTICO): 
-   - Obras públicas diferenciam "Custo Direto" (sem encargos), "Custo com Leis Sociais (LS)" e "Preço com BDI".
-   - Extraia SEMPRE o Custo (com Leis Sociais se houver, mas SEMPRE SEM BDI) para o campo "unitCost".
-   - Se a planilha informar apenas o "Preço com BDI" e a taxa do BDI, calcule o Custo: unitCost = Preço / (1 + BDI/100).
-   - Se a planilha tiver colunas separadas para Material, Mão de Obra e Equipamento, o "unitCost" é a SOMA dos três.
+6. PREÇOS E CUSTOS (CRÍTICO — CAMPO unitCost): 
+   PLANILHAS ORÇAMENTÁRIAS DE OBRAS TÊM DUAS COLUNAS DE PREÇO:
+   - "PREÇO UNITÁRIO S/ BDI" ← USE ESTA COLUNA para o campo unitCost
+   - "PREÇO UNITÁRIO C/ BDI" ← NUNCA use esta coluna
+   
+   COMO IDENTIFICAR:
+   - A coluna S/BDI tem valores MENORES (ex: 104,47)
+   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← NÃO USE
+   - O cabeçalho geralmente mostra o BDI (ex: "BDI: 29,31%")
+   
+   Se a planilha informar APENAS "Preço com BDI" e a taxa do BDI:
+   → Calcule: unitCost = Preço_com_BDI / (1 + BDI/100)
+   → Exemplo: 135,09 / 1.2931 = 104,47
 
 7. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
    - Antes de gerar a saída, faça a conta: para cada item, (quantidade × unitCost).
@@ -130,49 +138,46 @@ FORMATO DE SAÍDA (JSON)
       "quantity": 0,
       "unitCost": 0
     },
-    {
-      "item": "1.1.1",
-      "type": "COMPOSICAO",
-      "sourceName": "SINAPI",
-      "code": "74209/1",
-      "description": "PLACA DE OBRA EM CHAPA DE AÇO GALVANIZADO",
-      "unit": "M2",
-      "quantity": 3.00,
-      "unitCost": 403.26
-    },
-    {
-      "item": "1.1.2",
-      "type": "COMPOSICAO",
-      "sourceName": "PROPRIA",
-      "code": "CP-001",
-      "description": "LOCAÇÃO DA OBRA COM EQUIPAMENTO TOPOGRÁFICO",
-      "unit": "M2",
-      "quantity": 762.58,
-      "unitCost": 2.35,
-      "insumos": [
-        {
-          "description": "Engenheiro agrimensor",
-          "type": "MAO_DE_OBRA",
-          "unit": "H",
-          "coefficient": 0.05,
-          "unitPrice": 32.50
-        },
-        {
-          "description": "Estação total topográfica",
-          "type": "EQUIPAMENTO",
-          "unit": "H",
-          "coefficient": 0.05,
-          "unitPrice": 12.80
-        },
-        {
-          "description": "Estaca de madeira",
-          "type": "MATERIAL",
-          "unit": "UN",
-          "coefficient": 0.15,
-          "unitPrice": 1.20
-        }
-      ]
-    },
+     {
+       "item": "1.1.1",
+       "type": "COMPOSICAO",
+       "sourceName": "SEINFRA",
+       "code": "C0054",
+       "description": "PLACA DE OBRA EM CHAPA DE AÇO GALVANIZADO",
+       "unit": "M2",
+       "quantity": 3.00,
+       "unitCost": 183.41
+     },
+     {
+       "item": "1.1.2",
+       "type": "COMPOSICAO",
+       "sourceName": "SINAPI",
+       "code": "87640",
+       "description": "CONTRAPISO EM ARGAMASSA TRAÇO 1:4 (CIMENTO E AREIA)",
+       "unit": "M2",
+       "quantity": 189.00,
+       "unitCost": 48.26
+     },
+     {
+       "item": "1.1.3",
+       "type": "COMPOSICAO",
+       "sourceName": "ORSE",
+       "code": "14025/ORSE",
+       "description": "JANELA BASCULANTE EM ALUMÍNIO ANODIZADO",
+       "unit": "M2",
+       "quantity": 103.20,
+       "unitCost": 1618.01
+     },
+     {
+       "item": "1.1.4",
+       "type": "COMPOSICAO",
+       "sourceName": "PROPRIA",
+       "code": "CP-01",
+       "description": "FACHADA EM ESTRUTURA METÁLICA COM CHAPA PERFURADA",
+       "unit": "M2",
+       "quantity": 765.72,
+       "unitCost": 346.93
+     },
     {
       "item": "2.0",
       "type": "ETAPA",
