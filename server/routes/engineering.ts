@@ -966,7 +966,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 ?.filter((a: any) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' || a.purpose === 'composicao_custos' || a.purpose === 'anexo_geral' || a.title?.toLowerCase().includes('planilha')))
                 ?.map((a: any) => a.url) || [];
 
-            const user = req.user || { tenantId: bidding.tenantId, id: 'system' };
+            const user = req.user || { tenantId: bidding?.tenantId || 'unknown', id: 'system' };
             const { submitJob } = require('../services/backgroundJobService');
             
             const newJob = await submitJob({
@@ -974,7 +974,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 userId: user.id,
                 type: 'engineering_extraction',
                 targetId: biddingId,
-                targetTitle: `Planilha Orçamentária — ${bidding.processNumber || bidding.title || 'Edital'}`,
+                targetTitle: `Planilha Orçamentária — ${bidding?.processNumber || bidding?.title || 'Edital'}`,
                 input: {
                     biddingId,
                     pdfUrls
