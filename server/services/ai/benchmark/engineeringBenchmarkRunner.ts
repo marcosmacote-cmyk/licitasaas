@@ -17,8 +17,7 @@
  *    3. Via CLI para regressão em batch
  */
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const engineeringManifest = require('./engineeringBenchmarkManifest.json');
+import { engineeringManifest } from './engineeringBenchmarkManifest';
 import { validateEngineeringExtraction } from '../../engineering/extractionValidator';
 import { logger } from '../../../lib/logger';
 

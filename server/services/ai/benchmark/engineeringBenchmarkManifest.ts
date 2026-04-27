@@ -1,4 +1,4 @@
-{
+export const engineeringManifest = {
   "version": "1.0.0",
   "description": "Benchmark de extração de planilha orçamentária de engenharia — Casos reais do PNCP para validação do pipeline Page Targeting + Gemini",
   "created_at": "2026-04-27",
