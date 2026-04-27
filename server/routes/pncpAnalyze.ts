@@ -831,7 +831,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (isEngineeringProcess) {
             sendProgress(5, 'Extração dedicada da planilha orçamentária...', 'Etapa 1.5 — Engenharia detectada');
             const t15Start = Date.now();
-            const ENG_BUDGET_TIMEOUT_MS = 240_000; // 240s — prompt refinado com extração de códigos denso; R3/R5 timed out em 120s/180s
+            const ENG_BUDGET_TIMEOUT_MS = 300_000; // 300s (5min) — R2-R6 analysis: extração leva 200-270s para PDFs de 22MB com 250+ itens. 120s/180s/240s todos insuficientes.
             logger.info(`[PNCP-V2] 🏗️ Etapa 1.5-A: Engenharia detectada (tipo=${detectedTipoObjeto}), itens_E1=${stage1ItensCount}. SEMPRE executando extração dedicada para metadados de engenharia (budget: ${ENG_BUDGET_TIMEOUT_MS / 1000}s)...`);
 
             try {
