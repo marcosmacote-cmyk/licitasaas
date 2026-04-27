@@ -87,9 +87,10 @@ function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
 
     const extractedUnitCost = Number(item.unitCost) || 0;
     const matchedUnitCost = audit.matchedUnitCost;
-    const deltaValue = extractedUnitCost - matchedUnitCost;
-    const deltaPercent = matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-    const hasRelevantDelta = Math.abs(deltaValue) > 0.01;
+    const hasRegimeMismatch = (audit.warnings || []).some(w => String(w).toLowerCase().includes('regime'));
+    const deltaValue = hasRegimeMismatch ? null : extractedUnitCost - matchedUnitCost;
+    const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+    const hasRelevantDelta = !hasRegimeMismatch && deltaValue !== null && Math.abs(deltaValue) > 0.01;
     const hasBaseWarnings = (audit.warnings || []).length > 0;
 
     return {
@@ -107,6 +108,7 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     const meta = AUDIT_META[audit.status] || AUDIT_META.SEM_MATCH;
     const delta = typeof audit.deltaPercent === 'number' ? ` (${audit.deltaPercent > 0 ? '+' : ''}${audit.deltaPercent.toFixed(2)}%)` : '';
     const hasBasePrice = typeof audit.matchedUnitCost === 'number' && audit.matchedUnitCost > 0;
+    const hasRegimeMismatch = (audit.warnings || []).some(w => String(w).toLowerCase().includes('regime'));
     const title = [
         audit.matchedSourceName ? `Base: ${audit.matchedSourceName} ${audit.matchedReference || ''}` : '',
         typeof audit.matchedUnitCost === 'number' ? `Preço base: ${fmt(audit.matchedUnitCost)}` : '',
@@ -120,7 +122,7 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
                 {audit.status === 'OK' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
                 {meta.label}{delta}
             </span>
-            {hasBasePrice && audit.status !== 'OK' && (
+            {hasBasePrice && audit.status !== 'OK' && !hasRegimeMismatch && (
                 <button
                     type="button"
                     onClick={onApplyBase}
@@ -140,6 +142,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
+    const [isAuditing, setIsAuditing] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
 
     // Search modal
@@ -385,11 +388,28 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         }));
     };
 
-    const refreshAllAudits = () => {
-        setHasUnsavedChanges(true);
-        setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig));
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><RefreshCw size={14} /> Auditoria recalculada</span>);
-        setTimeout(() => setSaveMsg(null), 3000);
+    const refreshAllAudits = async () => {
+        if (items.length === 0) return;
+        setIsAuditing(true);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Reauditando bases oficiais...</span>);
+        try {
+            const res = await fetch('/api/engineering/price-audit', {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ items, engineeringConfig }),
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao reauditar');
+            const data = await res.json();
+            setItems(recalcAll(Array.isArray(data.items) ? data.items : items, effectiveBdi, engineeringConfig));
+            setHasUnsavedChanges(true);
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Auditoria atualizada contra base, data e regime</span>);
+        } catch (e: any) {
+            setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig));
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
+        } finally {
+            setIsAuditing(false);
+            setTimeout(() => setSaveMsg(null), 5000);
+        }
     };
 
     const addTypedItem = (type: EngItemType) => {
@@ -654,8 +674,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <button className={`btn ${activeTab === 'hub_insumos' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('hub_insumos')}>
                         <Package size={15} /> Insumos & CPU
                     </button>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={refreshAllAudits} disabled={items.length === 0}>
-                        <RefreshCw size={14} /> Reauditar
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={refreshAllAudits} disabled={items.length === 0 || isAuditing}>
+                        {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Reauditar
                     </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}

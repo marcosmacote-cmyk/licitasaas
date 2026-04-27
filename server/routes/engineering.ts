@@ -4,7 +4,7 @@ import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
-import { downloadAndParseSeinfra } from '../services/engineering/seinfra-scraper';
+import { downloadAndParseSeinfra, getSeinfraRegimeMeta, type SeinfraRegime } from '../services/engineering/seinfra-scraper';
 import { CompositionFlattener } from '../services/engineering/compositionFlattener';
 import axios from 'axios';
 import https from 'https';
@@ -21,9 +21,10 @@ function refreshSubmittedPriceAudit(item: any) {
     if (!audit || matchedUnitCost <= 0) return audit || undefined;
 
     const extractedUnitCost = Number(item.unitCost) || 0;
-    const deltaValue = extractedUnitCost - matchedUnitCost;
-    const deltaPercent = matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-    const hasPriceDelta = Math.abs(deltaValue) > 0.01;
+    const hasRegimeMismatch = Array.isArray(audit.warnings) && audit.warnings.some((warning: string) => String(warning).toLowerCase().includes('regime'));
+    const deltaValue = hasRegimeMismatch ? null : extractedUnitCost - matchedUnitCost;
+    const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+    const hasPriceDelta = !hasRegimeMismatch && deltaValue !== null && Math.abs(deltaValue) > 0.01;
     const hasBaseWarnings = Array.isArray(audit.warnings) && audit.warnings.length > 0;
 
     return {
@@ -905,6 +906,24 @@ router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
     }
 });
 
+// POST /api/engineering/price-audit
+// Recalcula o match dos itens contra as bases oficiais respeitando data-base e regime.
+router.post('/price-audit', async (req: any, res: any) => {
+    try {
+        const { items, engineeringConfig } = req.body || {};
+        if (!Array.isArray(items)) {
+            return res.status(400).json({ error: 'items deve ser um array' });
+        }
+
+        const audited = items.map((item: any) => ({ ...item }));
+        await enrichWithOfficialPrices(audited, engineeringConfig);
+        res.json({ items: audited });
+    } catch (e: any) {
+        console.error('[Engineering Price Audit] Error:', e);
+        res.status(500).json({ error: 'Erro ao reauditar preços', details: e.message });
+    }
+});
+
 // ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
@@ -1500,7 +1519,14 @@ function buildCandidateScore(candidate: any, sourceName: string, config: any, ta
 
 function chooseBestCandidate(candidates: any[], item: any, config: any, targetDate: { year: number; month: number } | null) {
     if (candidates.length === 0) return null;
-    return candidates
+    const desiredDesonerado = config?.regimeOneracao
+        ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
+        : null;
+    const sameRegime = desiredDesonerado === null
+        ? candidates
+        : candidates.filter(candidate => Boolean(candidate.database?.payrollExemption) === desiredDesonerado);
+    const pool = sameRegime.length > 0 ? sameRegime : candidates;
+    return pool
         .map(candidate => ({ candidate, ...buildCandidateScore(candidate, item.sourceName, config, targetDate) }))
         .sort((a, b) => b.score - a.score)[0];
 }
@@ -1561,10 +1587,13 @@ async function enrichWithOfficialPrices(items: any[], engineeringConfig?: any): 
 
         const matched = best.candidate;
         const matchedUnitCost = Number(matched.matchedPrice) || 0;
-        const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
+        const regimeMismatch = best.warnings.some((warning: string) => warning.includes('regime'));
+        const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
         const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-        const hasRelevantDelta = Math.abs(deltaValue || 0) > 0.01;
-        const status: EngineeringPriceAuditStatus = hasRelevantDelta
+        const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
+        const status: EngineeringPriceAuditStatus = regimeMismatch
+            ? 'BASE_INCOMPATIVEL'
+            : hasRelevantDelta
             ? 'DIVERGENT'
             : best.warnings.length > 0
                 ? 'BASE_INCOMPATIVEL'
@@ -1988,139 +2017,181 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
-        console.log('[SEINFRA Import] 🚀 Iniciando download dos Excel oficiais do SIPROCE...');
+        const requestedRegime = String(req.body?.regime || 'ambas').toLowerCase();
+        const regimes: SeinfraRegime[] = requestedRegime === 'onerada'
+            ? ['onerada']
+            : requestedRegime === 'desonerada'
+                ? ['desonerada']
+                : ['onerada', 'desonerada'];
 
-        // Phase 1: Download and parse Excel files
-        const { insumos, compositions, errors } = await downloadAndParseSeinfra();
+        console.log(`[SEINFRA Import] 🚀 Iniciando import SIPROCE: ${regimes.join(', ')}`);
+        const summaries: any[] = [];
 
-        console.log(`[SEINFRA Import] ✅ Parse concluído: ${insumos.length} insumos, ${compositions.length} composições`);
+        for (const regime of regimes) {
+            const meta = getSeinfraRegimeMeta(regime);
+            const errors: string[] = [];
+            console.log(`[SEINFRA Import] 📚 Processando SEINFRA ${meta.version} (${regime})...`);
 
-        if (insumos.length === 0 && compositions.length === 0) {
-            return res.json({
-                message: 'Download concluído mas nenhum dado encontrado. Verifique se o portal SIPROCE está acessível.',
+            const parsed = await downloadAndParseSeinfra(regime);
+            errors.push(...parsed.errors);
+            const { insumos, compositions } = parsed;
+
+            if (insumos.length === 0 && compositions.length === 0) {
+                summaries.push({
+                    regime,
+                    version: meta.version,
+                    payrollExemption: meta.payrollExemption,
+                    parsed: { insumos: 0, compositions: 0 },
+                    inserted: { insumos: 0, compositions: 0, compositionItems: 0 },
+                    errors: errors.slice(0, 20),
+                });
+                continue;
+            }
+
+            let db = await prisma.engineeringDatabase.findFirst({
+                where: {
+                    name: 'SEINFRA',
+                    uf: 'CE',
+                    type: 'OFICIAL',
+                    version: meta.version,
+                    payrollExemption: meta.payrollExemption,
+                }
+            });
+
+            if (!db) {
+                db = await prisma.engineeringDatabase.create({
+                    data: {
+                        name: 'SEINFRA',
+                        uf: 'CE',
+                        version: meta.version,
+                        type: 'OFICIAL',
+                        payrollExemption: meta.payrollExemption,
+                    }
+                });
+            } else {
+                db = await prisma.engineeringDatabase.update({
+                    where: { id: db.id },
+                    data: {
+                        version: meta.version,
+                        payrollExemption: meta.payrollExemption,
+                    }
+                });
+            }
+
+            let insertedInsumos = 0;
+            for (const insumo of insumos) {
+                try {
+                    await prisma.engineeringItem.upsert({
+                        where: { databaseId_code: { databaseId: db.id, code: insumo.code } },
+                        create: {
+                            databaseId: db.id,
+                            code: insumo.code,
+                            description: insumo.description,
+                            unit: insumo.unit,
+                            price: insumo.price,
+                            type: insumo.type,
+                        },
+                        update: {
+                            description: insumo.description,
+                            unit: insumo.unit,
+                            price: insumo.price,
+                            type: insumo.type,
+                        },
+                    });
+                    insertedInsumos++;
+                } catch (e: any) {
+                    if (!e.message.includes('Unique constraint')) {
+                        errors.push(`Insumo ${insumo.code}: ${e.message}`);
+                    }
+                }
+            }
+
+            let insertedComps = 0;
+            let insertedCompItems = 0;
+            for (const comp of compositions) {
+                try {
+                    const dbComp = await prisma.engineeringComposition.upsert({
+                        where: { databaseId_code: { databaseId: db.id, code: comp.code } },
+                        create: {
+                            databaseId: db.id,
+                            code: comp.code,
+                            description: comp.description,
+                            unit: comp.unit,
+                            totalPrice: comp.totalPrice,
+                        },
+                        update: {
+                            description: comp.description,
+                            unit: comp.unit,
+                            totalPrice: comp.totalPrice,
+                        },
+                    });
+
+                    await prisma.engineeringCompositionItem.deleteMany({
+                        where: { compositionId: dbComp.id }
+                    });
+
+                    for (const item of comp.items) {
+                        let itemId: string | null = null;
+                        let auxCompId: string | null = null;
+
+                        if (item.isComposition) {
+                            const auxComp = await prisma.engineeringComposition.findFirst({
+                                where: { databaseId: db.id, code: item.insumoCode }
+                            });
+                            auxCompId = auxComp?.id || null;
+                        } else {
+                            const dbItem = await prisma.engineeringItem.findFirst({
+                                where: { databaseId: db.id, code: item.insumoCode }
+                            });
+                            itemId = dbItem?.id || null;
+                        }
+
+                        await prisma.engineeringCompositionItem.create({
+                            data: {
+                                compositionId: dbComp.id,
+                                itemId,
+                                auxiliaryCompositionId: auxCompId,
+                                coefficient: item.coefficient,
+                                price: item.totalPrice,
+                            },
+                        });
+                        insertedCompItems++;
+                    }
+
+                    insertedComps++;
+                } catch (e: any) {
+                    errors.push(`Composition ${comp.code}: ${e.message}`);
+                }
+            }
+
+            const [itemCount, compositionCount] = await Promise.all([
+                prisma.engineeringItem.count({ where: { databaseId: db.id } }),
+                prisma.engineeringComposition.count({ where: { databaseId: db.id } }),
+            ]);
+            await prisma.engineeringDatabase.update({
+                where: { id: db.id },
+                data: { itemCount, compositionCount },
+            });
+
+            console.log(`[SEINFRA Import] 🏁 ${regime}: ${insertedInsumos} insumos, ${insertedComps} composições, ${insertedCompItems} itens`);
+            summaries.push({
+                regime,
+                version: meta.version,
+                payrollExemption: meta.payrollExemption,
+                databaseId: db.id,
+                parsed: { insumos: insumos.length, compositions: compositions.length },
+                inserted: { insumos: insertedInsumos, compositions: insertedComps, compositionItems: insertedCompItems },
+                counts: { items: itemCount, compositions: compositionCount },
                 errors: errors.slice(0, 20),
             });
         }
 
-        // Phase 2: Create or find the SEINFRA database
-        let db = await prisma.engineeringDatabase.findFirst({
-            where: { name: 'SEINFRA', uf: 'CE', type: 'OFICIAL' }
-        });
-        if (!db) {
-            db = await prisma.engineeringDatabase.create({
-                data: {
-                    name: 'SEINFRA',
-                    uf: 'CE',
-                    version: '028',
-                    type: 'OFICIAL',
-                }
-            });
-        }
-
-        // Phase 3: Upsert insumos (materials, labor, equipment)
-        let insertedInsumos = 0;
-        for (const insumo of insumos) {
-            try {
-                await prisma.engineeringItem.upsert({
-                    where: { databaseId_code: { databaseId: db.id, code: insumo.code } },
-                    create: {
-                        databaseId: db.id,
-                        code: insumo.code,
-                        description: insumo.description,
-                        unit: insumo.unit,
-                        price: insumo.price,
-                        type: insumo.type,
-                    },
-                    update: {
-                        description: insumo.description,
-                        unit: insumo.unit,
-                        price: insumo.price,
-                        type: insumo.type,
-                    },
-                });
-                insertedInsumos++;
-            } catch (e: any) {
-                if (!e.message.includes('Unique constraint')) {
-                    errors.push(`Insumo ${insumo.code}: ${e.message}`);
-                }
-            }
-        }
-        console.log(`[SEINFRA Import] 📦 ${insertedInsumos} insumos importados`);
-
-        // Phase 4: Upsert compositions and their items
-        let insertedComps = 0;
-        let insertedCompItems = 0;
-
-        for (const comp of compositions) {
-            try {
-                // Upsert composition
-                const dbComp = await prisma.engineeringComposition.upsert({
-                    where: { databaseId_code: { databaseId: db.id, code: comp.code } },
-                    create: {
-                        databaseId: db.id,
-                        code: comp.code,
-                        description: comp.description,
-                        unit: comp.unit,
-                        totalPrice: comp.totalPrice,
-                    },
-                    update: {
-                        description: comp.description,
-                        unit: comp.unit,
-                        totalPrice: comp.totalPrice,
-                    },
-                });
-
-                // Delete existing composition items and re-insert
-                await prisma.engineeringCompositionItem.deleteMany({
-                    where: { compositionId: dbComp.id }
-                });
-
-                // Link composition items
-                for (const item of comp.items) {
-                    let itemId: string | null = null;
-                    let auxCompId: string | null = null;
-
-                    if (item.isComposition) {
-                        // This is an auxiliary composition (C-code referencing another C-code)
-                        const auxComp = await prisma.engineeringComposition.findFirst({
-                            where: { databaseId: db.id, code: item.insumoCode }
-                        });
-                        auxCompId = auxComp?.id || null;
-                    } else {
-                        // This is a basic insumo (I-code or numeric)
-                        const dbItem = await prisma.engineeringItem.findFirst({
-                            where: { databaseId: db.id, code: item.insumoCode }
-                        });
-                        itemId = dbItem?.id || null;
-                    }
-
-                    // Create composition item even without a linked record (will show description)
-                    await prisma.engineeringCompositionItem.create({
-                        data: {
-                            compositionId: dbComp.id,
-                            itemId,
-                            auxiliaryCompositionId: auxCompId,
-                            coefficient: item.coefficient,
-                            price: item.totalPrice,
-                        },
-                    });
-                    insertedCompItems++;
-                }
-
-                insertedComps++;
-            } catch (e: any) {
-                errors.push(`Composition ${comp.code}: ${e.message}`);
-            }
-        }
-
-        console.log(`[SEINFRA Import] 🏁 Import concluído: ${insertedInsumos} insumos, ${insertedComps} composições, ${insertedCompItems} itens`);
-
+        const totalInserted = summaries.reduce((sum, s) => sum + (s.inserted?.insumos || 0) + (s.inserted?.compositions || 0), 0);
         res.json({
-            message: `SEINFRA-CE V028: ${insertedInsumos} insumos + ${insertedComps} composições (${insertedCompItems} itens) importados`,
-            databaseId: db.id,
-            parsed: { insumos: insumos.length, compositions: compositions.length },
-            inserted: { insumos: insertedInsumos, compositions: insertedComps, compositionItems: insertedCompItems },
-            errors: errors.slice(0, 20),
+            message: totalInserted > 0
+                ? `SEINFRA importada por regime: ${summaries.map(s => `${s.version} ${s.regime}`).join(', ')}`
+                : 'Download concluído mas nenhum dado encontrado. Verifique se o portal SIPROCE está acessível.',
+            results: summaries,
         });
 
     } catch (e: any) {

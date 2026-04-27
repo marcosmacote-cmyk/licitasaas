@@ -19,10 +19,28 @@
  */
 
 import * as XLSX from 'xlsx';
+import * as cheerio from 'cheerio';
 
-const SEINFRA_BASE = 'https://sin.seinfra.ce.gov.br/site-seinfra/siproce/onerada';
-const INSUMOS_URL = `${SEINFRA_BASE}/Tabela-de-Insumos-028---ENC.-SOCIAIS-114,15.xls`;
-const COMPOSICOES_URL = `${SEINFRA_BASE}/Composicoes-028---ENC.-SOCIAIS-114,15.xls`;
+export type SeinfraRegime = 'onerada' | 'desonerada';
+
+export const SEINFRA_REGIMES = {
+    onerada: {
+        baseUrl: 'https://sin.seinfra.ce.gov.br/site-seinfra/siproce/onerada',
+        version: '028',
+        encargos: '114,15',
+        payrollExemption: false,
+    },
+    desonerada: {
+        baseUrl: 'https://sin.seinfra.ce.gov.br/site-seinfra/siproce/desonerada',
+        version: '028.1',
+        encargos: '84,44',
+        payrollExemption: true,
+    },
+} as const;
+
+export function getSeinfraRegimeMeta(regime: SeinfraRegime) {
+    return SEINFRA_REGIMES[regime];
+}
 
 export interface ParsedInsumo {
     code: string;
@@ -67,6 +85,26 @@ async function downloadFile(url: string): Promise<Buffer> {
     } finally {
         clearTimeout(timeout);
     }
+}
+
+async function downloadText(url: string): Promise<string> {
+    console.log(`[SEINFRA Import] ⬇️ Downloading HTML: ${url}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+        const res = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'LicitaSaaS-Importer/1.0' }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+        return await res.text();
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function parseBrNumber(value: string): number {
+    return parseFloat(String(value || '0').replace(/\./g, '').replace(',', '.')) || 0;
 }
 
 function detectType(code: string, description: string): ParsedInsumo['type'] {
@@ -230,20 +268,110 @@ export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
     return compositions;
 }
 
-/**
- * Main function: Download and parse all SEINFRA data
- */
-export async function downloadAndParseSeinfra(): Promise<{
+async function downloadAndParseSeinfraHtml(regime: SeinfraRegime): Promise<{
     insumos: ParsedInsumo[];
     compositions: ParsedComposition[];
     errors: string[];
 }> {
+    const cfg = SEINFRA_REGIMES[regime];
+    const errors: string[] = [];
+    const compositions = new Map<string, ParsedComposition>();
+
+    try {
+        const indexUrl = `${cfg.baseUrl}/html/tabela-seinfra.html`;
+        const pending = [indexUrl];
+        const visited = new Set<string>();
+        const maxPages = 600;
+
+        const normalizeHref = (href: string, baseUrl: string): string | null => {
+            if (!href || href.startsWith('javascript:') || href.startsWith('#')) return null;
+            if (!/\.html(?:\?|$)/i.test(href)) return null;
+            if (/C\d{4,5}\.html/i.test(href)) return null;
+            try {
+                return new URL(href, baseUrl).toString();
+            } catch {
+                return null;
+            }
+        };
+
+        while (pending.length > 0 && visited.size < maxPages) {
+            const batch = pending.splice(0, 8).filter(url => !visited.has(url));
+            if (batch.length === 0) continue;
+
+            const pages = await Promise.all(batch.map(async url => {
+                try {
+                    const html = await downloadText(url);
+                    return { url, html };
+                } catch (e: any) {
+                    errors.push(`${url}: ${e.message}`);
+                    return null;
+                }
+            }));
+
+            for (const page of pages) {
+                if (!page) continue;
+                visited.add(page.url);
+                const $ = cheerio.load(page.html);
+
+                $('tbody tr').each((_, tr) => {
+                    const cells = $(tr).find('td');
+                    if (cells.length < 5) return;
+
+                    const code = cells.eq(1).text().replace(/\s+/g, ' ').trim().toUpperCase();
+                    if (!/^C\d{4,5}$/.test(code)) return;
+
+                    const description = cells.eq(2).text().replace(/\s+/g, ' ').trim();
+                    const unit = cells.eq(3).text().replace(/\s+/g, ' ').trim().toUpperCase() || 'UN';
+                    const totalPrice = Math.round(parseBrNumber(cells.eq(4).text()) * 100) / 100;
+                    if (totalPrice <= 0) return;
+
+                    compositions.set(code, {
+                        code,
+                        description: description || code,
+                        unit,
+                        totalPrice,
+                        items: [],
+                    });
+                });
+
+                $('a[href]').each((_, el) => {
+                    const nextUrl = normalizeHref(String($(el).attr('href') || ''), page.url);
+                    if (nextUrl && !visited.has(nextUrl) && !pending.includes(nextUrl)) {
+                        pending.push(nextUrl);
+                    }
+                });
+            }
+        }
+
+        console.log(`[SEINFRA Import] 🌐 ${regime}: ${compositions.size} composições em ${visited.size} páginas de índice`);
+    } catch (e: any) {
+        errors.push(`HTML index failed: ${e.message}`);
+    }
+
+    return { insumos: [], compositions: [...compositions.values()], errors };
+}
+
+/**
+ * Main function: Download and parse all SEINFRA data
+ */
+export async function downloadAndParseSeinfra(regime: SeinfraRegime = 'onerada'): Promise<{
+    insumos: ParsedInsumo[];
+    compositions: ParsedComposition[];
+    errors: string[];
+}> {
+    if (regime === 'desonerada') {
+        return downloadAndParseSeinfraHtml(regime);
+    }
+
+    const cfg = SEINFRA_REGIMES[regime];
+    const insumosUrl = `${cfg.baseUrl}/Tabela-de-Insumos-${cfg.version}---ENC.-SOCIAIS-${cfg.encargos}.xls`;
+    const composicoesUrl = `${cfg.baseUrl}/Composicoes-${cfg.version}---ENC.-SOCIAIS-${cfg.encargos}.xls`;
     const errors: string[] = [];
     let insumos: ParsedInsumo[] = [];
     let compositions: ParsedComposition[] = [];
 
     try {
-        const insumosBuffer = await downloadFile(INSUMOS_URL);
+        const insumosBuffer = await downloadFile(insumosUrl);
         insumos = parseInsumosExcel(insumosBuffer);
     } catch (e: any) {
         errors.push(`Insumos download failed: ${e.message}`);
@@ -251,7 +379,7 @@ export async function downloadAndParseSeinfra(): Promise<{
     }
 
     try {
-        const composBuffer = await downloadFile(COMPOSICOES_URL);
+        const composBuffer = await downloadFile(composicoesUrl);
         compositions = parseComposicoesExcel(composBuffer);
     } catch (e: any) {
         errors.push(`Composições download failed: ${e.message}`);

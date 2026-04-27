@@ -21,6 +21,7 @@ export function EngineeringHub() {
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [syncingSeinfra, setSyncingSeinfra] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +150,35 @@ export function EngineeringHub() {
         }
     };
 
+    const handleSyncSeinfra = async () => {
+        if (!confirm('Importar SEINFRA-CE pelo SIPROCE?\n\nIsso vai separar a base onerada 028 da desonerada 028.1 para evitar falso alerta de preço.')) return;
+
+        setSyncingSeinfra(true);
+        try {
+            const res = await fetch('/api/engineering/bases/scrape-seinfra', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ regime: 'ambas' })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                const imported = (data.results || []).map((r: any) => `${r.version} ${r.payrollExemption ? 'Desonerado' : 'Onerado'}: ${r.inserted?.compositions || 0} composições`).join('\n');
+                alert(`Sync SEINFRA concluído!\n\n${imported || data.message || ''}`);
+                fetchBases();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao importar SEINFRA'));
+            }
+        } catch (err) {
+            alert('Erro de conexão ao importar SEINFRA');
+        } finally {
+            setSyncingSeinfra(false);
+        }
+    };
+
     // Group bases by name+uf for better visualization
     const groupedBases: Record<string, EngDatabase[]> = {};
     for (const base of bases) {
@@ -203,6 +233,21 @@ export function EngineeringHub() {
                         >
                             {syncing ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
                             {syncing ? 'Sincronizando...' : 'Sync SINAPI (Automático)'}
+                        </button>
+
+                        <button
+                            onClick={handleSyncSeinfra}
+                            disabled={syncingSeinfra}
+                            style={{
+                                background: 'linear-gradient(135deg, #7c3aed, #2563eb)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSeinfra ? 'wait' : 'pointer',
+                                opacity: syncingSeinfra ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(124,58,237,0.25)'
+                            }}
+                        >
+                            {syncingSeinfra ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
+                            {syncingSeinfra ? 'Importando...' : 'Sync SEINFRA'}
                         </button>
 
                         <div style={{ position: 'relative' }}>
@@ -301,9 +346,14 @@ export function EngineeringHub() {
                             : 'Nossa equipe técnica ainda não instalou os catálogos oficiais do SINAPI/SEINFRA para este ambiente.'}
                     </p>
                     {isAdmin && (
-                        <button onClick={handleSyncSinapi} disabled={syncing} style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            <Zap size={16} /> Iniciar Download Automático SINAPI
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button onClick={handleSyncSinapi} disabled={syncing} style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Zap size={16} /> Iniciar Download Automático SINAPI
+                            </button>
+                            <button onClick={handleSyncSeinfra} disabled={syncingSeinfra} style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Database size={16} /> Importar SEINFRA
+                            </button>
+                        </div>
                     )}
                 </div>
             ) : (
