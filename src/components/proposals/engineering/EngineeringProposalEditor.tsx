@@ -63,6 +63,33 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
 
+const AUDIT_META = {
+    OK: { label: 'OK', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.08)' },
+    DIVERGENT: { label: 'Divergente', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
+    BASE_INCOMPATIVEL: { label: 'Base', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
+    SEM_MATCH: { label: 'Sem match', color: '#64748b', bg: 'rgba(100,116,139,0.10)' },
+} as const;
+
+function renderPriceAudit(item: EngItem) {
+    const audit = item.priceAudit;
+    if (!audit) return <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>-</span>;
+    const meta = AUDIT_META[audit.status] || AUDIT_META.SEM_MATCH;
+    const delta = typeof audit.deltaPercent === 'number' ? ` (${audit.deltaPercent.toFixed(2)}%)` : '';
+    const title = [
+        audit.matchedSourceName ? `Base: ${audit.matchedSourceName} ${audit.matchedReference || ''}` : '',
+        typeof audit.matchedUnitCost === 'number' ? `Preço base: ${fmt(audit.matchedUnitCost)}` : '',
+        typeof audit.extractedUnitCost === 'number' ? `Preço edital: ${fmt(audit.extractedUnitCost)}` : '',
+        ...(audit.warnings || []),
+    ].filter(Boolean).join('\n');
+
+    return (
+        <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+            {audit.status === 'OK' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+            {meta.label}{delta}
+        </span>
+    );
+}
+
 export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [items, setItems] = useState<EngItem[]>([]);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
@@ -117,6 +144,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
         return its.map(it => {
             if (isGrouper(it.type)) return it;
+            if (it.priceOrigin === 'EDITAL' && typeof it.officialUnitPrice === 'number' && it.officialUnitPrice > 0) {
+                return {
+                    ...it,
+                    unitPrice: it.officialUnitPrice,
+                    totalPrice: typeof it.officialTotalPrice === 'number' && it.officialTotalPrice > 0
+                        ? it.officialTotalPrice
+                        : applyPrecision(it.quantity * it.officialUnitPrice, config),
+                };
+            }
             // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
             const itemBdi = config.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
@@ -196,6 +232,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     const isGroup = isGrouper(aiType);
                     const cost = isGroup ? 0 : (Number(ai.unitCost) || 0);
                     const qty = isGroup ? 0 : (Number(ai.quantity) || 1);
+                    const computedUnitPrice = isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision);
+                    const officialUnitPrice = isGroup ? 0 : (Number(ai.unitPrice) || Number(ai.officialUnitPrice) || computedUnitPrice);
+                    const officialTotalPrice = isGroup ? 0 : (Number(ai.totalPrice) || Number(ai.officialTotalPrice) || applyPrecision(qty * officialUnitPrice, { precision: engineeringConfig.precision }));
                     
                     const extractedSource = ai.sourceName || '';
                     const isKnownSource = bases.some(b => b.name.toUpperCase() === extractedSource.toUpperCase());
@@ -206,8 +245,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         code: ai.code || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
-                        unitPrice: isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision),
-                        totalPrice: isGroup ? 0 : applyPrecision(qty * applyBdi(cost, effectiveBdi, engineeringConfig.precision), { precision: engineeringConfig.precision }),
+                        unitPrice: officialUnitPrice,
+                        totalPrice: officialTotalPrice,
+                        priceOrigin: isGroup ? undefined : 'EDITAL',
+                        officialUnitCost: cost,
+                        officialUnitPrice,
+                        officialTotalPrice,
+                        priceAudit: ai.priceAudit,
                         insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
                 });
@@ -268,9 +312,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             if (it.id !== id) return it;
             const updated = { ...it, [field]: value };
             if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') {
+                if (field === 'unitCost' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
+                const keepOfficialPrice = updated.priceOrigin === 'EDITAL' && typeof updated.officialUnitPrice === 'number' && updated.officialUnitPrice > 0;
+                const officialUnitPrice = keepOfficialPrice ? Number(updated.officialUnitPrice) : 0;
                 const itemBdi = resolveItemBdi(updated);
-                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                updated.unitPrice = keepOfficialPrice ? officialUnitPrice : applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
                 updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                if (keepOfficialPrice) updated.officialTotalPrice = updated.totalPrice;
             }
             return updated;
         }));
@@ -284,7 +332,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setItems(prev => renumberItems([...prev, {
             id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
             description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
-            unitCost: 0, unitPrice: 0, totalPrice: 0, type,
+            unitCost: 0, unitPrice: 0, totalPrice: 0, type, priceOrigin: isGroup ? undefined : 'MANUAL',
         }]));
     };
 
@@ -328,6 +376,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             unitCost: cost, unitPrice,
             // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
             totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: insertType,
+            priceOrigin: 'BASE',
         }]);
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
     };
@@ -743,7 +792,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total',''].map((h,i) => (
+                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
                                     <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, width: i === 4 ? '24%' : i === 1 ? 80 : undefined, fontSize: '0.72rem' }}>{h}</th>
                                 ))}
                             </tr>
@@ -784,7 +833,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     <IconComp size={11} /> {meta.label}
                                                 </span>
                                             </td>
-                                            <td colSpan={7} style={{ padding: '8px 12px' }}>
+                                            <td colSpan={8} style={{ padding: '8px 12px' }}>
                                                 <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
                                                     style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
                                                     onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
@@ -880,6 +929,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it)}</td>
                                                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                                     <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                 </td>
@@ -897,7 +947,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     };
                                     rows.push(
                                         <tr key={`${it.id}-insumos`} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td colSpan={11} style={{ padding: 0 }}>
+                                            <td colSpan={12} style={{ padding: 0 }}>
                                                 <div style={{ margin: '0 16px 8px 40px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(14,116,144,0.12)', overflow: 'hidden', background: 'rgba(14,116,144,0.02)' }}>
                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
                                                         <thead>

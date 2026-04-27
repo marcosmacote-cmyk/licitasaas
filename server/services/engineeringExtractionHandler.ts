@@ -542,8 +542,8 @@ async function mergeEngineeringResults(
 }
 
 /**
- * Local enrichment — same logic as engineering.ts enrichWithOfficialPrices
- * but self-contained to avoid circular imports.
+ * Local audit — compares extracted edital prices against official bases without
+ * replacing the extracted price. Keep self-contained to avoid circular imports.
  */
 async function enrichWithOfficialPricesLocal(items: any[]): Promise<void> {
     const enrichable = items.filter(it =>
@@ -556,38 +556,62 @@ async function enrichWithOfficialPricesLocal(items: any[]): Promise<void> {
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
             where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { name: true } } },
+            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
         prisma.engineeringComposition.findMany({
             where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { name: true } } },
+            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
     ]);
 
-    const itemMap = new Map(dbItems.map(di => [di.code.toLowerCase(), di]));
-    const compMap = new Map(dbComps.map(dc => [dc.code.toLowerCase(), dc]));
+    const itemMap = new Map(dbItems.map(di => [di.code.toLowerCase(), { ...di, matchedPrice: Number(di.price) || 0, matchType: 'INSUMO' }]));
+    const compMap = new Map(dbComps.map(dc => [dc.code.toLowerCase(), { ...dc, matchedPrice: Number(dc.totalPrice) || 0, matchType: 'COMPOSICAO' }]));
 
     let matched = 0;
     for (const item of enrichable) {
         const codeLower = item.code.toLowerCase();
-        const dbItem = itemMap.get(codeLower);
-        if (dbItem) {
-            item.unitCost = Number(dbItem.price) || item.unitCost || 0;
-            item.sourceName = dbItem.database?.name || item.sourceName || 'OFICIAL';
-            if (!item.unit || item.unit === 'UN') item.unit = dbItem.unit || item.unit;
+        const dbMatch = itemMap.get(codeLower) || compMap.get(codeLower);
+        const extractedUnitCost = Number(item.unitCost) || 0;
+
+        if (dbMatch) {
+            const matchedUnitCost = Number(dbMatch.matchedPrice) || 0;
+            const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
+            const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+            const status = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue || 0) > 0.01
+                ? 'DIVERGENT'
+                : 'OK';
+
+            if (!item.sourceName || item.sourceName === 'PROPRIA') item.sourceName = dbMatch.database?.name || item.sourceName || 'OFICIAL';
+            if (!item.unit || item.unit === 'UN') item.unit = dbMatch.unit || item.unit;
+            if (dbMatch.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+            item.priceAudit = {
+                status,
+                extractedUnitCost,
+                matchedUnitCost,
+                matchedDatabaseId: dbMatch.database?.id || null,
+                matchedSourceName: dbMatch.database?.name || null,
+                matchedUf: dbMatch.database?.uf || null,
+                matchedReference: dbMatch.database?.referenceYear && dbMatch.database?.referenceMonth
+                    ? `${String(dbMatch.database.referenceMonth).padStart(2, '0')}/${dbMatch.database.referenceYear}`
+                    : (dbMatch.database?.version || 'N/I'),
+                matchedPayrollExemption: Boolean(dbMatch.database?.payrollExemption),
+                deltaValue,
+                deltaPercent,
+                warnings: [],
+            };
             matched++;
             continue;
         }
-        const dbComp = compMap.get(codeLower);
-        if (dbComp) {
-            item.unitCost = Number(dbComp.totalPrice) || item.unitCost || 0;
-            item.sourceName = dbComp.database?.name || item.sourceName || 'OFICIAL';
-            if (!item.unit || item.unit === 'UN') item.unit = dbComp.unit || item.unit;
-            item.type = 'COMPOSICAO';
-            matched++;
-            continue;
-        }
+
+        item.priceAudit = {
+            status: 'SEM_MATCH',
+            extractedUnitCost,
+            matchedUnitCost: null,
+            deltaValue: null,
+            deltaPercent: null,
+            warnings: ['código não encontrado nas bases oficiais cadastradas'],
+        };
     }
 
-    logger.info(`[Engineering-BG] 🔍 Enrichment: ${matched}/${enrichable.length} itens matched against official DB`);
+    logger.info(`[Engineering-BG] 🔍 Price audit: ${matched}/${enrichable.length} itens matched against official DB`);
 }

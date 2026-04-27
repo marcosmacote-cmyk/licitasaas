@@ -822,6 +822,11 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     unitPrice: Number(item.unitPrice) || 0,
                     totalPrice: Number(item.totalPrice) || 0,
                     bdiCategoria: item.bdiCategoria || 'OBRA',
+                    priceOrigin: item.priceOrigin || 'MANUAL',
+                    officialUnitCost: item.officialUnitCost === undefined ? null : Number(item.officialUnitCost) || 0,
+                    officialUnitPrice: item.officialUnitPrice === undefined ? null : Number(item.officialUnitPrice) || 0,
+                    officialTotalPrice: item.officialTotalPrice === undefined ? null : Number(item.officialTotalPrice) || 0,
+                    priceAudit: item.priceAudit || undefined,
                     sortOrder: index,
                 }))
             });
@@ -908,7 +913,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
             const engBudgetItems = schemaV2?._engineeringBudgetItems;
             if (Array.isArray(engBudgetItems) && engBudgetItems.length > 5) {
                 console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
-                await enrichWithOfficialPrices(engBudgetItems);
+                await enrichWithOfficialPrices(engBudgetItems, engineeringConfig);
                 return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
             }
 
@@ -921,7 +926,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
             if (Array.isArray(itensV2) && itensV2.length >= MIN_V2_ITEMS_FOR_ENGINEERING) {
                 console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING})`);
                 
-                const items = await mapV2ToEngineering(itensV2);
+                const items = await mapV2ToEngineering(itensV2, engineeringConfig);
                 return res.json({ items, source: 'v2_itens_licitados', count: items.length });
             }
 
@@ -1098,7 +1103,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
         }
         
         // Auto-lookup for prices against registered databases
-        await enrichWithOfficialPrices(items);
+        await enrichWithOfficialPrices(items, engineeringConfig);
 
         // Auto-save composições PRÓPRIAS to the database
         const ownComps = items.filter((it: any) => {
@@ -1353,7 +1358,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
  * Mapeia itens_licitados do V2 para formato de engenharia
  * e faz auto-match contra as bases oficiais cadastradas (SINAPI/SEINFRA)
  */
-async function mapV2ToEngineering(itensV2: any[]): Promise<any[]> {
+async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any): Promise<any[]> {
     const items = itensV2.map((item: any) => {
         // Priority 1: Use V2's explicit sourceCode/sourceBase (new fields from enriched prompt)
         let sourceName = item.sourceBase || '';
@@ -1390,7 +1395,7 @@ async function mapV2ToEngineering(itensV2: any[]): Promise<any[]> {
     });
 
     // Enrich with official database prices
-    await enrichWithOfficialPrices(items);
+    await enrichWithOfficialPrices(items, engineeringConfig);
     
     return items;
 }
@@ -1422,11 +1427,69 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
     return { sourceName: 'PROPRIA', code: itemNumber || 'N/A' };
 }
 
+type EngineeringPriceAuditStatus = 'OK' | 'DIVERGENT' | 'BASE_INCOMPATIVEL' | 'SEM_MATCH';
+
+function parseDataBaseMonth(dataBase?: string): { year: number; month: number } | null {
+    const match = String(dataBase || '').match(/^(\d{4})-(\d{2})$/);
+    if (!match) return null;
+    return { year: Number(match[1]), month: Number(match[2]) };
+}
+
+function formatReference(db: any): string {
+    if (db?.referenceYear && db?.referenceMonth) {
+        return `${String(db.referenceMonth).padStart(2, '0')}/${db.referenceYear}`;
+    }
+    return db?.version || 'N/I';
+}
+
+function buildCandidateScore(candidate: any, sourceName: string, config: any, targetDate: { year: number; month: number } | null) {
+    const db = candidate.database || {};
+    const desiredSources = Array.isArray(config?.basesConsideradas)
+        ? config.basesConsideradas.map((b: string) => String(b).toUpperCase())
+        : [];
+    const desiredDesonerado = config?.regimeOneracao
+        ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
+        : null;
+
+    let score = 0;
+    const warnings: string[] = [];
+    const dbName = String(db.name || '').toUpperCase();
+    const itemSource = String(sourceName || '').toUpperCase();
+
+    if (itemSource && itemSource !== 'PROPRIA' && dbName === itemSource) score += 40;
+    else if (desiredSources.includes(dbName)) score += 20;
+    else if ((itemSource && itemSource !== 'PROPRIA') || desiredSources.length > 0) warnings.push('fonte fora das bases configuradas');
+
+    if (targetDate) {
+        const exactDate = db.referenceYear === targetDate.year && db.referenceMonth === targetDate.month;
+        const versionDate = String(db.version || '').includes(`${String(targetDate.month).padStart(2, '0')}/${targetDate.year}`)
+            || String(db.version || '').includes(`${targetDate.year}-${String(targetDate.month).padStart(2, '0')}`);
+        if (exactDate || versionDate) score += 30;
+        else warnings.push(`data-base incompatível (${formatReference(db)})`);
+    } else if (!db.referenceYear && !db.referenceMonth && !db.version) {
+        warnings.push('data-base não informada na base');
+    }
+
+    if (desiredDesonerado !== null) {
+        if (Boolean(db.payrollExemption) === desiredDesonerado) score += 20;
+        else warnings.push(`regime ${db.payrollExemption ? 'desonerado' : 'onerado'} incompatível`);
+    }
+
+    return { score, warnings };
+}
+
+function chooseBestCandidate(candidates: any[], item: any, config: any, targetDate: { year: number; month: number } | null) {
+    if (candidates.length === 0) return null;
+    return candidates
+        .map(candidate => ({ candidate, ...buildCandidateScore(candidate, item.sourceName, config, targetDate) }))
+        .sort((a, b) => b.score - a.score)[0];
+}
+
 /**
- * Enriquece itens com preços da base oficial cadastrada
- * Busca por código exato no EngineeringItem
+ * Compara itens extraídos contra bases oficiais cadastradas sem sobrescrever
+ * o preço do edital. O resultado fica em item.priceAudit.
  */
-async function enrichWithOfficialPrices(items: any[]): Promise<void> {
+async function enrichWithOfficialPrices(items: any[], engineeringConfig?: any): Promise<void> {
     // PERF-01 FIX: Batch query instead of N+1 sequential findFirst
     const enrichable = items.filter(it =>
         it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A'
@@ -1439,71 +1502,75 @@ async function enrichWithOfficialPrices(items: any[]): Promise<void> {
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
             where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { name: true } } },
+            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
         prisma.engineeringComposition.findMany({
             where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { name: true } } },
+            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
     ]);
 
-    // Build lookup maps (case-insensitive)
-    const itemMap = new Map(dbItems.map(di => [di.code.toLowerCase(), di]));
-    const compMap = new Map(dbComps.map(dc => [dc.code.toLowerCase(), dc]));
+    const byCode = new Map<string, any[]>();
+    for (const dbItem of dbItems) {
+        const key = dbItem.code.toLowerCase();
+        byCode.set(key, [...(byCode.get(key) || []), { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 }]);
+    }
+    for (const dbComp of dbComps) {
+        const key = dbComp.code.toLowerCase();
+        byCode.set(key, [...(byCode.get(key) || []), { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 }]);
+    }
 
-    // 2. Enrich items from maps
+    const targetDate = parseDataBaseMonth(engineeringConfig?.dataBase);
     for (const item of enrichable) {
         const codeLower = item.code.toLowerCase();
+        const extractedUnitCost = Number(item.unitCost) || 0;
+        const candidates = byCode.get(codeLower) || [];
+        const best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
 
-        // Match against items first
-        const dbItem = itemMap.get(codeLower);
-        if (dbItem) {
-            item.unitCost = Number(dbItem.price) || item.unitCost || 0;
-            item.sourceName = dbItem.database?.name || item.sourceName || 'OFICIAL';
-            if (!item.unit || item.unit === 'UN') item.unit = dbItem.unit || item.unit;
-            console.log(`[Engineering Match] ✅ Item ${item.code} → ${dbItem.description?.substring(0, 50)} = R$ ${dbItem.price} (${item.sourceName})`);
+        if (!best) {
+            item.priceAudit = {
+                status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
+                extractedUnitCost,
+                matchedUnitCost: null,
+                deltaValue: null,
+                deltaPercent: null,
+                warnings: ['código não encontrado nas bases oficiais cadastradas'],
+            };
             continue;
         }
 
-        // Match against compositions
-        const dbComp = compMap.get(codeLower);
-        if (dbComp) {
-            item.unitCost = Number(dbComp.totalPrice) || item.unitCost || 0;
-            item.sourceName = dbComp.database?.name || item.sourceName || 'OFICIAL';
-            if (!item.unit || item.unit === 'UN') item.unit = dbComp.unit || item.unit;
-            item.type = 'COMPOSICAO';
-            console.log(`[Engineering Match] ✅ Comp ${item.code} → ${dbComp.description?.substring(0, 50)} = R$ ${dbComp.totalPrice} (${item.sourceName})`);
-            continue;
-        }
+        const matched = best.candidate;
+        const matchedUnitCost = Number(matched.matchedPrice) || 0;
+        const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
+        const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+        const hasRelevantDelta = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue || 0) > 0.01;
+        const status: EngineeringPriceAuditStatus = best.warnings.length > 0
+            ? 'BASE_INCOMPATIVEL'
+            : hasRelevantDelta
+                ? 'DIVERGENT'
+                : 'OK';
 
-        // 3. Auto-register: If AI extracted a known source code with data, auto-create it
-        if (item.sourceName && ['SINAPI', 'SEINFRA', 'SICRO', 'ORSE'].includes(item.sourceName) && item.description && item.unitCost > 0) {
-            try {
-                let officialDb = await prisma.engineeringDatabase.findFirst({
-                    where: { name: item.sourceName, type: 'OFICIAL' }
-                });
-                if (!officialDb) {
-                    officialDb = await prisma.engineeringDatabase.create({
-                        data: { name: item.sourceName, uf: '', type: 'OFICIAL' }
-                    });
-                }
-                await prisma.engineeringComposition.create({
-                    data: {
-                        databaseId: officialDb.id,
-                        code: item.code,
-                        description: item.description,
-                        unit: item.unit || 'UN',
-                        totalPrice: item.unitCost,
-                    }
-                });
-                item.type = 'COMPOSICAO';
-                console.log(`[Engineering Auto-Register] 📝 ${item.sourceName} ${item.code} → ${item.description?.substring(0, 50)} = R$ ${item.unitCost} (auto-cadastrado)`);
-            } catch (e: any) {
-                if (!e.message?.includes('Unique constraint')) {
-                    console.warn(`[Engineering Auto-Register] ⚠️ ${item.code}: ${e.message}`);
-                }
-            }
-        }
+        // Mantém o preço extraído do edital. Só completa metadados seguros.
+        if (!item.unit || item.unit === 'UN') item.unit = matched.unit || item.unit;
+        if ((!item.sourceName || item.sourceName === 'PROPRIA') && matched.database?.name) item.sourceName = matched.database.name;
+        if (matched.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+
+        item.priceAudit = {
+            status,
+            extractedUnitCost,
+            matchedUnitCost,
+            matchedDatabaseId: matched.database?.id || null,
+            matchedSourceName: matched.database?.name || null,
+            matchedUf: matched.database?.uf || null,
+            matchedReference: formatReference(matched.database),
+            matchedPayrollExemption: Boolean(matched.database?.payrollExemption),
+            deltaValue,
+            deltaPercent,
+            warnings: best.warnings,
+        };
+
+        const deltaLabel = deltaPercent === null ? 'sem delta' : `${deltaPercent.toFixed(2)}%`;
+        console.log(`[Engineering Audit] ${status} ${item.code}: edital R$ ${extractedUnitCost} vs base R$ ${matchedUnitCost} (${matched.database?.name || 'OFICIAL'} ${formatReference(matched.database)}) delta=${deltaLabel}`);
     }
 }
 
@@ -1868,7 +1935,7 @@ router.post('/bases/sync-sinapi', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
-        const { ufs = ['CE'], months = 3, includeDesonerado = true } = req.body;
+        const { ufs = ['CE'], months = 12, includeDesonerado = true } = req.body;
 
         console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: UFs=${ufs.join(',')}, meses=${months}, desonerado=${includeDesonerado}`);
 

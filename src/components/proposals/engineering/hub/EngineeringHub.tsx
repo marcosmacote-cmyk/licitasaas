@@ -119,7 +119,7 @@ export function EngineeringHub() {
     };
 
     const handleSyncSinapi = async () => {
-        if (!confirm('Iniciar download automático do SINAPI?\n\nIsso vai buscar as últimas 3 data-bases do Ceará (Onerado + Desonerado) diretamente do portal da Caixa.\n\nO processo roda em background e pode levar alguns minutos.')) return;
+        if (!confirm('Iniciar download automático do SINAPI?\n\nIsso vai buscar as últimas 12 data-bases do Ceará (Onerado + Desonerado) diretamente do portal da Caixa.\n\nO processo roda em background e pode levar alguns minutos.')) return;
         
         setSyncing(true);
         try {
@@ -129,7 +129,7 @@ export function EngineeringHub() {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ ufs: ['CE'], months: 3, includeDesonerado: true })
+                body: JSON.stringify({ ufs: ['CE'], months: 12, includeDesonerado: true })
             });
             
             if (res.ok) {

@@ -14,6 +14,22 @@ export type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
 /** Categorias de BDI conforme Acórdão TCU 2622/2013 */
 export type BdiCategoria = 'OBRA' | 'FORNECIMENTO';
 
+export type PriceAuditStatus = 'OK' | 'DIVERGENT' | 'BASE_INCOMPATIVEL' | 'SEM_MATCH';
+
+export interface PriceAudit {
+    status: PriceAuditStatus;
+    extractedUnitCost?: number;
+    matchedUnitCost?: number | null;
+    matchedDatabaseId?: string | null;
+    matchedSourceName?: string | null;
+    matchedUf?: string | null;
+    matchedReference?: string | null;
+    matchedPayrollExemption?: boolean | null;
+    deltaValue?: number | null;
+    deltaPercent?: number | null;
+    warnings?: string[];
+}
+
 export interface EngInsumo {
     description: string;
     type: string;
@@ -36,6 +52,12 @@ export interface EngItem {
     type: EngItemType;
     /** Categoria de BDI diferenciado. Default: 'OBRA' */
     bdiCategoria?: BdiCategoria;
+    /** Origem do preço atualmente exibido. EDITAL preserva valores oficiais extraídos. */
+    priceOrigin?: 'EDITAL' | 'BASE' | 'MANUAL';
+    officialUnitCost?: number;
+    officialUnitPrice?: number;
+    officialTotalPrice?: number;
+    priceAudit?: PriceAudit;
     insumos?: EngInsumo[];
 }
 
