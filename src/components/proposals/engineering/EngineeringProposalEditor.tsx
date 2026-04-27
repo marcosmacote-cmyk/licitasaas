@@ -63,6 +63,17 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
 
+function parseLocaleNumber(value: unknown, fallback = 0): number {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+    const raw = String(value ?? '').trim();
+    if (!raw) return fallback;
+    const normalized = raw.includes(',')
+        ? raw.replace(/\./g, '').replace(',', '.')
+        : raw;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const AUDIT_META = {
     OK: { label: 'OK', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.08)' },
     DIVERGENT: { label: 'Divergente', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
@@ -112,6 +123,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
+    const updateEngineeringConfig = (next: EngineeringConfig) => {
+        setHasUnsavedChanges(true);
+        setEngineeringConfig(next);
+    };
+
     const toggleExpand = (id: string) => {
         setExpandedItems(prev => {
             const next = new Set(prev);
@@ -144,15 +160,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
         return its.map(it => {
             if (isGrouper(it.type)) return it;
-            if (it.priceOrigin === 'EDITAL' && typeof it.officialUnitPrice === 'number' && it.officialUnitPrice > 0) {
-                return {
-                    ...it,
-                    unitPrice: it.officialUnitPrice,
-                    totalPrice: typeof it.officialTotalPrice === 'number' && it.officialTotalPrice > 0
-                        ? it.officialTotalPrice
-                        : applyPrecision(it.quantity * it.officialUnitPrice, config),
-                };
-            }
             // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
             const itemBdi = config.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
@@ -230,11 +237,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const mapped = data.items.map((ai: any, i: number) => {
                     const aiType: EngItemType = (['ETAPA','SUBETAPA','COMPOSICAO','INSUMO'].includes(ai.type)) ? ai.type : 'COMPOSICAO';
                     const isGroup = isGrouper(aiType);
-                    const cost = isGroup ? 0 : (Number(ai.unitCost) || 0);
-                    const qty = isGroup ? 0 : (Number(ai.quantity) || 1);
+                    const cost = isGroup ? 0 : parseLocaleNumber(ai.unitCost);
+                    const qty = isGroup ? 0 : parseLocaleNumber(ai.quantity, 1);
                     const computedUnitPrice = isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision);
-                    const officialUnitPrice = isGroup ? 0 : (Number(ai.unitPrice) || Number(ai.officialUnitPrice) || computedUnitPrice);
-                    const officialTotalPrice = isGroup ? 0 : (Number(ai.totalPrice) || Number(ai.officialTotalPrice) || applyPrecision(qty * officialUnitPrice, { precision: engineeringConfig.precision }));
+                    const extractedUnitPrice = parseLocaleNumber(ai.unitPrice || ai.officialUnitPrice);
+                    const extractedTotalPrice = parseLocaleNumber(ai.totalPrice || ai.officialTotalPrice);
+                    const unitPrice = extractedUnitPrice > 0 ? extractedUnitPrice : computedUnitPrice;
+                    const totalPrice = extractedTotalPrice > 0 ? extractedTotalPrice : applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision });
                     
                     const extractedSource = ai.sourceName || '';
                     const isKnownSource = bases.some(b => b.name.toUpperCase() === extractedSource.toUpperCase());
@@ -245,12 +254,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         code: ai.code || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
-                        unitPrice: officialUnitPrice,
-                        totalPrice: officialTotalPrice,
+                        unitPrice,
+                        totalPrice,
                         priceOrigin: isGroup ? undefined : 'EDITAL',
                         officialUnitCost: cost,
-                        officialUnitPrice,
-                        officialTotalPrice,
+                        officialUnitPrice: extractedUnitPrice > 0 ? extractedUnitPrice : undefined,
+                        officialTotalPrice: extractedTotalPrice > 0 ? extractedTotalPrice : undefined,
                         priceAudit: ai.priceAudit,
                         insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
@@ -313,12 +322,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             const updated = { ...it, [field]: value };
             if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') {
                 if (field === 'unitCost' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
-                const keepOfficialPrice = updated.priceOrigin === 'EDITAL' && typeof updated.officialUnitPrice === 'number' && updated.officialUnitPrice > 0;
-                const officialUnitPrice = keepOfficialPrice ? Number(updated.officialUnitPrice) : 0;
                 const itemBdi = resolveItemBdi(updated);
-                updated.unitPrice = keepOfficialPrice ? officialUnitPrice : applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
                 updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
-                if (keepOfficialPrice) updated.officialTotalPrice = updated.totalPrice;
             }
             return updated;
         }));
@@ -367,8 +373,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
-        const cost = Number(dbItem.price) || 0;
+        const cost = parseLocaleNumber(dbItem.price);
         const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
+        setHasUnsavedChanges(true);
         setItems(prev => [...prev, {
             id: `db-${Date.now()}`, itemNumber: String(prev.length + 1),
             code: dbItem.code, sourceName: base?.name || 'OFICIAL',
@@ -383,6 +390,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // BDI helpers
     const updateTcu = (field: keyof BdiTcuParams, val: number) => {
+        setHasUnsavedChanges(true);
         setBdiConfig(prev => ({ ...prev, tcu: { ...prev.tcu, [field]: val } }));
     };
 
@@ -435,8 +443,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
                     const itemNum = colItem >= 0 ? String(row[colItem] ?? '').trim() : String(imported.length + 1);
                     const unit = colUn >= 0 ? String(row[colUn] ?? '').trim() : '';
-                    const qty = colQtd >= 0 ? Number(row[colQtd]) || 0 : 0;
-                    const cost = colCusto >= 0 ? Number(row[colCusto]) || 0 : 0;
+                    const qty = colQtd >= 0 ? parseLocaleNumber(row[colQtd]) : 0;
+                    const cost = colCusto >= 0 ? parseLocaleNumber(row[colCusto]) : 0;
                     const code = colCodigo >= 0 ? String(row[colCodigo] ?? '').trim() : '';
                     const base = colBase >= 0 ? String(row[colBase] ?? '').trim() : '';
 
@@ -473,6 +481,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 }
 
                 setItems(prev => [...prev, ...imported]);
+                setHasUnsavedChanges(true);
                 const etapas = imported.filter(i => i.type === 'ETAPA').length;
                 const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {imported.length} itens importados do Excel ({etapas} etapas, {comps} composições)</span>);
@@ -569,8 +578,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                     {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                        onClick={() => items.length > 0 && setCompositionEditorIndex(0)}
-                        disabled={items.length === 0}>
+                        onClick={() => {
+                            const firstEditable = items.findIndex(it => !isGrouper(it.type));
+                            if (firstEditable >= 0) setCompositionEditorIndex(firstEditable);
+                        }}
+                        disabled={items.findIndex(it => !isGrouper(it.type)) < 0}>
                         <Layers size={14} color="var(--color-primary)" /> Editar Composições
                     </button>
                     <button className={`btn ${activeTab === 'planilha' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('planilha')}>
@@ -645,7 +657,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 <CronogramaPanel
                     items={items}
                     savedData={cronogramaData}
-                    onDataChange={setCronogramaData}
+                    onDataChange={(data) => { setHasUnsavedChanges(true); setCronogramaData(data); }}
                 />
             )}
 
@@ -660,7 +672,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
                             <div>
                                 <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Objeto / Descrição</label>
-                                <textarea className="form-input" rows={3} value={engineeringConfig.objeto} onChange={e => setEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Descrição do orçamento..." style={{ width: '100%', resize: 'none' }} />
+                                <textarea className="form-input" rows={3} value={engineeringConfig.objeto} onChange={e => updateEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Descrição do orçamento..." style={{ width: '100%', resize: 'none' }} />
                             </div>
                             
                             <div>
@@ -670,7 +682,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <label key={base} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', background: 'var(--color-bg-base)', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)' }}>
                                             <input type="checkbox" checked={engineeringConfig.basesConsideradas.includes(base)} onChange={e => {
                                                 const b = engineeringConfig.basesConsideradas;
-                                                setEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
+                                                updateEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
                                             }} />
                                             {base}
                                         </label>
@@ -682,12 +694,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
                             <div>
                                 <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Data Base Principal</label>
-                                <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => setEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%' }} />
+                                <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => updateEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%' }} />
                             </div>
                             
                             <div>
                                 <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Regime de Oneração</label>
-                                <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => setEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%' }}>
+                                <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => updateEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%' }}>
                                     <option value="DESONERADO">Desonerado (Padrão)</option>
                                     <option value="ONERADO">Onerado</option>
                                 </select>
@@ -700,11 +712,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <div style={{ display: 'flex', gap: 16 }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Horista (%)</label>
-                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.horista} onChange={e => setEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, horista: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.horista} onChange={e => updateEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, horista: parseLocaleNumber(e.target.value)}})} style={{ width: '100%' }} />
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Mensalista (%)</label>
-                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.mensalista} onChange={e => setEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, mensalista: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                        <input type="number" step="0.1" className="form-input" value={engineeringConfig.encargosSociais.mensalista} onChange={e => updateEngineeringConfig({...engineeringConfig, encargosSociais: {...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value)}})} style={{ width: '100%' }} />
                                     </div>
                                 </div>
                             </div>
@@ -714,14 +726,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <div style={{ display: 'flex', gap: 16 }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Cálculo Multiplicação</label>
-                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%' }}>
+                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%' }}>
                                             <option value="ROUND">Arredondar</option>
                                             <option value="TRUNCATE">Truncar</option>
                                         </select>
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ display: 'block', marginBottom: 4, fontSize: '0.8rem' }}>Casas Decimais</label>
-                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => setEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: Number(e.target.value)}})} style={{ width: '100%' }} />
+                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: parseLocaleNumber(e.target.value)}})} style={{ width: '100%' }} />
                                     </div>
                                 </div>
                             </div>
@@ -736,7 +748,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 </div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
                                     <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
-                                        onChange={e => setEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} />
+                                        onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} />
                                     Ativar BDI por categoria
                                 </label>
                             </div>
@@ -756,7 +768,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', marginBottom: 4 }}>BDI FORNECIMENTO</div>
                                             <input type="number" step="0.01" className="form-input" style={{ width: '100%', fontSize: '1rem', fontWeight: 700 }}
                                                 value={engineeringConfig.bdiFornecimento || 14.02}
-                                                onChange={e => setEngineeringConfig({ ...engineeringConfig, bdiFornecimento: Number(e.target.value) })} />
+                                                onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiFornecimento: parseLocaleNumber(e.target.value) })} />
                                             <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
                                                 TCU ref: {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].min}% – {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].max}% (mediana {TCU_REFERENCE_RANGES['Fornecimento de Materiais/Equipamentos'].median}%)
                                             </div>
@@ -913,7 +925,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('55px'), textAlign: 'center' }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
+                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
@@ -921,10 +933,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     <span title={it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' ? "Composição vazia. Preencha no Módulo Livre." : "Item sem preço unitário."} style={{ display: 'flex' }}>
                                                         <AlertCircle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
-                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
@@ -1041,7 +1053,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
                         <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-4)' }}>
                             {(['SIMPLIFICADO', 'TCU'] as const).map(mode => (
-                                <button key={mode} onClick={() => setBdiConfig(prev => ({ ...prev, mode }))} style={{
+                                <button key={mode} onClick={() => { setHasUnsavedChanges(true); setBdiConfig(prev => ({ ...prev, mode })); }} style={{
                                     flex: 1, padding: 6, fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)',
                                     border: '1px solid', cursor: 'pointer',
                                     borderColor: bdiConfig.mode === mode ? (mode === 'TCU' ? '#B45309' : 'var(--color-primary)') : 'var(--color-border)',
@@ -1055,7 +1067,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>BDI Global (%)</label>
                                 <input type="number" className="form-input" value={bdiConfig.bdiGlobal}
-                                    onChange={e => setBdiConfig(prev => ({ ...prev, bdiGlobal: parseFloat(e.target.value) || 0 }))}
+                                    onChange={e => { setHasUnsavedChanges(true); setBdiConfig(prev => ({ ...prev, bdiGlobal: parseLocaleNumber(e.target.value) })); }}
                                     style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)' }} step="0.01" />
                             </div>
                         ) : (
@@ -1070,7 +1082,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <div key={key}>
                                             <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{label}</label>
                                             <input type="number" className="form-input" value={bdiConfig.tcu[key]}
-                                                onChange={e => updateTcu(key, parseFloat(e.target.value) || 0)}
+                                                onChange={e => updateTcu(key, parseLocaleNumber(e.target.value))}
                                                 style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                         </div>
                                     ))}
@@ -1079,19 +1091,19 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <div>
                                     <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Desp. Financeiras (%)</label>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
-                                        onChange={e => updateTcu('despFinanceiras', parseFloat(e.target.value) || 0)}
+                                        onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
                                         style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Lucro (%)</label>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
-                                        onChange={e => updateTcu('lucro', parseFloat(e.target.value) || 0)}
+                                        onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
                                         style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Tributos — PIS+COFINS+ISS (%)</label>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.tributos}
-                                        onChange={e => updateTcu('tributos', parseFloat(e.target.value) || 0)}
+                                        onChange={e => updateTcu('tributos', parseLocaleNumber(e.target.value))}
                                         style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                 </div>
                                 <div style={{ marginTop: 4, background: 'rgba(180,83,9,0.08)', padding: 10, borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
