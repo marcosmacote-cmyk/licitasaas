@@ -94,9 +94,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
             const attachments = schemaV2?.pncp_source?.attachments || [];
             const classified = classifyEngineeringAttachments(attachments, { maxDocuments: 4 });
-            const selectedAttachments = classified.selected.length > 0
+            const selectedAttachments: Array<{ url: string; titulo: string }> = classified.selected.length > 0
                 ? classified.selected.map(doc => ({ url: doc.url, titulo: doc.title }))
-                : urlsToEngineeringAttachments(pdfUrls).slice(0, 3);
+                : urlsToEngineeringAttachments(pdfUrls)
+                    .filter((att): att is { url: string; titulo: string } => Boolean(att.url && att.titulo))
+                    .slice(0, 3);
 
             logger.info(
                 `[Engineering-BG] 📎 Fallback classifier selected ${selectedAttachments.length}/${classified.summary.total} attachment(s): ` +
