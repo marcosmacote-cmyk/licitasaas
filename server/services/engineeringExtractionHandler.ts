@@ -35,6 +35,7 @@ import {
     type EngineeringValidationReport,
 } from './engineering/extractionValidator';
 import { autoEvaluateIfBenchmarkCase } from './ai/benchmark/engineeringBenchmarkRunner';
+import { enrichWithOfficialPrices } from './engineering/priceEnricher';
 
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
@@ -366,9 +367,23 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         progressMsg: `Enriquecendo ${engItems.length} itens com preços oficiais...`
     });
 
-    // ── Step 3: Enrich with official prices ──
+    // ── Step 3: Enrich with official prices (FIX-01: uses centralized priceEnricher with regime/date-base scoring) ──
     try {
-        await enrichWithOfficialPricesLocal(engItems);
+        // Fetch engineeringConfig from the proposal (if exists) to respect regime/data-base
+        let engineeringConfig: any = undefined;
+        try {
+            const proposal = await prisma.priceProposal.findFirst({
+                where: { biddingProcessId: biddingId },
+                select: { engineeringConfig: true },
+                orderBy: { updatedAt: 'desc' },
+            });
+            if (proposal?.engineeringConfig) {
+                engineeringConfig = proposal.engineeringConfig;
+            }
+        } catch { /* no proposal yet — enrich without config */ }
+
+        const enrichResult = await enrichWithOfficialPrices(engItems, engineeringConfig);
+        logger.info(`[Engineering-BG] 🔍 Price audit: ${enrichResult.matched}/${enrichResult.total} itens matched against official DB`);
     } catch (err: any) {
         logger.warn(`[Engineering-BG] ⚠️ Enrichment partial: ${err.message}`);
     }
@@ -541,77 +556,4 @@ async function mergeEngineeringResults(
     );
 }
 
-/**
- * Local audit — compares extracted edital prices against official bases without
- * replacing the extracted price. Keep self-contained to avoid circular imports.
- */
-async function enrichWithOfficialPricesLocal(items: any[]): Promise<void> {
-    const enrichable = items.filter(it =>
-        it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A'
-    );
-    if (enrichable.length === 0) return;
-
-    const codes = enrichable.map(it => it.code);
-
-    const [dbItems, dbComps] = await Promise.all([
-        prisma.engineeringItem.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
-        }),
-        prisma.engineeringComposition.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
-        }),
-    ]);
-
-    const itemMap = new Map(dbItems.map(di => [di.code.toLowerCase(), { ...di, matchedPrice: Number(di.price) || 0, matchType: 'INSUMO' }]));
-    const compMap = new Map(dbComps.map(dc => [dc.code.toLowerCase(), { ...dc, matchedPrice: Number(dc.totalPrice) || 0, matchType: 'COMPOSICAO' }]));
-
-    let matched = 0;
-    for (const item of enrichable) {
-        const codeLower = item.code.toLowerCase();
-        const dbMatch = itemMap.get(codeLower) || compMap.get(codeLower);
-        const extractedUnitCost = Number(item.unitCost) || 0;
-
-        if (dbMatch) {
-            const matchedUnitCost = Number(dbMatch.matchedPrice) || 0;
-            const deltaValue = extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
-            const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-            const status = deltaPercent !== null && Math.abs(deltaPercent) > 0.5 && Math.abs(deltaValue || 0) > 0.01
-                ? 'DIVERGENT'
-                : 'OK';
-
-            if (!item.sourceName || item.sourceName === 'PROPRIA') item.sourceName = dbMatch.database?.name || item.sourceName || 'OFICIAL';
-            if (!item.unit || item.unit === 'UN') item.unit = dbMatch.unit || item.unit;
-            if (dbMatch.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
-            item.priceAudit = {
-                status,
-                extractedUnitCost,
-                matchedUnitCost,
-                matchedDatabaseId: dbMatch.database?.id || null,
-                matchedSourceName: dbMatch.database?.name || null,
-                matchedUf: dbMatch.database?.uf || null,
-                matchedReference: dbMatch.database?.referenceYear && dbMatch.database?.referenceMonth
-                    ? `${String(dbMatch.database.referenceMonth).padStart(2, '0')}/${dbMatch.database.referenceYear}`
-                    : (dbMatch.database?.version || 'N/I'),
-                matchedPayrollExemption: Boolean(dbMatch.database?.payrollExemption),
-                deltaValue,
-                deltaPercent,
-                warnings: [],
-            };
-            matched++;
-            continue;
-        }
-
-        item.priceAudit = {
-            status: 'SEM_MATCH',
-            extractedUnitCost,
-            matchedUnitCost: null,
-            deltaValue: null,
-            deltaPercent: null,
-            warnings: ['código não encontrado nas bases oficiais cadastradas'],
-        };
-    }
-
-    logger.info(`[Engineering-BG] 🔍 Price audit: ${matched}/${enrichable.length} itens matched against official DB`);
-}
+// enrichWithOfficialPricesLocal removed — FIX-01: now uses centralized priceEnricher.ts

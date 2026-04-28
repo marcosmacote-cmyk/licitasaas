@@ -374,6 +374,11 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Apenas composições próprias podem ser alteradas' });
         }
 
+        // SEC-02: Verify tenant ownership
+        if (existing.database.tenantId && req.user?.tenantId && existing.database.tenantId !== req.user.tenantId) {
+            return res.status(403).json({ error: 'Composição pertence a outro tenant' });
+        }
+
         // Flatten all items from groups to update
         const flatItems: any[] = [];
         for (const group of Object.values(composition.groups)) {
@@ -399,9 +404,9 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 where: { compositionId: id }
             });
 
-            // Create new items
-            const tenantId = composition.tenantId; // Or get it from the parent composition
-            const basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA' } });
+            // Create new items — SEC-02: use authenticated tenantId
+            const tenantId = req.user?.tenantId || composition.tenantId;
+            const basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId } });
 
             for (const item of flatItems) {
                 let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
@@ -679,7 +684,12 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const composition = await prisma.engineeringComposition.findFirst({
                 where: { code: { equals: code, mode: 'insensitive' } },
                 include: {
-                    items: { include: { item: true } },
+                    items: {
+                        include: {
+                            item: true,
+                            // FIX-04: Include auxiliary compositions with their items for recursive resolution
+                        },
+                    },
                     database: { select: { name: true, uf: true } },
                 },
             });
@@ -693,46 +703,72 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const serviceQty = Number(clientItem.quantity) || 1;
             const baseName = composition.database?.name || clientItem.sourceName || 'PROPRIA';
 
-            // Drill into each insumo of the composition
-            for (const ci of composition.items) {
-                if (!ci.item) continue;
-
-                const insumoKey = ci.item.code.toUpperCase();
+            // FIX-04: Helper to add an insumo to the consolidated map
+            const addInsumo = (insumoCode: string, insumo: any, coef: number, parentCompCode: string) => {
+                const insumoKey = insumoCode.toUpperCase();
                 const existing = consolidated.get(insumoKey);
-                const weightedCoef = ci.coefficient * serviceQty;
+                const weightedCoef = coef * serviceQty;
 
                 if (existing) {
                     existing.coeficienteTotal += weightedCoef;
                     existing.coeficientesPorComposicao.push({
-                        compCode: composition.code,
-                        coef: ci.coefficient,
+                        compCode: parentCompCode,
+                        coef,
                         qty: serviceQty,
                     });
-                    if (!existing.composicoesVinculadas.includes(composition.code)) {
-                        existing.composicoesVinculadas.push(composition.code);
+                    if (!existing.composicoesVinculadas.includes(parentCompCode)) {
+                        existing.composicoesVinculadas.push(parentCompCode);
                     }
-                    // IMPORTANT: Keep the SAME price (legal requirement)
-                    // If different prices found, log a warning
-                    if (Math.abs(existing.precoOriginal - ci.item.price) > 0.01) {
-                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${ci.item.code}: R$${existing.precoOriginal} vs R$${ci.item.price} — usando preço da primeira ocorrência`);
+                    if (Math.abs(existing.precoOriginal - insumo.price) > 0.01) {
+                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${insumo.code}: R$${existing.precoOriginal} vs R$${insumo.price} — usando preço da primeira ocorrência`);
                     }
                 } else {
                     consolidated.set(insumoKey, {
                         id: insumoKey,
-                        codigo: ci.item.code,
-                        descricao: ci.item.description,
-                        categoria: normalizeInsumoType(ci.item.type),
-                        unidade: ci.item.unit,
-                        precoOriginal: ci.item.price,
+                        codigo: insumo.code,
+                        descricao: insumo.description,
+                        categoria: normalizeInsumoType(insumo.type),
+                        unidade: insumo.unit,
+                        precoOriginal: insumo.price,
                         base: baseName,
-                        composicoesVinculadas: [composition.code],
+                        composicoesVinculadas: [parentCompCode],
                         coeficientesPorComposicao: [{
-                            compCode: composition.code,
-                            coef: ci.coefficient,
+                            compCode: parentCompCode,
+                            coef,
                             qty: serviceQty,
                         }],
                         coeficienteTotal: weightedCoef,
                     });
+                }
+            };
+
+            // Drill into each insumo of the composition
+            for (const ci of composition.items) {
+                if (ci.item) {
+                    // Direct insumo (material, MO, equipment)
+                    addInsumo(ci.item.code, ci.item, ci.coefficient, composition.code);
+                } else if (ci.auxiliaryCompositionId) {
+                    // FIX-04: Resolve auxiliary composition recursively
+                    const visitedAux = new Set<string>();
+                    const resolveAuxiliary = async (auxId: string, parentCoef: number, parentCompCode: string) => {
+                        if (visitedAux.has(auxId)) return; // Prevent infinite loops
+                        visitedAux.add(auxId);
+
+                        const auxComp = await prisma.engineeringComposition.findUnique({
+                            where: { id: auxId },
+                            include: { items: { include: { item: true } } },
+                        });
+                        if (!auxComp) return;
+
+                        for (const auxCi of auxComp.items) {
+                            if (auxCi.item) {
+                                addInsumo(auxCi.item.code, auxCi.item, auxCi.coefficient * parentCoef, parentCompCode);
+                            } else if (auxCi.auxiliaryCompositionId) {
+                                await resolveAuxiliary(auxCi.auxiliaryCompositionId, auxCi.coefficient * parentCoef, parentCompCode);
+                            }
+                        }
+                    };
+                    await resolveAuxiliary(ci.auxiliaryCompositionId, ci.coefficient, composition.code);
                 }
             }
         }
@@ -1466,162 +1502,15 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
     return { sourceName: 'PROPRIA', code: itemNumber || 'N/A' };
 }
 
-type EngineeringPriceAuditStatus = 'OK' | 'DIVERGENT' | 'BASE_INCOMPATIVEL' | 'SEM_MATCH';
-
-function parseDataBaseMonth(dataBase?: string): { year: number; month: number } | null {
-    const match = String(dataBase || '').match(/^(\d{4})-(\d{2})$/);
-    if (!match) return null;
-    return { year: Number(match[1]), month: Number(match[2]) };
-}
-
-function formatReference(db: any): string {
-    if (db?.referenceYear && db?.referenceMonth) {
-        return `${String(db.referenceMonth).padStart(2, '0')}/${db.referenceYear}`;
-    }
-    return db?.version || 'N/I';
-}
-
-function buildCandidateScore(candidate: any, sourceName: string, config: any, targetDate: { year: number; month: number } | null) {
-    const db = candidate.database || {};
-    const desiredSources = Array.isArray(config?.basesConsideradas)
-        ? config.basesConsideradas.map((b: string) => String(b).toUpperCase())
-        : [];
-    const desiredDesonerado = config?.regimeOneracao
-        ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
-        : null;
-
-    let score = 0;
-    const warnings: string[] = [];
-    const dbName = String(db.name || '').toUpperCase();
-    const itemSource = String(sourceName || '').toUpperCase();
-
-    if (itemSource && itemSource !== 'PROPRIA' && dbName === itemSource) score += 40;
-    else if (desiredSources.includes(dbName)) score += 20;
-    else if ((itemSource && itemSource !== 'PROPRIA') || desiredSources.length > 0) warnings.push('fonte fora das bases configuradas');
-
-    if (targetDate) {
-        const exactDate = db.referenceYear === targetDate.year && db.referenceMonth === targetDate.month;
-        const versionDate = String(db.version || '').includes(`${String(targetDate.month).padStart(2, '0')}/${targetDate.year}`)
-            || String(db.version || '').includes(`${targetDate.year}-${String(targetDate.month).padStart(2, '0')}`);
-        if (exactDate || versionDate) score += 30;
-        else warnings.push(`data-base incompatível (${formatReference(db)})`);
-    } else if (!db.referenceYear && !db.referenceMonth && !db.version) {
-        warnings.push('data-base não informada na base');
-    }
-
-    if (desiredDesonerado !== null) {
-        if (Boolean(db.payrollExemption) === desiredDesonerado) score += 20;
-        else warnings.push(`regime ${db.payrollExemption ? 'desonerado' : 'onerado'} incompatível`);
-    }
-
-    return { score, warnings };
-}
-
-function chooseBestCandidate(candidates: any[], item: any, config: any, targetDate: { year: number; month: number } | null) {
-    if (candidates.length === 0) return null;
-    const desiredDesonerado = config?.regimeOneracao
-        ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
-        : null;
-    const sameRegime = desiredDesonerado === null
-        ? candidates
-        : candidates.filter(candidate => Boolean(candidate.database?.payrollExemption) === desiredDesonerado);
-    const pool = sameRegime.length > 0 ? sameRegime : candidates;
-    return pool
-        .map(candidate => ({ candidate, ...buildCandidateScore(candidate, item.sourceName, config, targetDate) }))
-        .sort((a, b) => b.score - a.score)[0];
-}
-
-/**
- * Compara itens extraídos contra bases oficiais cadastradas sem sobrescrever
- * o preço do edital. O resultado fica em item.priceAudit.
- */
-async function enrichWithOfficialPrices(items: any[], engineeringConfig?: any): Promise<void> {
-    // PERF-01 FIX: Batch query instead of N+1 sequential findFirst
-    const enrichable = items.filter(it =>
-        it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A'
-    );
-    if (enrichable.length === 0) return;
-
-    const codes = enrichable.map(it => it.code);
-
-    // 1. Batch fetch all matching items (2 queries total instead of 2N)
-    const [dbItems, dbComps] = await Promise.all([
-        prisma.engineeringItem.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
-        }),
-        prisma.engineeringComposition.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
-        }),
-    ]);
-
-    const byCode = new Map<string, any[]>();
-    for (const dbItem of dbItems) {
-        const key = dbItem.code.toLowerCase();
-        byCode.set(key, [...(byCode.get(key) || []), { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 }]);
-    }
-    for (const dbComp of dbComps) {
-        const key = dbComp.code.toLowerCase();
-        byCode.set(key, [...(byCode.get(key) || []), { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 }]);
-    }
-
-    const targetDate = parseDataBaseMonth(engineeringConfig?.dataBase);
-    for (const item of enrichable) {
-        const codeLower = item.code.toLowerCase();
-        const extractedUnitCost = Number(item.unitCost) || 0;
-        const candidates = byCode.get(codeLower) || [];
-        const best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
-
-        if (!best) {
-            item.priceAudit = {
-                status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
-                extractedUnitCost,
-                matchedUnitCost: null,
-                deltaValue: null,
-                deltaPercent: null,
-                warnings: ['código não encontrado nas bases oficiais cadastradas'],
-            };
-            continue;
-        }
-
-        const matched = best.candidate;
-        const matchedUnitCost = Number(matched.matchedPrice) || 0;
-        const regimeMismatch = best.warnings.some((warning: string) => warning.includes('regime'));
-        const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
-        const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-        const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
-        const status: EngineeringPriceAuditStatus = regimeMismatch
-            ? 'BASE_INCOMPATIVEL'
-            : hasRelevantDelta
-            ? 'DIVERGENT'
-            : best.warnings.length > 0
-                ? 'BASE_INCOMPATIVEL'
-                : 'OK';
-
-        // Mantém o preço extraído do edital. Só completa metadados seguros.
-        if (!item.unit || item.unit === 'UN') item.unit = matched.unit || item.unit;
-        if ((!item.sourceName || item.sourceName === 'PROPRIA') && matched.database?.name) item.sourceName = matched.database.name;
-        if (matched.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
-
-        item.priceAudit = {
-            status,
-            extractedUnitCost,
-            matchedUnitCost,
-            matchedDatabaseId: matched.database?.id || null,
-            matchedSourceName: matched.database?.name || null,
-            matchedUf: matched.database?.uf || null,
-            matchedReference: formatReference(matched.database),
-            matchedPayrollExemption: Boolean(matched.database?.payrollExemption),
-            deltaValue,
-            deltaPercent,
-            warnings: best.warnings,
-        };
-
-        const deltaLabel = deltaPercent === null ? 'sem delta' : `${deltaPercent.toFixed(2)}%`;
-        console.log(`[Engineering Audit] ${status} ${item.code}: edital R$ ${extractedUnitCost} vs base R$ ${matchedUnitCost} (${matched.database?.name || 'OFICIAL'} ${formatReference(matched.database)}) delta=${deltaLabel}`);
-    }
-}
+// FIX-01: Price enrichment functions now centralized in priceEnricher.ts
+import {
+    enrichWithOfficialPrices,
+    parseDataBaseMonth,
+    formatReference,
+    buildCandidateScore,
+    chooseBestCandidate,
+    type EngineeringPriceAuditStatus,
+} from '../services/engineering/priceEnricher';
 
 // ═══════════════════════════════════════════════════════════
 // POST /api/engineering/seed — Seed de bases oficiais (admin-only)
@@ -2223,4 +2112,179 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/sync-sinapi
+// Sync SINAPI-CE official base via Puppeteer + Excel parsing
+// Downloads from Caixa portal, parses, and persists to DB
+// ═══════════════════════════════════════════════════════════
+import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
+
+router.post('/bases/sync-sinapi', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const {
+            ufs = ['CE'],
+            months = 12,
+            includeDesonerado = true,
+        } = req.body;
+
+        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} triggered sync: UFs=${ufs.join(',')}, months=${months}, desonerado=${includeDesonerado}`);
+
+        // Run sync (can be long — up to 30min for 12 months × 2 regimes)
+        const report = await syncSinapi({ ufs, months, includeDesonerado });
+
+        res.json({
+            message: `SINAPI sync concluído: ${report.totalSuccess}/${report.totalAttempted} com sucesso`,
+            report,
+        });
+    } catch (e: any) {
+        console.error('[SINAPI Sync] Fatal:', e);
+        res.status(500).json({ error: 'Erro na sincronização SINAPI', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/import-excel
+// Upload manual de planilha SINAPI/SEINFRA/ORSE/SICRO (.xlsx)
+// Para quando download automático não funcionar
+// ═══════════════════════════════════════════════════════════
+router.post('/bases/import-excel', aiUpload.single('file'), async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        }
+
+        const { baseName, uf, month, year, desonerado } = req.body;
+        if (!baseName || !uf || !month || !year) {
+            return res.status(400).json({ error: 'baseName, uf, month e year são obrigatórios' });
+        }
+
+        const isDesonerado = desonerado === 'true' || desonerado === true;
+        const monthNum = parseInt(month);
+        const yearNum = parseInt(year);
+
+        console.log(`[Base Import] 📥 Admin ${req.user?.email}: ${baseName} ${uf} ${monthNum}/${yearNum} ${isDesonerado ? 'Desonerado' : 'Onerado'}`);
+
+        const result = await importSinapiFromBuffer(
+            req.file.buffer,
+            baseName.toUpperCase(),
+            uf.toUpperCase(),
+            monthNum,
+            yearNum,
+            isDesonerado,
+        );
+
+        res.json({
+            message: result.success
+                ? `${result.message}`
+                : `Importação falhou: ${result.message}`,
+            ...result,
+        });
+    } catch (e: any) {
+        console.error('[Base Import] Fatal:', e);
+        res.status(500).json({ error: 'Erro na importação', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /api/engineering/bases/status
+// Retorna mapa de cobertura das bases oficiais
+// (base × mês × regime → ✅/❌ + contadores)
+// ═══════════════════════════════════════════════════════════
+router.get('/bases/status', async (req: any, res: any) => {
+    try {
+        const bases = await prisma.engineeringDatabase.findMany({
+            where: { type: 'OFICIAL' },
+            select: {
+                id: true,
+                name: true,
+                uf: true,
+                version: true,
+                referenceMonth: true,
+                referenceYear: true,
+                payrollExemption: true,
+                itemCount: true,
+                compositionCount: true,
+                updatedAt: true,
+            },
+            orderBy: [
+                { name: 'asc' },
+                { referenceYear: 'desc' },
+                { referenceMonth: 'desc' },
+            ],
+        });
+
+        // Build coverage matrix: { "SINAPI-CE": { "2026-04": { onerado: {...}, desonerado: {...} } } }
+        const coverage: Record<string, Record<string, Record<string, { id: string; itemCount: number; compositionCount: number; updatedAt: Date }>>> = {};
+
+        for (const db of bases) {
+            const key = `${db.name}-${db.uf || 'BR'}`;
+            if (!coverage[key]) coverage[key] = {};
+
+            const monthKey = db.referenceYear && db.referenceMonth
+                ? `${db.referenceYear}-${String(db.referenceMonth).padStart(2, '0')}`
+                : (db.version || 'sem-data');
+
+            if (!coverage[key][monthKey]) coverage[key][monthKey] = {};
+
+            const regime = db.payrollExemption ? 'desonerado' : 'onerado';
+            coverage[key][monthKey][regime] = {
+                id: db.id,
+                itemCount: db.itemCount,
+                compositionCount: db.compositionCount,
+                updatedAt: db.updatedAt,
+            };
+        }
+
+        // Summary stats
+        const totalDatabases = bases.length;
+        const totalItems = bases.reduce((sum, b) => sum + b.itemCount, 0);
+        const totalCompositions = bases.reduce((sum, b) => sum + b.compositionCount, 0);
+        const lastUpdated = bases.length > 0
+            ? new Date(Math.max(...bases.map(b => b.updatedAt.getTime())))
+            : null;
+
+        // Check coverage for last 12 months
+        const now = new Date();
+        const expectedMonths: string[] = [];
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            expectedMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        }
+
+        const gaps: string[] = [];
+        for (const [baseKey, monthData] of Object.entries(coverage)) {
+            for (const month of expectedMonths) {
+                if (!monthData[month]) {
+                    gaps.push(`${baseKey} ${month}: FALTANDO`);
+                } else {
+                    if (!monthData[month].onerado) gaps.push(`${baseKey} ${month}: falta onerado`);
+                    if (!monthData[month].desonerado) gaps.push(`${baseKey} ${month}: falta desonerado`);
+                }
+            }
+        }
+
+        res.json({
+            totalDatabases,
+            totalItems,
+            totalCompositions,
+            lastUpdated,
+            coverage,
+            gaps: gaps.slice(0, 50), // Max 50 gaps
+            expectedMonths,
+        });
+    } catch (e: any) {
+        console.error('[Bases Status] Error:', e);
+        res.status(500).json({ error: 'Erro ao consultar status das bases', details: e.message });
+    }
+});
+
 export default router;
+

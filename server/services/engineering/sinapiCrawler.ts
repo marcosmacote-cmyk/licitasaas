@@ -4,12 +4,10 @@
  */
 import * as XLSX from 'xlsx';
 import AdmZip from 'adm-zip';
-import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../lib/prisma';
 
 // ═══════════════════════════════════════════════════════════
 // Puppeteer portal navigation + CDP download interception

@@ -460,7 +460,16 @@ export function validateEngineeringExtraction(
     // Clamp score
     score = Math.max(0, Math.min(100, score));
 
-    const publishable = score >= 40; // Below 40 = too unreliable
+    const publishable = score >= 65; // FIX-06: Below 65 = too unreliable for publication
+
+    // Add warning for moderate confidence publications
+    if (score >= 65 && score < 80) {
+        issues.push({
+            code: 'LOW_CONFIDENCE_PUBLICATION',
+            severity: 'warning',
+            message: `Extração publicada com confiança moderada (${score}%). Recomenda-se revisão manual.`,
+        });
+    }
 
     const report: EngineeringValidationReport = {
         qualityScore: score,

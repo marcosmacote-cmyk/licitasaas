@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
+import { fallbackToOpenAiV2 } from '../openai.service';
 
 const systemPrompt = `Você é um engenheiro orçamentista expert em leitura de composições de custos (CPUs).
 Seu trabalho é ler a imagem/pdf fornecida, identificar a tabela de insumos e extrair os dados ESTRITAMENTE neste schema JSON:
@@ -37,29 +37,42 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
     // Import callGeminiWithRetry (dynamically or statically at the top)
     const { callGeminiWithRetry } = require('../gemini.service');
 
-    const response = await callGeminiWithRetry(
-        genAI.models,
-        {
-            model: 'gemini-2.5-flash',
-            contents: [
-                { role: 'user', parts: [
-                    { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-                    { text: `Extraia a composição da imagem.` + (expectedCode ? ` Se possível, foque no item com código ou descrição similar a ${expectedCode}.` : '') }
-                ]}
-            ],
-            config: {
-                systemInstruction: systemPrompt,
-                responseMimeType: 'application/json',
-                temperature: 0.1
-            }
-        },
-        3 // retries
-    );
+    // FIX-05: Try Gemini first, fallback to DeepSeek/OpenAI on failure
+    let text: string;
+    try {
+        const response = await callGeminiWithRetry(
+            genAI.models,
+            {
+                model: 'gemini-2.5-flash',
+                contents: [
+                    { role: 'user', parts: [
+                        { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
+                        { text: `Extraia a composição da imagem.` + (expectedCode ? ` Se possível, foque no item com código ou descrição similar a ${expectedCode}.` : '') }
+                    ]}
+                ],
+                config: {
+                    systemInstruction: systemPrompt,
+                    responseMimeType: 'application/json',
+                    temperature: 0.1
+                }
+            },
+            3 // retries
+        );
+        text = response.text || '';
+    } catch (geminiErr: any) {
+        logger.warn(`[AI Extract Composition] Gemini falhou: ${geminiErr.message}. Tentando fallback...`);
+        const fallback = await fallbackToOpenAiV2({
+            systemPrompt,
+            userPrompt: `Extraia a composição.${expectedCode ? ` Foque no item ${expectedCode}.` : ''} Retorne APENAS JSON válido.`,
+            temperature: 0.1,
+            maxTokens: 8192,
+            stageName: 'Composition Extraction',
+        });
+        text = fallback.text;
+    }
 
-    const text = response.text;
     if (!text) throw new Error('Resposta vazia da IA');
-    
-    console.log('[AI Extract Composition] Raw response:', text);
+    logger.info(`[AI Extract Composition] Raw response length: ${text.length}`);
 
     let extracted: any;
     try {
@@ -75,11 +88,15 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
         let match = null;
         
         // 1. Try exact code match if available
+        // FIX-07: Normalize type from LLM (may return 'auxiliar', 'Auxiliar', etc.)
+        const itemType = String(item.type || 'MATERIAL').toUpperCase();
+        item.type = itemType;
+
         if (item.code) {
             match = await prisma.engineeringItem.findFirst({
                 where: { code: item.code }
             });
-            if (!match && item.type === 'AUXILIAR') {
+            if (!match && itemType === 'AUXILIAR') {
                 match = await prisma.engineeringComposition.findFirst({
                     where: { code: item.code }
                 });
@@ -89,7 +106,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
         // 2. Try simple FTS or ILIKE on description
         if (!match && item.description) {
             const query = item.description.substring(0, 30); // Use first 30 chars for looser match
-            if (item.type === 'AUXILIAR') {
+            if (itemType === 'AUXILIAR') {
                 match = await prisma.engineeringComposition.findFirst({
                     where: { description: { contains: query, mode: 'insensitive' } }
                 });
@@ -108,7 +125,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
             id: `temp-${Date.now()}-${Math.random()}`,
             coefficient: item.coefficient || 1,
             price: subtotal, // In the schema, ci.price is the subtotal
-            item: item.type !== 'AUXILIAR' ? {
+            item: itemType !== 'AUXILIAR' ? {
                 id: match ? match.id : `new-${Date.now()}`,
                 code: match ? match.code : (item.code || 'NOVO'),
                 description: match ? match.description : item.description,
@@ -117,7 +134,7 @@ export async function extractCompositionFromImage(fileBuffer: Buffer, mimeType: 
                 price: unitPrice,
                 isNew: !match
             } : undefined,
-            auxiliaryComposition: item.type === 'AUXILIAR' ? {
+            auxiliaryComposition: itemType === 'AUXILIAR' ? {
                 id: match ? match.id : `new-aux-${Date.now()}`,
                 code: match ? match.code : (item.code || 'NOVO'),
                 description: match ? match.description : item.description,
