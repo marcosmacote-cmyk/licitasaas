@@ -609,7 +609,18 @@ for (const p of possibleDistPaths) {
 
 if (frontendDist) {
     logger.info(`[Frontend] Found and serving static UI from: ${frontendDist}`);
-    app.use(express.static(frontendDist));
+    app.use('/assets', express.static(path.join(frontendDist, 'assets'), {
+        immutable: true,
+        maxAge: '1y',
+    }));
+    app.use(express.static(frontendDist, {
+        maxAge: 0,
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith('index.html')) {
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            }
+        },
+    }));
     
     // Fallback for React Router (catch-all)
     // Using app.use() instead of app.get('*') to avoid Express 5 path-to-regexp crash
