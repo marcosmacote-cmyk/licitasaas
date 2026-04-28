@@ -1866,6 +1866,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // Trigger SINAPI auto-download & import (Admin only)
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
+import { getLatestOrsePeriods, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -1893,6 +1894,69 @@ router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('[SINAPI Sync] Error:', e);
         res.status(500).json({ error: 'Erro ao iniciar sync', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ORSE official base sync + live search
+// Uses the public ORSE service search by period because .ORSE update
+// packages are proprietary binary files from the desktop ORSE system.
+// ═══════════════════════════════════════════════════════════
+router.get('/bases/orse/periods', async (req: any, res: any) => {
+    try {
+        const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
+        const periods = await getLatestOrsePeriods(months);
+        res.json({ periods });
+    } catch (e: any) {
+        console.error('[ORSE Periods] Error:', e);
+        res.status(500).json({ error: 'Erro ao listar períodos ORSE', details: e.message });
+    }
+});
+
+router.get('/bases/orse/search', async (req: any, res: any) => {
+    try {
+        let period = String(req.query.period || '');
+        if (!period) {
+            const periods = await getLatestOrsePeriods(1);
+            period = String(periods[0]?.value || '');
+        }
+        if (!period) return res.status(404).json({ error: 'Nenhum período ORSE disponível' });
+
+        const q = String(req.query.q || '');
+        const page = Math.max(1, Number(req.query.page || 1));
+        const result = await searchOrseServices(period, q, page);
+        res.json(result);
+    } catch (e: any) {
+        console.error('[ORSE Search] Error:', e);
+        res.status(500).json({ error: 'Erro na busca ORSE', details: e.message });
+    }
+});
+
+router.post('/bases/sync-orse', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
+        const force = Boolean(req.body?.force);
+        const maxPagesPerPeriod = req.body?.maxPagesPerPeriod ? Number(req.body.maxPagesPerPeriod) : undefined;
+
+        console.log(`[ORSE Sync] Admin ${req.user?.email} disparou sync: meses=${months}, force=${force}`);
+
+        res.json({
+            message: `Sync ORSE iniciado em background para os últimos ${months} períodos disponíveis`,
+            status: 'started',
+        });
+
+        syncOrse({ months, force, maxPagesPerPeriod }).then(report => {
+            console.log(`[ORSE Sync] Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error('[ORSE Sync] Erro fatal:', err);
+        });
+    } catch (e: any) {
+        console.error('[ORSE Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync ORSE', details: e.message });
     }
 });
 
@@ -2253,4 +2317,3 @@ router.get('/bases/status', async (req: any, res: any) => {
 });
 
 export default router;
-

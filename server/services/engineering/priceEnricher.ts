@@ -53,6 +53,20 @@ export function formatReference(db: any): string {
     return db?.version || 'N/I';
 }
 
+function normalizeOfficialCode(code: string): string {
+    const value = String(code || '').trim().toUpperCase();
+    const orse = value.match(/^0*(\d+)\/ORSE$/);
+    return orse ? `${orse[1]}/ORSE` : value;
+}
+
+function buildCodeVariants(code: string): string[] {
+    const normalized = normalizeOfficialCode(code);
+    const variants = new Set([String(code || '').trim(), normalized]);
+    const orse = normalized.match(/^(\d+)\/ORSE$/);
+    if (orse) variants.add(`${orse[1].padStart(5, '0')}/ORSE`);
+    return [...variants].filter(Boolean);
+}
+
 export function buildCandidateScore(
     candidate: any,
     sourceName: string,
@@ -88,8 +102,11 @@ export function buildCandidateScore(
         warnings.push('data-base não informada na base');
     }
 
-    // Regime match scoring
-    if (desiredDesonerado !== null) {
+    // Regime match scoring. ORSE/SICRO do not expose dual onerado/desonerado
+    // catalogs in the same way SINAPI/SEINFRA do, so they must not produce
+    // false base-incompatible alerts only because the project has a payroll regime.
+    const supportsPayrollRegime = ['SINAPI', 'SEINFRA'].includes(dbName);
+    if (desiredDesonerado !== null && supportsPayrollRegime) {
         if (Boolean(db.payrollExemption) === desiredDesonerado) score += 20;
         else warnings.push(`regime ${db.payrollExemption ? 'desonerado' : 'onerado'} incompatível`);
     }
@@ -135,7 +152,7 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
     );
     if (enrichable.length === 0) return { matched: 0, total: 0 };
 
-    const codes = enrichable.map(it => it.code);
+    const codes = [...new Set(enrichable.flatMap(it => buildCodeVariants(it.code)))];
 
     // Batch fetch all matching items (2 queries total instead of 2N)
     const [dbItems, dbComps] = await Promise.all([
@@ -152,19 +169,25 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
     // Build arrays per code (same code may exist in multiple DBs)
     const byCode = new Map<string, any[]>();
     for (const dbItem of dbItems) {
-        const key = dbItem.code.toLowerCase();
-        byCode.set(key, [...(byCode.get(key) || []), { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 }]);
+        const candidate = { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 };
+        for (const keyVariant of buildCodeVariants(dbItem.code)) {
+            const key = keyVariant.toLowerCase();
+            byCode.set(key, [...(byCode.get(key) || []), candidate]);
+        }
     }
     for (const dbComp of dbComps) {
-        const key = dbComp.code.toLowerCase();
-        byCode.set(key, [...(byCode.get(key) || []), { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 }]);
+        const candidate = { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 };
+        for (const keyVariant of buildCodeVariants(dbComp.code)) {
+            const key = keyVariant.toLowerCase();
+            byCode.set(key, [...(byCode.get(key) || []), candidate]);
+        }
     }
 
     const targetDate = parseDataBaseMonth(engineeringConfig?.dataBase);
     let matched = 0;
 
     for (const item of enrichable) {
-        const codeLower = item.code.toLowerCase();
+        const codeLower = normalizeOfficialCode(item.code).toLowerCase();
         const extractedUnitCost = Number(item.unitCost) || 0;
         const candidates = byCode.get(codeLower) || [];
         const best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);

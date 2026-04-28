@@ -285,10 +285,13 @@ async function downloadAndParseSeinfraHtml(regime: SeinfraRegime): Promise<{
 
         const normalizeHref = (href: string, baseUrl: string): string | null => {
             if (!href || href.startsWith('javascript:') || href.startsWith('#')) return null;
-            if (!/\.html(?:\?|$)/i.test(href)) return null;
             if (/C\d{4,5}\.html/i.test(href)) return null;
             try {
-                return new URL(href, baseUrl).toString();
+                const url = new URL(href, baseUrl);
+                // The SIPROCE tree links category pages as /html/1.html, /html/1.4.html, etc.
+                // Download pages such as tabela-custo-download.html look like HTML too, but are not indexes.
+                if (!/\/html\/\d+(?:\.\d+)*\.html$/i.test(url.pathname)) return null;
+                return url.toString();
             } catch {
                 return null;
             }

@@ -22,6 +22,7 @@ export function EngineeringHub() {
     const [uploading, setUploading] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [syncingSeinfra, setSyncingSeinfra] = useState(false);
+    const [syncingOrse, setSyncingOrse] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,6 +180,36 @@ export function EngineeringHub() {
         }
     };
 
+    const handleSyncOrse = async () => {
+        if (!confirm('Sincronizar ORSE?\n\nIsso vai buscar os últimos 12 períodos disponíveis na consulta pública oficial da ORSE e gravar as composições para auditoria de preços. O processo roda em background e pode levar alguns minutos.')) return;
+
+        setSyncingOrse(true);
+        try {
+            const res = await fetch('/api/engineering/bases/sync-orse', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ months: 12 })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert(data.message || 'Sync ORSE iniciado em background. Acompanhe os logs e recarregue em alguns minutos.');
+                setTimeout(fetchBases, 30000);
+                setTimeout(fetchBases, 90000);
+                setTimeout(fetchBases, 180000);
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao iniciar sync ORSE'));
+            }
+        } catch (err) {
+            alert('Erro de conexão ao sincronizar ORSE');
+        } finally {
+            setSyncingOrse(false);
+        }
+    };
+
     // Group bases by name+uf for better visualization
     const groupedBases: Record<string, EngDatabase[]> = {};
     for (const base of bases) {
@@ -248,6 +279,21 @@ export function EngineeringHub() {
                         >
                             {syncingSeinfra ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
                             {syncingSeinfra ? 'Importando...' : 'Sync SEINFRA'}
+                        </button>
+
+                        <button
+                            onClick={handleSyncOrse}
+                            disabled={syncingOrse}
+                            style={{
+                                background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingOrse ? 'wait' : 'pointer',
+                                opacity: syncingOrse ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(8,145,178,0.25)'
+                            }}
+                        >
+                            {syncingOrse ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
+                            {syncingOrse ? 'Sincronizando...' : 'Sync ORSE'}
                         </button>
 
                         <div style={{ position: 'relative' }}>
@@ -353,6 +399,9 @@ export function EngineeringHub() {
                             <button onClick={handleSyncSeinfra} disabled={syncingSeinfra} style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                 <Database size={16} /> Importar SEINFRA
                             </button>
+                            <button onClick={handleSyncOrse} disabled={syncingOrse} style={{ background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Database size={16} /> Sincronizar ORSE
+                            </button>
                         </div>
                     )}
                 </div>
@@ -360,8 +409,9 @@ export function EngineeringHub() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                     {bases.map(base => {
                         const color = getBaseColor(base.name);
-                        const regimeLabel = base.payrollExemption ? 'Desonerado' : 'Onerado';
-                        const regimeColor = base.payrollExemption ? '#f59e0b' : '#059669';
+                        const hasPayrollRegime = ['SINAPI', 'SEINFRA'].includes(base.name);
+                        const regimeLabel = hasPayrollRegime ? (base.payrollExemption ? 'Desonerado' : 'Onerado') : 'Catálogo único';
+                        const regimeColor = hasPayrollRegime ? (base.payrollExemption ? '#f59e0b' : '#059669') : '#64748b';
                         const versionLabel = base.referenceMonth && base.referenceYear 
                             ? `${String(base.referenceMonth).padStart(2, '0')}/${base.referenceYear}` 
                             : (base.version || 'N/I');
@@ -387,7 +437,7 @@ export function EngineeringHub() {
                                                         {base.type}
                                                     </span>
                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700, color: regimeColor, background: `${regimeColor}15`, padding: '1px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                        {base.payrollExemption ? <ShieldOff size={10} /> : <Shield size={10} />}
+                                                        {hasPayrollRegime ? (base.payrollExemption ? <ShieldOff size={10} /> : <Shield size={10} />) : <Database size={10} />}
                                                         {regimeLabel}
                                                     </span>
                                                 </div>
