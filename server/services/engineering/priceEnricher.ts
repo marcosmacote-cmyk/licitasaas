@@ -128,8 +128,18 @@ export function chooseBestCandidate(
         ? candidates
         : candidates.filter(candidate => Boolean(candidate.database?.payrollExemption) === desiredDesonerado);
     const pool = sameRegime.length > 0 ? sameRegime : candidates;
+    const desiredType = String(item.type || '').toUpperCase();
     return pool
-        .map(candidate => ({ candidate, ...buildCandidateScore(candidate, item.sourceName, config, targetDate) }))
+        .map(candidate => {
+            const scored = buildCandidateScore(candidate, item.sourceName, config, targetDate);
+            const matchType = String(candidate.matchType || '').toUpperCase();
+            const typeBonus = desiredType === 'COMPOSICAO' && matchType === 'COMPOSICAO'
+                ? 5
+                : desiredType === 'INSUMO' && matchType === 'INSUMO'
+                    ? 5
+                    : 0;
+            return { candidate, score: scored.score + typeBonus, warnings: scored.warnings };
+        })
         .sort((a, b) => b.score - a.score)[0];
 }
 

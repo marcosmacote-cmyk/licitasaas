@@ -222,12 +222,16 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
     const repairs: string[] = [];
 
     const engineeringItems = (items || []).map((item, index) => {
+        const rawCode = String(firstDefined(item, ['code', 'sourceCode', 'codigo', 'cod', 'codigoServico']) || '');
+        const rawSourceName = String(firstDefined(item, ['sourceName', 'sourceBase', 'base', 'fonte', 'banco']) || 'PROPRIA').toUpperCase();
+        const orseCodeMatch = rawCode.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
+        const isOrse = rawSourceName === 'ORSE' || /\/ORSE$/i.test(rawCode);
         const normalized = {
             ...item,
             item: String(firstDefined(item, ['item', 'itemNumber', 'numero', 'n', 'ordem']) ?? `${index + 1}`),
             type: normalizeType(firstDefined(item, ['type', 'tipo', 'classification'])),
-            sourceName: String(firstDefined(item, ['sourceName', 'sourceBase', 'base', 'fonte', 'banco']) || 'PROPRIA').toUpperCase(),
-            code: String(firstDefined(item, ['code', 'sourceCode', 'codigo', 'cod', 'codigoServico']) || ''),
+            sourceName: isOrse ? 'ORSE' : rawSourceName,
+            code: isOrse && orseCodeMatch ? `${orseCodeMatch[1]}/ORSE` : rawCode,
             description: String(firstDefined(item, ['description', 'descricao', 'descrição', 'servico', 'serviço', 'nome']) || ''),
             unit: String(firstDefined(item, ['unit', 'unidade', 'unid', 'und']) || ''),
             quantity: parseNumber(firstDefined(item, ['quantity', 'quantidade', 'qtd', 'qty'])),

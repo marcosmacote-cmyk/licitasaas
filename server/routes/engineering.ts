@@ -170,26 +170,48 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
         const skip = (page - 1) * limit;
 
         const whereClause: any = { databaseId };
+        const compWhereClause: any = { databaseId };
         
         if (query) {
             whereClause.OR = [
                 { code: { contains: query, mode: 'insensitive' } },
                 { description: { contains: query, mode: 'insensitive' } }
             ];
+            compWhereClause.OR = [
+                { code: { contains: query, mode: 'insensitive' } },
+                { description: { contains: query, mode: 'insensitive' } }
+            ];
         }
 
-        const [items, total] = await Promise.all([
+        const [items, compositions, itemTotal, compositionTotal] = await Promise.all([
             prisma.engineeringItem.findMany({
                 where: whereClause,
-                skip,
-                take: limit,
+                take: skip + limit,
                 orderBy: { code: 'asc' }
             }),
-            prisma.engineeringItem.count({ where: whereClause })
+            prisma.engineeringComposition.findMany({
+                where: compWhereClause,
+                take: skip + limit,
+                orderBy: { code: 'asc' }
+            }),
+            prisma.engineeringItem.count({ where: whereClause }),
+            prisma.engineeringComposition.count({ where: compWhereClause })
         ]);
 
+        const combined = [
+            ...items.map((item: any) => ({ ...item, recordKind: 'INSUMO', price: item.price })),
+            ...compositions.map((composition: any) => ({
+                ...composition,
+                recordKind: 'COMPOSICAO',
+                price: composition.totalPrice,
+                type: 'SERVICO',
+            })),
+        ].sort((a: any, b: any) => String(a.code).localeCompare(String(b.code)));
+
+        const total = itemTotal + compositionTotal;
+
         res.json({
-            items,
+            items: combined.slice(skip, skip + limit),
             total,
             page,
             totalPages: Math.ceil(total / limit)
@@ -1445,7 +1467,11 @@ async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any): Prom
             sourceName = detected.sourceName;
             code = detected.code;
         } else if (!sourceName) {
-            sourceName = code.match(/^[CI]\d/i) ? 'SEINFRA' : 'SINAPI';
+            sourceName = /\/ORSE$/i.test(code)
+                ? 'ORSE'
+                : code.match(/^[CI]\d/i)
+                    ? 'SEINFRA'
+                    : 'SINAPI';
         }
 
         // Infer type from item structure
@@ -1491,12 +1517,26 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
     if (seinfraMatch) return { sourceName: 'SEINFRA', code: seinfraMatch[1].toUpperCase() };
     
     // Pattern: "ORSE 1234" or "SICRO 1234"
-    const orseMatch = desc.match(/(?:ORSE|SICRO)[\s:.-]*(\d{3,6})/i);
-    if (orseMatch) return { sourceName: orseMatch[0].split(/[\s:.-]/)[0].toUpperCase(), code: orseMatch[1] };
+    const sourceMatch = desc.match(/\b(ORSE|SICRO)[\s:.-]*(\d{3,6})(?:\/ORSE)?\b/i)
+        || desc.match(/\b(0*\d{1,6})\/(ORSE)\b/i);
+    if (sourceMatch) {
+        const isSlashFormat = String(sourceMatch[2] || '').toUpperCase() === 'ORSE';
+        const sourceName = isSlashFormat ? 'ORSE' : String(sourceMatch[1]).toUpperCase();
+        const numericCode = isSlashFormat ? sourceMatch[1] : sourceMatch[2];
+        return {
+            sourceName,
+            code: sourceName === 'ORSE'
+                ? `${String(numericCode).replace(/^0+(\d)/, '$1')}/ORSE`
+                : String(numericCode),
+        };
+    }
 
     // If itemNumber has a code-like pattern (e.g., C0054)
     if (itemNumber && /^[CI]\d{3,5}$/i.test(itemNumber.trim())) {
         return { sourceName: 'SEINFRA', code: itemNumber.trim().toUpperCase() };
+    }
+    if (itemNumber && /^0*\d{1,6}\/ORSE$/i.test(itemNumber.trim())) {
+        return { sourceName: 'ORSE', code: itemNumber.trim().toUpperCase().replace(/^0+(\d)/, '$1') };
     }
 
     return { sourceName: 'PROPRIA', code: itemNumber || 'N/A' };
@@ -1866,7 +1906,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // Trigger SINAPI auto-download & import (Admin only)
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
-import { getLatestOrsePeriods, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
+import { getLatestOrsePeriods, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -1929,6 +1969,26 @@ router.get('/bases/orse/search', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('[ORSE Search] Error:', e);
         res.status(500).json({ error: 'Erro na busca ORSE', details: e.message });
+    }
+});
+
+router.get('/bases/orse/insumos/search', async (req: any, res: any) => {
+    try {
+        let period = String(req.query.period || '');
+        if (!period) {
+            const periods = await getLatestOrsePeriods(1);
+            period = String(periods[0]?.value || '');
+        }
+        if (!period) return res.status(404).json({ error: 'Nenhum período ORSE disponível' });
+
+        const q = String(req.query.q || '');
+        const page = Math.max(1, Number(req.query.page || 1));
+        const groupId = String(req.query.groupId || '0');
+        const result = await searchOrseInsumos(period, q, page, groupId);
+        res.json(result);
+    } catch (e: any) {
+        console.error('[ORSE Inputs Search] Error:', e);
+        res.status(500).json({ error: 'Erro na busca de insumos ORSE', details: e.message });
     }
 });
 

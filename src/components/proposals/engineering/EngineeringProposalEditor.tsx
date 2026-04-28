@@ -232,7 +232,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
         fetch('/api/engineering/bases', { headers: hdrs() })
             .then(r => r.json()).then(data => {
-                if (Array.isArray(data)) { setBases(data); if (data.length > 0) setSelectedBaseId(data[0].id); }
+                if (Array.isArray(data)) {
+                    setBases(data);
+                    if (data.length > 0) {
+                        const withData = [...data]
+                            .filter(b => ((b.itemCount || 0) + (b.compositionCount || 0)) > 0)
+                            .sort((a, b) => (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0))[0];
+                        setSelectedBaseId((withData || data[0]).id);
+                    }
+                }
             }).catch(console.error);
     }, [proposalId]);
 
@@ -284,13 +292,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     const unitPrice = extractedUnitPrice > 0 ? extractedUnitPrice : computedUnitPrice;
                     const totalPrice = extractedTotalPrice > 0 ? extractedTotalPrice : applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision });
                     
-                    const extractedSource = ai.sourceName || '';
+                    const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (ai.sourceName || '');
                     const isKnownSource = bases.some(b => b.name.toUpperCase() === extractedSource.toUpperCase());
                     const finalSource = isGroup ? '' : (isKnownSource ? extractedSource : 'PROPRIA');
+                    const normalizedCode = finalSource === 'ORSE' && ai.code
+                        ? String(ai.code).toUpperCase().replace(/^0+(\d)/, '$1').replace(/\/?ORSE$/, '/ORSE')
+                        : ai.code;
 
                     return {
                         id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
-                        code: ai.code || (isGroup ? '' : 'N/A'), sourceName: finalSource,
+                        code: normalizedCode || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
                         unitPrice,
@@ -455,6 +466,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         const base = bases.find(b => b.id === selectedBaseId);
         const cost = parseLocaleNumber(dbItem.price);
         const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
+        const typeFromBase = dbItem.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : insertType;
         setHasUnsavedChanges(true);
         setItems(prev => [...prev, {
             id: `db-${Date.now()}`, itemNumber: String(prev.length + 1),
@@ -462,7 +474,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             description: dbItem.description, unit: dbItem.unit, quantity: 1,
             unitCost: cost, unitPrice,
             // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
-            totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: insertType,
+            totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: typeFromBase,
             priceOrigin: 'BASE',
         }]);
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
@@ -1233,7 +1245,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         : bases;
                                     
                                     if (filtered.length === 0) return <option value="">Nenhuma base permitida</option>;
-                                    return filtered.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>);
+                                    return filtered.map(b => {
+                                        const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                        const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
+                                        return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                    });
                                 })()}
                             </select>
                             <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
@@ -1242,11 +1258,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>
-                                    {['Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>)}
+                                    {['Tipo','Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 4 ? 'right' : 'left' }}>{h}</th>)}
                                 </tr></thead>
                                 <tbody>
                                     {searchResults.map(r => (
                                         <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: 8, color: 'var(--color-text-tertiary)', fontWeight: 700 }}>{r.recordKind === 'COMPOSICAO' ? 'Comp.' : 'Insumo'}</td>
                                             <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
                                             <td style={{ padding: 8 }}>{r.description}</td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>

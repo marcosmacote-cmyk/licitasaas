@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 
 const ORSE_BASE_URL = 'https://orse.cehop.se.gov.br';
 const ORSE_SERVICES_URL = `${ORSE_BASE_URL}/servicosargumento.asp`;
+const ORSE_INPUTS_URL = `${ORSE_BASE_URL}/insumosargumento.asp`;
 const ORSE_DOWNLOADS_URL = `${ORSE_BASE_URL}/downloads.asp`;
 const USER_AGENT = 'LicitaSaaS-ORSE-Sync/1.0';
 
@@ -26,12 +27,29 @@ export interface OrseServiceRow {
   detailUrl?: string;
 }
 
+export interface OrseInsumoRow {
+  code: string;
+  rawCode: string;
+  description: string;
+  unit: string;
+  price: number;
+  type: 'MATERIAL' | 'MAO_DE_OBRA' | 'EQUIPAMENTO' | 'SERVICO';
+}
+
 export interface OrseSearchResult {
   period: OrsePeriod;
   page: number;
   totalPages: number;
   totalServices: number;
   services: OrseServiceRow[];
+}
+
+export interface OrseInsumoSearchResult {
+  period: OrsePeriod;
+  page: number;
+  totalPages: number;
+  totalInputs: number;
+  inputs: OrseInsumoRow[];
 }
 
 export interface OrseSyncOptions {
@@ -45,6 +63,7 @@ export interface OrseSyncResult {
   message: string;
   databaseId?: string;
   period?: OrsePeriod;
+  itemCount?: number;
   compositionCount?: number;
 }
 
@@ -91,6 +110,25 @@ function normalizeOrseCode(code: string): string {
   const cleaned = String(code || '').trim().toUpperCase();
   const match = cleaned.match(/^0*(\d+)\/ORSE$/);
   return match ? `${match[1]}/ORSE` : cleaned;
+}
+
+function detectInsumoType(description: string): OrseInsumoRow['type'] {
+  const desc = String(description || '').toUpperCase();
+  if (desc.includes('PEDREIRO') || desc.includes('SERVENTE') || desc.includes('CARPINTEIRO') ||
+    desc.includes('ELETRICIST') || desc.includes('BOMBEIRO') || desc.includes('PINTOR') ||
+    desc.includes('ENCANADOR') || desc.includes('SOLDADOR') || desc.includes('ARMADOR') ||
+    desc.includes('OPERADOR') || desc.includes('MOTORISTA') || desc.includes('MÃO-DE-OBRA') ||
+    desc.includes('MAO-DE-OBRA') || desc.includes('MÃO DE OBRA') || desc.includes('MAO DE OBRA') ||
+    desc.includes('AJUDANTE') || desc.includes('ENGENHEIRO') || desc.includes('MESTRE') ||
+    desc.includes('APONTADOR') || desc.includes('VIGIA') || desc.includes('TOPOGRAF') ||
+    desc.includes('ALMOXARIFE')) return 'MAO_DE_OBRA';
+  if (desc.includes('BETONEIRA') || desc.includes('COMPACTADOR') || desc.includes('RETRO') ||
+    desc.includes('ESCAVADEIRA') || desc.includes('CAMINH') || desc.includes('VIBRADOR') ||
+    desc.includes('GUINDASTE') || desc.includes('MÁQUINA') || desc.includes('MAQUINA') ||
+    desc.includes('ROLO ') || desc.includes('TRATOR') || desc.includes('GERADOR') ||
+    desc.includes('EQUIPAMENTO')) return 'EQUIPAMENTO';
+  if (desc.includes('SERVIÇO') || desc.includes('SERVICO') || desc.includes('FORNECIMENTO COM INSTALA')) return 'SERVICO';
+  return 'MATERIAL';
 }
 
 function parsePeriodValue(value: string, label?: string): OrsePeriod | null {
@@ -186,6 +224,16 @@ function buildSearchBody(period: OrsePeriod, query: string): URLSearchParams {
   });
 }
 
+function buildInsumoSearchBody(period: OrsePeriod, query: string, groupId = '0'): URLSearchParams {
+  return new URLSearchParams({
+    sltFOnte: 'ORSE',
+    sltPeriodo: period.value,
+    sltGrupoInsumo: groupId,
+    rdbCriterio: '2',
+    txtDescricao: query,
+  });
+}
+
 function parseServicesHtml(html: string, period: OrsePeriod, page: number): OrseSearchResult {
   const $ = cheerio.load(html);
   const services: OrseServiceRow[] = [];
@@ -240,6 +288,58 @@ export async function searchOrseServices(periodValue: string, query = '', page =
   return parseServicesHtml(html, period, page);
 }
 
+function parseInsumosHtml(html: string, period: OrsePeriod, page: number): OrseInsumoSearchResult {
+  const $ = cheerio.load(html);
+  const inputs: OrseInsumoRow[] = [];
+
+  $('td.CorpoTabela').each((_, cell) => {
+    const rawCode = $(cell).text().replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!/^\d+\/ORSE$/.test(rawCode)) return;
+
+    const row = $(cell).parent('tr');
+    const cells = row.children('td.CorpoTabela');
+    if (cells.length < 4) return;
+
+    const description = cells.eq(1).text().replace(/\s+/g, ' ').trim();
+    const unit = cells.eq(2).text().replace(/\s+/g, ' ').trim().toUpperCase() || 'UN';
+    const price = parseBrNumber(cells.eq(3).text());
+    if (!description || price <= 0) return;
+
+    inputs.push({
+      code: normalizeOrseCode(rawCode),
+      rawCode,
+      description,
+      unit,
+      price: Math.round(price * 100) / 100,
+      type: detectInsumoType(description),
+    });
+  });
+
+  const footerText = $.root().text().replace(/\s+/g, ' ');
+  const footerMatch = footerText.match(/Total de Insumos\s+(\d+)\s+-\s+P\S+gina\s+(\d+)\s+de\s+(\d+)/i);
+  const totalInputs = footerMatch ? Number(footerMatch[1]) : inputs.length;
+  const currentPage = footerMatch ? Number(footerMatch[2]) : page;
+  const totalPages = footerMatch ? Number(footerMatch[3]) : Math.max(1, page);
+
+  return {
+    period,
+    page: currentPage,
+    totalPages,
+    totalInputs,
+    inputs,
+  };
+}
+
+export async function searchOrseInsumos(periodValue: string, query = '', page = 1, groupId = '0'): Promise<OrseInsumoSearchResult> {
+  const period = parsePeriodValue(periodValue) || (await getLatestOrsePeriods(1))[0];
+  const url = `${ORSE_INPUTS_URL}?tarefa=consultar&page=${Math.max(1, page)}`;
+  const html = await downloadText(url, {
+    method: 'POST',
+    body: buildInsumoSearchBody(period, query, groupId),
+  });
+  return parseInsumosHtml(html, period, page);
+}
+
 async function crawlPeriodServices(period: OrsePeriod, maxPagesPerPeriod?: number): Promise<OrseServiceRow[]> {
   console.log(`[ORSE Sync] Period ${period.version}: fetching page 1`);
   const first = await searchOrseServices(period.value, '', 1);
@@ -265,7 +365,32 @@ async function crawlPeriodServices(period: OrsePeriod, maxPagesPerPeriod?: numbe
   return [...byCode.values()];
 }
 
-async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[], force: boolean): Promise<OrseSyncResult> {
+async function crawlPeriodInsumos(period: OrsePeriod, maxPagesPerPeriod?: number): Promise<OrseInsumoRow[]> {
+  console.log(`[ORSE Sync] Period ${period.version}: fetching insumos page 1`);
+  const first = await searchOrseInsumos(period.value, '', 1);
+  const totalPages = maxPagesPerPeriod
+    ? Math.min(first.totalPages, maxPagesPerPeriod)
+    : first.totalPages;
+  const byCode = new Map<string, OrseInsumoRow>();
+  for (const input of first.inputs) byCode.set(input.code, input);
+
+  const concurrency = 6;
+  for (let nextPage = 2; nextPage <= totalPages; nextPage += concurrency) {
+    const pages = Array.from({ length: Math.min(concurrency, totalPages - nextPage + 1) }, (_, idx) => nextPage + idx);
+    const results = await Promise.all(pages.map(page => searchOrseInsumos(period.value, '', page).catch((e: any) => {
+      console.warn(`[ORSE Sync] Insumos page ${page}/${totalPages} failed for ${period.version}: ${e.message}`);
+      return null;
+    })));
+    for (const result of results) {
+      for (const input of result?.inputs || []) byCode.set(input.code, input);
+    }
+    console.log(`[ORSE Sync] Period ${period.version}: insumos ${Math.min(nextPage + concurrency - 1, totalPages)}/${totalPages} pages, ${byCode.size} inputs`);
+  }
+
+  return [...byCode.values()];
+}
+
+async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[], inputs: OrseInsumoRow[], force: boolean): Promise<OrseSyncResult> {
   let db = await prisma.engineeringDatabase.findFirst({
     where: {
       name: 'ORSE',
@@ -277,12 +402,13 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
     },
   });
 
-  if (db && !force && db.compositionCount > 0) {
+  if (db && !force && db.itemCount > 0 && db.compositionCount > 0) {
     return {
       success: true,
-      message: `Already synced: ORSE ${period.version} (${db.compositionCount} compositions)`,
+      message: `Already synced: ORSE ${period.version} (${db.itemCount} inputs, ${db.compositionCount} compositions)`,
       databaseId: db.id,
       period,
+      itemCount: db.itemCount,
       compositionCount: db.compositionCount,
     };
   }
@@ -304,6 +430,23 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
     });
   }
 
+  let insertedInputs = 0;
+  for (let i = 0; i < inputs.length; i += 1000) {
+    const chunk = inputs.slice(i, i + 1000);
+    const result = await prisma.engineeringItem.createMany({
+      data: chunk.map(input => ({
+        databaseId: db!.id,
+        code: input.code,
+        description: input.description,
+        unit: input.unit,
+        price: input.price,
+        type: input.type,
+      })),
+      skipDuplicates: true,
+    });
+    insertedInputs += result.count;
+  }
+
   let inserted = 0;
   for (let i = 0; i < services.length; i += 1000) {
     const chunk = services.slice(i, i + 1000);
@@ -323,7 +466,7 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
   await prisma.engineeringDatabase.update({
     where: { id: db.id },
     data: {
-      itemCount: 0,
+      itemCount: insertedInputs,
       compositionCount: inserted,
       payrollExemption: false,
       version: period.version,
@@ -332,9 +475,10 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
 
   return {
     success: true,
-    message: `ORSE ${period.version}: ${inserted} compositions synced`,
+    message: `ORSE ${period.version}: ${insertedInputs} inputs + ${inserted} compositions synced`,
     databaseId: db.id,
     period,
+    itemCount: insertedInputs,
     compositionCount: inserted,
   };
 }
@@ -360,23 +504,27 @@ export async function syncOrse(options: OrseSyncOptions = {}): Promise<OrseSyncR
         },
       });
 
-      if (existing && !options.force && existing.compositionCount > 0) {
+      if (existing && !options.force && existing.itemCount > 0 && existing.compositionCount > 0) {
         results.push({
           success: true,
-          message: `Already synced: ORSE ${period.version} (${existing.compositionCount} compositions)`,
+          message: `Already synced: ORSE ${period.version} (${existing.itemCount} inputs, ${existing.compositionCount} compositions)`,
           databaseId: existing.id,
           period,
+          itemCount: existing.itemCount,
           compositionCount: existing.compositionCount,
         });
         continue;
       }
 
-      const services = await crawlPeriodServices(period, options.maxPagesPerPeriod);
-      if (services.length === 0) {
-        results.push({ success: false, message: `No services found for ORSE ${period.version}`, period });
+      const [services, inputs] = await Promise.all([
+        crawlPeriodServices(period, options.maxPagesPerPeriod),
+        crawlPeriodInsumos(period, options.maxPagesPerPeriod),
+      ]);
+      if (services.length === 0 && inputs.length === 0) {
+        results.push({ success: false, message: `No data found for ORSE ${period.version}`, period });
         continue;
       }
-      results.push(await persistOrsePeriod(period, services, Boolean(options.force)));
+      results.push(await persistOrsePeriod(period, services, inputs, Boolean(options.force)));
     } catch (e: any) {
       console.error(`[ORSE Sync] Failed for ${period.version}:`, e);
       results.push({ success: false, message: `ORSE ${period.version}: ${e.message}`, period });
