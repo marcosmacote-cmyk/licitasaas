@@ -353,16 +353,13 @@ async function downloadAndParseSeinfraHtml(regime: SeinfraRegime): Promise<{
 
 /**
  * Main function: Download and parse all SEINFRA data
+ * Now supports BOTH regimes via Excel (primary) with HTML fallback for compositions only.
  */
 export async function downloadAndParseSeinfra(regime: SeinfraRegime = 'onerada'): Promise<{
     insumos: ParsedInsumo[];
     compositions: ParsedComposition[];
     errors: string[];
 }> {
-    if (regime === 'desonerada') {
-        return downloadAndParseSeinfraHtml(regime);
-    }
-
     const cfg = SEINFRA_REGIMES[regime];
     const insumosUrl = `${cfg.baseUrl}/Tabela-de-Insumos-${cfg.version}---ENC.-SOCIAIS-${cfg.encargos}.xls`;
     const composicoesUrl = `${cfg.baseUrl}/Composicoes-${cfg.version}---ENC.-SOCIAIS-${cfg.encargos}.xls`;
@@ -370,21 +367,34 @@ export async function downloadAndParseSeinfra(regime: SeinfraRegime = 'onerada')
     let insumos: ParsedInsumo[] = [];
     let compositions: ParsedComposition[] = [];
 
+    // 1. Try Excel Insumos
     try {
         const insumosBuffer = await downloadFile(insumosUrl);
         insumos = parseInsumosExcel(insumosBuffer);
     } catch (e: any) {
-        errors.push(`Insumos download failed: ${e.message}`);
-        console.error('[SEINFRA Import] ❌ Insumos download failed:', e.message);
+        errors.push(`Insumos Excel download failed (${regime}): ${e.message}`);
+        console.error(`[SEINFRA Import] ❌ Insumos Excel failed for ${regime}:`, e.message);
     }
 
+    // 2. Try Excel Composições
     try {
         const composBuffer = await downloadFile(composicoesUrl);
         compositions = parseComposicoesExcel(composBuffer);
     } catch (e: any) {
-        errors.push(`Composições download failed: ${e.message}`);
-        console.error('[SEINFRA Import] ❌ Composições download failed:', e.message);
+        errors.push(`Composições Excel download failed (${regime}): ${e.message}`);
+        console.error(`[SEINFRA Import] ❌ Composições Excel failed for ${regime}:`, e.message);
+        
+        // Fallback: try HTML scraper for compositions only
+        console.log(`[SEINFRA Import] 🔄 Falling back to HTML scraper for ${regime} compositions...`);
+        try {
+            const htmlResult = await downloadAndParseSeinfraHtml(regime);
+            compositions = htmlResult.compositions;
+            errors.push(...htmlResult.errors);
+        } catch (htmlErr: any) {
+            errors.push(`HTML fallback also failed: ${htmlErr.message}`);
+        }
     }
 
+    console.log(`[SEINFRA Import] 📊 ${regime}: ${insumos.length} insumos, ${compositions.length} composições (${errors.length} erros)`);
     return { insumos, compositions, errors };
 }
