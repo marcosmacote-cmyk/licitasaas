@@ -1865,7 +1865,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // POST /api/engineering/bases/sync-sinapi
 // Trigger SINAPI auto-download & import (Admin only)
 // ═══════════════════════════════════════════════════════════
-import { syncSinapi } from '../services/engineering/sinapiCrawler';
+import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -2113,40 +2113,6 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
 });
 
 // ═══════════════════════════════════════════════════════════
-// POST /api/engineering/bases/sync-sinapi
-// Sync SINAPI-CE official base via Puppeteer + Excel parsing
-// Downloads from Caixa portal, parses, and persists to DB
-// ═══════════════════════════════════════════════════════════
-import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
-
-router.post('/bases/sync-sinapi', async (req: any, res: any) => {
-    try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
-        }
-
-        const {
-            ufs = ['CE'],
-            months = 12,
-            includeDesonerado = true,
-        } = req.body;
-
-        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} triggered sync: UFs=${ufs.join(',')}, months=${months}, desonerado=${includeDesonerado}`);
-
-        // Run sync (can be long — up to 30min for 12 months × 2 regimes)
-        const report = await syncSinapi({ ufs, months, includeDesonerado });
-
-        res.json({
-            message: `SINAPI sync concluído: ${report.totalSuccess}/${report.totalAttempted} com sucesso`,
-            report,
-        });
-    } catch (e: any) {
-        console.error('[SINAPI Sync] Fatal:', e);
-        res.status(500).json({ error: 'Erro na sincronização SINAPI', details: e.message });
-    }
-});
-
-// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/bases/import-excel
 // Upload manual de planilha SINAPI/SEINFRA/ORSE/SICRO (.xlsx)
 // Para quando download automático não funcionar
@@ -2182,10 +2148,10 @@ router.post('/bases/import-excel', aiUpload.single('file'), async (req: any, res
         );
 
         res.json({
-            message: result.success
-                ? `${result.message}`
-                : `Importação falhou: ${result.message}`,
-            ...result,
+            success: result.success,
+            message: result.message,
+            itemCount: result.itemCount,
+            compositionCount: result.compositionCount,
         });
     } catch (e: any) {
         console.error('[Base Import] Fatal:', e);
