@@ -255,8 +255,25 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             return res.status(404).json({ error: 'Composição não encontrada', code });
         }
 
+        if (
+            composition.items.length === 0 &&
+            String(composition.database?.name || '').toUpperCase() === 'ORSE'
+        ) {
+            try {
+                const hydrated = await hydrateOrseCompositionDetails(composition.id);
+                if (hydrated.hydrated) {
+                    composition = await prisma.engineeringComposition.findUnique({
+                        where: { id: composition.id },
+                        include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+                    });
+                }
+            } catch (e: any) {
+                console.warn(`[ORSE Detail] Could not hydrate ${code}: ${e.message}`);
+            }
+        }
+
         // Enrich with auxiliary compositions if any
-        const enrichedItems = await Promise.all(composition.items.map(async (ci: any) => {
+        const enrichedItems = await Promise.all((composition?.items || []).map(async (ci: any) => {
             if (ci.auxiliaryCompositionId) {
                 const aux = await prisma.engineeringComposition.findUnique({
                     where: { id: ci.auxiliaryCompositionId },
@@ -1906,7 +1923,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // Trigger SINAPI auto-download & import (Admin only)
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
-import { getLatestOrsePeriods, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
+import { getLatestOrsePeriods, hydrateOrseCompositionDetails, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {

@@ -36,6 +36,17 @@ export interface OrseInsumoRow {
   type: 'MATERIAL' | 'MAO_DE_OBRA' | 'EQUIPAMENTO' | 'SERVICO';
 }
 
+export interface OrseCompositionDetailItem {
+  code: string;
+  rawCode: string;
+  description: string;
+  unit: string;
+  coefficient: number;
+  unitPrice: number;
+  totalPrice: number;
+  type: 'MATERIAL' | 'MAO_DE_OBRA' | 'EQUIPAMENTO' | 'SERVICO';
+}
+
 export interface OrseSearchResult {
   period: OrsePeriod;
   page: number;
@@ -129,6 +140,14 @@ function detectInsumoType(description: string): OrseInsumoRow['type'] {
     desc.includes('EQUIPAMENTO')) return 'EQUIPAMENTO';
   if (desc.includes('SERVIÇO') || desc.includes('SERVICO') || desc.includes('FORNECIMENTO COM INSTALA')) return 'SERVICO';
   return 'MATERIAL';
+}
+
+function detectDetailType(marker: string, description: string): OrseCompositionDetailItem['type'] {
+  const key = String(marker || '').trim().toUpperCase();
+  if (key === 'P') return 'MAO_DE_OBRA';
+  if (key === 'E') return 'EQUIPAMENTO';
+  if (key === 'S') return 'SERVICO';
+  return detectInsumoType(description);
 }
 
 function parsePeriodValue(value: string, label?: string): OrsePeriod | null {
@@ -328,6 +347,146 @@ function parseInsumosHtml(html: string, period: OrsePeriod, page: number): OrseI
     totalInputs,
     inputs,
   };
+}
+
+function parseCompositionDetailHtml(html: string): { items: OrseCompositionDetailItem[]; totalPrice?: number } {
+  const $ = cheerio.load(html);
+  const items: OrseCompositionDetailItem[] = [];
+
+  $('tr').each((_, row) => {
+    const cells = $(row).children('td.CorpoTabela');
+    if (cells.length < 7) return;
+
+    const marker = cells.eq(0).text().replace(/\s+/g, ' ').trim().toUpperCase();
+    const rawCode = cells.eq(1).text().replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!/^[MEPS]$/.test(marker) || !/^\d+\/(?:ORSE|SINAPI|SICRO|SEINFRA)$/i.test(rawCode)) return;
+
+    const description = cells.eq(2).text().replace(/\s+/g, ' ').trim();
+    const unit = cells.eq(3).text().replace(/\s+/g, ' ').trim().toUpperCase() || 'UN';
+    const coefficient = parseBrNumber(cells.eq(4).text());
+    const unitPrice = parseBrNumber(cells.eq(5).text());
+    const totalPrice = parseBrNumber(cells.eq(6).text());
+    if (!description || totalPrice <= 0) return;
+
+    items.push({
+      code: normalizeOrseCode(rawCode),
+      rawCode,
+      description,
+      unit,
+      coefficient,
+      unitPrice,
+      totalPrice,
+      type: detectDetailType(marker, description),
+    });
+  });
+
+  const footerText = $.root().text().replace(/\s+/g, ' ');
+  const totalMatch = footerText.match(/Valor Total\s+([\d.,]+)/i);
+  return {
+    items,
+    totalPrice: totalMatch ? parseBrNumber(totalMatch[1]) : undefined,
+  };
+}
+
+function buildCompositionDetailUrl(code: string, period: OrsePeriod): string {
+  const numericCode = String(code || '').replace(/\/ORSE$/i, '').replace(/^0+(\d)/, '$1');
+  const params = new URLSearchParams({
+    font_sg_fonte: 'ORSE',
+    serv_nr_codigo: numericCode,
+    peri_nr_ano: String(period.year),
+    peri_nr_mes: String(period.month),
+    peri_nr_ordem: String(period.order),
+  });
+  return `${ORSE_BASE_URL}/composicao.asp?${params.toString()}`;
+}
+
+function periodFromDatabase(database: any): OrsePeriod | null {
+  const year = Number(database?.referenceYear);
+  const month = Number(database?.referenceMonth);
+  if (!year || !month) return null;
+  const version = String(database?.version || `${String(month).padStart(2, '0')}/${year}-1`);
+  const orderMatch = version.match(/-(\d+)$/);
+  const order = orderMatch ? Number(orderMatch[1]) : 1;
+  return {
+    value: `${year}-${month}-${order}`,
+    label: version,
+    year,
+    month,
+    order,
+    version,
+  };
+}
+
+export async function fetchOrseCompositionDetail(code: string, period: OrsePeriod): Promise<{ items: OrseCompositionDetailItem[]; totalPrice?: number }> {
+  const url = buildCompositionDetailUrl(code, period);
+  const html = await downloadText(url, { method: 'GET' });
+  return parseCompositionDetailHtml(html);
+}
+
+export async function hydrateOrseCompositionDetails(compositionId: string): Promise<{ hydrated: boolean; itemCount: number }> {
+  const composition = await prisma.engineeringComposition.findUnique({
+    where: { id: compositionId },
+    include: { database: true, items: { select: { id: true }, take: 1 } },
+  });
+
+  if (!composition || String(composition.database?.name || '').toUpperCase() !== 'ORSE') {
+    return { hydrated: false, itemCount: 0 };
+  }
+  if (composition.items.length > 0) {
+    return { hydrated: false, itemCount: composition.items.length };
+  }
+
+  const period = periodFromDatabase(composition.database);
+  if (!period) return { hydrated: false, itemCount: 0 };
+
+  const detail = await fetchOrseCompositionDetail(composition.code, period);
+  if (detail.items.length === 0) return { hydrated: false, itemCount: 0 };
+
+  await prisma.engineeringCompositionItem.deleteMany({ where: { compositionId: composition.id } });
+
+  for (const detailItem of detail.items) {
+    const item = await prisma.engineeringItem.upsert({
+      where: {
+        databaseId_code: {
+          databaseId: composition.databaseId,
+          code: detailItem.code,
+        },
+      },
+      create: {
+        databaseId: composition.databaseId,
+        code: detailItem.code,
+        description: detailItem.description,
+        unit: detailItem.unit,
+        price: detailItem.unitPrice,
+        type: detailItem.type,
+      },
+      update: {
+        description: detailItem.description,
+        unit: detailItem.unit,
+        price: detailItem.unitPrice,
+        type: detailItem.type,
+      },
+    });
+
+    await prisma.engineeringCompositionItem.create({
+      data: {
+        compositionId: composition.id,
+        itemId: item.id,
+        auxiliaryCompositionId: null,
+        coefficient: detailItem.coefficient,
+        price: detailItem.totalPrice,
+      },
+    });
+  }
+
+  await prisma.engineeringComposition.update({
+    where: { id: composition.id },
+    data: {
+      totalPrice: detail.totalPrice && detail.totalPrice > 0 ? Math.round(detail.totalPrice * 100) / 100 : composition.totalPrice,
+    },
+  });
+
+  return { hydrated: true, itemCount: detail.items.length };
 }
 
 export async function searchOrseInsumos(periodValue: string, query = '', page = 1, groupId = '0'): Promise<OrseInsumoSearchResult> {
