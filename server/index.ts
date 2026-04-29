@@ -631,7 +631,7 @@ if (frontendDist) {
             gzipAssetCache.set(assetPath, gzipped);
         }
 
-        res.type(assetPath);
+        res.type(path.extname(assetPath));
         res.setHeader('Content-Encoding', 'gzip');
         res.setHeader('Content-Length', String(gzipped.length));
         res.setHeader('Vary', 'Accept-Encoding');
