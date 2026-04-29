@@ -734,13 +734,13 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                 />
             )}
 
-            {/* ── ENGINEERING HUB ── */}
-            {p.activeTab === 'hub' && p.proposal && p.objectType === 'ENGENHARIA' && (
+            {/* ── ENGINEERING HUB (standalone for admins or within engineering proposal) ── */}
+            {p.activeTab === 'hub' && (p.proposal ? p.objectType === 'ENGENHARIA' : true) && (
                 <EngineeringHub />
             )}
 
             {/* ────────── EMPTY STATE ────────── */}
-            {!p.proposal && p.items.length === 0 && (
+            {!p.proposal && p.items.length === 0 && p.activeTab !== 'hub' && (
                 <div style={{
                     borderRadius: 'var(--radius-xl)',
                     border: '1px solid var(--color-border)',
@@ -790,6 +790,24 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 </div>
                             ))}
                         </div>
+
+                        {/* Admin shortcut to Hub de Bases */}
+                        {(() => {
+                            const userStr = localStorage.getItem('user');
+                            const user = userStr ? JSON.parse(userStr) : null;
+                            const isAdmin = user?.role === 'ADMIN' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN';
+                            return isAdmin ? (
+                                <button onClick={() => p.setActiveTab('hub')} style={{
+                                    marginTop: 'var(--space-3)', padding: '10px 18px',
+                                    background: 'linear-gradient(135deg, #ca8a04, #f59e0b)', color: '#fff',
+                                    border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                    fontSize: 'var(--text-sm)', boxShadow: '0 4px 12px rgba(202,138,4,0.25)',
+                                }}>
+                                    <Database size={16} /> Hub de Bases (SINAPI/SEINFRA/SICOR)
+                                </button>
+                            ) : null;
+                        })()}
                     </div>
 
                     {/* RIGHT: ghost spreadsheet preview */}
