@@ -29,6 +29,7 @@ export function EngineeringHub() {
     const [syncingSeinfra, setSyncingSeinfra] = useState(false);
     const [syncingOrse, setSyncingOrse] = useState(false);
     const [syncingSicor, setSyncingSicor] = useState(false);
+    const [syncingSicro, setSyncingSicro] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -387,6 +388,34 @@ export function EngineeringHub() {
                         >
                             {syncing ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
                             {syncing ? 'Sincronizando...' : 'Sync SINAPI (Nacional)'}
+                        </button>
+
+                        <button
+                            onClick={async () => {
+                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n🛣️ Sistema de Custos Rodoviários\n🗺️ Todos os 27 estados\n📅 Últimos 12 meses\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
+                                setSyncingSicro(true);
+                                try {
+                                    const res = await fetch('/api/engineering/bases/sync-sicro', {
+                                        method: 'POST',
+                                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ ufs: ['ALL'], months: 12 })
+                                    });
+                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
+                                } catch (err) { alert('Erro de conexão'); }
+                                setSyncingSicro(false);
+                            }}
+                            disabled={syncingSicro}
+                            style={{
+                                background: 'linear-gradient(135deg, #dc2626, #f97316)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSicro ? 'wait' : 'pointer',
+                                opacity: syncingSicro ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(220,38,38,0.25)'
+                            }}
+                        >
+                            {syncingSicro ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
+                            {syncingSicro ? 'Sincronizando...' : 'Sync SICRO (DNIT)'}
                         </button>
 
                         <button

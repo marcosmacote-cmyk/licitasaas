@@ -2000,6 +2000,40 @@ router.post('/bases/sync-sinapi', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/sync-sicro
+// Trigger SICRO (DNIT) auto-download & import (Admin only)
+// ═══════════════════════════════════════════════════════════
+import { syncSicro } from '../services/engineering/sicroCrawler';
+
+router.post('/bases/sync-sicro', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const { ufs = ['ALL'], months = 12 } = req.body;
+
+        console.log(`[SICRO Sync] 🚀 Admin ${req.user?.email} disparou sync SICRO: UFs=${Array.isArray(ufs) ? ufs.join(',') : ufs}, meses=${months}`);
+
+        res.json({
+            message: `Sync SICRO iniciado em background para ${Array.isArray(ufs) ? ufs.join(', ') : 'Todos os estados'} (${months} meses)`,
+            status: 'started',
+        });
+
+        // Fire and forget
+        syncSicro({ ufs: Array.isArray(ufs) ? ufs : ['ALL'], months }).then(report => {
+            console.log(`[SICRO Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error(`[SICRO Sync] ❌ Erro fatal:`, err);
+        });
+
+    } catch (e: any) {
+        console.error('[SICRO Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync SICRO', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // ORSE official base sync + live search
 // Uses the public ORSE service search by period because .ORSE update
 // packages are proprietary binary files from the desktop ORSE system.
