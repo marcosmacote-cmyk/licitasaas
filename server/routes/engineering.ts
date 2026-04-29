@@ -1925,7 +1925,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
 import { getLatestOrsePeriods, hydrateOrseCompositionDetails, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
-import { getLatestSicorPublications, getSicorRegions, syncSicorMg, validateSicorAuthToken } from '../services/engineering/sicorMgSync';
+import { getLatestSicorPublications, getSicorRegions, hasConfiguredSicorAuthToken, syncSicorMg, validateSicorAuthToken } from '../services/engineering/sicorMgSync';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -2044,6 +2044,23 @@ router.post('/bases/sync-orse', async (req: any, res: any) => {
 // Uses DER-MG SCO Portal endpoints. These endpoints require the same
 // bearer token used by the official Portal de Serviços session.
 // ═══════════════════════════════════════════════════════════
+router.get('/bases/sicor-mg/status', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        res.json({
+            tokenConfigured: hasConfiguredSicorAuthToken(),
+            envNames: ['SICOR_MG_TOKEN', 'DER_MG_SCO_TOKEN'],
+            requiresToken: true,
+        });
+    } catch (e: any) {
+        console.error('[SICOR-MG Status] Error:', e);
+        res.status(500).json({ error: 'Erro ao consultar configuração SICOR-MG', details: e.message });
+    }
+});
+
 router.get('/bases/sicor-mg/regions', async (req: any, res: any) => {
     try {
         const authToken = String(req.query.authToken || '') || undefined;
@@ -2103,7 +2120,11 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
         });
     } catch (e: any) {
         console.error('[SICOR-MG Sync] Error:', e);
-        res.status(500).json({ error: 'Erro ao iniciar sync SICOR-MG', details: e.message });
+        const missingToken = String(e.message || '').includes('Token SICOR-MG ausente');
+        res.status(missingToken ? 400 : 500).json({
+            error: missingToken ? 'Token SICOR-MG não configurado' : 'Erro ao iniciar sync SICOR-MG',
+            details: e.message,
+        });
     }
 });
 

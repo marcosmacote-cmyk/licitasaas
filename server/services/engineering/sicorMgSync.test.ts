@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
-import { normalizeSicorPublication, parseSicorWorkbook } from './sicorMgSync';
+import { hasConfiguredSicorAuthToken, normalizeSicorPublication, parseSicorWorkbook, validateSicorAuthToken } from './sicorMgSync';
 
 function workbookBuffer(rows: any[][]): Buffer {
   const workbook = XLSX.utils.book_new();
@@ -46,5 +46,28 @@ describe('sicorMgSync', () => {
         type: 'SERVICO',
       },
     ]);
+  });
+
+  it('validates configured or explicit auth tokens without exposing token values', () => {
+    const originalSicor = process.env.SICOR_MG_TOKEN;
+    const originalDer = process.env.DER_MG_SCO_TOKEN;
+
+    try {
+      delete process.env.SICOR_MG_TOKEN;
+      delete process.env.DER_MG_SCO_TOKEN;
+
+      expect(hasConfiguredSicorAuthToken()).toBe(false);
+      expect(() => validateSicorAuthToken()).toThrow(/Token SICOR-MG ausente/);
+      expect(() => validateSicorAuthToken('temporary-token')).not.toThrow();
+
+      process.env.SICOR_MG_TOKEN = 'configured-token';
+      expect(hasConfiguredSicorAuthToken()).toBe(true);
+      expect(() => validateSicorAuthToken()).not.toThrow();
+    } finally {
+      if (originalSicor === undefined) delete process.env.SICOR_MG_TOKEN;
+      else process.env.SICOR_MG_TOKEN = originalSicor;
+      if (originalDer === undefined) delete process.env.DER_MG_SCO_TOKEN;
+      else process.env.DER_MG_SCO_TOKEN = originalDer;
+    }
   });
 });

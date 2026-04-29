@@ -215,10 +215,26 @@ export function EngineeringHub() {
     const handleSyncSicor = async () => {
         if (!confirm('Sincronizar SICOR-MG?\n\nIsso vai buscar as últimas 12 datas-base oficiais do DER-MG, nos regimes com e sem desoneração. O processo roda em background e pode levar alguns minutos.')) return;
 
-        const authToken = window.prompt('Token Bearer SICOR-MG/DER-MG (opcional se SICOR_MG_TOKEN já estiver configurado no Railway):')?.trim();
+        let authToken = '';
 
         setSyncingSicor(true);
         try {
+            const statusRes = await fetch('/api/engineering/bases/sicor-mg/status', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const status = await statusRes.json().catch(() => ({}));
+
+            if (statusRes.ok && !status.tokenConfigured) {
+                authToken = window.prompt('Token Bearer SICOR-MG/DER-MG:\n\nO servidor ainda não tem SICOR_MG_TOKEN/DER_MG_SCO_TOKEN configurado na Railway. Informe um token temporário para esta sincronização ou cancele para configurar a variável no Railway.')?.trim() || '';
+                if (!authToken) {
+                    alert('Sync SICOR-MG cancelado.\n\nConfigure SICOR_MG_TOKEN no Railway ou informe um token Bearer válido do DER-MG para esta sincronização.');
+                    return;
+                }
+            } else if (!statusRes.ok) {
+                alert('Não foi possível verificar a configuração SICOR-MG no servidor.');
+                return;
+            }
+
             const res = await fetch('/api/engineering/bases/sync-sicor-mg', {
                 method: 'POST',
                 headers: {

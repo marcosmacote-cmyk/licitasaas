@@ -85,6 +85,10 @@ function getAuthToken(input?: string): string {
   return token.trim();
 }
 
+export function hasConfiguredSicorAuthToken(): boolean {
+  return Boolean((process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '').trim());
+}
+
 export function validateSicorAuthToken(input?: string): void {
   getAuthToken(input);
 }
