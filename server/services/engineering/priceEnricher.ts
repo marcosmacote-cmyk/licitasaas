@@ -1,7 +1,7 @@
 /**
  * ══════════════════════════════════════════════════════════════
  *  Price Enricher — Módulo compartilhado de enriquecimento
- *  de preços contra bases oficiais (SINAPI, SEINFRA, ORSE, SICRO)
+ *  de preços contra bases oficiais (SINAPI, SEINFRA, ORSE, SICRO, SICOR)
  * ══════════════════════════════════════════════════════════════
  *
  *  FIX-01: Unifica a lógica completa de enriquecimento que antes
@@ -34,7 +34,7 @@ export interface EngineeringPriceAudit {
 export interface EngineeringConfig {
     dataBase?: string;       // "2026-04" — data-base do orçamento
     regimeOneracao?: string; // "ONERADO" | "DESONERADO"
-    basesConsideradas?: string[]; // ["SINAPI", "SEINFRA"]
+    basesConsideradas?: string[]; // ["SINAPI", "SEINFRA", "SICOR"]
     [key: string]: any;
 }
 
@@ -59,6 +59,12 @@ function normalizeOfficialCode(code: string): string {
     return orse ? `${orse[1]}/ORSE` : value;
 }
 
+function normalizeSourceName(sourceName: string): string {
+    const source = String(sourceName || '').trim().toUpperCase();
+    if (source === 'SICOR-MG' || source === 'SICOR MG' || source === 'DER-MG' || source === 'DER MG') return 'SICOR';
+    return source;
+}
+
 function buildCodeVariants(code: string): string[] {
     const normalized = normalizeOfficialCode(code);
     const variants = new Set([String(code || '').trim(), normalized]);
@@ -75,7 +81,7 @@ export function buildCandidateScore(
 ): { score: number; warnings: string[] } {
     const db = candidate.database || {};
     const desiredSources = Array.isArray(config?.basesConsideradas)
-        ? config.basesConsideradas.map((b: string) => String(b).toUpperCase())
+        ? config.basesConsideradas.map((b: string) => normalizeSourceName(b))
         : [];
     const desiredDesonerado = config?.regimeOneracao
         ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
@@ -84,7 +90,7 @@ export function buildCandidateScore(
     let score = 0;
     const warnings: string[] = [];
     const dbName = String(db.name || '').toUpperCase();
-    const itemSource = String(sourceName || '').toUpperCase();
+    const itemSource = normalizeSourceName(sourceName);
 
     // Source match scoring
     if (itemSource && itemSource !== 'PROPRIA' && dbName === itemSource) score += 40;
@@ -105,7 +111,7 @@ export function buildCandidateScore(
     // Regime match scoring. ORSE/SICRO do not expose dual onerado/desonerado
     // catalogs in the same way SINAPI/SEINFRA do, so they must not produce
     // false base-incompatible alerts only because the project has a payroll regime.
-    const supportsPayrollRegime = ['SINAPI', 'SEINFRA'].includes(dbName);
+    const supportsPayrollRegime = ['SINAPI', 'SEINFRA', 'SICOR'].includes(dbName);
     if (desiredDesonerado !== null && supportsPayrollRegime) {
         if (Boolean(db.payrollExemption) === desiredDesonerado) score += 20;
         else warnings.push(`regime ${db.payrollExemption ? 'desonerado' : 'onerado'} incompatível`);

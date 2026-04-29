@@ -225,7 +225,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     </button>
                     <button onClick={() => p.setActiveTab('hub')} className={`tab-btn${p.activeTab === 'hub' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
-                        <Database size={16} /> Hub de Bases (SINAPI/SEINFRA)
+                        <Database size={16} /> Hub de Bases (SINAPI/SEINFRA/SICOR)
                     </button>
                 </div>
             )}

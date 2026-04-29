@@ -85,6 +85,10 @@ function getAuthToken(input?: string): string {
   return token.trim();
 }
 
+export function validateSicorAuthToken(input?: string): void {
+  getAuthToken(input);
+}
+
 async function sicorFetch(path: string, authToken: string, timeoutMs = 120000): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

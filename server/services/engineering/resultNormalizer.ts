@@ -188,6 +188,12 @@ function normalizeType(value: unknown): string {
     return 'COMPOSICAO';
 }
 
+function normalizeSourceName(value: unknown): string {
+    const source = String(value || 'PROPRIA').trim().toUpperCase();
+    if (source === 'SICOR-MG' || source === 'SICOR MG' || source === 'DER-MG' || source === 'DER MG') return 'SICOR';
+    return source || 'PROPRIA';
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' ? value as Record<string, unknown> : {};
 }
@@ -223,7 +229,7 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
 
     const engineeringItems = (items || []).map((item, index) => {
         const rawCode = String(firstDefined(item, ['code', 'sourceCode', 'codigo', 'cod', 'codigoServico']) || '');
-        const rawSourceName = String(firstDefined(item, ['sourceName', 'sourceBase', 'base', 'fonte', 'banco']) || 'PROPRIA').toUpperCase();
+        const rawSourceName = normalizeSourceName(firstDefined(item, ['sourceName', 'sourceBase', 'base', 'fonte', 'banco']));
         const orseCodeMatch = rawCode.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
         const isOrse = rawSourceName === 'ORSE' || /\/ORSE$/i.test(rawCode);
         const normalized = {

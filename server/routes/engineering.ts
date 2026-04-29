@@ -1223,7 +1223,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
         const ownComps = items.filter((it: any) => {
             if (it.type !== 'COMPOSICAO') return false;
             const source = (it.sourceName || '').toUpperCase();
-            const isKnownSource = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SBC'].includes(source);
+            const isKnownSource = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SICOR', 'SBC'].includes(source);
             return !isKnownSource || source === 'PROPRIA';
         });
         if (ownComps.length > 0 && biddingId) {
@@ -1519,7 +1519,7 @@ async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any): Prom
 }
 
 /**
- * Detecta a base oficial (SINAPI, SEINFRA, ORSE, SICRO) e o código
+ * Detecta a base oficial (SINAPI, SEINFRA, SICOR, ORSE, SICRO) e o código
  * a partir da descrição ou número do item
  */
 function detectSourceAndCode(description: string, itemNumber?: string): { sourceName: string; code: string } {
@@ -1533,12 +1533,13 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
     const seinfraMatch = desc.match(/(?:SEINFRA[\s:.-]*)?([CI]\d{3,5})/i);
     if (seinfraMatch) return { sourceName: 'SEINFRA', code: seinfraMatch[1].toUpperCase() };
     
-    // Pattern: "ORSE 1234" or "SICRO 1234"
-    const sourceMatch = desc.match(/\b(ORSE|SICRO)[\s:.-]*(\d{3,6})(?:\/ORSE)?\b/i)
+    // Pattern: "ORSE 1234", "SICRO 1234" or "SICOR-MG ED-12345"
+    const sourceMatch = desc.match(/\b(ORSE|SICRO|SICOR(?:-MG)?|DER(?:-MG)?)[\s:.-]*([A-Z]{0,4}[-.]?\d{3,8})(?:\/ORSE)?\b/i)
         || desc.match(/\b(0*\d{1,6})\/(ORSE)\b/i);
     if (sourceMatch) {
         const isSlashFormat = String(sourceMatch[2] || '').toUpperCase() === 'ORSE';
-        const sourceName = isSlashFormat ? 'ORSE' : String(sourceMatch[1]).toUpperCase();
+        const rawSourceName = isSlashFormat ? 'ORSE' : String(sourceMatch[1]).toUpperCase();
+        const sourceName = rawSourceName === 'SICOR-MG' || rawSourceName === 'DER' || rawSourceName === 'DER-MG' ? 'SICOR' : rawSourceName;
         const numericCode = isSlashFormat ? sourceMatch[1] : sourceMatch[2];
         return {
             sourceName,
@@ -1924,7 +1925,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
 import { getLatestOrsePeriods, hydrateOrseCompositionDetails, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
-import { getLatestSicorPublications, getSicorRegions, syncSicorMg } from '../services/engineering/sicorMgSync';
+import { getLatestSicorPublications, getSicorRegions, syncSicorMg, validateSicorAuthToken } from '../services/engineering/sicorMgSync';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -2085,6 +2086,8 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
         const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : undefined;
         const regionCodes = Array.isArray(req.body?.regionCodes) ? req.body.regionCodes : undefined;
         const includeCompositionWorkbook = Boolean(req.body?.includeCompositionWorkbook);
+
+        validateSicorAuthToken(authToken);
 
         console.log(`[SICOR-MG Sync] Admin ${req.user?.email} disparou sync: meses=${months}, force=${force}`);
 

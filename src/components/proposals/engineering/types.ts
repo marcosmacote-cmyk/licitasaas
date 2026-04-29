@@ -93,7 +93,7 @@ export interface EngineeringConfig {
 
 export const DEFAULT_ENGINEERING_CONFIG: EngineeringConfig = {
     objeto: '',
-    basesConsideradas: ['SINAPI', 'SEINFRA'],
+    basesConsideradas: ['SINAPI', 'SEINFRA', 'SICOR'],
     dataBase: '',
     regimeOneracao: 'DESONERADO',
     encargosSociais: { horista: 114.3, mensalista: 47.8 },

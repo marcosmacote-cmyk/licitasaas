@@ -23,6 +23,7 @@ export function EngineeringHub() {
     const [syncing, setSyncing] = useState(false);
     const [syncingSeinfra, setSyncingSeinfra] = useState(false);
     const [syncingOrse, setSyncingOrse] = useState(false);
+    const [syncingSicor, setSyncingSicor] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +77,7 @@ export function EngineeringHub() {
         if (file.name.toUpperCase().includes('SEINFRA')) name = 'SEINFRA';
         if (file.name.toUpperCase().includes('SICRO')) name = 'SICRO';
         if (file.name.toUpperCase().includes('ORSE')) name = 'ORSE';
+        if (file.name.toUpperCase().includes('SICOR')) name = 'SICOR';
 
         const ufMatch = file.name.match(/_([A-Z]{2})_/i) || file.name.match(/-([A-Z]{2})-/i);
         const uf = ufMatch ? ufMatch[1].toUpperCase() : '';
@@ -210,6 +212,45 @@ export function EngineeringHub() {
         }
     };
 
+    const handleSyncSicor = async () => {
+        if (!confirm('Sincronizar SICOR-MG?\n\nIsso vai buscar as últimas 12 datas-base oficiais do DER-MG, nos regimes com e sem desoneração. O processo roda em background e pode levar alguns minutos.')) return;
+
+        const authToken = window.prompt('Token Bearer SICOR-MG/DER-MG (opcional se SICOR_MG_TOKEN já estiver configurado no Railway):')?.trim();
+
+        setSyncingSicor(true);
+        try {
+            const res = await fetch('/api/engineering/bases/sync-sicor-mg', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    months: 12,
+                    conditions: ['SD', 'CD'],
+                    includeCompositionWorkbook: true,
+                    ...(authToken ? { authToken } : {})
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert(data.message || 'Sync SICOR-MG iniciado em background. Acompanhe os logs e recarregue em alguns minutos.');
+                setTimeout(fetchBases, 30000);
+                setTimeout(fetchBases, 90000);
+                setTimeout(fetchBases, 180000);
+                setTimeout(fetchBases, 300000);
+            } else {
+                const details = data.details ? `\n\nDetalhes: ${data.details}` : '';
+                alert('Erro: ' + (data.error || 'Falha ao iniciar sync SICOR-MG') + details);
+            }
+        } catch (err) {
+            alert('Erro de conexão ao sincronizar SICOR-MG');
+        } finally {
+            setSyncingSicor(false);
+        }
+    };
+
     // Group bases by name+uf for better visualization
     const groupedBases: Record<string, EngDatabase[]> = {};
     for (const base of bases) {
@@ -233,30 +274,31 @@ export function EngineeringHub() {
             case 'SEINFRA': return '#7c3aed';
             case 'ORSE': return '#0891b2';
             case 'SICRO': return '#dc2626';
+            case 'SICOR': return '#ca8a04';
             default: return '#10b981';
         }
     };
 
     return (
         <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', fontFamily: 'Inter, sans-serif' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
                 <div>
                     <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Database size={24} color="var(--color-primary)" /> Hub de Bases Oficiais
                     </h2>
                     <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>
-                        Catálogos oficiais do SINAPI, SEINFRA, ORSE e outros para uso automatizado nas propostas de engenharia.
+                        Catálogos oficiais do SINAPI, SEINFRA, SICOR-MG, ORSE e outros para uso automatizado nas propostas de engenharia.
                     </p>
                 </div>
 
                 {isAdmin && (
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button 
                             onClick={handleSyncSinapi}
                             disabled={syncing}
                             style={{ 
                                 background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', border: 'none', 
-                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, 
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
                                 display: 'flex', alignItems: 'center', gap: 8, cursor: syncing ? 'wait' : 'pointer',
                                 opacity: syncing ? 0.7 : 1, transition: 'all 0.2s',
                                 boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
@@ -271,7 +313,7 @@ export function EngineeringHub() {
                             disabled={syncingSeinfra}
                             style={{
                                 background: 'linear-gradient(135deg, #7c3aed, #2563eb)', color: '#fff', border: 'none',
-                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
                                 display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSeinfra ? 'wait' : 'pointer',
                                 opacity: syncingSeinfra ? 0.7 : 1, transition: 'all 0.2s',
                                 boxShadow: '0 4px 12px rgba(124,58,237,0.25)'
@@ -286,7 +328,7 @@ export function EngineeringHub() {
                             disabled={syncingOrse}
                             style={{
                                 background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: '#fff', border: 'none',
-                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
                                 display: 'flex', alignItems: 'center', gap: 8, cursor: syncingOrse ? 'wait' : 'pointer',
                                 opacity: syncingOrse ? 0.7 : 1, transition: 'all 0.2s',
                                 boxShadow: '0 4px 12px rgba(8,145,178,0.25)'
@@ -296,6 +338,21 @@ export function EngineeringHub() {
                             {syncingOrse ? 'Sincronizando...' : 'Sync ORSE'}
                         </button>
 
+                        <button
+                            onClick={handleSyncSicor}
+                            disabled={syncingSicor}
+                            style={{
+                                background: 'linear-gradient(135deg, #ca8a04, #f59e0b)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSicor ? 'wait' : 'pointer',
+                                opacity: syncingSicor ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(202,138,4,0.25)'
+                            }}
+                        >
+                            {syncingSicor ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
+                            {syncingSicor ? 'Sincronizando...' : 'Sync SICOR-MG'}
+                        </button>
+
                         <div style={{ position: 'relative' }}>
                             <input type="file" ref={fileInputRef} onChange={handleUpload} accept=".xlsx,.xls,.csv" style={{ display: 'none' }} />
                             <button 
@@ -303,7 +360,7 @@ export function EngineeringHub() {
                                 disabled={uploading}
                                 style={{ 
                                     background: 'var(--color-primary)', color: '#fff', border: 'none', 
-                                    padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, 
+                                    padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
                                     display: 'flex', alignItems: 'center', gap: 8, cursor: uploading ? 'wait' : 'pointer',
                                     opacity: uploading ? 0.7 : 1, transition: 'all 0.2s',
                                     boxShadow: '0 4px 12px rgba(37,99,235,0.2)'
@@ -388,8 +445,8 @@ export function EngineeringHub() {
                     <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma base oficial instalada</h3>
                     <p style={{ margin: '0 0 20px', color: 'var(--color-text-tertiary)', fontSize: '0.9rem', maxWidth: 400, marginInline: 'auto' }}>
                         {isAdmin 
-                            ? 'Use o botão "Sync SINAPI" para baixar automaticamente as bases mais recentes da Caixa Econômica.'
-                            : 'Nossa equipe técnica ainda não instalou os catálogos oficiais do SINAPI/SEINFRA para este ambiente.'}
+                            ? 'Use os botões de sincronização para baixar automaticamente as bases oficiais mais recentes.'
+                            : 'Nossa equipe técnica ainda não instalou os catálogos oficiais para este ambiente.'}
                     </p>
                     {isAdmin && (
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -402,6 +459,9 @@ export function EngineeringHub() {
                             <button onClick={handleSyncOrse} disabled={syncingOrse} style={{ background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                 <Database size={16} /> Sincronizar ORSE
                             </button>
+                            <button onClick={handleSyncSicor} disabled={syncingSicor} style={{ background: 'linear-gradient(135deg, #ca8a04, #f59e0b)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Database size={16} /> Sincronizar SICOR-MG
+                            </button>
                         </div>
                     )}
                 </div>
@@ -409,7 +469,7 @@ export function EngineeringHub() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                     {bases.map(base => {
                         const color = getBaseColor(base.name);
-                        const hasPayrollRegime = ['SINAPI', 'SEINFRA'].includes(base.name);
+                        const hasPayrollRegime = ['SINAPI', 'SEINFRA', 'SICOR'].includes(base.name);
                         const regimeLabel = hasPayrollRegime ? (base.payrollExemption ? 'Desonerado' : 'Onerado') : 'Catálogo único';
                         const regimeColor = hasPayrollRegime ? (base.payrollExemption ? '#f59e0b' : '#059669') : '#64748b';
                         const versionLabel = base.referenceMonth && base.referenceYear 

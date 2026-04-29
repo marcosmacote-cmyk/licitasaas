@@ -57,6 +57,28 @@ describe('parseAndNormalizeEngineeringExtraction', () => {
         expect(result.repairs).toContain('array_key:itens->engineeringItems');
     });
 
+    it('normalizes SICOR-MG source aliases to SICOR', () => {
+        const result = parseAndNormalizeEngineeringExtraction(JSON.stringify({
+            engineeringItems: [
+                {
+                    item: '1.1',
+                    type: 'COMPOSICAO',
+                    sourceName: 'SICOR-MG',
+                    code: 'ED-12345',
+                    description: 'SERVICO REFERENCIAL DER-MG',
+                    unit: 'M2',
+                    quantity: 1,
+                    unitCost: 123.45,
+                },
+            ],
+        }));
+
+        expect(result.engineeringItems[0]).toMatchObject({
+            sourceName: 'SICOR',
+            code: 'ED-12345',
+        });
+    });
+
     it('salvages valid items from a malformed large JSON response', () => {
         const result = parseAndNormalizeEngineeringExtraction(`
             {

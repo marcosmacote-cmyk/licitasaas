@@ -773,7 +773,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             <div>
                                 <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Bases Consideradas</label>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                    {['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => (
+                                    {['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => (
                                         <label key={base} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', background: 'var(--color-bg-base)', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)' }}>
                                             <input type="checkbox" checked={engineeringConfig.basesConsideradas.includes(base)} onChange={e => {
                                                 const b = engineeringConfig.basesConsideradas;
