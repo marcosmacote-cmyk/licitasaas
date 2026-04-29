@@ -20,17 +20,20 @@ import {
   X,
   Search
 } from 'lucide-react';
-import { BiddingPage } from './components/BiddingPage';
-import { Dashboard } from './components/Dashboard';
 import { LoginPage } from './components/LoginPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ToastProvider, GuidedTour, type TourStep, GlobalSearchModal, PageSkeleton } from './components/ui';
-import NotificationCenter from './components/NotificationCenter';
+import { ToastProvider } from './components/ui/Toast';
+import { GuidedTour, type TourStep } from './components/ui/GuidedTour';
+import { PageSkeleton } from './components/ui/Skeleton';
 import { onSessionExpired } from './services/apiClient';
 
 // Lazy imports — pages loaded on demand
+const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
+const BiddingPage = lazy(() => import('./components/BiddingPage').then(m => ({ default: m.BiddingPage })));
+const NotificationCenter = lazy(() => import('./components/NotificationCenter'));
+const GlobalSearchModal = lazy(() => import('./components/ui/GlobalSearchModal').then(m => ({ default: m.GlobalSearchModal })));
 const PncpPage = lazy(() => import('./components/PncpPage').then(m => ({ default: m.PncpPage })));
 const DocumentsPage = lazy(() => import('./components/DocumentsPage').then(m => ({ default: m.DocumentsPage })));
 const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -468,15 +471,17 @@ function App() {
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
               <div data-tour="notifications-icon">
-                <NotificationCenter onNavigateToProcess={(processId, type, jobId) => {
-                  if (type === 'pncp_analysis') {
-                    setModuleContext({ action: 'open_pncp_job', jobId });
-                    setActiveTab('opportunities');
-                  } else {
-                    setModuleContext({ processId });
-                    setActiveTab('bidding');
-                  }
-                }} />
+                <Suspense fallback={<button className="icon-btn" title="Notificações"><Loader2 size={16} className="spinner" /></button>}>
+                  <NotificationCenter onNavigateToProcess={(processId, type, jobId) => {
+                    if (type === 'pncp_analysis') {
+                      setModuleContext({ action: 'open_pncp_job', jobId });
+                      setActiveTab('opportunities');
+                    } else {
+                      setModuleContext({ processId });
+                      setActiveTab('bidding');
+                    }
+                  }} />
+                </Suspense>
               </div>
 
               <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
@@ -549,14 +554,18 @@ function App() {
           </Suspense>
         </main>
       {/* Global Modals & Overlays */}
-      <GlobalSearchModal 
-          isOpen={searchOpen} 
-          onClose={() => setSearchOpen(false)} 
-          onNavigate={(route, context) => {
-             setActiveTab(route as AppTab);
-             if (context) setModuleContext(context);
-          }} 
-      />
+      <Suspense fallback={null}>
+        {searchOpen && (
+          <GlobalSearchModal
+            isOpen={searchOpen}
+            onClose={() => setSearchOpen(false)}
+            onNavigate={(route, context) => {
+              setActiveTab(route as AppTab);
+              if (context) setModuleContext(context);
+            }}
+          />
+        )}
+      </Suspense>
 
       </div>
     </ErrorBoundary>
