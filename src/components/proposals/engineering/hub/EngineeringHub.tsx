@@ -39,6 +39,12 @@ export function EngineeringHub() {
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
+    // ── Hub global search ──
+    const [hubSearchQuery, setHubSearchQuery] = useState('');
+    const [hubSearchResults, setHubSearchResults] = useState<{ compositions: any[]; items: any[] } | null>(null);
+    const [hubSearching, setHubSearching] = useState(false);
+    const hubSearchTimer = useRef<any>(null);
+
     const propriaBase = bases.find(b => b.type === 'PROPRIA' || b.name === 'PROPRIA');
     const [propriaComps, setPropriaComps] = useState<any[]>([]);
     const [loadingPropria, setLoadingPropria] = useState(false);
@@ -58,6 +64,21 @@ export function EngineeringHub() {
     useEffect(() => {
         if (activeTab === 'propria') loadPropria();
     }, [activeTab, propriaBase, propriaSearch]);
+
+    // Debounced hub search
+    useEffect(() => {
+        if (hubSearchTimer.current) clearTimeout(hubSearchTimer.current);
+        if (hubSearchQuery.trim().length < 3) { setHubSearchResults(null); return; }
+        setHubSearching(true);
+        hubSearchTimer.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/engineering/hub/search?q=${encodeURIComponent(hubSearchQuery)}&limit=20`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                if (res.ok) setHubSearchResults(await res.json());
+            } catch (e) {}
+            setHubSearching(false);
+        }, 400);
+        return () => { if (hubSearchTimer.current) clearTimeout(hubSearchTimer.current); };
+    }, [hubSearchQuery]);
 
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -135,7 +156,7 @@ export function EngineeringHub() {
     };
 
     const handleSyncSinapi = async () => {
-        if (!confirm('Iniciar download automático do SINAPI?\n\nIsso vai buscar as últimas 12 data-bases do Ceará (Onerado + Desonerado) diretamente do portal da Caixa.\n\nO processo roda em background e pode levar alguns minutos.')) return;
+        if (!confirm('Iniciar download SINAPI Nacional?\n\n🗺️ Todos os 27 estados do Brasil\n📅 Últimos 12 meses\n🔄 Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.')) return;
         
         setSyncing(true);
         try {
@@ -145,7 +166,7 @@ export function EngineeringHub() {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ ufs: ['CE'], months: 12, includeDesonerado: true })
+                body: JSON.stringify({ ufs: ['ALL'], months: 12, includeDesonerado: true })
             });
             
             if (res.ok) {
@@ -365,7 +386,7 @@ export function EngineeringHub() {
                             }}
                         >
                             {syncing ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
-                            {syncing ? 'Sincronizando...' : 'Sync SINAPI (Automático)'}
+                            {syncing ? 'Sincronizando...' : 'Sync SINAPI (Nacional)'}
                         </button>
 
                         <button
@@ -512,6 +533,95 @@ export function EngineeringHub() {
                     </div>
                 )}
 
+                {/* Hub global search — compositions + items */}
+                {bases.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Search size={18} style={{ position: 'absolute', left: 14, color: 'var(--color-text-tertiary)', zIndex: 1 }} />
+                            <input
+                                value={hubSearchQuery}
+                                onChange={e => setHubSearchQuery(e.target.value)}
+                                placeholder="Buscar composições e insumos em todas as bases... (ex: CONCRETO, 96526)"
+                                style={{ width: '100%', padding: '12px 14px 12px 42px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.92rem', background: 'var(--color-bg-surface)', transition: 'border-color 0.2s' }}
+                                onFocus={e => e.currentTarget.style.borderColor = 'var(--color-primary)'}
+                                onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+                            />
+                            {hubSearchQuery && <button onClick={() => { setHubSearchQuery(''); setHubSearchResults(null); }} style={{ position: 'absolute', right: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 4 }}><X size={16} /></button>}
+                        </div>
+
+                        {hubSearching && <div style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-tertiary)' }}><RefreshCw size={16} className="spin" style={{ marginRight: 8 }} />Pesquisando...</div>}
+
+                        {hubSearchResults && !hubSearching && (
+                            <div style={{ marginTop: 8, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface)', maxHeight: 420, overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                                {hubSearchResults.compositions.length === 0 && hubSearchResults.items.length === 0 ? (
+                                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.88rem' }}>Nenhum resultado para "{hubSearchQuery}"</div>
+                                ) : (<>
+                                    {hubSearchResults.compositions.length > 0 && (
+                                        <div>
+                                            <div style={{ padding: '8px 16px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: 1, background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                                                Composições ({hubSearchResults.compositions.length})
+                                            </div>
+                                            {hubSearchResults.compositions.map((c: any) => {
+                                                const db = c.database;
+                                                const color = SOURCE_COLORS[db?.name] || '#64748b';
+                                                const ver = db?.referenceMonth && db?.referenceYear ? `${String(db.referenceMonth).padStart(2, '0')}/${db.referenceYear}` : '';
+                                                return (
+                                                    <div key={c.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 12, transition: 'background 0.1s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = `${color}06`} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                        <div style={{ minWidth: 80, fontWeight: 700, color, fontSize: '0.85rem' }}>{c.code}</div>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.description}</div>
+                                                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', gap: 8 }}>
+                                                                <span style={{ fontWeight: 600, color }}>{db?.name}</span>
+                                                                <span>{db?.uf || 'Nacional'}</span>
+                                                                {ver && <span>{ver}</span>}
+                                                                <span>{db?.payrollExemption ? 'Desonerado' : 'Onerado'}</span>
+                                                                <span>{c._count?.items || 0} itens</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right', minWidth: 100 }}>
+                                                            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--color-text-primary)' }}>R$ {(c.totalPrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{c.unit}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {hubSearchResults.items.length > 0 && (
+                                        <div>
+                                            <div style={{ padding: '8px 16px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: 1, background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                                                Insumos ({hubSearchResults.items.length})
+                                            </div>
+                                            {hubSearchResults.items.map((it: any) => {
+                                                const db = it.database;
+                                                const color = SOURCE_COLORS[db?.name] || '#64748b';
+                                                const ver = db?.referenceMonth && db?.referenceYear ? `${String(db.referenceMonth).padStart(2, '0')}/${db.referenceYear}` : '';
+                                                return (
+                                                    <div key={it.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 12, transition: 'background 0.1s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = `${color}06`} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                        <div style={{ minWidth: 80, fontWeight: 700, color: '#059669', fontSize: '0.85rem' }}>{it.code}</div>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{it.description}</div>
+                                                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', gap: 8 }}>
+                                                                <span style={{ fontWeight: 600, color }}>{db?.name}</span>
+                                                                <span>{db?.uf || 'Nacional'}</span>
+                                                                {ver && <span>{ver}</span>}
+                                                                <span>{it.type}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right', minWidth: 100 }}>
+                                                            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--color-text-primary)' }}>R$ {(it.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{it.unit}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </>)}
+                            </div>
+                        )}
+                    </div>
+                )}
                 {loading && bases.length === 0 ? (
                     <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                         <RefreshCw size={24} className="spin" style={{ marginBottom: 12, opacity: 0.5 }} />

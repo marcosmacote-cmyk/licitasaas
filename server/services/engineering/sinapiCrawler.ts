@@ -17,6 +17,8 @@ import { prisma } from '../../lib/prisma';
 
 const PORTAL_URL = 'https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx';
 
+const ALL_UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+
 export async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
   let browser: any = null;
   try {
@@ -454,8 +456,135 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 export interface SyncOptions { ufs: string[]; months: number; includeDesonerado: boolean; baseName?: string; }
 export interface SyncReport { started: string; finished: string; totalAttempted: number; totalSuccess: number; totalFailed: number; results: SyncResult[]; }
 
+/** Parse national 2025+ Excel extracting ALL UF columns at once */
+function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }> {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
+  const result = new Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }>();
+  for (const uf of ALL_UFS) result.set(uf, { items: [], compositionItems: [] });
+
+  let insumoSheets = ['IND', 'ISD', 'ICD', 'ISE'];
+  let compSheets = ['CSD', 'CCD', 'CNE', 'CSE'];
+  if (desonerado !== undefined) {
+    insumoSheets = desonerado ? ['ICD'] : ['IND', 'ISD'];
+    compSheets = desonerado ? ['CCD'] : ['CSD'];
+  }
+  const allTargets = [...insumoSheets, ...compSheets];
+
+  for (const sheetName of workbook.SheetNames) {
+    const upper = sheetName.toUpperCase().trim();
+    if (!allTargets.includes(upper)) continue;
+    const isComposition = compSheets.includes(upper);
+    const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    if (rows.length < 5) continue;
+
+    // Find header row — detect ALL UF columns at once
+    let headerIdx = -1;
+    let codeCol = -1, descCol = -1, unitCol = -1, groupCol = -1;
+    const ufColMap: Record<string, number> = {};
+
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+      const foundUfs = ALL_UFS.filter(uf => row.indexOf(uf) >= 0);
+      if (foundUfs.length >= 10) { // National sheet has 27 UF columns
+        headerIdx = i;
+        for (const uf of ALL_UFS) { const idx = row.indexOf(uf); if (idx >= 0) ufColMap[uf] = idx; }
+        for (let j = Math.max(0, i - 3); j <= i; j++) {
+          const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
+          if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c.includes('COMPOSIÇÃO'));
+          if (descCol < 0) descCol = r2.findIndex((c: string) => c.includes('DESCRI'));
+          if (unitCol < 0) unitCol = r2.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UNIDADE');
+          if (groupCol < 0) groupCol = r2.findIndex((c: string) => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO'));
+        }
+        break;
+      }
+    }
+
+    if (headerIdx < 0 || Object.keys(ufColMap).length === 0) continue;
+    if (codeCol < 0) codeCol = 1;
+    if (descCol < 0) descCol = codeCol + 1;
+    if (unitCol < 0) unitCol = codeCol + 2;
+
+    console.log(`[SINAPI Parse] 🌎 Aba "${sheetName}": ${Object.keys(ufColMap).length} UFs detectadas, parsing multi-UF...`);
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const r = rows[i];
+      let code = String(r[codeCol] ?? '').trim();
+      if (!code || code === '0' || code.length < 2) {
+        const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: i, c: codeCol })];
+        if (cell && cell.f) { const match = cell.f.match(/,?(\d+)\s*\)$/); if (match) code = match[1]; }
+      }
+      const desc = String(r[descCol] ?? '').trim();
+      const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
+      if (!code || !desc || code.length < 2 || code === '0') continue;
+
+      let type = isComposition ? 'SERVICO' : 'MATERIAL';
+      const group = String(r[groupCol] ?? '').toUpperCase();
+      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) type = 'MAO_DE_OBRA';
+      else if (group.includes('EQUIP')) type = 'EQUIPAMENTO';
+      else if (group.includes('COMPOS') || group.includes('SERV')) type = 'SERVICO';
+      else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
+
+      for (const [uf, colIdx] of Object.entries(ufColMap)) {
+        let price = 0;
+        const raw = r[colIdx];
+        if (typeof raw === 'number') price = raw;
+        else if (raw) {
+          const c = String(raw).replace(/[^\d.,\-]/g, '');
+          if (c) price = c.includes(',') && (!c.includes('.') || c.lastIndexOf(',') > c.lastIndexOf('.')) ? parseFloat(c.replace(/\./g, '').replace(',', '.')) || 0 : parseFloat(c.replace(/,/g, '')) || 0;
+        }
+        if (price <= 0) continue;
+        result.get(uf)!.items.push({ code, description: desc, unit, price, type });
+      }
+    }
+  }
+
+  // Also parse ANALÍTICO sheet for composition items (UF-independent coefficients)
+  for (const sheetName of workbook.SheetNames) {
+    const upper = sheetName.toUpperCase().trim();
+    if (upper !== 'ANALÍTICO' && upper !== 'ANALITICO') continue;
+    const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    let headerIdx = -1, parentCodeCol = 1, typeCol = 2, ccodeCol = 3, cdescCol = 4, cunitCol = 5, qtyCol = 6;
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+      if (row.includes('GRUPO') && row.some((c: string) => c.includes('COEFICIENTE'))) {
+        headerIdx = i;
+        parentCodeCol = row.findIndex((c: string) => c.includes('COMPOSIÇÃO'));
+        typeCol = row.findIndex((c: string) => c.includes('TIPO ITEM'));
+        ccodeCol = row.findIndex((c: string) => c.includes('CÓDIGO DO ITEM') || c.includes('CÓDIGO DO\r\nITEM'));
+        cdescCol = row.findIndex((c: string) => c === 'DESCRIÇÃO');
+        cunitCol = row.findIndex((c: string) => c === 'UNIDADE');
+        qtyCol = row.findIndex((c: string) => c === 'COEFICIENTE');
+        break;
+      }
+    }
+    if (headerIdx < 0) continue;
+    const compItems: ParsedCompositionItem[] = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const r = rows[i];
+      const parentCode = String(r[parentCodeCol] ?? '').trim();
+      const code = String(r[ccodeCol] ?? '').trim();
+      if (!parentCode || !code || code === '0') continue;
+      const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
+      const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
+      let qty = 0;
+      const rawQty = r[qtyCol];
+      if (typeof rawQty === 'number') qty = rawQty;
+      else if (rawQty) { const c = String(rawQty).replace(/[^\d.,\-]/g, ''); if (c) qty = parseFloat(c.replace(',', '.')) || 0; }
+      if (qty <= 0) continue;
+      compItems.push({ parentCode, type, code, description: String(r[cdescCol] ?? '').trim(), unit: String(r[cunitCol] ?? '').trim() || 'UN', quantity: qty });
+    }
+    // Share composition items across all UFs (coefficients are universal)
+    for (const uf of ALL_UFS) result.get(uf)!.compositionItems.push(...compItems);
+    console.log(`[SINAPI Parse] ✅ Analítico: ${compItems.length} itens de composição (compartilhados entre ${ALL_UFS.length} UFs)`);
+  }
+
+  return result;
+}
+
 export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
-  const { ufs, months, includeDesonerado, baseName = 'SINAPI' } = options;
+  const { ufs: requestedUfs, months, includeDesonerado, baseName = 'SINAPI' } = options;
+  const isAllUfs = requestedUfs.includes('ALL') || requestedUfs.length >= 27;
+  const ufs = isAllUfs ? ALL_UFS : requestedUfs;
   const started = new Date().toISOString();
   const results: SyncResult[] = [];
   const now = new Date();
@@ -465,10 +594,69 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
     targetMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
   }
 
-  console.log(`[SINAPI Crawler] 🚀 Sync: ${ufs.join(',')} × ${months} meses`);
+  console.log(`[SINAPI Crawler] 🚀 Sync: ${isAllUfs ? 'ALL (27 UFs)' : ufs.join(',')} × ${months} meses`);
 
+  // For 2025+ national format: download once, extract all UFs
+  for (const { month, year } of targetMonths) {
+    if (year >= 2025 && isAllUfs) {
+      const regimes = includeDesonerado ? [false, true] : [false];
+      for (const desonerado of regimes) {
+        const regime = desonerado ? 'Desonerado' : 'Onerado';
+        const version = `${String(month).padStart(2, '0')}/${year}`;
+
+        // Check if ALL UFs already synced for this month
+        const existingCount = await prisma.engineeringDatabase.count({
+          where: { name: baseName, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL', compositionCount: { gt: 0 } }
+        });
+        if (existingCount >= 27) { console.log(`[SINAPI Crawler] ⏭️ ${version} ${regime}: ${existingCount}/27 UFs já completas`); continue; }
+
+        console.log(`\n[SINAPI Crawler] 📥 Nacional ${version} ${regime} (${27 - existingCount} UFs pendentes)...`);
+        let zipBuffer: Buffer | null = null;
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sinapi-'));
+        try {
+          const filePath = await downloadSinapiViaBrowser('CE', month, year, desonerado, tmpDir);
+          if (filePath && fs.existsSync(filePath)) {
+            const buf = fs.readFileSync(filePath);
+            if (buf.length > 100 && buf[0] === 0x50 && buf[1] === 0x4B) zipBuffer = buf;
+          }
+        } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }
+
+        if (!zipBuffer) { console.log(`[SINAPI Crawler] ❌ Download falhou: ${version} ${regime}`); results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
+
+        const excels = extractExcelFromZip(zipBuffer);
+        if (excels.length === 0) { results.push({ success: false, message: `ZIP sem Excel` }); continue; }
+
+        console.log(`[SINAPI Crawler] 🌎 Parsing multi-UF (${excels.length} planilhas)...`);
+        const allUfData = new Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }>();
+        for (const uf of ALL_UFS) allUfData.set(uf, { items: [], compositionItems: [] });
+
+        for (const buf of excels) {
+          const ufData = parseExcelAllUFs(buf, desonerado);
+          for (const [uf, data] of ufData.entries()) {
+            const existing = allUfData.get(uf)!;
+            existing.items.push(...data.items);
+            existing.compositionItems.push(...data.compositionItems);
+          }
+        }
+
+        for (const uf of ALL_UFS) {
+          const data = allUfData.get(uf)!;
+          if (data.items.length === 0) { results.push({ success: false, message: `${uf}: sem dados` }); continue; }
+          // Check if this specific UF already synced
+          const ex = await prisma.engineeringDatabase.findFirst({ where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL', compositionCount: { gt: 0 } } });
+          if (ex) { results.push({ success: true, message: `Já existente: ${uf}` }); continue; }
+          results.push(await persistItems(baseName, uf, month, year, desonerado, data));
+        }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      continue; // Skip per-UF loop for this month
+    }
+  }
+
+  // Per-UF loop (pre-2025 or specific UFs)
   for (const uf of ufs) {
     for (const { month, year } of targetMonths) {
+      if (year >= 2025 && isAllUfs) continue; // Already handled above
       const regimes = includeDesonerado ? [false, true] : [false];
       for (const desonerado of regimes) {
         const regime = desonerado ? 'Desonerado' : 'Onerado';

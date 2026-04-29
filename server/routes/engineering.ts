@@ -341,6 +341,48 @@ router.get('/compositions', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /api/engineering/hub/search — Busca unificada no Hub
+// Pesquisa composições + insumos across all databases
+// ═══════════════════════════════════════════════════════════
+router.get('/hub/search', async (req: any, res: any) => {
+    try {
+        const q = (req.query.q as string || '').trim();
+        const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
+        if (q.length < 2) return res.json({ compositions: [], items: [] });
+
+        const qFilter = [
+            { code: { contains: q, mode: 'insensitive' as const } },
+            { description: { contains: q, mode: 'insensitive' as const } }
+        ];
+
+        const [compositions, items] = await Promise.all([
+            prisma.engineeringComposition.findMany({
+                where: { OR: qFilter },
+                take: limit,
+                orderBy: { code: 'asc' },
+                include: {
+                    database: { select: { id: true, name: true, uf: true, referenceMonth: true, referenceYear: true, payrollExemption: true } },
+                    _count: { select: { items: true } }
+                }
+            }),
+            prisma.engineeringItem.findMany({
+                where: { OR: qFilter },
+                take: limit,
+                orderBy: { code: 'asc' },
+                include: {
+                    database: { select: { id: true, name: true, uf: true, referenceMonth: true, referenceYear: true, payrollExemption: true } }
+                }
+            })
+        ]);
+
+        res.json({ compositions, items });
+    } catch (e: any) {
+        console.error('[Hub Search] Error:', e);
+        res.status(500).json({ error: 'Erro na busca' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/compositions — Criar Composição (PRÓPRIA)
 // ═══════════════════════════════════════════════════════════
 router.post('/compositions', async (req: any, res: any) => {
