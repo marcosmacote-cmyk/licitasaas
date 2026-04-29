@@ -79,8 +79,9 @@ interface SyncResult {
 
 // ═══════════════════════════════════════════════════════════
 // Download SICRO .7z file via HTTP
-// URL pattern: .../sicro/relatorios-sicro/{region}/{state}/{year}/{month}/{UF}-{MM}.{YYYY}.7z
-// Fallback patterns tried if primary fails
+// Confirmed URL pattern (via browser inspection):
+//   .../sicro/relatorios/relatorios-sicro/{region}/{state}/{year}/{month}/{uf-lower}-{MM}-{YYYY}.7z
+// Example: .../sicro/relatorios/relatorios-sicro/nordeste/ceara/2026/janeiro/ce-01-2026.7z
 // ═══════════════════════════════════════════════════════════
 async function downloadSicro7z(uf: string, month: number, year: number, downloadDir: string): Promise<string | null> {
   const info = SICRO_UF_MAP[uf];
@@ -88,19 +89,25 @@ async function downloadSicro7z(uf: string, month: number, year: number, download
 
   const mm = String(month).padStart(2, '0');
   const monthName = MONTH_NAMES[month];
-  const fileName = `${uf}-${mm}.${year}.7z`;
+  const ufLower = uf.toLowerCase();
+  const correctFileName = `${ufLower}-${mm}-${year}.7z`;
 
-  // Try multiple URL patterns
+  // Primary URL: confirmed via browser DOM inspection of gov.br portal
+  // Path: .../sicro/relatorios/relatorios-sicro/{region}/{state}/{year}/{month}/{uf}-{MM}-{YYYY}.7z
   const urlPatterns = [
-    `${BASE_URL}/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${fileName}`,
-    `${BASE_URL}/relatorios/${info.region}/${info.slug}/${year}/${monthName}/${fileName}`,
-    `${BASE_URL}/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${uf.toLowerCase()}-${mm}.${year}.7z`,
-    `${BASE_URL}/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${info.slug}-${monthName}-${year}`,
+    `${BASE_URL}/relatorios/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${correctFileName}`,
+    // Fallback: try uppercase UF
+    `${BASE_URL}/relatorios/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${uf}-${mm}-${year}.7z`,
+    // Fallback: dot-separated format
+    `${BASE_URL}/relatorios/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${ufLower}-${mm}.${year}.7z`,
+    // Fallback: navigate to month page and extract link from HTML
+    `${BASE_URL}/relatorios/relatorios-sicro/${info.region}/${info.slug}/${year}/${monthName}/${monthName}-${year}`,
   ];
+
+  console.log(`[SICRO Crawler] 📥 Buscando: ${uf} ${mm}/${year}...`);
 
   for (const url of urlPatterns) {
     try {
-      console.log(`[SICRO Crawler] 📥 Tentando: ${url}`);
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -110,8 +117,7 @@ async function downloadSicro7z(uf: string, month: number, year: number, download
       });
 
       if (!response.ok) {
-        console.log(`[SICRO Crawler] ⚠️ ${response.status} para ${url}`);
-        continue;
+        continue; // silently try next pattern
       }
 
       const contentType = response.headers.get('content-type') || '';
@@ -119,17 +125,17 @@ async function downloadSicro7z(uf: string, month: number, year: number, download
 
       // Check if it's a valid 7z file (magic bytes: 37 7A BC AF 27 1C)
       if (buffer.length > 6 && buffer[0] === 0x37 && buffer[1] === 0x7A && buffer[2] === 0xBC) {
-        const filePath = path.join(downloadDir, fileName);
+        const filePath = path.join(downloadDir, correctFileName);
         fs.writeFileSync(filePath, buffer);
-        console.log(`[SICRO Crawler] ✅ Download OK: ${fileName} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+        console.log(`[SICRO Crawler] ✅ Download OK: ${correctFileName} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
         return filePath;
       }
 
       // Could also be a ZIP
       if (buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4B) {
-        const filePath = path.join(downloadDir, fileName.replace('.7z', '.zip'));
+        const filePath = path.join(downloadDir, correctFileName.replace('.7z', '.zip'));
         fs.writeFileSync(filePath, buffer);
-        console.log(`[SICRO Crawler] ✅ Download OK (ZIP): ${fileName} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+        console.log(`[SICRO Crawler] ✅ Download OK (ZIP): ${correctFileName} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
         return filePath;
       }
 
