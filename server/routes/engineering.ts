@@ -2116,10 +2116,20 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
 
         const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
         const force = Boolean(req.body?.force);
-        const authToken = String(req.headers['x-sicor-token'] || req.body?.authToken || '') || undefined;
+        const rawToken = req.headers['x-sicor-token'] || req.body?.authToken || '';
+        const authToken = typeof rawToken === 'string' && rawToken.trim() ? rawToken.trim() : undefined;
         const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : undefined;
         const regionCodes = Array.isArray(req.body?.regionCodes) ? req.body.regionCodes : undefined;
         const includeCompositionWorkbook = Boolean(req.body?.includeCompositionWorkbook);
+
+        // Diagnostic: log which env vars are present (values redacted)
+        const diagCnpj = (process.env.SICOR_MG_CNPJ || '').trim();
+        const diagSenha = (process.env.SICOR_MG_SENHA || '').trim();
+        const diagToken = (process.env.SICOR_MG_TOKEN || '').trim();
+        const diagCnpjAlt = (process.env.DER_MG_CNPJ || '').trim();
+        const diagSenhaAlt = (process.env.DER_MG_SENHA || '').trim();
+        const diagTokenAlt = (process.env.DER_MG_SCO_TOKEN || '').trim();
+        logger.info(`[SICOR-MG Sync] Auth diagnostic: SICOR_MG_CNPJ=${diagCnpj ? `set(${diagCnpj.length}ch)` : 'MISSING'}, SICOR_MG_SENHA=${diagSenha ? `set(${diagSenha.length}ch)` : 'MISSING'}, SICOR_MG_TOKEN=${diagToken ? `set(${diagToken.length}ch)` : 'MISSING'}, DER_MG_CNPJ=${diagCnpjAlt ? 'set' : 'MISSING'}, DER_MG_SENHA=${diagSenhaAlt ? 'set' : 'MISSING'}, DER_MG_SCO_TOKEN=${diagTokenAlt ? 'set' : 'MISSING'}, explicit=${authToken ? 'yes' : 'no'}`);
 
         validateSicorAuthToken(authToken);
 
@@ -2142,7 +2152,7 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
             error: missingToken ? 'Token SICOR-MG não configurado' : 'Erro ao iniciar sync SICOR-MG',
             details: e.message,
             instructions: missingToken
-                ? 'Configure SICOR_MG_TOKEN no Railway ou envie um token Bearer válido no header X-Sicor-Token. O token é obtido fazendo login no portal https://portal.der.mg.gov.br/sco-portal/ e copiando o Bearer token do DevTools.'
+                ? 'Configure SICOR_MG_CNPJ e SICOR_MG_SENHA no Railway para login automático, ou envie um Bearer token via header X-Sicor-Token.'
                 : undefined,
         });
     }
