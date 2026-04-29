@@ -59,6 +59,7 @@ describe('sicorMgSync', () => {
       expect(hasConfiguredSicorAuthToken()).toBe(false);
       expect(() => validateSicorAuthToken()).toThrow(/Token SICOR-MG ausente/);
       expect(() => validateSicorAuthToken('temporary-token')).not.toThrow();
+      expect(() => validateSicorAuthToken('Bearer temporary-token')).not.toThrow();
 
       process.env.SICOR_MG_TOKEN = 'configured-token';
       expect(hasConfiguredSicorAuthToken()).toBe(true);

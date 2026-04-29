@@ -82,7 +82,7 @@ function getAuthToken(input?: string): string {
   if (!token.trim()) {
     throw new Error('Token SICOR-MG ausente. Informe authToken ou configure SICOR_MG_TOKEN/DER_MG_SCO_TOKEN.');
   }
-  return token.trim();
+  return token.trim().replace(/^Bearer\s+/i, '');
 }
 
 export function hasConfiguredSicorAuthToken(): boolean {
