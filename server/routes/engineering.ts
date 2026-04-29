@@ -1924,6 +1924,7 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
 // ═══════════════════════════════════════════════════════════
 import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../services/engineering/sinapiCrawler';
 import { getLatestOrsePeriods, hydrateOrseCompositionDetails, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
+import { getLatestSicorPublications, getSicorRegions, syncSicorMg } from '../services/engineering/sicorMgSync';
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
@@ -2034,6 +2035,72 @@ router.post('/bases/sync-orse', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('[ORSE Sync] Error:', e);
         res.status(500).json({ error: 'Erro ao iniciar sync ORSE', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// SICOR-MG official base sync
+// Uses DER-MG SCO Portal endpoints. These endpoints require the same
+// bearer token used by the official Portal de Serviços session.
+// ═══════════════════════════════════════════════════════════
+router.get('/bases/sicor-mg/regions', async (req: any, res: any) => {
+    try {
+        const authToken = String(req.query.authToken || '') || undefined;
+        const regions = await getSicorRegions(authToken);
+        res.json({ regions });
+    } catch (e: any) {
+        console.error('[SICOR-MG Regions] Error:', e);
+        res.status(500).json({ error: 'Erro ao listar regiões SICOR-MG', details: e.message });
+    }
+});
+
+router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
+    try {
+        const authToken = String(req.query.authToken || '') || undefined;
+        const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
+        const regionCodes = req.query.regionCodes
+            ? String(req.query.regionCodes).split(',').map(value => value.trim()).filter(Boolean)
+            : undefined;
+        const publications = await getLatestSicorPublications({ authToken, months, regionCodes });
+        const periods = [...new Map(publications.map(publication => [
+            `${publication.period.year}-${publication.period.month}`,
+            publication.period,
+        ])).values()];
+        res.json({ periods, publications });
+    } catch (e: any) {
+        console.error('[SICOR-MG Periods] Error:', e);
+        res.status(500).json({ error: 'Erro ao listar datas-base SICOR-MG', details: e.message });
+    }
+});
+
+router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
+        const force = Boolean(req.body?.force);
+        const authToken = String(req.body?.authToken || '') || undefined;
+        const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : undefined;
+        const regionCodes = Array.isArray(req.body?.regionCodes) ? req.body.regionCodes : undefined;
+        const includeCompositionWorkbook = Boolean(req.body?.includeCompositionWorkbook);
+
+        console.log(`[SICOR-MG Sync] Admin ${req.user?.email} disparou sync: meses=${months}, force=${force}`);
+
+        res.json({
+            message: `Sync SICOR-MG iniciado em background para as últimas ${months} datas-base`,
+            status: 'started',
+        });
+
+        syncSicorMg({ months, force, authToken, conditions, regionCodes, includeCompositionWorkbook }).then(report => {
+            console.log(`[SICOR-MG Sync] Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error('[SICOR-MG Sync] Erro fatal:', err);
+        });
+    } catch (e: any) {
+        console.error('[SICOR-MG Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync SICOR-MG', details: e.message });
     }
 });
 
