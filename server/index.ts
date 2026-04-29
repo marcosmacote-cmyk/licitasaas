@@ -57,6 +57,7 @@ import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 
 import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import bcrypt from 'bcryptjs';
@@ -609,7 +610,39 @@ for (const p of possibleDistPaths) {
 
 if (frontendDist) {
     logger.info(`[Frontend] Found and serving static UI from: ${frontendDist}`);
-    app.use('/assets', express.static(path.join(frontendDist, 'assets'), {
+    const assetsDir = path.join(frontendDist, 'assets');
+    const gzipAssetCache = new Map<string, Buffer>();
+    app.use('/assets', (req, res, next) => {
+        if (!['GET', 'HEAD'].includes(req.method) || !req.headers['accept-encoding']?.includes('gzip')) {
+            next();
+            return;
+        }
+
+        const assetPath = path.resolve(assetsDir, `.${decodeURIComponent(req.path)}`);
+        const isCompressibleAsset = /\.(js|css|svg|json|html)$/i.test(assetPath);
+        if (!assetPath.startsWith(`${assetsDir}${path.sep}`) || !isCompressibleAsset || !fs.existsSync(assetPath)) {
+            next();
+            return;
+        }
+
+        let gzipped = gzipAssetCache.get(assetPath);
+        if (!gzipped) {
+            gzipped = zlib.gzipSync(fs.readFileSync(assetPath), { level: zlib.constants.Z_BEST_SPEED });
+            gzipAssetCache.set(assetPath, gzipped);
+        }
+
+        res.type(assetPath);
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Content-Length', String(gzipped.length));
+        res.setHeader('Vary', 'Accept-Encoding');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        if (req.method === 'HEAD') {
+            res.end();
+            return;
+        }
+        res.end(gzipped);
+    });
+    app.use('/assets', express.static(assetsDir, {
         immutable: true,
         maxAge: '1y',
     }));
