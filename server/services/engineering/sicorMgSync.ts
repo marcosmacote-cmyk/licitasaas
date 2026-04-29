@@ -1,9 +1,13 @@
 import * as XLSX from 'xlsx';
-import { prisma } from '../../lib/prisma';
 
 const SICOR_BASE_URL = 'https://portal.der.mg.gov.br';
 const SICOR_API_BASE = `${SICOR_BASE_URL}/sco-portal-service/api/publicacao`;
 const USER_AGENT = 'LicitaSaaS-SICOR-MG-Sync/1.0';
+
+async function getPrisma() {
+  const mod = await import('../../lib/prisma');
+  return mod.prisma;
+}
 
 type SicorConditionCode = 'CD' | 'SD';
 
@@ -334,6 +338,7 @@ export function parseSicorWorkbook(buffer: Buffer, defaultType: SicorParsedRow['
 }
 
 async function persistSicorPublication(publication: SicorPublication, rows: SicorParsedRow[], force: boolean): Promise<SicorSyncResult> {
+  const prisma = await getPrisma();
   let db = await prisma.engineeringDatabase.findFirst({
     where: {
       name: 'SICOR',
