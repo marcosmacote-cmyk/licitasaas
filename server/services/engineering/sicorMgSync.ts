@@ -1,8 +1,17 @@
 import * as XLSX from 'xlsx';
+import { logger } from '../../lib/logger';
 
 const SICOR_BASE_URL = 'https://portal.der.mg.gov.br';
 const SICOR_API_BASE = `${SICOR_BASE_URL}/sco-portal-service/api/publicacao`;
+const SICOR_LOGIN_URL = `${SICOR_BASE_URL}/portal-servicos-backend/login`;
 const USER_AGENT = 'LicitaSaaS-SICOR-MG-Sync/1.0';
+
+/** Rate-limit delay between consecutive API calls to avoid hammering DER-MG */
+const API_DELAY_MS = 500;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Cached token with auto-refresh support */
+let cachedToken: { jwt: string; expiresAt: number } | null = null;
 
 async function getPrisma() {
   const mod = await import('../../lib/prisma');
@@ -77,26 +86,115 @@ export interface SicorSyncReport {
   results: SicorSyncResult[];
 }
 
-function getAuthToken(input?: string): string {
-  const token = input || process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '';
-  if (!token.trim()) {
-    throw new Error('Token SICOR-MG ausente. Informe authToken ou configure SICOR_MG_TOKEN/DER_MG_SCO_TOKEN.');
+// ─── Auto-Login DER-MG Portal ─────────────────────────────────────
+
+/**
+ * Authenticate with the DER-MG portal using CNPJ + password.
+ * Returns a fresh Bearer token valid for ~1 hour.
+ */
+async function loginDerMg(): Promise<string> {
+  const cnpj = process.env.SICOR_MG_CNPJ || process.env.DER_MG_CNPJ || '';
+  const senha = process.env.SICOR_MG_SENHA || process.env.DER_MG_SENHA || '';
+
+  if (!cnpj.trim() || !senha.trim()) {
+    throw new Error(
+      'Credenciais DER-MG ausentes. Configure SICOR_MG_CNPJ e SICOR_MG_SENHA no Railway, ' +
+      'ou forneça um token Bearer direto via SICOR_MG_TOKEN.'
+    );
   }
-  return token.trim().replace(/^Bearer\s+/i, '');
+
+  logger.info('[SICOR-MG] Autenticando no portal DER-MG...');
+
+  const res = await fetch(SICOR_LOGIN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json;charset=utf-8',
+      'Accept': 'application/json, text/plain, */*',
+    },
+    body: JSON.stringify({
+      usuario: cnpj.trim(),
+      senha: senha.trim(),
+      redirecPageDefault: '/servicos-disponiveis',
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    logger.error(`[SICOR-MG] Login falhou: HTTP ${res.status} — ${body.slice(0, 300)}`);
+    throw new Error(`Login DER-MG falhou (HTTP ${res.status}). Verifique SICOR_MG_CNPJ e SICOR_MG_SENHA.`);
+  }
+
+  const data = await res.json() as { token?: string; token_type?: string };
+
+  if (!data.token) {
+    throw new Error('Login DER-MG retornou resposta sem token. Verifique as credenciais.');
+  }
+
+  // Parse JWT expiry
+  try {
+    const payload = JSON.parse(Buffer.from(data.token.split('.')[1], 'base64url').toString());
+    cachedToken = { jwt: data.token, expiresAt: (payload.exp || 0) * 1000 };
+    const expiresInMin = Math.round(((payload.exp * 1000) - Date.now()) / 60000);
+    logger.info(`[SICOR-MG] Login OK — token válido por ~${expiresInMin}min`);
+  } catch {
+    // If JWT parsing fails, cache for 50 minutes (tokens are ~1h)
+    cachedToken = { jwt: data.token, expiresAt: Date.now() + 50 * 60 * 1000 };
+    logger.info('[SICOR-MG] Login OK — token cacheado por 50min (fallback)');
+  }
+
+  return data.token;
+}
+
+/**
+ * Get a valid auth token, auto-refreshing via login when needed.
+ * Priority: explicit input > env SICOR_MG_TOKEN > auto-login > error
+ */
+async function getAuthToken(input?: string): Promise<string> {
+  // 1. Explicit token passed (from UI or API call)
+  const explicit = input || process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '';
+  if (explicit.trim()) {
+    return explicit.trim().replace(/^Bearer\s+/i, '');
+  }
+
+  // 2. Cached auto-login token still valid (with 2-min safety margin)
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 120_000) {
+    return cachedToken.jwt;
+  }
+
+  // 3. Auto-login with CNPJ + password
+  return loginDerMg();
 }
 
 export function hasConfiguredSicorAuthToken(): boolean {
-  return Boolean((process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '').trim());
+  const hasToken = Boolean((process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '').trim());
+  const hasCredentials = Boolean(
+    (process.env.SICOR_MG_CNPJ || process.env.DER_MG_CNPJ || '').trim() &&
+    (process.env.SICOR_MG_SENHA || process.env.DER_MG_SENHA || '').trim()
+  );
+  return hasToken || hasCredentials;
 }
 
 export function validateSicorAuthToken(input?: string): void {
-  getAuthToken(input);
+  const hasExplicit = Boolean((input || '').trim());
+  const hasEnvToken = Boolean((process.env.SICOR_MG_TOKEN || process.env.DER_MG_SCO_TOKEN || '').trim());
+  const hasCredentials = Boolean(
+    (process.env.SICOR_MG_CNPJ || process.env.DER_MG_CNPJ || '').trim() &&
+    (process.env.SICOR_MG_SENHA || process.env.DER_MG_SENHA || '').trim()
+  );
+
+  if (!hasExplicit && !hasEnvToken && !hasCredentials) {
+    throw new Error(
+      'Token SICOR-MG ausente. Configure SICOR_MG_TOKEN (token Bearer) ou ' +
+      'SICOR_MG_CNPJ + SICOR_MG_SENHA (login automático) no Railway.'
+    );
+  }
 }
 
 async function sicorFetch(path: string, authToken: string, timeoutMs = 120000): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    logger.debug(`[SICOR-MG] GET ${path}`);
     const res = await fetch(`${SICOR_API_BASE}${path}`, {
       signal: controller.signal,
       headers: {
@@ -106,7 +204,9 @@ async function sicorFetch(path: string, authToken: string, timeoutMs = 120000): 
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status} ${path}${body ? `: ${body.slice(0, 240)}` : ''}`);
+      const msg = `HTTP ${res.status} ${path}${body ? `: ${body.slice(0, 240)}` : ''}`;
+      logger.warn(`[SICOR-MG] ${msg}`);
+      throw new Error(msg);
     }
     return res;
   } finally {
@@ -202,7 +302,7 @@ function publicationSort(a: SicorPublication, b: SicorPublication): number {
 }
 
 export async function getSicorRegions(authToken?: string): Promise<SicorRegion[]> {
-  const token = getAuthToken(authToken);
+  const token = await getAuthToken(authToken);
   const rows = await sicorJson<any[]>('/municipios?sort=deMunicipio&deMunicipio=', token);
   const byCode = new Map<string, SicorRegion>();
   for (const row of rows || []) {
@@ -233,7 +333,7 @@ async function listSicorPublicationsFor(authToken: string, year: number, conditi
 }
 
 export async function getLatestSicorPublications(options: SicorSyncOptions = {}): Promise<SicorPublication[]> {
-  const token = getAuthToken(options.authToken);
+  const token = await getAuthToken(options.authToken);
   const months = Math.max(1, Math.min(Number(options.months || 12), 24));
   const conditions = (options.conditions?.length ? options.conditions : ['SD', 'CD'])
     .map(normalizeCondition)
@@ -250,8 +350,9 @@ export async function getLatestSicorPublications(options: SicorSyncOptions = {})
       for (const condition of conditions) {
         try {
           publications.push(...await listSicorPublicationsFor(token, year, condition, regionCode));
+          await sleep(API_DELAY_MS);
         } catch (e: any) {
-          console.warn(`[SICOR-MG Sync] Falha ao listar ${year}/${regionCode}/${condition}: ${e.message}`);
+          logger.warn(`[SICOR-MG Sync] Falha ao listar ${year}/${regionCode}/${condition}: ${e.message}`);
         }
       }
     }
@@ -435,11 +536,11 @@ async function persistSicorPublication(publication: SicorPublication, rows: Sico
 
 export async function syncSicorMg(options: SicorSyncOptions = {}): Promise<SicorSyncReport> {
   const started = new Date().toISOString();
-  const token = getAuthToken(options.authToken);
+  const token = await getAuthToken(options.authToken);
   const publications = await getLatestSicorPublications({ ...options, authToken: token });
   const results: SicorSyncResult[] = [];
 
-  console.log(`[SICOR-MG Sync] Starting sync for ${publications.length} publicações`);
+  logger.info(`[SICOR-MG Sync] Starting sync for ${publications.length} publicações`);
 
   for (const publication of publications) {
     try {
@@ -464,7 +565,7 @@ export async function syncSicorMg(options: SicorSyncOptions = {}): Promise<Sicor
 
       results.push(await persistSicorPublication(publication, rows, Boolean(options.force)));
     } catch (e: any) {
-      console.error(`[SICOR-MG Sync] Failed ${publication.period.version}/${publication.regionCode}/${publication.conditionCode}:`, e);
+      logger.error(`[SICOR-MG Sync] Failed ${publication.period.version}/${publication.regionCode}/${publication.conditionCode}: ${e.message}`);
       results.push({ success: false, message: `SICOR-MG ${publication.period.version}: ${e.message}`, publication });
     }
   }

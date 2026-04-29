@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { logger } from '../lib/logger';
 import { PrismaClient } from '@prisma/client';
 import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
@@ -2050,31 +2051,47 @@ router.get('/bases/sicor-mg/status', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
+        const hasCredentials = Boolean(
+            (process.env.SICOR_MG_CNPJ || process.env.DER_MG_CNPJ || '').trim() &&
+            (process.env.SICOR_MG_SENHA || process.env.DER_MG_SENHA || '').trim()
+        );
+
         res.json({
             tokenConfigured: hasConfiguredSicorAuthToken(),
-            envNames: ['SICOR_MG_TOKEN', 'DER_MG_SCO_TOKEN'],
-            requiresToken: true,
+            authMethod: hasCredentials ? 'auto-login' : (hasConfiguredSicorAuthToken() ? 'static-token' : 'none'),
+            envNames: ['SICOR_MG_CNPJ + SICOR_MG_SENHA (recomendado)', 'SICOR_MG_TOKEN (alternativo)'],
+            requiresToken: !hasConfiguredSicorAuthToken(),
+            portalUrl: 'https://portal.der.mg.gov.br/sco-portal/',
+            instructions: hasConfiguredSicorAuthToken()
+                ? 'Autenticação configurada. O sistema renova o token automaticamente.'
+                : 'Configure SICOR_MG_CNPJ e SICOR_MG_SENHA no Railway para login automático, ou passe um Bearer token via X-Sicor-Token header.',
         });
     } catch (e: any) {
-        console.error('[SICOR-MG Status] Error:', e);
+        logger.error('[SICOR-MG Status] Error:', e?.message);
         res.status(500).json({ error: 'Erro ao consultar configuração SICOR-MG', details: e.message });
     }
 });
 
 router.get('/bases/sicor-mg/regions', async (req: any, res: any) => {
     try {
-        const authToken = String(req.query.authToken || '') || undefined;
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+        const authToken = String(req.headers['x-sicor-token'] || req.query.authToken || '') || undefined;
         const regions = await getSicorRegions(authToken);
         res.json({ regions });
     } catch (e: any) {
-        console.error('[SICOR-MG Regions] Error:', e);
+        logger.error('[SICOR-MG Regions] Error:', e?.message);
         res.status(500).json({ error: 'Erro ao listar regiões SICOR-MG', details: e.message });
     }
 });
 
 router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
     try {
-        const authToken = String(req.query.authToken || '') || undefined;
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+        const authToken = String(req.headers['x-sicor-token'] || req.query.authToken || '') || undefined;
         const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
         const regionCodes = req.query.regionCodes
             ? String(req.query.regionCodes).split(',').map(value => value.trim()).filter(Boolean)
@@ -2086,7 +2103,7 @@ router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
         ])).values()];
         res.json({ periods, publications });
     } catch (e: any) {
-        console.error('[SICOR-MG Periods] Error:', e);
+        logger.error('[SICOR-MG Periods] Error:', e?.message);
         res.status(500).json({ error: 'Erro ao listar datas-base SICOR-MG', details: e.message });
     }
 });
@@ -2099,14 +2116,14 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
 
         const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
         const force = Boolean(req.body?.force);
-        const authToken = String(req.body?.authToken || '') || undefined;
+        const authToken = String(req.headers['x-sicor-token'] || req.body?.authToken || '') || undefined;
         const conditions = Array.isArray(req.body?.conditions) ? req.body.conditions : undefined;
         const regionCodes = Array.isArray(req.body?.regionCodes) ? req.body.regionCodes : undefined;
         const includeCompositionWorkbook = Boolean(req.body?.includeCompositionWorkbook);
 
         validateSicorAuthToken(authToken);
 
-        console.log(`[SICOR-MG Sync] Admin ${req.user?.email} disparou sync: meses=${months}, force=${force}`);
+        logger.info(`[SICOR-MG Sync] Admin ${req.user?.email} disparou sync: meses=${months}, force=${force}`);
 
         res.json({
             message: `Sync SICOR-MG iniciado em background para as últimas ${months} datas-base`,
@@ -2114,16 +2131,19 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
         });
 
         syncSicorMg({ months, force, authToken, conditions, regionCodes, includeCompositionWorkbook }).then(report => {
-            console.log(`[SICOR-MG Sync] Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+            logger.info(`[SICOR-MG Sync] Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
         }).catch(err => {
-            console.error('[SICOR-MG Sync] Erro fatal:', err);
+            logger.error('[SICOR-MG Sync] Erro fatal:', err?.message);
         });
     } catch (e: any) {
-        console.error('[SICOR-MG Sync] Error:', e);
+        logger.error('[SICOR-MG Sync] Error:', e?.message);
         const missingToken = String(e.message || '').includes('Token SICOR-MG ausente');
         res.status(missingToken ? 400 : 500).json({
             error: missingToken ? 'Token SICOR-MG não configurado' : 'Erro ao iniciar sync SICOR-MG',
             details: e.message,
+            instructions: missingToken
+                ? 'Configure SICOR_MG_TOKEN no Railway ou envie um token Bearer válido no header X-Sicor-Token. O token é obtido fazendo login no portal https://portal.der.mg.gov.br/sco-portal/ e copiando o Bearer token do DevTools.'
+                : undefined,
         });
     }
 });
