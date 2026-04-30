@@ -16,9 +16,9 @@ interface EngDatabase {
 }
 
 const SOURCE_COLORS: Record<string, string> = {
-    SINAPI: '#059669', SEINFRA: '#7c3aed', ORSE: '#0891b2', SICOR: '#ca8a04', SICRO: '#dc2626', PROPRIA: '#2563eb',
+    SINAPI: '#059669', SEINFRA: '#7c3aed', ORSE: '#0891b2', SICOR: '#ca8a04', SICRO: '#dc2626', SBC: '#d97706', PROPRIA: '#2563eb',
 };
-const SOURCE_ORDER = ['SINAPI', 'SICOR', 'SEINFRA', 'ORSE', 'SICRO', 'PROPRIA'];
+const SOURCE_ORDER = ['SINAPI', 'SICRO', 'SBC', 'SICOR', 'SEINFRA', 'ORSE', 'PROPRIA'];
 
 export function EngineeringHub() {
     const [activeTab, setActiveTab] = useState<'oficiais' | 'propria'>('oficiais');
@@ -30,6 +30,7 @@ export function EngineeringHub() {
     const [syncingOrse, setSyncingOrse] = useState(false);
     const [syncingSicor, setSyncingSicor] = useState(false);
     const [syncingSicro, setSyncingSicro] = useState(false);
+    const [syncingSbc, setSyncingSbc] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -416,6 +417,34 @@ export function EngineeringHub() {
                         >
                             {syncingSicro ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
                             {syncingSicro ? 'Sincronizando...' : 'Sync SICRO (DNIT)'}
+                        </button>
+
+                        <button
+                            onClick={async () => {
+                                if (!confirm('Iniciar download SBC (Informativo SBC)?\n\n🏗️ Banco de Composições Analíticas\n🗺️ 30 regiões/praças do Brasil\n📅 Últimos 12 meses\n\nRequer credenciais SBC configuradas.\nO processo roda em background e pode levar ~30-60 min.')) return;
+                                setSyncingSbc(true);
+                                try {
+                                    const res = await fetch('/api/engineering/bases/sync-sbc', {
+                                        method: 'POST',
+                                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ regions: ['ALL'], months: 12 })
+                                    });
+                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
+                                } catch (err) { alert('Erro de conexão'); }
+                                setSyncingSbc(false);
+                            }}
+                            disabled={syncingSbc}
+                            style={{
+                                background: 'linear-gradient(135deg, #d97706, #f59e0b)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSbc ? 'wait' : 'pointer',
+                                opacity: syncingSbc ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(217,119,6,0.25)'
+                            }}
+                        >
+                            {syncingSbc ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
+                            {syncingSbc ? 'Sincronizando...' : 'Sync SBC'}
                         </button>
 
                         <button

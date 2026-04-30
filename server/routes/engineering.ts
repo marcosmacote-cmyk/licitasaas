@@ -2034,6 +2034,51 @@ router.post('/bases/sync-sicro', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/sync-sbc
+// Trigger SBC (Informativo SBC) auto-download & import (Admin only)
+// Credentials from env: SBC_EMAIL, SBC_PASSWORD
+// ═══════════════════════════════════════════════════════════
+import { syncSbc, getSbcRegions } from '../services/engineering/sbcCrawler';
+
+router.post('/bases/sync-sbc', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const sbcEmail = process.env.SBC_EMAIL;
+        const sbcPassword = process.env.SBC_PASSWORD;
+        if (!sbcEmail || !sbcPassword) {
+            return res.status(400).json({ error: 'Credenciais SBC não configuradas. Defina SBC_EMAIL e SBC_PASSWORD nas variáveis de ambiente.' });
+        }
+
+        const { regions = ['ALL'], months = 12 } = req.body;
+
+        console.log(`[SBC Sync] 🚀 Admin ${req.user?.email} disparou sync SBC: Regiões=${Array.isArray(regions) ? regions.join(',') : regions}, meses=${months}`);
+
+        res.json({
+            message: `Sync SBC iniciado em background para ${Array.isArray(regions) && regions.includes('ALL') ? 'Todas as 30 regiões' : (Array.isArray(regions) ? regions.join(', ') : regions)} (${months} meses)`,
+            status: 'started',
+        });
+
+        // Fire and forget
+        syncSbc({ regions: Array.isArray(regions) ? regions : ['ALL'], months, email: sbcEmail, password: sbcPassword }).then(report => {
+            console.log(`[SBC Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error(`[SBC Sync] ❌ Erro fatal:`, err);
+        });
+
+    } catch (e: any) {
+        console.error('[SBC Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync SBC', details: e.message });
+    }
+});
+
+router.get('/bases/sbc/regions', async (_req: any, res: any) => {
+    res.json({ regions: getSbcRegions() });
+});
+
+// ═══════════════════════════════════════════════════════════
 // ORSE official base sync + live search
 // Uses the public ORSE service search by period because .ORSE update
 // packages are proprietary binary files from the desktop ORSE system.
