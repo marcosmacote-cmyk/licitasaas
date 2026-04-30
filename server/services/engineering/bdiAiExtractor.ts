@@ -4,16 +4,46 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export async function extractBdiFromBidding(biddingId: string): Promise<any | null> {
+    let text = '';
+
+    // Tier 1: DocumentChunks (best quality — full edital text)
     const chunks = await prisma.documentChunk.findMany({
         where: { biddingProcessId: biddingId },
         orderBy: { id: 'asc' }
     });
 
-    if (!chunks || chunks.length === 0) {
-        throw new Error('Texto do edital não indexado. Analise o edital primeiro para extrair o BDI.');
+    if (chunks && chunks.length > 0) {
+        text = chunks.map(c => c.content).join('\n\n');
     }
 
-    const text = chunks.map(c => c.content).join('\n\n');
+    // Tier 2: AiAnalysis fields (fallback when RAG indexing hasn't run)
+    if (!text || text.length < 200) {
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id: biddingId },
+            include: { aiAnalysis: true }
+        });
+
+        if (bidding?.aiAnalysis) {
+            const parts: string[] = [];
+            const a = bidding.aiAnalysis;
+            if (a.fullSummary) parts.push(a.fullSummary);
+            if (a.biddingItems) parts.push(a.biddingItems);
+            if (a.pricingConsiderations) parts.push(a.pricingConsiderations);
+            if (a.requiredDocuments) parts.push(a.requiredDocuments);
+            // schemaV2 may contain structured pricing data
+            const schemaV2 = a.schemaV2 as any;
+            if (schemaV2?.proposal_analysis) {
+                parts.push('DADOS ESTRUTURADOS:\n' + JSON.stringify(schemaV2.proposal_analysis, null, 2));
+            }
+            text = parts.join('\n\n---\n\n');
+        }
+    }
+
+    // Tier 3: No text available at all
+    if (!text || text.length < 100) {
+        throw new Error('Texto do edital não disponível. Analise o edital primeiro para extrair o BDI.');
+    }
+
     const chunk = text.substring(0, 150000); // Send up to 150k chars of the text
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

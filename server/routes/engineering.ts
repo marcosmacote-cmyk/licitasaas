@@ -1102,7 +1102,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // Threshold raised from >1 to >=10 to prevent partial extractions from
             // being accepted as valid (e.g., 2 of 59 items would pass the old guard)
             const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
-            const MIN_V2_ITEMS_FOR_ENGINEERING = 10;
+            const MIN_V2_ITEMS_FOR_ENGINEERING = 3;
             
             if (Array.isArray(itensV2) && itensV2.length >= MIN_V2_ITEMS_FOR_ENGINEERING) {
                 console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING})`);

@@ -328,9 +328,42 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             } else if (data.source === 'pending_background_job') {
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
-                        <Loader2 size={14} className="spin" /> {data.message}
+                        <Loader2 size={14} className="spin" /> {data.pendingJob?.progressMsg || data.message}
                     </span>
                 );
+                // Auto-poll: check job status every 5s and re-extract when done
+                if (data.pendingJob?.jobId) {
+                    const pollJob = async () => {
+                        const jobId = data.pendingJob.jobId;
+                        let attempts = 0;
+                        const maxAttempts = 60; // 5 minutes max
+                        const poll = setInterval(async () => {
+                            attempts++;
+                            if (attempts > maxAttempts) { clearInterval(poll); return; }
+                            try {
+                                const jobRes = await fetch(`/api/analyze-edital/jobs/${jobId}`, { headers: hdrs() });
+                                if (!jobRes.ok) return;
+                                const job = await jobRes.json();
+                                setSaveMsg(
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
+                                        <Loader2 size={14} className="spin" /> {job.progressMsg || `Extraindo... ${job.progress || 0}%`}
+                                    </span>
+                                );
+                                if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+                                    clearInterval(poll);
+                                    if (job.status === 'COMPLETED') {
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
+                                        // Re-trigger to get the items now available in schemaV2
+                                        setTimeout(() => handleAiPopulate(), 1000);
+                                    } else {
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
+                                    }
+                                }
+                            } catch {}
+                        }, 5000);
+                    };
+                    pollJob();
+                }
             } else { 
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
