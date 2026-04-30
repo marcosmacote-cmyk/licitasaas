@@ -82,6 +82,8 @@ export interface EngineeringConfig {
     objeto: string;
     basesConsideradas: string[];
     dataBase: string;
+    /** Data base específica para cada banco selecionado (ex: SINAPI -> 2026-03) */
+    dataBases?: Record<string, string>;
     regimeOneracao: 'DESONERADO' | 'ONERADO';
     encargosSociais: EncargosSociaisConfig;
     precision: PrecisionConfig;

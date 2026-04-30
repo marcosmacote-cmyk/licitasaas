@@ -94,7 +94,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (searchType === 'item') {
                 const params = new URLSearchParams({ q: searchQuery });
                 if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
-                if (engineeringConfig?.dataBase) params.append('dataBase', engineeringConfig.dataBase);
+                const selectedBase = bases.find(b => b.id === selectedBaseId);
+                const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
+                if (effectiveDate) params.append('dataBase', effectiveDate);
                 url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
             } else {
                 url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(searchQuery)}`;

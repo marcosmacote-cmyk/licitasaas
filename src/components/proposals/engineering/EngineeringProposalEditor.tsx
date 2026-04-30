@@ -456,7 +456,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         try {
             const params = new URLSearchParams({ q: searchQuery });
             if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
-            if (engineeringConfig?.dataBase) params.append('dataBase', engineeringConfig.dataBase);
+            const selectedBase = bases.find(b => b.id === selectedBaseId);
+            const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
+            if (effectiveDate) params.append('dataBase', effectiveDate);
             const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`, { headers: hdrs() });
             const data = await res.json();
             setSearchResults(data.items || []);
@@ -895,7 +897,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
             {/* Tab Content: Planilha */}
             {activeTab === 'planilha' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--space-4)' }}>
 
                 {/* Table */}
                 <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
@@ -1190,17 +1192,33 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 </div>
 
                                 {/* Data Base & Regime */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Data Base</label>
-                                        <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => updateEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }} />
-                                    </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Regime de Desoneração</label>
                                         <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => updateEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}>
                                             <option value="DESONERADO">Desonerado</option>
                                             <option value="ONERADO">Onerado</option>
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Data Base (Referência Temporal)</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--color-bg-base)', padding: 10, borderRadius: 'var(--radius-md)' }}>
+                                            {engineeringConfig.basesConsideradas.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Nenhuma base selecionada</span>}
+                                            {engineeringConfig.basesConsideradas.map(base => (
+                                                <div key={base} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
+                                                    <input type="month" className="form-input" 
+                                                        value={engineeringConfig.dataBases?.[base] || engineeringConfig.dataBase || ''} 
+                                                        onChange={e => updateEngineeringConfig({
+                                                            ...engineeringConfig, 
+                                                            dataBase: engineeringConfig.dataBase || e.target.value, // fallback global
+                                                            dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
+                                                        })} 
+                                                        style={{ width: 140, fontSize: '0.8rem', padding: '4px 8px' }} 
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
 
