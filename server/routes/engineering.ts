@@ -1419,7 +1419,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-extract-compositions', async (req: any, res: any) => {
     try {
-        const { biddingId, engineeringConfig } = req.body;
+        const { biddingId, engineeringConfig, proposalItems } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId obrigatório' });
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -1441,6 +1441,21 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
 3. Se a base não estiver na lista, ou for uma composição "P" (Própria), categorize com código "N/A" e informe os insumos.`;
         }
 
+        // Build a list of items from the proposal so the AI uses their exact codes
+        let itemsContext = '';
+        const budgetItemCodes: string[] = [];
+        if (Array.isArray(proposalItems) && proposalItems.length > 0) {
+            const compositionItems = proposalItems.filter((it: any) => it.type === 'COMPOSICAO' || it.type === 'INSUMO');
+            if (compositionItems.length > 0) {
+                itemsContext = '\n\n═══════════════════════════════════════════════════════\nITENS DA PLANILHA ORÇAMENTÁRIA (use ESTES códigos nas composições)\n═══════════════════════════════════════════════════════\n';
+                itemsContext += compositionItems.map((it: any) => {
+                    budgetItemCodes.push(it.code || '');
+                    return `- Código: ${it.code || 'N/A'} | Descrição: ${it.description} | Unidade: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}`;
+                }).join('\n');
+                itemsContext += '\n\nIMPORTANTE: Use os códigos EXATOS listados acima (ex: CP-01, CP-02) como "code" de cada composição no JSON de saída. Extraia a composição analítica de CADA item listado acima.';
+            }
+        }
+
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         let result: any = null;
 
@@ -1452,10 +1467,10 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         try {
             const pdfParts = await downloadPncpPdfsForEngineering(biddingId);
             if (pdfParts.length > 0) {
-                console.log(`[Engineering AI-Compositions] 📄 ${pdfParts.length} PDFs prontos para extração multimodal de composições`);
+                console.log(`[Engineering AI-Compositions] 📄 ${pdfParts.length} PDFs prontos para extração multimodal de composições (${budgetItemCodes.length} itens contextuais)`);
                 result = await callGeminiWithRetry(ai.models, {
                     model: 'gemini-2.5-flash',
-                    contents: [{ role: 'user', parts: [...pdfParts, { text: COMPOSITION_EXTRACTION_USER_INSTRUCTION }] }],
+                    contents: [{ role: 'user', parts: [...pdfParts, { text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + itemsContext }] }],
                     config: {
                         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
                         temperature: 0.15,

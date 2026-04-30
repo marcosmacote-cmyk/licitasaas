@@ -390,8 +390,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setIsExtractingComps(true);
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições do projeto básico via IA...</span>);
         try {
+            // Send current items so the AI uses their exact codes (CP-01, CP-02...)
+            const proposalItems = items.filter(it => it.type === 'COMPOSICAO' || it.type === 'INSUMO').map(it => ({
+                code: it.code, description: it.description, unit: it.unit, quantity: it.quantity, type: it.type,
+            }));
             const res = await fetch('/api/engineering/ai-extract-compositions', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, proposalItems })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
