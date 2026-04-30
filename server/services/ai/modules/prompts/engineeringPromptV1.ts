@@ -214,8 +214,8 @@ REGRAS FINAIS
 - NÃO omita itens — extraia TODOS, mesmo sem preço
 - ETAPAS e SUBETAPAS DEVEM ter quantity=0 e unitCost=0
 - Composições PRÓPRIAS DEVEM ter o campo "insumos" quando possível
-- Se o documento mencionar serviços como objeto da licitação mas sem planilha detalhada,
-  crie um item para CADA serviço principal mencionado como COMPOSICAO
+- Se você NÃO ENCONTRAR uma planilha orçamentária detalhada com itens e preços, RETORNE UM ARRAY VAZIO [].
+- NUNCA invente itens genéricos baseados no objeto do edital.
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 `;
 
