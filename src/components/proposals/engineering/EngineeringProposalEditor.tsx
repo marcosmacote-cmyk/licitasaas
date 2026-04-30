@@ -354,7 +354,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     if (job.status === 'COMPLETED') {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
                                         // Re-trigger to get the items now available in schemaV2
-                                        setTimeout(() => handleAiPopulate(), 1000);
+                                        setTimeout(() => handleExtractAI(), 1000);
                                     } else {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
                                     }
@@ -521,7 +521,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             const data = await res.json();
             
             // Auto-apply base prices
-            const syncedItems = (Array.isArray(data.items) ? data.items : items).map(it => {
+            const syncedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
                 if (it.priceAudit?.matchedUnitCost && it.priceAudit.matchedUnitCost > 0) {
                     return { ...it, unitCost: it.priceAudit.matchedUnitCost, priceOrigin: 'BASE' as const };
                 }
