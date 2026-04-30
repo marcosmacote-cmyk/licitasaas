@@ -158,7 +158,24 @@ async function discoverPdfLinks(years: number[]): Promise<CaernPdfEntry[]> {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Download PDF and try to extract table data
+// Known units in CAERN price tables
+// ═══════════════════════════════════════════════════════════
+const KNOWN_UNITS = new Set([
+  'UN', 'M', 'M2', 'M²', 'M3', 'M³', 'KG', 'L', 'CJ', 'VB', 'GB', 'PC', 'H',
+  'MÊS', 'MES', 'DIA', 'KM', 'PAR', 'JG', 'BD', 'GL', 'CX', 'TB', 'SC', 'LT',
+  'TN', 'TF', 'CH', 'CM', 'T', 'KWH', 'HA', 'CHP', 'CHI', 'MJ', 'CONJ',
+]);
+
+// ═══════════════════════════════════════════════════════════
+// Download PDF and extract table data using state machine
+// PDF text format (each field on a separate line):
+//   94660                  ← code (3-6 digit number)
+//   ADAPTADOR CURTO...     ← description line 1
+//   DN 40 MM X 1 1/4"...  ← description continuation
+//   FORNECIMENTO E...      ← description continuation
+//   UN                     ← unit
+//   7,63                   ← price with desoneração
+//   7,38                   ← price without desoneração
 // ═══════════════════════════════════════════════════════════
 async function downloadAndParsePdf(url: string): Promise<{ items: { code: string; description: string; unit: string; price: number; type: string }[]; rawText: string }> {
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
@@ -178,33 +195,115 @@ async function downloadAndParsePdf(url: string): Promise<{ items: { code: string
     // Try pdf-parse
     let pdfParse: any;
     try { pdfParse = require('pdf-parse'); } catch {
-      console.log(`[CAERN Crawler] ⚠️ pdf-parse não disponível, salvando PDF sem parsing`);
+      console.log(`[CAERN Crawler] ⚠️ pdf-parse não disponível`);
       return { items: [], rawText: '' };
     }
 
     const pdfData = await pdfParse(buffer);
-    const text = pdfData.text || '';
+    const text: string = pdfData.text || '';
+    const lines: string[] = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
-    // Try to extract structured data from PDF text
-    // CAERN PDFs typically have format: CÓDIGO | DESCRIÇÃO | UNIDADE | PREÇO
-    const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
+    // State machine parser
+    type State = 'SEEK_CODE' | 'READ_DESC' | 'READ_UNIT' | 'READ_PRICE1' | 'READ_PRICE2';
+    let state: State = 'SEEK_CODE';
+    let curCode = '';
+    let curDesc: string[] = [];
+    let curUnit = '';
+    let descLineCount = 0;
 
-    for (const line of lines) {
-      // Pattern: starts with a code (numbers, dots, dashes), followed by description, unit, price
-      // Example: "01.001.001  ESCAVAÇÃO MANUAL DE VALA  M3  45,50"
-      const match = line.match(/^(\d[\d./-]{2,20})\s+(.{10,}?)\s+(M[23²³]?|UN|KG|L|M|CJ|VB|GB|PC|H|MÊS|DIA|KM|PAR|JG|FIO|BD|GL|CX|TB|SC|LT|TN|TF|CH|CM)\s+(\d[\d.,]+)\s*$/i);
-      if (match) {
-        items.push({
-          code: match[1].trim(),
-          description: match[2].trim(),
-          unit: match[3].trim().toUpperCase(),
-          price: parseBrPrice(match[4]),
-          type: 'SERVICO',
-        });
+    const isCode = (l: string) => /^\d{3,6}$/.test(l); // 3-6 digit pure number
+    const isUnit = (l: string) => KNOWN_UNITS.has(l.toUpperCase());
+    const isPrice = (l: string) => /^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(l) || /^\d+,\d{2}$/.test(l);
+    // Skip header/footer lines
+    const isHeaderLine = (l: string) => /^(CÓDIGO|DESCRIÇÃO|UNIDADE|PREÇO|ITEM|BANCO DE PREÇOS|COMPOSIÇÕES|TABELA|PÁG|PAG|CAERN|JANEIRO|FEVEREIRO|MARÇO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)/i.test(l);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Skip table headers/footers
+      if (isHeaderLine(line)) { state = 'SEEK_CODE'; curDesc = []; continue; }
+
+      switch (state) {
+        case 'SEEK_CODE':
+          if (isCode(line)) {
+            curCode = line;
+            curDesc = [];
+            descLineCount = 0;
+            state = 'READ_DESC';
+          }
+          break;
+
+        case 'READ_DESC':
+          // A description line is text (not a code, not a unit, not a price)
+          if (isUnit(line) && descLineCount > 0) {
+            curUnit = line.toUpperCase();
+            state = 'READ_PRICE1';
+          } else if (isCode(line) && descLineCount > 0) {
+            // New code started before unit — save partial if possible, restart
+            curCode = line;
+            curDesc = [];
+            descLineCount = 0;
+            state = 'READ_DESC';
+          } else if (isPrice(line) && descLineCount > 0) {
+            // Price found without unit — likely missed unit, skip this entry
+            state = 'SEEK_CODE';
+          } else if (line.length > 2) {
+            curDesc.push(line);
+            descLineCount++;
+            // Safety: max 5 description lines
+            if (descLineCount > 5) { state = 'SEEK_CODE'; }
+          }
+          break;
+
+        case 'READ_PRICE1':
+          if (isPrice(line)) {
+            const price = parseBrPrice(line);
+            items.push({
+              code: curCode,
+              description: curDesc.join(' '),
+              unit: curUnit,
+              price,
+              type: 'SERVICO',
+            });
+            state = 'READ_PRICE2'; // expect second price (sem desoneração)
+          } else if (isCode(line)) {
+            // No price — go to new code
+            curCode = line;
+            curDesc = [];
+            descLineCount = 0;
+            state = 'READ_DESC';
+          } else {
+            state = 'SEEK_CODE';
+          }
+          break;
+
+        case 'READ_PRICE2':
+          // Second price (sem desoneração) — just consume it and go to next code
+          if (isPrice(line)) {
+            // We already saved with the first price (com desoneração)
+            state = 'SEEK_CODE';
+          } else if (isCode(line)) {
+            // No second price, but next code already
+            curCode = line;
+            curDesc = [];
+            descLineCount = 0;
+            state = 'READ_DESC';
+          } else {
+            state = 'SEEK_CODE';
+          }
+          break;
       }
     }
 
-    console.log(`[CAERN Crawler] 📊 PDF parseado: ${items.length} itens extraídos de ${lines.length} linhas`);
+    // Log sample for debugging
+    if (items.length > 0) {
+      const sample = items[0];
+      console.log(`[CAERN Crawler] 📊 ${items.length} itens parseados (ex: ${sample.code} | ${sample.description.substring(0, 50)}... | ${sample.unit} | ${sample.price})`);
+    } else {
+      // Diagnostic: show first lines that look like codes
+      const codeLikeLines = lines.filter(l => /^\d{3,6}$/.test(l)).slice(0, 5);
+      console.log(`[CAERN Crawler] 📊 0 itens parseados de ${lines.length} linhas. Possíveis códigos: ${codeLikeLines.join(', ')}`);
+    }
     return { items, rawText: text.substring(0, 500) };
 
   } catch (e: any) {
@@ -358,14 +457,19 @@ export async function syncCaern(options: CaernSyncOptions = {}): Promise<CaernSy
       const pdfUrls: string[] = [];
 
       for (const entry of entries) {
-        // Only process "Banco de Preços" and "Composições" PDFs (skip Encargos Sociais)
-        const isRelevant = entry.title.toLowerCase().includes('banco') ||
-                          entry.title.toLowerCase().includes('composiç') ||
-                          entry.title.toLowerCase().includes('composic') ||
-                          entry.title.toLowerCase().includes('cpu') ||
-                          entry.title.toLowerCase().includes('preço');
+        // Skip irrelevant PDFs: MIV (brand manual), Privacy Policy, generic links
+        const lower = entry.title.toLowerCase();
+        const isIrrelevant = lower.includes('miv') || lower.includes('política') || lower.includes('politica') ||
+                            lower.includes('privacidade') || lower.includes('powered by') ||
+                            lower === 'tabela de preços' || entry.title.length < 5;
+        
+        if (isIrrelevant) {
+          console.log(`[CAERN Crawler] ⏭️ Pulando irrelevante: ${entry.title.substring(0, 60)}`);
+          continue;
+        }
 
-        if (!isRelevant && entry.title.toLowerCase().includes('encargo')) {
+        // Skip Encargos Sociais (not price data)
+        if (lower.includes('encargo') && lower.includes('socia')) {
           console.log(`[CAERN Crawler] ⏭️ Pulando: ${entry.title.substring(0, 60)}`);
           continue;
         }
