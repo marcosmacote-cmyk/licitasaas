@@ -1099,16 +1099,57 @@ router.post('/ai-populate', async (req: any, res: any) => {
             }
 
             // Priority 2: Use V2 itens_licitados if they have enough items
-            // Threshold raised from >1 to >=10 to prevent partial extractions from
-            // being accepted as valid (e.g., 2 of 59 items would pass the old guard)
+            // Guard: V2 items must be real budget items, NOT high-level stages/chapters
             const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
             const MIN_V2_ITEMS_FOR_ENGINEERING = 3;
             
             if (Array.isArray(itensV2) && itensV2.length >= MIN_V2_ITEMS_FOR_ENGINEERING) {
-                console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING})`);
+                // ═══════════════════════════════════════════════════
+                // GUARD ANTI-ETAPA: Detecta se os "itens" são na verdade
+                // etapas/capítulos genéricos do orçamento (ex: "SERVIÇOS PRELIMINARES",
+                // "ADMINISTRAÇÃO", "DEMOLIÇÕES"). Etapas não têm códigos técnicos
+                // (SINAPI/SEINFRA/ORSE) e usam descrições genéricas curtas.
+                // Se >50% são etapas, rejeita e força extração dedicada.
+                // ═══════════════════════════════════════════════════
+                const STAGE_PATTERNS = [
+                    /^SERVI[CÇ]OS?\s+(PRELIMIN|FINAIS|GERAIS|COMPLEMENTAR|T[EÉ]CNICOS)/i,
+                    /^ADMINISTRA[CÇ][AÃ]O/i,
+                    /^DEMOLI[CÇ][OÕ]ES/i,
+                    /^TRANSPORTE/i,
+                    /^EQUIPAMENTOS?\s+E\s+INSUMOS/i,
+                    /^PINTURA$/i,
+                    /^INSTALA[CÇ][OÕ]ES/i,
+                    /^INFRAESTRUTURA$/i,
+                    /^SUPERESTRUTURA$/i,
+                    /^TERRAPLENAGEM$/i,
+                    /^DRENAGEM$/i,
+                    /^PAVIMENTA[CÇ][AÃ]O$/i,
+                    /^COBERTURA$/i,
+                    /^REVESTIMENTO/i,
+                    /^ALVENARIA/i,
+                    /^FUNDA[CÇ][OÕ]ES/i,
+                    /^ESQUADRIAS/i,
+                    /^LIMPEZA\s+(FINAL|GERAL|DA\s+OBRA)/i,
+                    /^(M[AÃ]O\s+DE\s+OBRA|ENCARGOS)/i,
+                ];
                 
-                const items = await mapV2ToEngineering(itensV2, engineeringConfig);
-                return res.json({ items, source: 'v2_itens_licitados', count: items.length });
+                const stageCount = itensV2.filter((item: any) => {
+                    const desc = (item.description || '').trim();
+                    // Short generic descriptions without technical codes are likely stages
+                    const hasCode = /\b\d{4,6}(\/\d+)?\b/.test(desc) || /\b[CI]\d{3,5}\b/i.test(desc);
+                    if (hasCode) return false;
+                    return STAGE_PATTERNS.some(p => p.test(desc)) || desc.split(/\s+/).length <= 3;
+                }).length;
+                
+                const stageRatio = stageCount / itensV2.length;
+                
+                if (stageRatio > 0.5) {
+                    console.log(`[Engineering AI-Populate] ⚠️ GUARD ANTI-ETAPA: ${stageCount}/${itensV2.length} itens (${Math.round(stageRatio * 100)}%) parecem etapas/capítulos. Rejeitando V2 e forçando extração dedicada.`);
+                } else {
+                    console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING}, ${stageCount} etapas detectadas)`);
+                    const items = await mapV2ToEngineering(itensV2, engineeringConfig);
+                    return res.json({ items, source: 'v2_itens_licitados', count: items.length });
+                }
             }
 
             console.log(`[Engineering AI-Populate] ⚠️ Dados V2 insuficientes (engBudget=${engBudgetItems?.length || 0}, itensV2=${itensV2?.length || 0}).`);
@@ -1390,26 +1431,6 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
             return res.status(404).json({ error: 'Análise IA não encontrada para este processo' });
         }
 
-        // Build extraction text from all available sources
-        const parts: string[] = [];
-        if (bidding.aiAnalysis.biddingItems) parts.push(bidding.aiAnalysis.biddingItems);
-        if (bidding.aiAnalysis.requiredDocuments) parts.push(bidding.aiAnalysis.requiredDocuments);
-        if (bidding.aiAnalysis.pricingConsiderations) parts.push(bidding.aiAnalysis.pricingConsiderations);
-        if (bidding.aiAnalysis.fullSummary) parts.push(bidding.aiAnalysis.fullSummary);
-
-        // Also check schemaV2 for structured composition data
-        const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
-        if (schemaV2?.proposal_analysis?.itens_licitados) {
-            parts.push('ITENS LICITADOS (estruturados):\n' + JSON.stringify(schemaV2.proposal_analysis.itens_licitados, null, 2));
-        }
-
-        const extractionText = parts.join('\n\n---\n\n');
-        if (extractionText.length < 50) {
-            return res.status(400).json({ error: 'Texto insuficiente para extração de composições' });
-        }
-
-        console.log(`[Engineering AI-Compositions] 🔬 Extraindo composições de ${extractionText.length} chars`);
-
         const { COMPOSITION_EXTRACTION_SYSTEM_PROMPT, COMPOSITION_EXTRACTION_USER_INSTRUCTION } = await import('../services/ai/modules/prompts/engineeringCompositionPrompt');
 
         let systemPrompt = COMPOSITION_EXTRACTION_SYSTEM_PROMPT;
@@ -1421,18 +1442,74 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         }
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{
-                role: 'user',
-                parts: [{ text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + '\n\nDOCUMENTO:\n' + extractionText.slice(0, 120000) }]
-            }],
-            config: {
-                systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
-                temperature: 0.15,
-                maxOutputTokens: 65536,
+        let result: any = null;
+
+        // ═══════════════════════════════════════════════════════
+        // MODO 1 (PRIMÁRIO): Extração multimodal via PDFs do PNCP
+        // CPUs estão nos anexos (planilha orçamentária, projeto básico),
+        // NÃO no texto narrativo do edital.
+        // ═══════════════════════════════════════════════════════
+        try {
+            const pdfParts = await downloadPncpPdfsForEngineering(biddingId);
+            if (pdfParts.length > 0) {
+                console.log(`[Engineering AI-Compositions] 📄 ${pdfParts.length} PDFs prontos para extração multimodal de composições`);
+                result = await callGeminiWithRetry(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: [{ role: 'user', parts: [...pdfParts, { text: COMPOSITION_EXTRACTION_USER_INSTRUCTION }] }],
+                    config: {
+                        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                        temperature: 0.15,
+                        maxOutputTokens: 65536,
+                    }
+                });
+            } else {
+                console.log(`[Engineering AI-Compositions] ⚠️ Nenhum PDF disponível para extração multimodal`);
             }
-        });
+        } catch (pdfErr: any) {
+            console.warn(`[Engineering AI-Compositions] ⚠️ Falha no modo PDF multimodal: ${pdfErr.message}`);
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // MODO 2 (FALLBACK): Texto do aiAnalysis + schemaV2
+        // Usado somente se o modo PDF não conseguiu extrair nada
+        // ═══════════════════════════════════════════════════════
+        if (!result) {
+            const parts: string[] = [];
+            if (bidding.aiAnalysis.biddingItems) parts.push(bidding.aiAnalysis.biddingItems);
+            if (bidding.aiAnalysis.requiredDocuments) parts.push(bidding.aiAnalysis.requiredDocuments);
+            if (bidding.aiAnalysis.pricingConsiderations) parts.push(bidding.aiAnalysis.pricingConsiderations);
+            if (bidding.aiAnalysis.fullSummary) parts.push(bidding.aiAnalysis.fullSummary);
+
+            const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
+            if (schemaV2?.proposal_analysis?.itens_licitados) {
+                parts.push('ITENS LICITADOS (estruturados):\n' + JSON.stringify(schemaV2.proposal_analysis.itens_licitados, null, 2));
+            }
+            // Also include _engineeringBudgetItems if available
+            if (schemaV2?._engineeringBudgetItems) {
+                parts.push('ITENS DE ENGENHARIA (extração dedicada):\n' + JSON.stringify(schemaV2._engineeringBudgetItems, null, 2));
+            }
+
+            const extractionText = parts.join('\n\n---\n\n');
+            if (extractionText.length >= 50) {
+                console.log(`[Engineering AI-Compositions] 📝 Fallback texto: ${extractionText.length} chars`);
+                result = await callGeminiWithRetry(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: [{
+                        role: 'user',
+                        parts: [{ text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + '\n\nDOCUMENTO:\n' + extractionText.slice(0, 120000) }]
+                    }],
+                    config: {
+                        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                        temperature: 0.15,
+                        maxOutputTokens: 65536,
+                    }
+                });
+            }
+        }
+
+        if (!result) {
+            return res.status(400).json({ error: 'Não foi possível extrair composições: sem PDFs nem texto disponíveis' });
+        }
 
         const rawResponse = result?.text || '';
         const parsed = robustJsonParse(rawResponse);

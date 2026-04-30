@@ -75,6 +75,13 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
+    // ── Auto-selecionar empresa quando há apenas 1 cadastrada ──
+    useEffect(() => {
+        if (!selectedCompanyId && companies.length === 1) {
+            setSelectedCompanyId(companies[0].id);
+        }
+    }, [companies, selectedCompanyId]);
+
     // ── Inicializar dados de assinatura/banco quando empresa ou processo muda ──
     useEffect(() => {
         if (!selectedCompanyId) return;
