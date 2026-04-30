@@ -1,17 +1,19 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { prisma } from '../../db';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function extractBdiFromBidding(biddingId: string): Promise<any | null> {
-    const bidding = await prisma.biddingProcess.findUnique({
-        where: { id: biddingId },
-        include: { aiAnalysis: true }
+    const chunks = await prisma.documentChunk.findMany({
+        where: { biddingProcessId: biddingId },
+        orderBy: { id: 'asc' }
     });
 
-    if (!bidding || !bidding.aiAnalysis?.fullEditalText) {
-        throw new Error('Texto do edital não disponível para extração de BDI.');
+    if (!chunks || chunks.length === 0) {
+        throw new Error('Texto do edital não indexado. Analise o edital primeiro para extrair o BDI.');
     }
 
-    const text = bidding.aiAnalysis.fullEditalText;
+    const text = chunks.map(c => c.content).join('\n\n');
     const chunk = text.substring(0, 150000); // Send up to 150k chars of the text
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
