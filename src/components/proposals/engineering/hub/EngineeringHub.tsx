@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Database, UploadCloud, RefreshCw, Layers, MapPin, Calendar, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter } from 'lucide-react';
+import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter } from 'lucide-react';
 import { CompositionEditor } from '../CompositionEditor';
 
 interface EngDatabase {
@@ -318,9 +318,40 @@ export function EngineeringHub() {
         }
     };
 
+    // ── Brazilian state/region mapping ──
+    const UF_NAMES: Record<string, string> = {
+        AC: 'Acre', AL: 'Alagoas', AM: 'Amazonas', AP: 'Amapá', BA: 'Bahia',
+        CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
+        MA: 'Maranhão', MG: 'Minas Gerais', MS: 'Mato Grosso do Sul', MT: 'Mato Grosso',
+        PA: 'Pará', PB: 'Paraíba', PE: 'Pernambuco', PI: 'Piauí', PR: 'Paraná',
+        RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RO: 'Rondônia', RR: 'Roraima',
+        RS: 'Rio Grande do Sul', SC: 'Santa Catarina', SE: 'Sergipe', SP: 'São Paulo',
+        TO: 'Tocantins',
+    };
+    const MACRO_REGIONS: Record<string, string[]> = {
+        'Norte': ['AC', 'AM', 'AP', 'PA', 'RO', 'RR', 'TO'],
+        'Nordeste': ['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'],
+        'Centro-Oeste': ['DF', 'GO', 'MS', 'MT'],
+        'Sudeste': ['ES', 'MG', 'RJ', 'SP'],
+        'Sul': ['PR', 'RS', 'SC'],
+    };
+
+    // Extract the 2-letter UF from raw uf field: "AC-RBO" → "AC", "MG-R1" → "MG", "Nacional" → "Nacional"
+    const extractUF = (raw: string | null): string => {
+        if (!raw) return 'Nacional';
+        const uf = raw.substring(0, 2).toUpperCase();
+        return UF_NAMES[uf] ? uf : 'Nacional';
+    };
+
     // ── Filtered + Grouped bases ──
-    const allStates = useMemo(() => [...new Set(bases.map(b => b.uf || 'Nacional'))].sort(), [bases]);
+    const allStates = useMemo(() => [...new Set(bases.map(b => extractUF(b.uf)))].sort(), [bases]);
     const allSources = useMemo(() => [...new Set(bases.map(b => b.name))].sort((a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b)), [bases]);
+
+    // Macro-regions present in bases
+    const presentRegions = useMemo(() => {
+        const stateSet = new Set(allStates);
+        return Object.entries(MACRO_REGIONS).filter(([, ufs]) => ufs.some(uf => stateSet.has(uf)));
+    }, [allStates]);
 
     const toggleFilter = (arr: string[], val: string, setter: (v: string[]) => void) => {
         setter(arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val]);
@@ -331,34 +362,61 @@ export function EngineeringHub() {
         return bases.filter(b => {
             if (b.type === 'PROPRIA' || b.name === 'PROPRIA') return false;
             if (filterSources.length > 0 && !filterSources.includes(b.name)) return false;
-            if (filterStates.length > 0 && !filterStates.includes(b.uf || 'Nacional')) return false;
+            if (filterStates.length > 0 && !filterStates.includes(extractUF(b.uf))) return false;
             if (filterRegime.length > 0) {
                 const regime = b.payrollExemption ? 'Desonerado' : 'Onerado';
                 if (!filterRegime.includes(regime)) return false;
             }
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
-                const searchable = `${b.name} ${b.uf || ''} ${b.version || ''} ${b.referenceMonth}/${b.referenceYear}`.toLowerCase();
+                const uf = extractUF(b.uf);
+                const searchable = `${b.name} ${b.uf || ''} ${uf} ${UF_NAMES[uf] || ''} ${b.version || ''} ${b.referenceMonth}/${b.referenceYear}`.toLowerCase();
                 if (!searchable.includes(q)) return false;
             }
             return true;
         });
     }, [bases, filterSources, filterStates, filterRegime, searchQuery]);
 
+    // Group by STATE (2-letter UF) instead of by source
+    const stateGroups = useMemo(() => {
+        const map: Record<string, EngDatabase[]> = {};
+        for (const b of filteredBases) {
+            const uf = extractUF(b.uf);
+            if (!map[uf]) map[uf] = [];
+            map[uf].push(b);
+        }
+        // Sort within each state: source order first, then date desc, then regime
+        Object.values(map).forEach(group => group.sort((a, b) => {
+            const sA = SOURCE_ORDER.indexOf(a.name);
+            const sB = SOURCE_ORDER.indexOf(b.name);
+            if (sA !== sB) return sA - sB;
+            const dA = (a.referenceYear || 0) * 100 + (a.referenceMonth || 0);
+            const dB = (b.referenceYear || 0) * 100 + (b.referenceMonth || 0);
+            if (dB !== dA) return dB - dA;
+            return (a.payrollExemption ? 1 : 0) - (b.payrollExemption ? 1 : 0);
+        }));
+        // Sort states: Nacional first, then alphabetical by UF
+        const sorted = Object.entries(map).sort(([a], [b]) => {
+            if (a === 'Nacional') return -1;
+            if (b === 'Nacional') return 1;
+            return a.localeCompare(b);
+        });
+        return sorted;
+    }, [filteredBases]);
+
+    // Legacy groups by source (kept for backward compat if needed)
     const groups = useMemo(() => {
         const map: Record<string, EngDatabase[]> = {};
         for (const b of filteredBases) {
             if (!map[b.name]) map[b.name] = [];
             map[b.name].push(b);
         }
-        // Sort within groups: date desc, then regime
         Object.values(map).forEach(group => group.sort((a, b) => {
             const dA = (a.referenceYear || 0) * 100 + (a.referenceMonth || 0);
             const dB = (b.referenceYear || 0) * 100 + (b.referenceMonth || 0);
             if (dB !== dA) return dB - dA;
             return (a.payrollExemption ? 1 : 0) - (b.payrollExemption ? 1 : 0);
         }));
-        // Sort groups by SOURCE_ORDER
         const sorted = Object.entries(map).sort(([a], [b]) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b));
         return sorted;
     }, [filteredBases]);
@@ -574,7 +632,7 @@ export function EngineeringHub() {
                             { icon: <Database size={20} color="var(--color-primary)" />, val: filteredBases.length, label: 'Bases Filtradas' },
                             { icon: <Hash size={20} color="#059669" />, val: filteredBases.reduce((s, b) => s + (b.itemCount || 0), 0).toLocaleString('pt-BR'), label: 'Insumos' },
                             { icon: <Layers size={20} color="#7c3aed" />, val: filteredBases.reduce((s, b) => s + (b.compositionCount || 0), 0).toLocaleString('pt-BR'), label: 'Composições' },
-                            { icon: <Calendar size={20} color="#f59e0b" />, val: groups.length, label: 'Catálogos' },
+                            { icon: <MapPin size={20} color="#f59e0b" />, val: stateGroups.length, label: 'Estados' },
                         ].map((s, i) => (
                             <div key={i} style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 150 }}>
                                 {s.icon}
@@ -589,34 +647,56 @@ export function EngineeringHub() {
 
                 {/* Filter bar */}
                 {bases.length > 0 && (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20, padding: '12px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                        <Filter size={16} color="var(--color-text-tertiary)" />
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {allSources.filter(s => s !== 'PROPRIA').map(src => {
-                                const active = filterSources.includes(src);
-                                const c = SOURCE_COLORS[src] || '#64748b';
-                                return <button key={src} onClick={() => toggleFilter(filterSources, src, setFilterSources)} style={{ padding: '4px 12px', borderRadius: 20, border: active ? `2px solid ${c}` : '1px solid var(--color-border)', background: active ? `${c}18` : 'transparent', color: active ? c : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s' }}>{src}</button>;
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, padding: '14px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                        {/* Row 1: Sources + Regime + Search */}
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Filter size={16} color="var(--color-text-tertiary)" />
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {allSources.filter(s => s !== 'PROPRIA').map(src => {
+                                    const active = filterSources.includes(src);
+                                    const c = SOURCE_COLORS[src] || '#64748b';
+                                    return <button key={src} onClick={() => toggleFilter(filterSources, src, setFilterSources)} style={{ padding: '4px 12px', borderRadius: 20, border: active ? `2px solid ${c}` : '1px solid var(--color-border)', background: active ? `${c}18` : 'transparent', color: active ? c : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s' }}>{src}</button>;
+                                })}
+                            </div>
+                            <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
+                            {['Onerado', 'Desonerado'].map(r => {
+                                const active = filterRegime.includes(r);
+                                const ic = r === 'Desonerado' ? '#f59e0b' : '#059669';
+                                return <button key={r} onClick={() => toggleFilter(filterRegime, r, setFilterRegime)} style={{ padding: '4px 10px', borderRadius: 20, border: active ? `2px solid ${ic}` : '1px solid var(--color-border)', background: active ? `${ic}15` : 'transparent', color: active ? ic : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>{r === 'Desonerado' ? <ShieldOff size={12} /> : <Shield size={12} />}{r}</button>;
                             })}
+                            <div style={{ flex: 1 }} />
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <Search size={14} style={{ position: 'absolute', left: 10, color: 'var(--color-text-tertiary)' }} />
+                                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar base..." style={{ padding: '6px 10px 6px 30px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', width: 180, background: 'var(--color-bg-base)' }} />
+                            </div>
+                            {hasFilters && <button onClick={() => { setFilterSources([]); setFilterStates([]); setFilterRegime([]); setSearchQuery(''); }} style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #ef444460', background: '#ef444410', color: '#ef4444', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} />Limpar</button>}
                         </div>
-                        <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {allStates.filter(s => s !== 'Nacional' || allStates.length <= 4).map(st => {
-                                const active = filterStates.includes(st);
-                                return <button key={st} onClick={() => toggleFilter(filterStates, st, setFilterStates)} style={{ padding: '4px 10px', borderRadius: 20, border: active ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: active ? 'rgba(37,99,235,0.1)' : 'transparent', color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>{st}</button>;
+                        {/* Row 2: States grouped by macro-region */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start', borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
+                            <MapPin size={14} color="var(--color-text-tertiary)" style={{ marginTop: 4 }} />
+                            {presentRegions.map(([region, ufs]) => {
+                                const presentUfs = ufs.filter(uf => allStates.includes(uf));
+                                if (presentUfs.length === 0) return null;
+                                const regionActive = presentUfs.some(uf => filterStates.includes(uf));
+                                return (
+                                    <div key={region} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: regionActive ? 'var(--color-primary)' : 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{region}</span>
+                                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                            {presentUfs.map(uf => {
+                                                const active = filterStates.includes(uf);
+                                                return <button key={uf} onClick={() => toggleFilter(filterStates, uf, setFilterStates)} style={{ padding: '3px 8px', borderRadius: 6, border: active ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: active ? 'rgba(37,99,235,0.1)' : 'transparent', color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', transition: 'all 0.15s', lineHeight: 1.2 }}>{uf}</button>;
+                                            })}
+                                        </div>
+                                    </div>
+                                );
                             })}
+                            {allStates.includes('Nacional') && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nacional</span>
+                                    <button onClick={() => toggleFilter(filterStates, 'Nacional', setFilterStates)} style={{ padding: '3px 8px', borderRadius: 6, border: filterStates.includes('Nacional') ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: filterStates.includes('Nacional') ? 'rgba(37,99,235,0.1)' : 'transparent', color: filterStates.includes('Nacional') ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer' }}>BR</button>
+                                </div>
+                            )}
                         </div>
-                        <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
-                        {['Onerado', 'Desonerado'].map(r => {
-                            const active = filterRegime.includes(r);
-                            const ic = r === 'Desonerado' ? '#f59e0b' : '#059669';
-                            return <button key={r} onClick={() => toggleFilter(filterRegime, r, setFilterRegime)} style={{ padding: '4px 10px', borderRadius: 20, border: active ? `2px solid ${ic}` : '1px solid var(--color-border)', background: active ? `${ic}15` : 'transparent', color: active ? ic : 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>{r === 'Desonerado' ? <ShieldOff size={12} /> : <Shield size={12} />}{r}</button>;
-                        })}
-                        <div style={{ flex: 1 }} />
-                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <Search size={14} style={{ position: 'absolute', left: 10, color: 'var(--color-text-tertiary)' }} />
-                            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar base..." style={{ padding: '6px 10px 6px 30px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', width: 180, background: 'var(--color-bg-base)' }} />
-                        </div>
-                        {hasFilters && <button onClick={() => { setFilterSources([]); setFilterStates([]); setFilterRegime([]); setSearchQuery(''); }} style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #ef444460', background: '#ef444410', color: '#ef4444', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><X size={12} />Limpar</button>}
                     </div>
                 )}
 
@@ -726,39 +806,41 @@ export function EngineeringHub() {
                         <p>Nenhuma base corresponde aos filtros selecionados.</p>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {groups.map(([name, items]) => {
-                            const color = SOURCE_COLORS[name] || '#64748b';
-                            const isOpen = expandedGroup === name;
-                            const states = [...new Set(items.map(b => b.uf || 'Nacional'))];
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+                        {stateGroups.map(([uf, items]) => {
+                            const isOpen = expandedGroup === uf;
                             const totalItems = items.reduce((s, b) => s + (b.itemCount || 0), 0);
                             const totalComps = items.reduce((s, b) => s + (b.compositionCount || 0), 0);
+                            const sources = [...new Set(items.map(b => b.name))];
+                            const stateName = UF_NAMES[uf] || uf;
+                            const primaryColor = SOURCE_COLORS[sources[0]] || '#64748b';
                             return (
-                                <div key={name} style={{ borderRadius: 'var(--radius-lg)', border: `1px solid ${color}30`, overflow: 'hidden', background: 'var(--color-bg-surface)', transition: 'box-shadow 0.2s', boxShadow: isOpen ? `0 4px 20px ${color}15` : '0 1px 4px rgba(0,0,0,0.04)' }}>
-                                    <button onClick={() => setExpandedGroup(isOpen ? null : name)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: `linear-gradient(135deg, ${color}08, ${color}03)`, border: 'none', borderLeft: `4px solid ${color}`, cursor: 'pointer', transition: 'background 0.2s' }}>
-                                        <div style={{ background: `${color}15`, padding: 8, borderRadius: 8, color, display: 'flex' }}><Layers size={20} /></div>
+                                <div key={uf} style={{ borderRadius: 'var(--radius-lg)', border: `1px solid var(--color-border)`, overflow: 'hidden', background: 'var(--color-bg-surface)', transition: 'all 0.2s', boxShadow: isOpen ? `0 4px 20px ${primaryColor}15` : '0 1px 4px rgba(0,0,0,0.04)', gridColumn: isOpen ? '1 / -1' : undefined }}>
+                                    <button onClick={() => setExpandedGroup(isOpen ? null : uf)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: `linear-gradient(135deg, ${primaryColor}06, transparent)`, border: 'none', borderLeft: `4px solid ${primaryColor}`, cursor: 'pointer', transition: 'background 0.2s' }}>
+                                        <div style={{ background: `${primaryColor}12`, padding: 8, borderRadius: 8, display: 'flex' }}><MapPin size={18} color={primaryColor} /></div>
                                         <div style={{ flex: 1, textAlign: 'left' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>{name}</span>
-                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff', background: color, padding: '2px 8px', borderRadius: 10 }}>{items.length}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>{uf === 'Nacional' ? 'Nacional' : `${uf} — ${stateName}`}</span>
+                                                {sources.map(src => <span key={src} style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', background: SOURCE_COLORS[src] || '#64748b', padding: '1px 7px', borderRadius: 8 }}>{src}</span>)}
                                             </div>
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                                {states.join(', ')} • {totalItems.toLocaleString('pt-BR')} insumos • {totalComps.toLocaleString('pt-BR')} composições
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                                                {items.length} bases • {totalItems.toLocaleString('pt-BR')} insumos • {totalComps.toLocaleString('pt-BR')} composições
                                             </div>
                                         </div>
-                                        {isOpen ? <ChevronUp size={20} color="var(--color-text-tertiary)" /> : <ChevronDown size={20} color="var(--color-text-tertiary)" />}
+                                        {isOpen ? <ChevronUp size={18} color="var(--color-text-tertiary)" /> : <ChevronDown size={18} color="var(--color-text-tertiary)" />}
                                     </button>
                                     {isOpen && (
-                                        <div style={{ borderTop: `1px solid ${color}20` }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                        <div style={{ borderTop: '1px solid var(--color-border)' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                                                 <thead>
                                                     <tr style={{ background: 'var(--color-bg-base)' }}>
-                                                        <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>UF / Região</th>
-                                                        <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>Data-base</th>
-                                                        <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>Regime</th>
-                                                        <th style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>Insumos</th>
-                                                        <th style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>Composições</th>
-                                                        <th style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.78rem' }}>Status</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Fonte</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Região</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Data-base</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Regime</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Insumos</th>
+                                                        <th style={{ padding: '8px 14px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Composições</th>
+                                                        <th style={{ padding: '8px 6px', textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>⬤</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -767,18 +849,20 @@ export function EngineeringHub() {
                                                         const hasData = (b.itemCount || 0) + (b.compositionCount || 0) > 0;
                                                         const regime = ['SINAPI', 'SEINFRA', 'SICOR'].includes(b.name) ? (b.payrollExemption ? 'Desonerado' : 'Onerado') : 'Único';
                                                         const regColor = b.payrollExemption ? '#f59e0b' : '#059669';
+                                                        const srcColor = SOURCE_COLORS[b.name] || '#64748b';
                                                         return (
-                                                            <tr key={b.id} style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'var(--color-bg-base)', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = `${color}08`} onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--color-bg-base)'}>
-                                                                <td style={{ padding: '10px 16px', fontWeight: 600 }}>{b.uf || 'Nacional'}</td>
-                                                                <td style={{ padding: '10px 16px' }}>{ver}</td>
-                                                                <td style={{ padding: '10px 16px' }}>
-                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 600, color: regColor, background: `${regColor}12`, padding: '2px 8px', borderRadius: 10 }}>
-                                                                        {b.payrollExemption ? <ShieldOff size={11} /> : <Shield size={11} />}{regime}
+                                                            <tr key={b.id} style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'var(--color-bg-base)' }}>
+                                                                <td style={{ padding: '8px 14px' }}><span style={{ fontWeight: 700, color: srcColor, fontSize: '0.8rem' }}>{b.name}</span></td>
+                                                                <td style={{ padding: '8px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{b.uf || '—'}</td>
+                                                                <td style={{ padding: '8px 14px' }}>{ver}</td>
+                                                                <td style={{ padding: '8px 14px' }}>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.74rem', fontWeight: 600, color: regColor, background: `${regColor}12`, padding: '2px 7px', borderRadius: 8 }}>
+                                                                        {b.payrollExemption ? <ShieldOff size={10} /> : <Shield size={10} />}{regime}
                                                                     </span>
                                                                 </td>
-                                                                <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600 }}>{(b.itemCount || 0).toLocaleString('pt-BR')}</td>
-                                                                <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600 }}>{(b.compositionCount || 0).toLocaleString('pt-BR')}</td>
-                                                                <td style={{ padding: '10px 8px', textAlign: 'center' }}>{hasData ? <CheckCircle2 size={16} color="#059669" /> : <AlertCircle size={16} color="#f59e0b" />}</td>
+                                                                <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 600 }}>{(b.itemCount || 0).toLocaleString('pt-BR')}</td>
+                                                                <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 600 }}>{(b.compositionCount || 0).toLocaleString('pt-BR')}</td>
+                                                                <td style={{ padding: '8px 6px', textAlign: 'center' }}>{hasData ? <CheckCircle2 size={14} color="#059669" /> : <AlertCircle size={14} color="#f59e0b" />}</td>
                                                             </tr>
                                                         );
                                                     })}
