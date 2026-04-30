@@ -1,22 +1,23 @@
 /**
  * SBC Crawler — Informativo SBC (informativosbc.com.br)
- * Strategy: Puppeteer login → extract session guid → HTTP POST scrape → parse HTML tables
- * 
- * SBC uses a Magic Web Gateway (MGW) with session-based GUIDs.
- * All data queries go through POST to /mgw with hidden fields MGWCHD, wlapp, guid.
- * 
- * Data structure:
- *   - Insumos: Código, Descrição, Unidade, Preço Unit.
- *   - Composições: Código, Descrição, Unidade, Preço Unit. (with drill-down analytical)
- *   - 30 regions (praças) across Brazil
- *   - Monthly data references (DTBASE in YYYYMMDD format)
+ * Strategy: FULL Puppeteer end-to-end scraping
+ *
+ * The SBC portal uses Magic Web Gateway (MGW) with strict server-side sessions.
+ * HTTP-only POST with extracted GUID does NOT work — the session is tied to the
+ * Puppeteer browser instance. All operations must happen within the same browser.
+ *
+ * Flow:
+ *   1. Puppeteer login → dashboard
+ *   2. Navigate to Insumos page
+ *   3. Select region (LOC dropdown) + date (DTBASE dropdown)
+ *   4. Leave keyword empty → click OK → parse HTML table
+ *   5. Repeat for Composições
+ *   6. Persist all items to database
  */
-import * as cheerio from 'cheerio';
 import { prisma } from '../../lib/prisma';
 
 // ═══════════════════════════════════════════════════════════
 // SBC Region codes → UF mapping
-// Each region is a city/market (praça), mapped to the state
 // ═══════════════════════════════════════════════════════════
 const SBC_REGIONS: { code: string; name: string; uf: string }[] = [
   { code: 'AJU', name: 'Aracajú', uf: 'SE' },
@@ -51,8 +52,6 @@ const SBC_REGIONS: { code: string; name: string; uf: string }[] = [
   { code: 'VTA', name: 'Vitória', uf: 'ES' },
 ];
 
-const MGW_URL = 'https://informativosbc.com.br/mgw';
-
 // ═══════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════
@@ -72,83 +71,70 @@ interface SyncResult {
   compositionCount?: number;
 }
 
+function parseBrazilianPrice(text: string): number {
+  if (!text) return 0;
+  const cleaned = text.replace(/[^\d.,\-]/g, '');
+  if (!cleaned) return 0;
+  if (cleaned.includes(',') && (!cleaned.includes('.') || cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.'))) {
+    return parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  return parseFloat(cleaned.replace(/,/g, '')) || 0;
+}
+
 // ═══════════════════════════════════════════════════════════
-// Step 1: Login via Puppeteer and extract session GUID + cookies
+// Launch Puppeteer browser
 // ═══════════════════════════════════════════════════════════
-async function loginAndGetSession(email: string, password: string): Promise<{ guid: string; cookies: string } | null> {
+async function launchBrowser(): Promise<any> {
   let puppeteer: any;
   try {
     puppeteer = require('puppeteer-core');
   } catch (e) {
     try { puppeteer = require('puppeteer'); } catch (e2) {
-      console.error('[SBC Crawler] Puppeteer not available');
-      return null;
+      throw new Error('Puppeteer not available');
     }
   }
 
   const chromePaths = [
-    '/usr/bin/chromium-browser',  // Alpine/Railway
+    '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome',
     process.env.CHROME_PATH,
   ].filter(Boolean);
 
-  let browser: any = null;
   for (const chromePath of chromePaths) {
     try {
-      browser = await puppeteer.launch({
-        executablePath: chromePath,
+      return await puppeteer.launch({
+        executablePath: chromePath as string,
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
       });
-      break;
     } catch (e) { continue; }
   }
+  throw new Error('Could not launch Puppeteer — no Chrome/Chromium found');
+}
 
-  if (!browser) {
-    console.error('[SBC Crawler] ❌ Could not launch Puppeteer');
-    return null;
-  }
-
+// ═══════════════════════════════════════════════════════════
+// Login to SBC portal
+// ═══════════════════════════════════════════════════════════
+async function loginToSbc(page: any, email: string, password: string): Promise<boolean> {
   try {
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-
-    // Navigate to login page
     await page.goto('https://informativosbc.com.br/index1.html', { waitUntil: 'networkidle2', timeout: 30000 });
     await new Promise(r => setTimeout(r, 2000));
 
-    // Fill login form - find the email/password fields
-    // The login form uses standard input fields
-    const frames = page.frames();
-    let loginFrame = page;
+    // The login form may be in the main page or in an iframe
+    const targetFrame = await findFrameWithLogin(page);
 
-    // Try to find the login form in iframes or main frame
-    for (const frame of frames) {
-      try {
-        const hasLoginForm = await frame.evaluate(() => {
-          const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]');
-          return inputs.length >= 2;
-        });
-        if (hasLoginForm) {
-          loginFrame = frame;
-          break;
-        }
-      } catch (e) { continue; }
-    }
-
-    // Type credentials
-    await loginFrame.evaluate((e: string, p: string) => {
+    // Fill credentials
+    await targetFrame.evaluate((e: string, p: string) => {
       const inputs = document.querySelectorAll('input');
-      let emailField: any = null;
-      let passField: any = null;
+      let emailField: HTMLInputElement | null = null;
+      let passField: HTMLInputElement | null = null;
       for (const inp of inputs) {
         const type = inp.type.toLowerCase();
         const name = (inp.name || '').toLowerCase();
-        const placeholder = (inp.placeholder || '').toLowerCase();
         if (type === 'password' || name.includes('senha') || name.includes('pass')) {
           passField = inp;
-        } else if (type === 'text' || type === 'email' || name.includes('email') || name.includes('user') || name.includes('login')) {
+        } else if ((type === 'text' || type === 'email') && !emailField) {
           emailField = inp;
         }
       }
@@ -158,9 +144,9 @@ async function loginAndGetSession(email: string, password: string): Promise<{ gu
 
     await new Promise(r => setTimeout(r, 500));
 
-    // Submit the form
-    await loginFrame.evaluate(() => {
-      const btn = document.querySelector('input[type="submit"], button[type="submit"], .ls-btn-primary') as any;
+    // Submit
+    await targetFrame.evaluate(() => {
+      const btn = document.querySelector('input[type="submit"], button[type="submit"], .ls-btn-primary, button.btn') as HTMLElement;
       if (btn) btn.click();
       else {
         const form = document.querySelector('form');
@@ -168,247 +154,284 @@ async function loginAndGetSession(email: string, password: string): Promise<{ gu
       }
     });
 
-    // Wait for navigation after login
+    // Wait for navigation
     await new Promise(r => setTimeout(r, 5000));
 
-    // Now navigate to Insumos to get a page with GUID
-    await page.goto('https://informativosbc.com.br/mgw?MGWCHD=0&wlapp=SBC&trgt=_blank&orgn=insumos1', {
-      waitUntil: 'networkidle2', timeout: 30000
+    // Verify login succeeded by checking for dashboard elements
+    const loggedIn = await page.evaluate(() => {
+      const body = document.body.innerText || '';
+      return body.includes('Conteúdo do Informativo') || body.includes('Insumos') || body.includes('Composições') || body.includes('Sair');
     });
-    await new Promise(r => setTimeout(r, 3000));
 
-    // Extract GUID from the page
-    let guid = '';
-    const allFrames = page.frames();
-    for (const frame of allFrames) {
+    if (loggedIn) {
+      console.log(`[SBC Crawler] ✅ Login bem-sucedido`);
+      return true;
+    }
+
+    // Check in iframes
+    for (const frame of page.frames()) {
       try {
-        const foundGuid = await frame.evaluate(() => {
-          // Look for guid in hidden inputs
-          const input = document.querySelector('input[name="guid"]') as HTMLInputElement;
-          if (input) return input.value;
-          // Look for guid in URL
-          const url = window.location.href;
-          const match = url.match(/guid=([^&]+)/);
-          if (match) return match[1];
-          // Look for guid in any form action
-          const form = document.querySelector('form');
-          if (form) {
-            const action = form.action;
-            const actionMatch = action.match(/guid=([^&]+)/);
-            if (actionMatch) return actionMatch[1];
-          }
-          return '';
+        const found = await frame.evaluate(() => {
+          return document.body.innerText.includes('Conteúdo do Informativo') || document.body.innerText.includes('Composições');
         });
-        if (foundGuid) {
-          guid = foundGuid;
-          break;
+        if (found) {
+          console.log(`[SBC Crawler] ✅ Login bem-sucedido (via iframe)`);
+          return true;
         }
       } catch (e) { continue; }
     }
 
-    // Extract cookies
-    const cookieArray = await page.cookies();
-    const cookies = cookieArray.map((c: any) => `${c.name}=${c.value}`).join('; ');
-
-    console.log(`[SBC Crawler] ✅ Login OK, guid=${guid ? guid.substring(0, 10) + '...' : 'NOT FOUND'}, cookies=${cookies.length} chars`);
-
-    await browser.close();
-    return guid ? { guid, cookies } : null;
-
+    console.error(`[SBC Crawler] ❌ Login falhou — dashboard não encontrado`);
+    return false;
   } catch (e: any) {
     console.error(`[SBC Crawler] ❌ Login error: ${e.message}`);
-    try { await browser.close(); } catch (_) {}
-    return null;
+    return false;
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// Step 2: Fetch insumos/composições via HTTP POST
-// ═══════════════════════════════════════════════════════════
-async function fetchSbcData(
-  guid: string,
-  cookies: string,
-  type: 'insumos' | 'composicoes',
-  regionCode: string,
-  dtBase: string,
-  keyword: string = ''
-): Promise<ParsedItem[]> {
-  const items: ParsedItem[] = [];
-
-  // Build form data
-  const formData = new URLSearchParams();
-  formData.append('MGWCHD', '0');
-  formData.append('wlapp', 'SBC');
-  formData.append('guid', guid);
-  formData.append('Chave', keyword); // código
-  formData.append('TPFILTRO', '1'); // CONTÉM
-  formData.append('Chave', keyword); // palavra chave (yes, same name twice)
-  formData.append('LOC', regionCode);
-  formData.append('DTBASE', dtBase);
-
-  if (type === 'composicoes') {
-    formData.append('ITENS', 'TODOS');
+async function findFrameWithLogin(page: any): Promise<any> {
+  for (const frame of page.frames()) {
+    try {
+      const has = await frame.evaluate(() => {
+        const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]');
+        return inputs.length >= 2;
+      });
+      if (has) return frame;
+    } catch (e) { continue; }
   }
+  return page;
+}
 
+// ═══════════════════════════════════════════════════════════
+// Scrape Insumos page via Puppeteer
+// Navigate to Insumos → set region/date → click OK → parse table
+// ═══════════════════════════════════════════════════════════
+async function scrapeInsumos(page: any, regionCode: string, dtBase: string): Promise<ParsedItem[]> {
   try {
-    const response = await fetch(MGW_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': cookies,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://informativosbc.com.br/mgw',
-        'Origin': 'https://informativosbc.com.br',
-      },
-      body: formData.toString(),
+    // Navigate to Insumos page
+    await page.goto(`https://informativosbc.com.br/mgw?MGWCHD=0&wlapp=SBC&trgt=_blank&orgn=insumos1`, {
+      waitUntil: 'networkidle2', timeout: 30000
     });
+    await new Promise(r => setTimeout(r, 3000));
 
-    if (!response.ok) {
-      console.log(`[SBC Crawler] ⚠️ HTTP ${response.status} for ${type} ${regionCode} ${dtBase}`);
-      return [];
-    }
+    // Find the content frame (SBC uses iframes)
+    const contentFrame = await findContentFrame(page, 'Insumos');
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // Parse the HTML table
-    // SBC tables have columns: Código | Descrição | Unidade | Preço Unit.
-    const rows = $('table tr, .ls-table tr, tbody tr');
-    
-    rows.each((_: number, row: any) => {
-      const cells = $(row).find('td');
-      if (cells.length < 3) return;
-
-      const code = $(cells[0]).text().trim();
-      const description = $(cells[1]).text().trim();
-
-      if (!code || !description || code.length < 1) return;
-      if (code.toUpperCase() === 'CÓDIGO' || code.toUpperCase() === 'CODIGO') return; // header row
-
-      // Find unit and price columns (may vary)
-      let unit = '';
-      let price = 0;
-
-      if (cells.length >= 4) {
-        // Standard layout: Code | Description | Unit | Price
-        unit = $(cells[cells.length - 2]).text().trim();
-        const priceText = $(cells[cells.length - 1]).text().trim();
-        price = parseBrazilianPrice(priceText);
-      } else if (cells.length === 3) {
-        unit = $(cells[2]).text().trim();
-      }
-
-      if (!unit) unit = 'UN';
-      
-      const itemType = type === 'composicoes' ? 'SERVICO' : 'MATERIAL';
-
-      items.push({ code, description, unit, price, type: itemType });
-    });
-
-    // Also try parsing divs with structured data (some SBC pages use divs instead of tables)
-    if (items.length === 0) {
-      // Try alternative parsing for div-based layouts
-      $('div[class*="row"], div[class*="item"], div[class*="resultado"]').each((_: number, div: any) => {
-        const text = $(div).text().trim();
-        // Try to extract code | description | unit | price pattern
-        const parts = text.split(/\t|\n/).map((s: string) => s.trim()).filter(Boolean);
-        if (parts.length >= 3) {
-          const code = parts[0];
-          const desc = parts[1];
-          if (code && desc && code.length < 20 && desc.length > 3) {
-            const unit = parts.length >= 4 ? parts[parts.length - 2] : 'UN';
-            const price = parts.length >= 4 ? parseBrazilianPrice(parts[parts.length - 1]) : 0;
-            items.push({ code, description: desc, unit, price, type: type === 'composicoes' ? 'SERVICO' : 'MATERIAL' });
+    // Set region dropdown
+    await contentFrame.evaluate((code: string) => {
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        const name = (sel.name || '').toUpperCase();
+        // LOC select — look for options that match region codes
+        for (const opt of sel.options) {
+          if (opt.value === code || opt.text.startsWith(code)) {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
           }
         }
-      });
-    }
+      }
+    }, regionCode);
+
+    // Set date dropdown
+    await contentFrame.evaluate((dt: string) => {
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        const name = (sel.name || '').toUpperCase();
+        for (const opt of sel.options) {
+          if (opt.value === dt || opt.value.includes(dt)) {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }, dtBase);
+
+    await new Promise(r => setTimeout(r, 500));
+
+    // Click OK button
+    await contentFrame.evaluate(() => {
+      const btns = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+      for (const btn of btns) {
+        const text = (btn as HTMLElement).innerText || (btn as HTMLInputElement).value || '';
+        if (text.trim().toUpperCase() === 'OK') {
+          (btn as HTMLElement).click();
+          return;
+        }
+      }
+      // Fallback: submit form
+      const form = document.querySelector('form');
+      if (form) form.submit();
+    });
+
+    // Wait for results
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Parse the results table
+    const items = await contentFrame.evaluate(() => {
+      const results: { code: string; description: string; unit: string; price: string; type: string }[] = [];
+      const tables = document.querySelectorAll('table');
+
+      for (const table of tables) {
+        const rows = table.querySelectorAll('tr');
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 3) continue;
+
+          const code = cells[0]?.textContent?.trim() || '';
+          const desc = cells[1]?.textContent?.trim() || '';
+
+          if (!code || !desc || code.length < 1) continue;
+          if (code.toUpperCase() === 'CÓDIGO' || code.toUpperCase() === 'CODIGO') continue;
+          if (/^listados?\s/i.test(code)) continue;
+
+          const unit = cells.length >= 4 ? (cells[cells.length - 2]?.textContent?.trim() || 'UN') : 'UN';
+          const price = cells.length >= 4 ? (cells[cells.length - 1]?.textContent?.trim() || '0') : '0';
+
+          results.push({ code, description: desc, unit, price, type: 'MATERIAL' });
+        }
+      }
+      return results;
+    });
+
+    return items.map(it => ({
+      code: it.code,
+      description: it.description,
+      unit: it.unit,
+      price: parseBrazilianPrice(it.price),
+      type: it.type,
+    })).filter(it => it.code.length >= 1 && it.description.length > 2);
 
   } catch (e: any) {
-    console.error(`[SBC Crawler] ❌ Fetch error: ${e.message}`);
+    console.error(`[SBC Crawler] ❌ Insumos scrape error: ${e.message}`);
+    return [];
   }
-
-  return items;
-}
-
-function parseBrazilianPrice(text: string): number {
-  if (!text) return 0;
-  const cleaned = text.replace(/[^\d.,\-]/g, '');
-  if (!cleaned) return 0;
-  // Brazilian format: 1.234,56
-  if (cleaned.includes(',') && (!cleaned.includes('.') || cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.'))) {
-    return parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
-  }
-  return parseFloat(cleaned.replace(/,/g, '')) || 0;
 }
 
 // ═══════════════════════════════════════════════════════════
-// Step 3: Fetch ALL insumos for a region by iterating alphabet
-// SBC requires a keyword, so we iterate A-Z to get full coverage
+// Scrape Composições page via Puppeteer
 // ═══════════════════════════════════════════════════════════
-async function fetchAllInsumos(guid: string, cookies: string, regionCode: string, dtBase: string): Promise<ParsedItem[]> {
-  const allItems = new Map<string, ParsedItem>();
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-  
-  // First try empty keyword (might return all)
-  const allResult = await fetchSbcData(guid, cookies, 'insumos', regionCode, dtBase, '');
-  if (allResult.length > 50) {
-    // Got a good batch, return it
-    for (const item of allResult) allItems.set(item.code, item);
-    console.log(`[SBC Crawler] 📋 ${regionCode}: ${allItems.size} insumos (full query)`);
-    return Array.from(allItems.values());
-  }
+async function scrapeComposicoes(page: any, regionCode: string, dtBase: string): Promise<ParsedItem[]> {
+  try {
+    await page.goto(`https://informativosbc.com.br/mgw?MGWCHD=0&wlapp=SBC&trgt=_blank&orgn=composicoes1`, {
+      waitUntil: 'networkidle2', timeout: 30000
+    });
+    await new Promise(r => setTimeout(r, 3000));
 
-  // Otherwise iterate letter by letter
-  for (const letter of alphabet) {
-    const result = await fetchSbcData(guid, cookies, 'insumos', regionCode, dtBase, letter);
-    for (const item of result) allItems.set(item.code, item);
-    // Rate limit
-    await new Promise(r => setTimeout(r, 1000));
-  }
+    const contentFrame = await findContentFrame(page, 'Composições');
 
-  // Also try number prefixes for code-based items
-  for (let i = 0; i <= 9; i++) {
-    const result = await fetchSbcData(guid, cookies, 'insumos', regionCode, dtBase, String(i));
-    for (const item of result) allItems.set(item.code, item);
-    await new Promise(r => setTimeout(r, 1000));
-  }
+    // Set region
+    await contentFrame.evaluate((code: string) => {
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        for (const opt of sel.options) {
+          if (opt.value === code || opt.text.startsWith(code)) {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }, regionCode);
 
-  console.log(`[SBC Crawler] 📋 ${regionCode}: ${allItems.size} insumos (A-Z + 0-9 scan)`);
-  return Array.from(allItems.values());
+    // Set date
+    await contentFrame.evaluate((dt: string) => {
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        for (const opt of sel.options) {
+          if (opt.value === dt || opt.value.includes(dt)) {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }, dtBase);
+
+    await new Promise(r => setTimeout(r, 500));
+
+    // Click OK
+    await contentFrame.evaluate(() => {
+      const btns = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+      for (const btn of btns) {
+        const text = (btn as HTMLElement).innerText || (btn as HTMLInputElement).value || '';
+        if (text.trim().toUpperCase() === 'OK') {
+          (btn as HTMLElement).click();
+          return;
+        }
+      }
+      const form = document.querySelector('form');
+      if (form) form.submit();
+    });
+
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Parse results
+    const items = await contentFrame.evaluate(() => {
+      const results: { code: string; description: string; unit: string; price: string }[] = [];
+      const tables = document.querySelectorAll('table');
+
+      for (const table of tables) {
+        const rows = table.querySelectorAll('tr');
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 3) continue;
+
+          const code = cells[0]?.textContent?.trim() || '';
+          const desc = cells[1]?.textContent?.trim() || '';
+
+          if (!code || !desc || code.length < 1) continue;
+          if (code.toUpperCase() === 'CÓDIGO' || code.toUpperCase() === 'CODIGO') continue;
+          if (/^listados?\s/i.test(code)) continue;
+
+          const unit = cells.length >= 4 ? (cells[cells.length - 2]?.textContent?.trim() || 'UN') : 'UN';
+          const price = cells.length >= 4 ? (cells[cells.length - 1]?.textContent?.trim() || '0') : '0';
+
+          results.push({ code, description: desc, unit, price });
+        }
+      }
+      return results;
+    });
+
+    return items.map(it => ({
+      code: it.code,
+      description: it.description,
+      unit: it.unit,
+      price: parseBrazilianPrice(it.price),
+      type: 'SERVICO',
+    })).filter(it => it.code.length >= 1 && it.description.length > 2);
+
+  } catch (e: any) {
+    console.error(`[SBC Crawler] ❌ Composições scrape error: ${e.message}`);
+    return [];
+  }
 }
 
-async function fetchAllComposicoes(guid: string, cookies: string, regionCode: string, dtBase: string): Promise<ParsedItem[]> {
-  const allItems = new Map<string, ParsedItem>();
-
-  // Try empty keyword first
-  const allResult = await fetchSbcData(guid, cookies, 'composicoes', regionCode, dtBase, '');
-  if (allResult.length > 50) {
-    for (const item of allResult) allItems.set(item.code, item);
-    console.log(`[SBC Crawler] 📋 ${regionCode}: ${allItems.size} composições (full query)`);
-    return Array.from(allItems.values());
+async function findContentFrame(page: any, sectionHint: string): Promise<any> {
+  // Try iframes first
+  for (const frame of page.frames()) {
+    try {
+      const has = await frame.evaluate((hint: string) => {
+        const body = document.body?.innerText || '';
+        return body.includes(hint) || body.includes('Código') || body.includes('Região');
+      }, sectionHint);
+      if (has) return frame;
+    } catch (e) { continue; }
   }
-
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-  for (const letter of alphabet) {
-    const result = await fetchSbcData(guid, cookies, 'composicoes', regionCode, dtBase, letter);
-    for (const item of result) allItems.set(item.code, item);
-    await new Promise(r => setTimeout(r, 1000));
-  }
-
-  console.log(`[SBC Crawler] 📋 ${regionCode}: ${allItems.size} composições (A-Z scan)`);
-  return Array.from(allItems.values());
+  return page;
 }
 
 // ═══════════════════════════════════════════════════════════
-// Step 4: Persist to database
+// Persist to database
 // ═══════════════════════════════════════════════════════════
 async function persistSbcItems(regionCode: string, uf: string, month: number, year: number, data: ParsedItem[]): Promise<SyncResult> {
   const baseName = 'SBC';
   const version = `${String(month).padStart(2, '0')}/${year}`;
+  const ufKey = `${uf}-${regionCode}`;
 
   let db = await prisma.engineeringDatabase.findFirst({
-    where: { name: baseName, uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
+    where: { name: baseName, uf: ufKey, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
   });
 
   if (db) {
@@ -416,15 +439,7 @@ async function persistSbcItems(regionCode: string, uf: string, month: number, ye
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({
-      data: {
-        name: baseName,
-        uf: `${uf}-${regionCode}`,
-        version,
-        type: 'OFICIAL',
-        payrollExemption: false,
-        referenceMonth: month,
-        referenceYear: year,
-      }
+      data: { name: baseName, uf: ufKey, version, type: 'OFICIAL', payrollExemption: false, referenceMonth: month, referenceYear: year }
     });
   }
 
@@ -435,41 +450,30 @@ async function persistSbcItems(regionCode: string, uf: string, month: number, ye
   for (let i = 0; i < basicItems.length; i += 1000) {
     const r = await prisma.engineeringItem.createMany({
       data: basicItems.slice(i, i + 1000).map(it => ({ databaseId: db!.id, ...it })),
-      skipDuplicates: true
+      skipDuplicates: true,
     });
     insertedItems += r.count;
   }
 
   let insertedComps = 0;
   for (let i = 0; i < serviceItems.length; i += 1000) {
-    const chunk = serviceItems.slice(i, i + 1000);
     const r = await prisma.engineeringComposition.createMany({
-      data: chunk.map(svc => ({ databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price })),
-      skipDuplicates: true
+      data: serviceItems.slice(i, i + 1000).map(svc => ({ databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price })),
+      skipDuplicates: true,
     });
     insertedComps += r.count;
   }
 
-  await prisma.engineeringDatabase.update({
-    where: { id: db!.id },
-    data: { itemCount: insertedItems, compositionCount: insertedComps }
-  });
-
-  console.log(`[SBC Crawler] ✅ SBC ${uf}-${regionCode} ${version}: ${insertedItems} insumos + ${insertedComps} composições`);
-  return {
-    success: true,
-    message: `SBC ${uf}-${regionCode} ${version}: ${insertedItems} insumos + ${insertedComps} composições`,
-    databaseId: db!.id,
-    itemCount: insertedItems,
-    compositionCount: insertedComps,
-  };
+  await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
+  console.log(`[SBC Crawler] ✅ SBC ${ufKey} ${version}: ${insertedItems} insumos + ${insertedComps} composições`);
+  return { success: true, message: `SBC ${ufKey} ${version}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
 }
 
 // ═══════════════════════════════════════════════════════════
 // Main Orchestrator
 // ═══════════════════════════════════════════════════════════
 export interface SbcSyncOptions {
-  regions: string[];  // SBC region codes (e.g. ['RJO', 'SPO']) or ['ALL']
+  regions: string[];
   months: number;
   email: string;
   password: string;
@@ -491,75 +495,86 @@ export async function syncSbc(options: SbcSyncOptions): Promise<SbcSyncReport> {
   const started = new Date().toISOString();
   const results: SyncResult[] = [];
 
-  // Step 1: Login
   console.log(`\n[SBC Crawler] 🚀 Sync SBC: ${isAll ? 'ALL (30 regiões)' : regions.map(r => r.code).join(',')} × ${months} meses`);
-  const session = await loginAndGetSession(email, password);
-  if (!session) {
-    return { started, finished: new Date().toISOString(), totalAttempted: 0, totalSuccess: 0, totalFailed: 1, results: [{ success: false, message: 'Falha no login SBC' }] };
+
+  // Launch browser (kept alive for entire sync)
+  let browser: any;
+  try {
+    browser = await launchBrowser();
+  } catch (e: any) {
+    console.error(`[SBC Crawler] ❌ ${e.message}`);
+    return { started, finished: new Date().toISOString(), totalAttempted: 0, totalSuccess: 0, totalFailed: 1, results: [{ success: false, message: e.message }] };
   }
 
-  // Generate target dates (last N months)
-  const now = new Date();
-  const targetDates: { dtBase: string; month: number; year: number }[] = [];
-  for (let i = 0; i < months; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const m = d.getMonth() + 1;
-    const y = d.getFullYear();
-    targetDates.push({
-      dtBase: `${y}${String(m).padStart(2, '0')}01`,
-      month: m,
-      year: y,
-    });
-  }
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1366, height: 768 });
 
-  // Step 2: Iterate regions × dates
-  for (const region of regions) {
-    for (const { dtBase, month, year } of targetDates) {
-      const version = `${String(month).padStart(2, '0')}/${year}`;
+    // Step 1: Login
+    const loggedIn = await loginToSbc(page, email, password);
+    if (!loggedIn) {
+      await browser.close();
+      return { started, finished: new Date().toISOString(), totalAttempted: 0, totalSuccess: 0, totalFailed: 1, results: [{ success: false, message: 'Falha no login SBC' }] };
+    }
 
-      // Idempotency check
-      const existing = await prisma.engineeringDatabase.findFirst({
-        where: {
-          name: 'SBC',
-          uf: `${region.uf}-${region.code}`,
-          referenceMonth: month,
-          referenceYear: year,
-          type: 'OFICIAL',
-          itemCount: { gt: 0 },
-        }
-      });
-      if (existing && (existing.itemCount || 0) > 0) {
-        console.log(`[SBC Crawler] ⏭️ SBC ${region.uf}-${region.code} ${version}: já existente (${existing.itemCount} itens)`);
-        results.push({ success: true, message: `Já existente: ${region.code} ${version}` });
-        continue;
-      }
+    // Generate target dates
+    const now = new Date();
+    const targetDates: { dtBase: string; month: number; year: number }[] = [];
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      targetDates.push({ dtBase: `${y}${String(m).padStart(2, '0')}01`, month: m, year: y });
+    }
 
-      console.log(`[SBC Crawler] 📥 Buscando: ${region.code} (${region.name}-${region.uf}) ${version}...`);
+    // Step 2: Iterate regions × dates
+    for (const region of regions) {
+      for (const { dtBase, month, year } of targetDates) {
+        const version = `${String(month).padStart(2, '0')}/${year}`;
+        const ufKey = `${region.uf}-${region.code}`;
 
-      try {
-        // Fetch insumos
-        const insumos = await fetchAllInsumos(session.guid, session.cookies, region.code, dtBase);
-
-        // Fetch composições
-        const composicoes = await fetchAllComposicoes(session.guid, session.cookies, region.code, dtBase);
-
-        const allData = [...insumos, ...composicoes];
-        if (allData.length === 0) {
-          console.log(`[SBC Crawler] ⚠️ SBC ${region.code} ${version}: sem dados`);
-          results.push({ success: false, message: `Sem dados: ${region.code} ${version}` });
+        // Idempotency check
+        const existing = await prisma.engineeringDatabase.findFirst({
+          where: { name: 'SBC', uf: ufKey, referenceMonth: month, referenceYear: year, type: 'OFICIAL', itemCount: { gt: 0 } }
+        });
+        if (existing && (existing.itemCount || 0) > 0) {
+          console.log(`[SBC Crawler] ⏭️ SBC ${ufKey} ${version}: já existente (${existing.itemCount} itens)`);
+          results.push({ success: true, message: `Já existente: ${ufKey} ${version}` });
           continue;
         }
 
-        const result = await persistSbcItems(region.code, region.uf, month, year, allData);
-        results.push(result);
-      } catch (e: any) {
-        console.error(`[SBC Crawler] ❌ SBC ${region.code} ${version}: ${e.message}`);
-        results.push({ success: false, message: `Erro: ${region.code} ${version} - ${e.message}` });
-      }
+        console.log(`[SBC Crawler] 📥 Buscando: ${region.code} (${region.name}-${region.uf}) ${version}...`);
 
-      // Rate limit between regions
-      await new Promise(r => setTimeout(r, 3000));
+        try {
+          // Scrape insumos
+          const insumos = await scrapeInsumos(page, region.code, dtBase);
+          console.log(`[SBC Crawler] 📋 ${region.code} insumos: ${insumos.length}`);
+
+          // Scrape composições
+          const composicoes = await scrapeComposicoes(page, region.code, dtBase);
+          console.log(`[SBC Crawler] 📋 ${region.code} composições: ${composicoes.length}`);
+
+          const allData = [...insumos, ...composicoes];
+          if (allData.length === 0) {
+            console.log(`[SBC Crawler] ⚠️ SBC ${ufKey} ${version}: sem dados`);
+            results.push({ success: false, message: `Sem dados: ${ufKey} ${version}` });
+            continue;
+          }
+
+          const result = await persistSbcItems(region.code, region.uf, month, year, allData);
+          results.push(result);
+        } catch (e: any) {
+          console.error(`[SBC Crawler] ❌ SBC ${ufKey} ${version}: ${e.message}`);
+          results.push({ success: false, message: `Erro: ${ufKey} ${version} - ${e.message}` });
+        }
+
+        // Rate limit
+        await new Promise(r => setTimeout(r, 3000));
+      }
     }
+  } finally {
+    try { await browser.close(); } catch (_) {}
   }
 
   const finished = new Date().toISOString();
