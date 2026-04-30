@@ -71,6 +71,28 @@ export function calculateBdiTCU(params: BdiTcuParams): number {
 }
 
 /**
+ * Distribui o BDI global digitado pelo usuário pelos parâmetros TCU, 
+ * usando os valores medianos para as despesas e calculando o lucro 
+ * necessário para atingir o BDI alvo.
+ */
+export function autoDistributeBdi(targetBdi: number): BdiTcuParams {
+    const tcu = { ...DEFAULT_TCU_PARAMS };
+    // K1 = (1 + AC + S + G + R) * (1 + DF)
+    const ac_s_r_g = (tcu.adminCentral + tcu.seguros + tcu.riscos + tcu.garantias) / 100;
+    const K1 = (1 + ac_s_r_g) * (1 + tcu.despFinanceiras / 100);
+    const K2 = 1 - (tcu.tributos / 100);
+    
+    // Formula inversa para o lucro (L):
+    let solvedLucro = ( (targetBdi / 100 + 1) * K2 / K1 - 1 ) * 100;
+    
+    // Se o BDI for tão baixo que o lucro fica negativo, zeramos o lucro.
+    // E ajustamos também os outros pra não bugar.
+    if (solvedLucro < 0) solvedLucro = 0;
+    
+    return { ...tcu, lucro: Number(solvedLucro.toFixed(2)) };
+}
+
+/**
  * Resolve o BDI efetivo baseado na configuração
  */
 export function resolveEffectiveBdi(config: BdiConfig): number {

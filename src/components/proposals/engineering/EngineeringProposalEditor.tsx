@@ -3,7 +3,7 @@ import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload,
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, autoDistributeBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
@@ -1268,31 +1268,39 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
                     {/* BDI Calculator — Unified */}
                     <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: 'var(--space-4)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                            <Calculator size={16} color="var(--color-primary)" />
-                            <h4 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 600 }}>Cálculo de BDI</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <Calculator size={16} color="var(--color-primary)" />
+                                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Cálculo de BDI</h4>
+                            </div>
+                            <button className="btn" title="Em breve: extração automática de BDI via PDF" style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }} onClick={() => alert('Extração via IA em desenvolvimento para BDI.')}>
+                                <Wand2 size={12} /> Extrair via IA
+                            </button>
                         </div>
 
                         {/* BDI Global — always visible */}
-                        <div style={{ marginBottom: 12, padding: 10, borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(139,92,246,0.04))', textAlign: 'center' }}>
-                            <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>BDI Global (%)</label>
+                        <div style={{ marginBottom: 16, padding: '16px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.04))', border: '1px solid rgba(37,99,235,0.1)', textAlign: 'center' }}>
+                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>BDI Global (%)</label>
                             <input type="number" className="form-input" value={bdiConfig.bdiGlobal}
-                                onChange={e => { setHasUnsavedChanges(true); const val = parseLocaleNumber(e.target.value); setBdiConfig(prev => ({ ...prev, bdiGlobal: val, mode: 'SIMPLIFICADO' })); }}
-                                style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)', textAlign: 'center', width: '100%', border: '1px solid transparent', background: 'transparent' }} step="0.01" />
+                                onChange={e => { setHasUnsavedChanges(true); const val = parseLocaleNumber(e.target.value); setBdiConfig(prev => ({ ...prev, bdiGlobal: val, mode: 'SIMPLIFICADO', tcu: autoDistributeBdi(val) })); }}
+                                style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--color-primary)', textAlign: 'center', width: '100%', border: 'none', background: 'transparent', outline: 'none' }} step="0.01" />
                         </div>
 
                         {/* TCU Breakdown — collapsible */}
-                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
+                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
                             <button onClick={() => setBdiConfig(prev => ({ ...prev, mode: prev.mode === 'TCU' ? 'SIMPLIFICADO' : 'TCU' }))}
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 0', marginBottom: 8 }}>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: bdiConfig.mode === 'TCU' ? '#B45309' : 'var(--color-text-tertiary)' }}>
-                                    ⚙ Detalhamento TCU 2622
-                                </span>
-                                <ChevronDown size={12} style={{ color: 'var(--color-text-tertiary)', transform: bdiConfig.mode === 'TCU' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Split size={14} color={bdiConfig.mode === 'TCU' ? '#b45309' : 'var(--color-text-tertiary)'} />
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: bdiConfig.mode === 'TCU' ? '#B45309' : 'var(--color-text-primary)' }}>
+                                        Detalhamento TCU 2622
+                                    </span>
+                                </div>
+                                <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: bdiConfig.mode === 'TCU' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                             </button>
                             {bdiConfig.mode === 'TCU' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                         {([
                                             ['adminCentral', 'Adm. Central (%)'],
                                             ['seguros', 'Seguros (%)'],
@@ -1300,35 +1308,37 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             ['riscos', 'Riscos (%)'],
                                         ] as const).map(([key, label]) => (
                                             <div key={key}>
-                                                <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{label}</label>
+                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>{label}</label>
                                                 <input type="number" className="form-input" value={bdiConfig.tcu[key]}
                                                     onChange={e => { updateTcu(key, parseLocaleNumber(e.target.value)); }}
-                                                    style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
+                                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.85rem', background: 'var(--color-bg-base)' }} step="0.01" />
                                             </div>
                                         ))}
                                     </div>
-                                    <div style={{ borderTop: '1px dashed var(--color-border)', margin: '2px 0' }} />
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Desp. Financeiras (%)</label>
-                                        <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
-                                            onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
-                                            style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
+                                    <div style={{ borderTop: '1px dashed var(--color-border)', margin: '4px 0' }} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Desp. Financeiras (%)</label>
+                                            <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
+                                                onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
+                                                style={{ width: '100%', padding: '6px 10px', fontSize: '0.85rem', background: 'var(--color-bg-base)' }} step="0.01" />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Lucro (%)</label>
+                                            <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
+                                                onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
+                                                style={{ width: '100%', padding: '6px 10px', fontSize: '0.85rem', background: 'var(--color-bg-base)', borderColor: 'rgba(37,99,235,0.3)' }} step="0.01" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Lucro (%)</label>
-                                        <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
-                                            onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
-                                            style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Tributos — PIS+COFINS+ISS (%)</label>
+                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Tributos — PIS+COFINS+ISS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.tributos}
                                             onChange={e => updateTcu('tributos', parseLocaleNumber(e.target.value))}
-                                            style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
+                                            style={{ width: '100%', padding: '6px 10px', fontSize: '0.85rem', background: 'var(--color-bg-base)' }} step="0.01" />
                                     </div>
-                                    <div style={{ marginTop: 4, background: 'rgba(180,83,9,0.08)', padding: 8, borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-                                        <span style={{ fontSize: '0.68rem', color: '#92400E', fontWeight: 600, display: 'block' }}>BDI CALCULADO (Acórdão TCU 2622)</span>
-                                        <span style={{ fontSize: '1.2rem', color: '#B45309', fontWeight: 800 }}>{calculateBdiTCU(bdiConfig.tcu).toFixed(2)}%</span>
+                                    <div style={{ marginTop: 8, background: 'rgba(180,83,9,0.05)', border: '1px solid rgba(180,83,9,0.2)', padding: 12, borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
+                                        <span style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>BDI CALCULADO (Acórdão TCU 2622)</span>
+                                        <span style={{ fontSize: '1.4rem', color: '#b45309', fontWeight: 800 }}>{calculateBdiTCU(bdiConfig.tcu).toFixed(2)}%</span>
                                     </div>
                                 </div>
                             )}
