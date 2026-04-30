@@ -295,13 +295,13 @@ async function scrapeInsumos(page: any, regionCode: string, dtBase: string): Pro
       return results;
     });
 
-    return items.map(it => ({
+    return items.map((it: { code: string; description: string; unit: string; price: string; type: string }) => ({
       code: it.code,
       description: it.description,
       unit: it.unit,
       price: parseBrazilianPrice(it.price),
       type: it.type,
-    })).filter(it => it.code.length >= 1 && it.description.length > 2);
+    })).filter((it: ParsedItem) => it.code.length >= 1 && it.description.length > 2);
 
   } catch (e: any) {
     console.error(`[SBC Crawler] ❌ Insumos scrape error: ${e.message}`);
@@ -394,13 +394,13 @@ async function scrapeComposicoes(page: any, regionCode: string, dtBase: string):
       return results;
     });
 
-    return items.map(it => ({
+    return items.map((it: { code: string; description: string; unit: string; price: string }) => ({
       code: it.code,
       description: it.description,
       unit: it.unit,
       price: parseBrazilianPrice(it.price),
       type: 'SERVICO',
-    })).filter(it => it.code.length >= 1 && it.description.length > 2);
+    })).filter((it: ParsedItem) => it.code.length >= 1 && it.description.length > 2);
 
   } catch (e: any) {
     console.error(`[SBC Crawler] ❌ Composições scrape error: ${e.message}`);
