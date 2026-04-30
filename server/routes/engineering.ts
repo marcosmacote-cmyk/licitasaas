@@ -1483,6 +1483,11 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         } catch (pdfErr: any) {
             console.warn(`[Engineering AI-Compositions] ⚠️ Falha no modo PDF multimodal: ${pdfErr.message}`);
         }
+        // Verify PDF mode actually produced content
+        if (result && (!result.text || result.text.trim().length < 10)) {
+            console.warn(`[Engineering AI-Compositions] ⚠️ PDF mode returned empty/minimal response (${(result.text || '').length} chars). Trying fallback...`);
+            result = null;
+        }
 
         // ═══════════════════════════════════════════════════════
         // MODO 2 (FALLBACK): Texto do aiAnalysis + schemaV2
@@ -1527,11 +1532,39 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         }
 
         const rawResponse = result?.text || '';
-        const parsed = robustJsonParse(rawResponse);
-        const compositions = parsed?.compositions || [];
+        console.log(`[Engineering AI-Compositions] 📋 Resposta IA: ${rawResponse.length} chars | Primeiros 300: ${rawResponse.substring(0, 300)}`);
+
+        let compositions: any[] = [];
+        try {
+            const parsed = robustJsonParse(rawResponse);
+            console.log(`[Engineering AI-Compositions] 📋 Parse OK. Keys: ${Object.keys(parsed || {}).join(', ')} | Type: ${typeof parsed} | isArray: ${Array.isArray(parsed)}`);
+
+            // Try multiple possible response formats
+            if (Array.isArray(parsed?.compositions)) {
+                compositions = parsed.compositions;
+            } else if (Array.isArray(parsed)) {
+                compositions = parsed;
+            } else {
+                // Search for any array property that looks like compositions
+                for (const key of Object.keys(parsed || {})) {
+                    const val = parsed[key];
+                    if (Array.isArray(val) && val.length > 0 && val[0].code) {
+                        compositions = val;
+                        console.log(`[Engineering AI-Compositions] 📋 Found compositions under key "${key}"`);
+                        break;
+                    }
+                }
+            }
+        } catch (parseErr: any) {
+            console.error(`[Engineering AI-Compositions] ❌ JSON parse failed: ${parseErr.message}`);
+            console.error(`[Engineering AI-Compositions] 📋 Raw response (first 500): ${rawResponse.substring(0, 500)}`);
+            return res.status(500).json({ error: 'IA retornou resposta inválida', details: parseErr.message });
+        }
+
+        console.log(`[Engineering AI-Compositions] 📋 ${compositions.length} composições encontradas`);
 
         if (compositions.length === 0) {
-            return res.json({ compositions: [], message: 'Nenhuma composição encontrada no documento' });
+            return res.json({ compositions: [], saved: 0, message: 'Nenhuma composição encontrada no documento' });
         }
 
         // Store extracted compositions in the database as "PROPRIA"
