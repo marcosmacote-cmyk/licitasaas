@@ -160,22 +160,90 @@ async function discoverPdfLinks(years: number[]): Promise<CaernPdfEntry[]> {
 // ═══════════════════════════════════════════════════════════
 // Known units in CAERN price tables
 // ═══════════════════════════════════════════════════════════
-const KNOWN_UNITS = new Set([
+const KNOWN_UNITS_LIST = [
   'UN', 'M', 'M2', 'M²', 'M3', 'M³', 'KG', 'L', 'CJ', 'VB', 'GB', 'PC', 'H',
   'MÊS', 'MES', 'DIA', 'KM', 'PAR', 'JG', 'BD', 'GL', 'CX', 'TB', 'SC', 'LT',
   'TN', 'TF', 'CH', 'CM', 'T', 'KWH', 'HA', 'CHP', 'CHI', 'MJ', 'CONJ',
-]);
+];
+const KNOWN_UNITS = new Set(KNOWN_UNITS_LIST);
+// Regex to match the combined line: "UNIT PRICE1 PRICE2"
+// Examples: "M 7,10 6,55"  |  "UN 13,24 12,31"  |  "M2 1.234,56 1.200,00"
+const UNIT_PRICE_REGEX = new RegExp(
+  `^(${KNOWN_UNITS_LIST.join('|')})\\s+(\\d[\\d.,]+)\\s+(\\d[\\d.,]+)\\s*$`, 'i'
+);
+// Also match unit + single price: "M 7,10"
+const UNIT_SINGLE_PRICE_REGEX = new RegExp(
+  `^(${KNOWN_UNITS_LIST.join('|')})\\s+(\\d[\\d.,]+)\\s*$`, 'i'
+);
 
 // ═══════════════════════════════════════════════════════════
-// Download PDF and extract table data using state machine
-// PDF text format (each field on a separate line):
-//   94660                  ← code (3-6 digit number)
-//   ADAPTADOR CURTO...     ← description line 1
-//   DN 40 MM X 1 1/4"...  ← description continuation
-//   FORNECIMENTO E...      ← description continuation
-//   UN                     ← unit
-//   7,63                   ← price with desoneração
-//   7,38                   ← price without desoneração
+// Extract text from PDF using pdf-parse v2 (PDFParse class)
+// Falls back to pdfjs-dist if available
+// ═══════════════════════════════════════════════════════════
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  // Try pdf-parse v2+ (class-based API)
+  try {
+    const mod = require('pdf-parse');
+    if (mod.PDFParse) {
+      const { PDFParse } = mod;
+      const parser = new PDFParse(new Uint8Array(buffer));
+      await parser.load();
+      const result = await parser.getText();
+      if (result && typeof result.text === 'string') {
+        return result.text;
+      }
+      // If result.text is not a string, reconstruct from pages
+      if (result && result.pages) {
+        const pages = result.pages;
+        const allText: string[] = [];
+        const pageKeys = Object.keys(pages);
+        for (const pk of pageKeys) {
+          const page = pages[pk];
+          const itemKeys = Object.keys(page);
+          for (const ik of itemKeys) {
+            const item = page[ik];
+            if (item && item.text) allText.push(item.text);
+          }
+        }
+        return allText.join('\n');
+      }
+    }
+    // Try as function (v1 API fallback)
+    if (typeof mod === 'function') {
+      const pdfData = await mod(buffer);
+      return pdfData.text || '';
+    }
+  } catch (e: any) {
+    console.log(`[CAERN Crawler] ⚠️ pdf-parse getText falhou: ${e.message}, tentando pdfjs-dist...`);
+  }
+
+  // Fallback: pdfjs-dist
+  try {
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+    const allText: string[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((i: any) => i.str).join('\n');
+      allText.push(pageText);
+    }
+    return allText.join('\n');
+  } catch (e: any) {
+    console.log(`[CAERN Crawler] ⚠️ pdfjs-dist também falhou: ${e.message}`);
+  }
+
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Download PDF and extract table data
+// Actual PDF text format (from pdf-parse v2.4.5):
+//   97160                          ← code (3-6 digit number)
+//   ASSENTAMENTO DE TUBO...        ← description line 1
+//   MM, JUNTA ELÁSTICA...          ← description line 2
+//   INTERFERÊNCIAS...              ← description line 3
+//   M 7,10 6,55                    ← UNIT + PRICE1 + PRICE2 on SAME line
 // ═══════════════════════════════════════════════════════════
 async function downloadAndParsePdf(url: string): Promise<{ items: { code: string; description: string; unit: string; price: number; type: string }[]; rawText: string }> {
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
@@ -191,37 +259,34 @@ async function downloadAndParsePdf(url: string): Promise<{ items: { code: string
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
+    const text = await extractPdfText(buffer);
 
-    // Try pdf-parse
-    let pdfParse: any;
-    try { pdfParse = require('pdf-parse'); } catch {
-      console.log(`[CAERN Crawler] ⚠️ pdf-parse não disponível`);
+    if (!text) {
+      console.log(`[CAERN Crawler] ⚠️ Não foi possível extrair texto do PDF`);
       return { items: [], rawText: '' };
     }
 
-    const pdfData = await pdfParse(buffer);
-    const text: string = pdfData.text || '';
     const lines: string[] = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
     // State machine parser
-    type State = 'SEEK_CODE' | 'READ_DESC' | 'READ_UNIT' | 'READ_PRICE1' | 'READ_PRICE2';
+    type State = 'SEEK_CODE' | 'READ_DESC';
     let state: State = 'SEEK_CODE';
     let curCode = '';
     let curDesc: string[] = [];
-    let curUnit = '';
     let descLineCount = 0;
 
-    const isCode = (l: string) => /^\d{3,6}$/.test(l); // 3-6 digit pure number
-    const isUnit = (l: string) => KNOWN_UNITS.has(l.toUpperCase());
-    const isPrice = (l: string) => /^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(l) || /^\d+,\d{2}$/.test(l);
-    // Skip header/footer lines
-    const isHeaderLine = (l: string) => /^(CÓDIGO|DESCRIÇÃO|UNIDADE|PREÇO|ITEM|BANCO DE PREÇOS|COMPOSIÇÕES|TABELA|PÁG|PAG|CAERN|JANEIRO|FEVEREIRO|MARÇO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)/i.test(l);
+    const isCode = (l: string) => /^\d{3,6}$/.test(l);
+    const isHeaderLine = (l: string) => /^(CÓDIGO|DESCRIÇÃO|UNIDADE|PREÇO|ITEM|BANCO DE PREÇOS|COMPOSIÇÕES|TABELA|PÁG|PAG|CAERN|OBSERVAÇÕES|DATA BASE|PREÇOS SERVIÇOS|SERVIÇOS SINAPI|COM DESONERAÇÃO|SEM DESONERAÇÃO|SEM BDI)/i.test(l);
+    const isPageMarker = (l: string) => /^--\s*\d+\s*of\s*\d+\s*--$/.test(l);
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // Skip table headers/footers
-      if (isHeaderLine(line)) { state = 'SEEK_CODE'; curDesc = []; continue; }
+      // Skip headers, footers, page markers
+      if (isHeaderLine(line) || isPageMarker(line)) {
+        if (state === 'READ_DESC' && descLineCount > 0) state = 'SEEK_CODE';
+        continue;
+      }
 
       switch (state) {
         case 'SEEK_CODE':
@@ -233,76 +298,62 @@ async function downloadAndParsePdf(url: string): Promise<{ items: { code: string
           }
           break;
 
-        case 'READ_DESC':
-          // A description line is text (not a code, not a unit, not a price)
-          if (isUnit(line) && descLineCount > 0) {
-            curUnit = line.toUpperCase();
-            state = 'READ_PRICE1';
-          } else if (isCode(line) && descLineCount > 0) {
-            // New code started before unit — save partial if possible, restart
-            curCode = line;
-            curDesc = [];
-            descLineCount = 0;
-            state = 'READ_DESC';
-          } else if (isPrice(line) && descLineCount > 0) {
-            // Price found without unit — likely missed unit, skip this entry
-            state = 'SEEK_CODE';
-          } else if (line.length > 2) {
-            curDesc.push(line);
-            descLineCount++;
-            // Safety: max 5 description lines
-            if (descLineCount > 5) { state = 'SEEK_CODE'; }
-          }
-          break;
-
-        case 'READ_PRICE1':
-          if (isPrice(line)) {
-            const price = parseBrPrice(line);
+        case 'READ_DESC': {
+          // Check if this line is the combined UNIT + PRICE line
+          const matchDouble = line.match(UNIT_PRICE_REGEX);
+          if (matchDouble && descLineCount > 0) {
             items.push({
               code: curCode,
               description: curDesc.join(' '),
-              unit: curUnit,
-              price,
+              unit: matchDouble[1].toUpperCase(),
+              price: parseBrPrice(matchDouble[2]),
               type: 'SERVICO',
             });
-            state = 'READ_PRICE2'; // expect second price (sem desoneração)
-          } else if (isCode(line)) {
-            // No price — go to new code
-            curCode = line;
-            curDesc = [];
-            descLineCount = 0;
-            state = 'READ_DESC';
-          } else {
             state = 'SEEK_CODE';
+            break;
           }
-          break;
 
-        case 'READ_PRICE2':
-          // Second price (sem desoneração) — just consume it and go to next code
-          if (isPrice(line)) {
-            // We already saved with the first price (com desoneração)
+          // Check single price variant: "UN 13,24"
+          const matchSingle = line.match(UNIT_SINGLE_PRICE_REGEX);
+          if (matchSingle && descLineCount > 0) {
+            items.push({
+              code: curCode,
+              description: curDesc.join(' '),
+              unit: matchSingle[1].toUpperCase(),
+              price: parseBrPrice(matchSingle[2]),
+              type: 'SERVICO',
+            });
             state = 'SEEK_CODE';
-          } else if (isCode(line)) {
-            // No second price, but next code already
+            break;
+          }
+
+          // Check if this is a new code (description was empty or we need to restart)
+          if (isCode(line)) {
             curCode = line;
             curDesc = [];
             descLineCount = 0;
-            state = 'READ_DESC';
-          } else {
-            state = 'SEEK_CODE';
+            break;
+          }
+
+          // Otherwise it's a description line
+          if (line.length > 2) {
+            curDesc.push(line);
+            descLineCount++;
+            if (descLineCount > 6) { state = 'SEEK_CODE'; }
           }
           break;
+        }
       }
     }
 
-    // Log sample for debugging
+    // Log results
     if (items.length > 0) {
-      const sample = items[0];
-      console.log(`[CAERN Crawler] 📊 ${items.length} itens parseados (ex: ${sample.code} | ${sample.description.substring(0, 50)}... | ${sample.unit} | ${sample.price})`);
+      const s = items[0];
+      console.log(`[CAERN Crawler] 📊 ${items.length} itens (ex: ${s.code} | ${s.description.substring(0, 50)}... | ${s.unit} | R$${s.price})`);
     } else {
-      // Diagnostic: show first lines that look like codes
-      const codeLikeLines = lines.filter(l => /^\d{3,6}$/.test(l)).slice(0, 5);
-      console.log(`[CAERN Crawler] 📊 0 itens parseados de ${lines.length} linhas. Possíveis códigos: ${codeLikeLines.join(', ')}`);
+      const codeLikes = lines.filter(l => /^\d{3,6}$/.test(l)).slice(0, 3);
+      const unitPriceLikes = lines.filter(l => UNIT_PRICE_REGEX.test(l) || UNIT_SINGLE_PRICE_REGEX.test(l)).slice(0, 3);
+      console.log(`[CAERN Crawler] 📊 0 itens de ${lines.length} linhas. Códigos: [${codeLikes}] UnitPrice: [${unitPriceLikes}]`);
     }
     return { items, rawText: text.substring(0, 500) };
 
