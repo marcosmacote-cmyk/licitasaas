@@ -1155,65 +1155,95 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: showConfigPanel ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </button>
                         {showConfigPanel && (
-                            <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--color-border)' }}>
-                                <div style={{ marginTop: 12 }}>
-                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Objeto</label>
-                                    <textarea className="form-input" rows={2} value={engineeringConfig.objeto} onChange={e => updateEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Descrição do orçamento..." style={{ width: '100%', resize: 'none', fontSize: '0.8rem' }} />
-                                </div>
+                            <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 16, borderTop: '1px solid var(--color-border)', marginTop: 8 }}>
+                                
+                                {/* Objeto */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Bases</label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                        {['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => (
-                                            <label key={base} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.72rem', background: 'var(--color-bg-base)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--color-border)', cursor: 'pointer' }}>
-                                                <input type="checkbox" checked={engineeringConfig.basesConsideradas.includes(base)} onChange={e => {
-                                                    const b = engineeringConfig.basesConsideradas;
-                                                    updateEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
-                                                }} style={{ width: 12, height: 12 }} />
-                                                {base}
-                                            </label>
-                                        ))}
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Objeto da Obra</label>
+                                    <textarea className="form-input" rows={2} value={engineeringConfig.objeto} onChange={e => updateEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Ex: Construção de quadra poliesportiva..." style={{ width: '100%', resize: 'none', fontSize: '0.85rem', padding: '8px 12px', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)' }} />
+                                </div>
+
+                                {/* Bases */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Bases de Referência</label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => {
+                                            const isChecked = engineeringConfig.basesConsideradas.includes(base);
+                                            return (
+                                                <label key={base} style={{ 
+                                                    display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600,
+                                                    background: isChecked ? 'var(--color-primary-light)' : 'var(--color-bg-base)', 
+                                                    color: isChecked ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                    padding: '4px 10px', borderRadius: 'var(--radius-full)', 
+                                                    border: `1px solid ${isChecked ? 'var(--color-primary)' : 'var(--color-border)'}`, 
+                                                    cursor: 'pointer', transition: 'all 0.2s', userSelect: 'none'
+                                                }}>
+                                                    <input type="checkbox" checked={isChecked} onChange={e => {
+                                                        const b = engineeringConfig.basesConsideradas;
+                                                        updateEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
+                                                    }} style={{ display: 'none' }} />
+                                                    {base}
+                                                </label>
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+                                {/* Data Base & Regime */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Data Base</label>
-                                        <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => updateEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%', fontSize: '0.8rem' }} />
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Data Base</label>
+                                        <input type="month" className="form-input" value={engineeringConfig.dataBase} onChange={e => updateEngineeringConfig({...engineeringConfig, dataBase: e.target.value})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Regime</label>
-                                        <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => updateEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%', fontSize: '0.8rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Regime de Desoneração</label>
+                                        <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => updateEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}>
                                             <option value="DESONERADO">Desonerado</option>
                                             <option value="ONERADO">Onerado</option>
                                         </select>
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+                                {/* Arredondamento & Casas Decimais */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Arredondamento</label>
-                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%', fontSize: '0.8rem' }}>
-                                            <option value="ROUND">Arredondar</option>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Critério de Arredondamento</label>
+                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}>
+                                            <option value="ROUND">Arredondar ABNT</option>
                                             <option value="TRUNCATE">Truncar</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>Casas Decimais</label>
-                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: parseLocaleNumber(e.target.value)}})} style={{ width: '100%', fontSize: '0.8rem' }} />
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Casas Decimais</label>
+                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: parseLocaleNumber(e.target.value)}})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }} />
                                     </div>
                                 </div>
+
                                 {/* BDI Diferenciado toggle */}
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer', padding: '6px 0', borderTop: '1px solid var(--color-border)' }}>
-                                    <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
-                                        onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} />
-                                    <Split size={13} color="var(--color-primary)" /> BDI Diferenciado (TCU 2622)
-                                </label>
-                                {engineeringConfig.bdiDiferenciado && (
-                                    <div style={{ padding: 8, borderRadius: 6, border: '1px solid rgba(180,83,9,0.15)', background: 'rgba(180,83,9,0.03)' }}>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: '#b45309', marginBottom: 4 }}>BDI Fornecimento (%)</label>
-                                        <input type="number" step="0.01" className="form-input" style={{ width: '100%', fontSize: '0.85rem', fontWeight: 700 }}
-                                            value={engineeringConfig.bdiFornecimento || 14.02}
-                                            onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiFornecimento: parseLocaleNumber(e.target.value) })} />
-                                    </div>
-                                )}
+                                <div style={{ background: engineeringConfig.bdiDiferenciado ? 'rgba(180,83,9,0.04)' : 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: `1px solid ${engineeringConfig.bdiDiferenciado ? 'rgba(180,83,9,0.2)' : 'var(--color-border)'}`, padding: 12, transition: 'all 0.2s' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, color: engineeringConfig.bdiDiferenciado ? '#b45309' : 'var(--color-text-primary)', cursor: 'pointer', userSelect: 'none' }}>
+                                        <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
+                                            onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} 
+                                            style={{ width: 16, height: 16, accentColor: '#b45309', cursor: 'pointer' }}/>
+                                        <Split size={16} color={engineeringConfig.bdiDiferenciado ? "#b45309" : "var(--color-text-tertiary)"} />
+                                        Ativar BDI Diferenciado (Acórdão TCU 2622)
+                                    </label>
+                                    
+                                    {engineeringConfig.bdiDiferenciado && (
+                                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(180,83,9,0.2)' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Taxa de BDI para Fornecimento / Materiais (%)</label>
+                                            <div style={{ position: 'relative', width: '50%' }}>
+                                                <input type="number" step="0.01" className="form-input" style={{ width: '100%', fontSize: '0.9rem', fontWeight: 700, paddingRight: 30, color: '#92400e', borderColor: 'rgba(180,83,9,0.3)', background: 'white' }}
+                                                    value={engineeringConfig.bdiFornecimento || 14.02}
+                                                    onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiFornecimento: parseLocaleNumber(e.target.value) })} />
+                                                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 700, color: '#92400e' }}>%</span>
+                                            </div>
+                                            <span style={{ display: 'block', fontSize: '0.65rem', color: '#b45309', marginTop: 6, lineHeight: 1.4 }}>
+                                                Itens classificados como "EQUIPAMENTO" ou "MATERIAL" aplicarão esta taxa em vez do BDI Global.
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
