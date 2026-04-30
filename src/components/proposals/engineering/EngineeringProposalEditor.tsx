@@ -174,6 +174,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Active tab
     const [activeTab, setActiveTab] = useState<'planilha' | 'balizamento' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'caderno'>('planilha');
+    const [showAIMenu, setShowAIMenu] = useState(false);
+    const [showToolsMenu, setShowToolsMenu] = useState(false);
 
     // FIX ARQ-04: Cronograma data persisted in parent state to survive tab switches
     const [cronogramaData, setCronogramaData] = useState<{ meses: number; etapas: any[] } | null>(null);
@@ -654,8 +656,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
 
-            {/* Action Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+            {/* Action Bar — simplified: title + save */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                     <div style={{ background: 'var(--color-primary-light)', padding: 8, borderRadius: 'var(--radius-md)' }}>
                         <TableProperties size={18} color="var(--color-primary)" />
@@ -669,42 +671,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                     {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                        onClick={() => {
-                            const firstEditable = items.findIndex(it => !isGrouper(it.type));
-                            if (firstEditable >= 0) setCompositionEditorIndex(firstEditable);
-                        }}
-                        disabled={items.findIndex(it => !isGrouper(it.type)) < 0}>
-                        <Layers size={14} color="var(--color-primary)" /> Editar Composições
-                    </button>
-                    <button className={`btn ${activeTab === 'planilha' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('planilha')}>
-                        <TableProperties size={15} /> Planilha Orçamentária
-                    </button>
-                    <button className={`btn ${activeTab === 'balizamento' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('balizamento')}>
-                        <Wrench size={15} /> Balizamento Mestre
-                    </button>
-                    <button className={`btn ${activeTab === 'hub_insumos' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('hub_insumos')}>
-                        <Package size={15} /> Insumos & CPU
-                    </button>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={refreshAllAudits} disabled={items.length === 0 || isAuditing}>
-                        {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Reauditar
-                    </button>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
-                        {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
-                        {isExtracting ? 'Extraindo...' : 'Extrair Itens IA'}
-                    </button>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractCompositions} disabled={isExtractingComps}>
-                        {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
-                        {isExtractingComps ? 'Extraindo CPUs...' : 'Extrair Composições IA'}
-                    </button>
-                    {/* Importar Excel */}
-                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.ods,.csv" style={{ display: 'none' }} onChange={handleImportExcel} />
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => fileInputRef.current?.click()}>
-                        <Upload size={14} color="#059669" /> Importar Excel
-                    </button>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExportExcel}>
-                        <Download size={14} /> Exportar Excel
-                    </button>
                     <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={handleSave} disabled={isSaving}>
                         {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                         {isSaving ? 'Salvando...' : 'Salvar Planilha'}
@@ -715,27 +681,102 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
             </div>
 
-            {/* Tab Bar */}
+            {/* Tab Bar — unified navigation */}
             <div style={{ display: 'flex', gap: 4, background: 'var(--color-bg-base)', padding: 4, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                 {[
-                    { key: 'planilha' as const, label: 'Planilha Orçamentária', icon: TableProperties },
+                    { key: 'planilha' as const, label: 'Planilha', icon: TableProperties },
+                    { key: 'balizamento' as const, label: 'Balizamento', icon: Wrench },
                     { key: 'hub_insumos' as const, label: 'Hub de Insumos', icon: Package },
                     { key: 'curva_abc' as const, label: 'Curva ABC', icon: BarChart3 },
                     { key: 'cronograma' as const, label: 'Cronograma', icon: Calendar },
-                    { key: 'caderno' as const, label: 'Caderno de Orçamento', icon: Download },
+                    { key: 'caderno' as const, label: 'Caderno', icon: Download },
                 ].map(tab => (
-                    <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-                        flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                    <button key={tab.key} onClick={() => { setActiveTab(tab.key); setShowAIMenu(false); setShowToolsMenu(false); }} style={{
+                        flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                         background: activeTab === tab.key ? 'var(--color-bg-surface)' : 'transparent',
                         boxShadow: activeTab === tab.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                         color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        fontWeight: activeTab === tab.key ? 700 : 500, fontSize: '0.85rem',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        fontWeight: activeTab === tab.key ? 700 : 500, fontSize: '0.82rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.15s',
                     }}>
-                        <tab.icon size={15} /> {tab.label}
+                        <tab.icon size={14} /> {tab.label}
                     </button>
                 ))}
             </div>
+
+            {/* Contextual Toolbar — only visible on Planilha tab */}
+            {activeTab === 'planilha' && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                    {/* ── AI Group (dropdown) ── */}
+                    <div style={{ position: 'relative' }}>
+                        <button className="btn btn-outline" onClick={() => { setShowAIMenu(!showAIMenu); setShowToolsMenu(false); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 12px', borderColor: showAIMenu ? 'var(--color-primary)' : undefined, color: showAIMenu ? 'var(--color-primary)' : undefined }}>
+                            <Cpu size={14} /> IA <ChevronDown size={12} style={{ transform: showAIMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        </button>
+                        {showAIMenu && (<>
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowAIMenu(false)} />
+                            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 240, overflow: 'hidden' }}>
+                                <div style={{ padding: '6px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', background: 'var(--color-bg-base)' }}>Extração por IA</div>
+                                <button onClick={() => { handleExtractAI(); setShowAIMenu(false); }} disabled={isExtracting}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isExtracting ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, opacity: isExtracting ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isExtracting) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
+                                    <div><div>Extrair Itens do Edital</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Popula a planilha com itens do edital</div></div>
+                                </button>
+                                <button onClick={() => { handleExtractCompositions(); setShowAIMenu(false); }} disabled={isExtractingComps}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isExtractingComps ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isExtractingComps ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isExtractingComps) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
+                                    <div><div>Extrair Composições (CPU)</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Gera composições detalhadas na base própria</div></div>
+                                </button>
+                            </div>
+                        </>)}
+                    </div>
+
+                    <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
+
+                    {/* ── Import / Export (side by side) ── */}
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.ods,.csv" style={{ display: 'none' }} onChange={handleImportExcel} />
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem', padding: '6px 12px' }} onClick={() => fileInputRef.current?.click()}>
+                        <Upload size={14} color="#059669" /> Importar
+                    </button>
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem', padding: '6px 12px' }} onClick={handleExportExcel}>
+                        <Download size={14} /> Exportar
+                    </button>
+
+                    <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
+
+                    {/* ── Tools Group (dropdown) ── */}
+                    <div style={{ position: 'relative' }}>
+                        <button className="btn btn-outline" onClick={() => { setShowToolsMenu(!showToolsMenu); setShowAIMenu(false); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 12px', borderColor: showToolsMenu ? 'var(--color-primary)' : undefined, color: showToolsMenu ? 'var(--color-primary)' : undefined }}>
+                            <Wrench size={14} /> Ferramentas <ChevronDown size={12} style={{ transform: showToolsMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        </button>
+                        {showToolsMenu && (<>
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowToolsMenu(false)} />
+                            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 240, overflow: 'hidden' }}>
+                                <button onClick={() => { const idx = items.findIndex(it => !isGrouper(it.type)); if (idx >= 0) setCompositionEditorIndex(idx); setShowToolsMenu(false); }}
+                                    disabled={items.findIndex(it => !isGrouper(it.type)) < 0}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    <Layers size={14} color="var(--color-primary)" />
+                                    <div><div>Editar Composições</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Abre o editor de detalhamento</div></div>
+                                </button>
+                                <button onClick={() => { refreshAllAudits(); setShowToolsMenu(false); }} disabled={items.length === 0 || isAuditing}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isAuditing ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isAuditing) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                                    <div><div>Reauditar Preços</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Confere preços contra bases oficiais</div></div>
+                                </button>
+                            </div>
+                        </>)}
+                    </div>
+                </div>
+            )}
 
             {/* Tab Content: Hub de Insumos */}
             {activeTab === 'hub_insumos' && (
