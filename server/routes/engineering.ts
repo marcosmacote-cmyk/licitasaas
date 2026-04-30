@@ -1043,6 +1043,30 @@ router.post('/price-audit', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-bdi
+// Extrai a composição de BDI via IA a partir do edital
+// ═══════════════════════════════════════════════════════════
+import { extractBdiFromBidding } from '../services/engineering/bdiAiExtractor';
+
+router.post('/ai-extract-bdi', async (req: any, res: any) => {
+    try {
+        const { biddingId } = req.body;
+        if (!biddingId) return res.status(400).json({ error: 'biddingId é obrigatório' });
+        
+        const bdiData = await extractBdiFromBidding(biddingId);
+        
+        if (!bdiData || !bdiData.found) {
+            return res.json({ found: false, message: 'Nenhuma tabela de BDI explícita encontrada no edital.' });
+        }
+        
+        return res.json({ found: true, data: bdiData });
+    } catch (e: any) {
+        console.error('[Engineering AI BDI] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair BDI', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
 // Pipeline: V2 itens_licitados → AI extraction (fallback)

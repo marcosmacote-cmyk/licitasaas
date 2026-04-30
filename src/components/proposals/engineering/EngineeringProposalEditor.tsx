@@ -367,6 +367,54 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(null), 8000); }
     };
 
+    // AI BDI extraction
+    const [isExtractingBdi, setIsExtractingBdi] = useState(false);
+    const handleExtractBdi = async () => {
+        setIsExtractingBdi(true);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Lendo edital com IA em busca do BDI...</span>);
+        try {
+            const res = await fetch('/api/engineering/ai-extract-bdi', {
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro na extração');
+            const result = await res.json();
+            
+            if (!result.found || !result.data) {
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> {result.message || 'Tabela de BDI não encontrada'}</span>);
+                return;
+            }
+            
+            const bdiData = result.data;
+            if (bdiData.tcu) {
+                // If detailed TCU is found
+                const tcu = bdiData.tcu;
+                setBdiConfig(prev => ({
+                    ...prev,
+                    mode: 'TCU',
+                    tcu: {
+                        ...prev.tcu,
+                        ...tcu
+                    }
+                }));
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Composição TCU 2622 extraída com sucesso!</span>);
+                setHasUnsavedChanges(true);
+            } else if (bdiData.globalBdi) {
+                // If only global is found
+                setBdiConfig(prev => ({
+                    ...prev,
+                    mode: 'SIMPLIFICADO',
+                    bdiGlobal: bdiData.globalBdi,
+                    tcu: autoDistributeBdi(bdiData.globalBdi)
+                }));
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> BDI Global extraído com sucesso!</span>);
+                setHasUnsavedChanges(true);
+            } else {
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> IA não conseguiu identificar os valores numéricos.</span>);
+            }
+        } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
+        finally { setIsExtractingBdi(false); setTimeout(() => setSaveMsg(null), 8000); }
+    };
+
     // Inline edit
     const updateItem = (id: string, field: keyof EngItem, value: any) => {
         setHasUnsavedChanges(true);
@@ -419,6 +467,38 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Auditoria atualizada contra base, data e regime</span>);
         } catch (e: any) {
             setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig));
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
+        } finally {
+            setIsAuditing(false);
+            setTimeout(() => setSaveMsg(null), 5000);
+        }
+    };
+
+    const syncBases = async () => {
+        if (items.length === 0) return;
+        setIsAuditing(true);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({Object.keys(engineeringConfig.dataBases || {}).length} datas bases)...</span>);
+        try {
+            const res = await fetch('/api/engineering/price-audit', {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ items, engineeringConfig }),
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar preços');
+            const data = await res.json();
+            
+            // Auto-apply base prices
+            const syncedItems = (Array.isArray(data.items) ? data.items : items).map(it => {
+                if (it.priceAudit?.matchedUnitCost && it.priceAudit.matchedUnitCost > 0) {
+                    return { ...it, unitCost: it.priceAudit.matchedUnitCost, priceOrigin: 'BASE' as const };
+                }
+                return it;
+            });
+            
+            setItems(recalcAll(syncedItems, effectiveBdi, engineeringConfig));
+            setHasUnsavedChanges(true);
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Tabela 100% atualizada com os custos do Hub (Nova Data Base).</span>);
+        } catch (e: any) {
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
@@ -1218,6 +1298,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     />
                                                 </div>
                                             ))}
+                                            {engineeringConfig.basesConsideradas.length > 0 && (
+                                                <button onClick={syncBases} disabled={isAuditing} style={{ marginTop: 4, width: '100%', padding: '6px', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s', opacity: isAuditing ? 0.7 : 1 }}>
+                                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                                                    Puxar Valores do Hub
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1273,8 +1359,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <Calculator size={16} color="var(--color-primary)" />
                                 <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Cálculo de BDI</h4>
                             </div>
-                            <button className="btn" title="Em breve: extração automática de BDI via PDF" style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }} onClick={() => alert('Extração via IA em desenvolvimento para BDI.')}>
-                                <Wand2 size={12} /> Extrair via IA
+                            <button className="btn" title="Extração automática de BDI via PDF" style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.6 : 1 }} onClick={handleExtractBdi} disabled={isExtractingBdi}>
+                                {isExtractingBdi ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair via IA
                             </button>
                         </div>
 
