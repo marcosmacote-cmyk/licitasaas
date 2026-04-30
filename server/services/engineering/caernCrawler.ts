@@ -167,13 +167,13 @@ const KNOWN_UNITS_LIST = [
 ];
 const KNOWN_UNITS = new Set(KNOWN_UNITS_LIST);
 // Regex to match the combined line: "UNIT PRICE1 PRICE2"
-// Examples: "M 7,10 6,55"  |  "UN 13,24 12,31"  |  "M2 1.234,56 1.200,00"
+// Supports properly spaced "M 7,10 6,55" AND merged spaces from pdf-parse "M³2,512,48"
 const UNIT_PRICE_REGEX = new RegExp(
-  `^(${KNOWN_UNITS_LIST.join('|')})\\s+(\\d[\\d.,]+)\\s+(\\d[\\d.,]+)\\s*$`, 'i'
+  `^(${KNOWN_UNITS_LIST.join('|')})\\s*(\\d[\\d.,]*?\\,\\d{2})\\s*(\\d[\\d.,]*?\\,\\d{2})\\s*$`, 'i'
 );
-// Also match unit + single price: "M 7,10"
+// Also match unit + single price: "M 7,10" or "M7,10"
 const UNIT_SINGLE_PRICE_REGEX = new RegExp(
-  `^(${KNOWN_UNITS_LIST.join('|')})\\s+(\\d[\\d.,]+)\\s*$`, 'i'
+  `^(${KNOWN_UNITS_LIST.join('|')})\\s*(\\d[\\d.,]*?\\,\\d{2})\\s*$`, 'i'
 );
 
 // ═══════════════════════════════════════════════════════════
