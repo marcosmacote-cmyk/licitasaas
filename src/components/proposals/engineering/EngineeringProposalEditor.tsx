@@ -1284,8 +1284,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     </div>
                                 </div>
                             )}
+                        </div>
                     </div>
-
                     {/* Totals */}
                     <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
                         <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
