@@ -121,6 +121,66 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     logger.warn(`[Engineering-BG] ⚠️ Failed: ${err.message}`);
                 }
             }
+
+            // ═══════════════════════════════════════════════════════
+            // FALLBACK 3: Se schemaV2.attachments está vazio, buscar
+            // diretamente na API PNCP usando o pncpLink do processo.
+            // (Mesmo approach que downloadPncpPdfsForEngineering)
+            // ═══════════════════════════════════════════════════════
+            if (rawPdfBuffers.length === 0 && bidding?.pncpLink) {
+                logger.info(`[Engineering-BG] 📄 Fallback 3: Buscando anexos diretamente da API PNCP via pncpLink...`);
+                const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
+                if (linkMatch) {
+                    const [, cnpj, ano, seq] = linkMatch;
+                    const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+                    try {
+                        const apiRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 20000 } as any);
+                        const arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
+                        logger.info(`[Engineering-BG] 📎 API PNCP retornou ${arquivos.length} anexo(s)`);
+
+                        if (arquivos.length > 0) {
+                            const apiClassified = classifyEngineeringAttachments(arquivos, { maxDocuments: 4 });
+                            const apiSelected = apiClassified.selected.length > 0
+                                ? apiClassified.selected
+                                : apiClassified.all.filter(doc => doc.score > -20).slice(0, 4);
+
+                            logger.info(
+                                `[Engineering-BG] 📎 API classifier selected ${apiSelected.length}/${apiClassified.summary.total}: ` +
+                                apiSelected.map(doc => `"${doc.title}" (${doc.score})`).join(', ')
+                            );
+
+                            for (const doc of apiSelected.slice(0, 4)) {
+                                try {
+                                    let fileUrl = doc.url || '';
+                                    if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
+                                    if (!fileUrl) continue;
+
+                                    const fileRes = await axios.get(fileUrl, {
+                                        responseType: 'arraybuffer',
+                                        httpsAgent: agent,
+                                        timeout: 60000,
+                                        maxRedirects: 5,
+                                        maxContentLength: 50 * 1024 * 1024,
+                                    } as any);
+                                    const buf = Buffer.from(fileRes.data as ArrayBuffer);
+
+                                    // Verify it's a PDF (magic bytes %P)
+                                    if (buf[0] === 0x25 && buf[1] === 0x50) {
+                                        rawPdfBuffers.push({ buffer: buf, source: doc.title || 'PNCP PDF' });
+                                        logger.info(`[Engineering-BG] ✅ API PDF: "${doc.title}" (${(buf.length / 1024).toFixed(0)} KB)`);
+                                    } else {
+                                        logger.info(`[Engineering-BG] ⏭️ "${doc.title}" não é PDF, ignorando`);
+                                    }
+                                } catch (dlErr: any) {
+                                    logger.warn(`[Engineering-BG] ⚠️ Download falhou para "${doc.title}": ${dlErr.message}`);
+                                }
+                            }
+                        }
+                    } catch (apiErr: any) {
+                        logger.warn(`[Engineering-BG] ⚠️ API PNCP falhou: ${apiErr.message}`);
+                    }
+                }
+            }
         } catch (err: any) {
             logger.warn(`[Engineering-BG] ⚠️ DB lookup failed: ${err.message}`);
         }
