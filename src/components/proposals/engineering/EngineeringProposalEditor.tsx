@@ -396,6 +396,29 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {data.saved || 0} composições extraídas e salvas na base PRÓPRIA</span>);
+
+            // Reload bases list (PROPRIA may have been created)
+            try {
+                const basesRes = await fetch('/api/engineering/bases', { headers: hdrs() });
+                if (basesRes.ok) {
+                    const basesData = await basesRes.json();
+                    if (Array.isArray(basesData)) setBases(basesData);
+                }
+            } catch { /* ignore */ }
+
+            // Re-enrich items to pick up the newly saved PROPRIA compositions
+            if (items.length > 0 && data.saved > 0) {
+                try {
+                    const enrichRes = await fetch('/api/engineering/ai-populate', {
+                        method: 'POST', headers: hdrs(),
+                        body: JSON.stringify({ biddingId, engineeringConfig })
+                    });
+                    if (enrichRes.ok) {
+                        // Silently update priceAudit without replacing items
+                        // (user may have manual edits)
+                    }
+                } catch { /* enrichment is best-effort */ }
+            }
         } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
         finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(null), 8000); }
     };
