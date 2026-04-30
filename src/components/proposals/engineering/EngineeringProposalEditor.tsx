@@ -275,8 +275,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     }, [hasUnsavedChanges]);
 
     // AI extraction
-    const handleExtractAI = async () => {
-        if (items.length > 0) {
+    const handleExtractAI = async (isPolling: boolean = false) => {
+        if (!isPolling && items.length > 0) {
             if (!window.confirm('Já existem itens na planilha. Deseja substituí-los completamente por uma nova extração da IA? (Isso iniciará uma nova extração do zero)')) {
                 return;
             }
@@ -284,7 +284,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setIsExtracting(true);
         try {
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh: items.length > 0 })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh: !isPolling && items.length > 0 })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -358,7 +358,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     if (job.status === 'COMPLETED') {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
                                         // Re-trigger to get the items now available in schemaV2
-                                        setTimeout(() => handleExtractAI(), 1000);
+                                        setTimeout(() => handleExtractAI(true), 1000);
                                     } else {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
                                     }
