@@ -295,9 +295,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     const unitPrice = extractedUnitPrice > 0 ? extractedUnitPrice : computedUnitPrice;
                     const totalPrice = extractedTotalPrice > 0 ? extractedTotalPrice : applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision });
                     
-                    const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (ai.sourceName || '');
-                    const isKnownSource = bases.some(b => b.name.toUpperCase() === extractedSource.toUpperCase());
-                    const finalSource = isGroup ? '' : (isKnownSource ? extractedSource : 'PROPRIA');
+                    const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (ai.sourceName || 'PROPRIA');
+                    const finalSource = isGroup ? '' : extractedSource;
                     const normalizedCode = finalSource === 'ORSE' && ai.code
                         ? String(ai.code).toUpperCase().replace(/^0+(\d)/, '$1').replace(/\/?ORSE$/, '/ORSE')
                         : ai.code;

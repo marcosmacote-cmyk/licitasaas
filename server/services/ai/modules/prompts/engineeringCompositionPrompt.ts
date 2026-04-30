@@ -36,7 +36,7 @@ FORMATO DE SAÍDA (JSON)
 {
   "compositions": [
     {
-      "code": "C0001",
+      "code": "CP-01",
       "description": "CHAPISCO COM ARGAMASSA DE CIMENTO E AREIA",
       "unit": "M2",
       "groups": {
