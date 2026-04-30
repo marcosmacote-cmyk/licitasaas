@@ -2079,6 +2079,42 @@ router.get('/bases/sbc/regions', async (_req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/sync-caern
+// Trigger CAERN (RN) auto-download & import (Admin only)
+// Public access — no credentials needed
+// ═══════════════════════════════════════════════════════════
+import { syncCaern } from '../services/engineering/caernCrawler';
+
+router.post('/bases/sync-caern', async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        const currentYear = new Date().getFullYear();
+        const { years = [currentYear, currentYear - 1, currentYear - 2] } = req.body;
+
+        console.log(`[CAERN Sync] 🚀 Admin ${req.user?.email} disparou sync CAERN: Anos=${Array.isArray(years) ? years.join(',') : years}`);
+
+        res.json({
+            message: `Sync CAERN iniciado em background para anos ${Array.isArray(years) ? years.join(', ') : years}`,
+            status: 'started',
+        });
+
+        // Fire and forget
+        syncCaern({ years: Array.isArray(years) ? years : [currentYear, currentYear - 1, currentYear - 2] }).then(report => {
+            console.log(`[CAERN Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
+        }).catch(err => {
+            console.error(`[CAERN Sync] ❌ Erro fatal:`, err);
+        });
+
+    } catch (e: any) {
+        console.error('[CAERN Sync] Error:', e);
+        res.status(500).json({ error: 'Erro ao iniciar sync CAERN', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // ORSE official base sync + live search
 // Uses the public ORSE service search by period because .ORSE update
 // packages are proprietary binary files from the desktop ORSE system.

@@ -16,9 +16,9 @@ interface EngDatabase {
 }
 
 const SOURCE_COLORS: Record<string, string> = {
-    SINAPI: '#059669', SEINFRA: '#7c3aed', ORSE: '#0891b2', SICOR: '#ca8a04', SICRO: '#dc2626', SBC: '#d97706', PROPRIA: '#2563eb',
+    SINAPI: '#059669', SEINFRA: '#7c3aed', ORSE: '#0891b2', SICOR: '#ca8a04', SICRO: '#dc2626', SBC: '#d97706', CAERN: '#0d9488', PROPRIA: '#2563eb',
 };
-const SOURCE_ORDER = ['SINAPI', 'SICRO', 'SBC', 'SICOR', 'SEINFRA', 'ORSE', 'PROPRIA'];
+const SOURCE_ORDER = ['SINAPI', 'SICRO', 'SBC', 'CAERN', 'SICOR', 'SEINFRA', 'ORSE', 'PROPRIA'];
 
 export function EngineeringHub() {
     const [activeTab, setActiveTab] = useState<'oficiais' | 'propria'>('oficiais');
@@ -31,6 +31,7 @@ export function EngineeringHub() {
     const [syncingSicor, setSyncingSicor] = useState(false);
     const [syncingSicro, setSyncingSicro] = useState(false);
     const [syncingSbc, setSyncingSbc] = useState(false);
+    const [syncingCaern, setSyncingCaern] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -445,6 +446,34 @@ export function EngineeringHub() {
                         >
                             {syncingSbc ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
                             {syncingSbc ? 'Sincronizando...' : 'Sync SBC'}
+                        </button>
+
+                        <button
+                            onClick={async () => {
+                                if (!confirm('Iniciar download CAERN (RN)?\n\n🏗️ Tabela de Preços da CAERN\n🗺️ Rio Grande do Norte\n📅 Últimos 3 anos\n\nAcesso público — sem credenciais.\nO processo roda em background.')) return;
+                                setSyncingCaern(true);
+                                try {
+                                    const res = await fetch('/api/engineering/bases/sync-caern', {
+                                        method: 'POST',
+                                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({})
+                                    });
+                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
+                                } catch (err) { alert('Erro de conexão'); }
+                                setSyncingCaern(false);
+                            }}
+                            disabled={syncingCaern}
+                            style={{
+                                background: 'linear-gradient(135deg, #0d9488, #14b8a6)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingCaern ? 'wait' : 'pointer',
+                                opacity: syncingCaern ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(13,148,136,0.25)'
+                            }}
+                        >
+                            {syncingCaern ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
+                            {syncingCaern ? 'Sincronizando...' : 'Sync CAERN (RN)'}
                         </button>
 
                         <button
