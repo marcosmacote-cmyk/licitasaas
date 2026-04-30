@@ -1073,7 +1073,7 @@ router.post('/ai-extract-bdi', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
-        const { textChunk, biddingId, engineeringConfig } = req.body;
+        const { textChunk, biddingId, engineeringConfig, forceRefresh } = req.body;
         
         let extractionText = textChunk;
 
@@ -1092,10 +1092,14 @@ router.post('/ai-populate', async (req: any, res: any) => {
             
             // Priority 1: Use _engineeringBudgetItems from Etapa 1.5 (dedicated extraction)
             const engBudgetItems = schemaV2?._engineeringBudgetItems;
-            if (Array.isArray(engBudgetItems) && engBudgetItems.length > 5) {
+            if (Array.isArray(engBudgetItems) && engBudgetItems.length > 5 && !forceRefresh) {
                 console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
                 await enrichWithOfficialPrices(engBudgetItems, engineeringConfig);
                 return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
+            }
+            
+            if (forceRefresh) {
+                console.log(`[Engineering AI-Populate] 🔄 forceRefresh=true — invalidando cache e forçando nova extração`);
             }
 
             // Priority 2: Use V2 itens_licitados if they have enough items

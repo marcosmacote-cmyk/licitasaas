@@ -276,10 +276,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // AI extraction
     const handleExtractAI = async () => {
+        if (items.length > 0) {
+            if (!window.confirm('Já existem itens na planilha. Deseja substituí-los completamente por uma nova extração da IA? (Isso iniciará uma nova extração do zero)')) {
+                return;
+            }
+        }
         setIsExtracting(true);
         try {
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh: items.length > 0 })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -302,7 +307,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         : ai.code;
 
                     return {
-                        id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
+                        id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(i + 1),
                         code: normalizedCode || (isGroup ? '' : 'N/A'), sourceName: finalSource,
                         description: ai.description || '', unit: isGroup ? '' : (ai.unit || 'UN'),
                         quantity: qty, unitCost: cost, type: aiType,
@@ -316,7 +321,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         insumos: Array.isArray(ai.insumos) ? ai.insumos : undefined,
                     };
                 });
-                setItems(prev => [...prev, ...mapped]);
+                setItems(mapped); // REPLACE instead of append
                 setHasUnsavedChanges(true);
                 const etapas = mapped.filter((m: EngItem) => m.type === 'ETAPA').length;
                 const subs = mapped.filter((m: EngItem) => m.type === 'SUBETAPA').length;
