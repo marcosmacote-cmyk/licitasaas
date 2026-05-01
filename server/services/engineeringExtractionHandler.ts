@@ -418,6 +418,56 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         throw new Error(`Extração de engenharia falhou: ${err.message}`);
     }
 
+    // ── RETRY WITHOUT PAGE TARGETING ──
+    // If targeting was used but 0 items found, the targeting may have excluded budget pages.
+    // Retry with the FULL PDF (no trimming) before giving up.
+    if (engItems.length === 0 && targetingUsed && rawPdfBuffers.length > 0) {
+        logger.info(`[Engineering-BG] 🔄 Page targeting produziu 0 itens — retentando com PDF COMPLETO (sem targeting)...`);
+        
+        await updateJobProgress(job.id, tenantId, {
+            progress: 50,
+            progressMsg: 'Retentando extração com documento completo...'
+        }).catch(() => {});
+
+        try {
+            const fullPdfParts = rawPdfBuffers.map(({ buffer }) => ({
+                inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+            }));
+
+            const retryResult = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [...fullPdfParts, { text: `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}` }] }],
+                config: {
+                    systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    maxOutputTokens: 65536,
+                    responseMimeType: 'application/json'
+                }
+            }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction_full_retry' } });
+
+            const retryText = retryResult.text || '';
+            logger.info(`[Engineering-BG] ✅ Retry (full PDF) respondeu (${retryText.length} chars)`);
+
+            const retryNormalized = parseAndNormalizeEngineeringExtraction(retryText);
+            const retryScreening = screenEngineeringItems(retryNormalized.engineeringItems);
+            
+            if (retryScreening.acceptedItems.length > 0) {
+                engItems = retryScreening.acceptedItems;
+                screening = retryScreening;
+                targetingUsed = false; // Mark that full PDF was used
+                const withCodes = engItems.filter((it: any) => it.code && it.sourceName && it.sourceName !== 'PROPRIA').length;
+                logger.info(
+                    `[Engineering-BG] ✅ Retry (full PDF) bem-sucedido — ${engItems.length} itens extraídos (${withCodes} com código oficial). ` +
+                    `Page targeting havia falhado silenciosamente.`
+                );
+            } else {
+                logger.warn(`[Engineering-BG] ⚠️ Retry (full PDF) também retornou 0 itens.`);
+            }
+        } catch (retryErr: any) {
+            logger.warn(`[Engineering-BG] ⚠️ Retry (full PDF) falhou: ${retryErr.message}`);
+        }
+    }
+
     // TASK-05: Diagnóstico detalhado quando extração retorna 0 itens
     if (engItems.length === 0) {
         const diagnostics = {
