@@ -223,6 +223,41 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
     }
 });
 
+function normalizeCompositionSource(sourceName?: string): string | undefined {
+    const source = String(sourceName || '').trim().toUpperCase();
+    if (!source) return undefined;
+    if (source === 'SICRO3') return 'SICRO';
+    if (source === 'SICOR-MG' || source === 'SICOR MG' || source === 'DER-MG' || source === 'DER MG') return 'SICOR';
+    return source;
+}
+
+function buildCompositionCodeVariants(code: string): string[] {
+    const raw = String(code || '').trim();
+    const upper = raw.toUpperCase().replace(/\.$/, '');
+    const variants = new Set<string>([raw, upper]);
+    const orse = upper.match(/^0*(\d{1,6})(?:\/ORSE)?$/);
+    if (orse && /ORSE$/i.test(upper)) {
+        variants.add(`${orse[1]}/ORSE`);
+        variants.add(orse[1]);
+        variants.add(`${orse[1].padStart(4, '0')}/ORSE`);
+        variants.add(`${orse[1].padStart(5, '0')}/ORSE`);
+    }
+    const numeric = upper.match(/^0*(\d{4,7})$/);
+    if (numeric) {
+        variants.add(numeric[1]);
+        variants.add(numeric[1].padStart(5, '0'));
+        variants.add(numeric[1].padStart(6, '0'));
+    }
+    return [...variants].filter(Boolean);
+}
+
+function compositionIncludes() {
+    return {
+        items: { include: { item: true }, orderBy: { createdAt: 'asc' as const } },
+        database: { select: { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } },
+    };
+}
+
 // ═══════════════════════════════════════════════════════════
 // GET /api/engineering/compositions/:code
 // Busca composição por código com drill-down completo de insumos
@@ -231,28 +266,80 @@ router.get('/compositions/:code', async (req: any, res: any) => {
     try {
         const code = req.params.code;
         const databaseId = req.query.databaseId as string || undefined;
+        const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
+        const codeVariants = buildCompositionCodeVariants(code);
 
-        const where: any = { code };
+        const where: any = { code: { in: codeVariants } };
         if (databaseId) where.databaseId = databaseId;
+        else if (sourceName) where.database = { name: sourceName };
 
         // Try to find in PROPRIA first, then fallback to others
         let composition = null;
         if (!databaseId) {
+            const propriaDatabaseWhere: any = { name: 'PROPRIA' };
+            if (req.user?.tenantId) propriaDatabaseWhere.tenantId = req.user.tenantId;
             composition = await prisma.engineeringComposition.findFirst({
-                where: { code, database: { name: 'PROPRIA' } },
-                include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+                where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
+                include: compositionIncludes()
             });
         }
 
         if (!composition) {
             composition = await prisma.engineeringComposition.findFirst({
                 where,
-                include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+                include: compositionIncludes()
             });
         }
 
         if (!composition) {
-            return res.status(404).json({ error: 'Composição não encontrada', code });
+            const itemWhere: any = { code: { in: codeVariants } };
+            if (databaseId) itemWhere.databaseId = databaseId;
+            else if (sourceName) itemWhere.database = { name: sourceName };
+            const syntheticItem = await prisma.engineeringItem.findFirst({
+                where: itemWhere,
+                include: { database: { select: { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
+            });
+
+            if (!syntheticItem) {
+                return res.status(404).json({ error: 'Composição não encontrada', code, codeVariants });
+            }
+
+            const syntheticRow = {
+                id: `synthetic-${syntheticItem.id}`,
+                coefficient: 1,
+                price: syntheticItem.price,
+                item: {
+                    id: syntheticItem.id,
+                    code: syntheticItem.code,
+                    description: syntheticItem.description,
+                    unit: syntheticItem.unit,
+                    price: syntheticItem.price,
+                    type: syntheticItem.type === 'MAO_DE_OBRA' || syntheticItem.type === 'EQUIPAMENTO' || syntheticItem.type === 'MATERIAL'
+                        ? syntheticItem.type
+                        : 'SERVICO',
+                },
+            };
+
+            const syntheticGroups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };
+            const groupKey = syntheticRow.item.type || 'SERVICO';
+            if (!syntheticGroups[groupKey]) syntheticGroups[groupKey] = [];
+            syntheticGroups[groupKey].push(syntheticRow);
+
+            return res.json({
+                id: `synthetic-${syntheticItem.id}`,
+                databaseId: syntheticItem.databaseId,
+                code: syntheticItem.code,
+                description: syntheticItem.description,
+                unit: syntheticItem.unit,
+                totalPrice: syntheticItem.price,
+                database: syntheticItem.database,
+                items: [syntheticRow],
+                groups: syntheticGroups,
+                totalDirect: syntheticItem.price,
+                hasAnalyticalItems: false,
+                synthetic: true,
+                message: 'Preço sintético encontrado, mas a composição analítica não está importada nesta base.',
+            });
         }
 
         if (
@@ -270,6 +357,34 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             } catch (e: any) {
                 console.warn(`[ORSE Detail] Could not hydrate ${code}: ${e.message}`);
             }
+        }
+
+        if (
+            composition.items.length === 0 &&
+            String(composition.database?.type || '').toUpperCase() === 'OFICIAL'
+        ) {
+            const syntheticRow = {
+                id: `synthetic-composition-${composition.id}`,
+                coefficient: 1,
+                price: composition.totalPrice,
+                item: {
+                    id: `synthetic-item-${composition.id}`,
+                    code: composition.code,
+                    description: composition.description,
+                    unit: composition.unit,
+                    price: composition.totalPrice,
+                    type: 'SERVICO',
+                },
+            };
+            return res.json({
+                ...composition,
+                items: [syntheticRow],
+                groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [syntheticRow], AUXILIAR: [] },
+                totalDirect: composition.totalPrice,
+                hasAnalyticalItems: false,
+                synthetic: true,
+                message: 'Composição oficial encontrada, mas sem itens analíticos importados nesta base.',
+            });
         }
 
         // Enrich with auxiliary compositions if any

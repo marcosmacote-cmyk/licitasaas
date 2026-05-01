@@ -22,6 +22,9 @@ interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
+    priceAudit?: {
+        matchedDatabaseId?: string | null;
+    };
 }
 
 interface Props {
@@ -190,7 +193,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setData(null);
         setHasChanges(false);
         try {
-            const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}`, { headers: hdrs() });
+            const params = new URLSearchParams();
+            const matchedDatabaseId = currentItem?.priceAudit?.matchedDatabaseId;
+            if (matchedDatabaseId) params.set('databaseId', matchedDatabaseId);
+            if (currentItem?.sourceName) params.set('sourceName', currentItem.sourceName);
+            const qs = params.toString();
+            const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`, { headers: hdrs() });
             if (!res.ok) throw new Error('not_found');
             const d = await res.json();
             setData(d);
@@ -198,7 +206,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setError('not_found');
         }
         setLoading(false);
-    }, []);
+    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName]);
 
     useEffect(() => {
         if (currentItem?.code) loadComposition(currentItem.code);
@@ -905,6 +913,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
                     {data && !error && data.items?.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {data.hasAnalyticalItems === false && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                                    padding: '12px 14px', borderRadius: 6,
+                                    border: '1px solid rgba(217,119,6,0.25)',
+                                    background: 'rgba(217,119,6,0.08)',
+                                    color: '#92400e', fontSize: '0.82rem', lineHeight: 1.45,
+                                }}>
+                                    <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                                    <div>
+                                        <strong>Preço sintético encontrado, mas a CPU analítica não está importada.</strong>
+                                        <div style={{ marginTop: 3 }}>
+                                            A linha abaixo representa o serviço/preço cadastrado na base. Para ver materiais, mão de obra e equipamentos, sincronize ou importe a planilha analítica da base oficial correspondente.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             {Object.entries(GROUP_META).map(([groupKey, meta]) => {
                                 const groupItems = data.groups?.[groupKey] || [];
                                 if (groupItems.length === 0) return null;

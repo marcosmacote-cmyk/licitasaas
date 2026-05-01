@@ -1686,6 +1686,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 <CompositionDrawer
                     code={compositionItem.code}
                     description={compositionItem.description}
+                    databaseId={compositionItem.priceAudit?.matchedDatabaseId || undefined}
+                    sourceName={compositionItem.sourceName}
                     onClose={() => setCompositionItem(null)}
                 />
             )}

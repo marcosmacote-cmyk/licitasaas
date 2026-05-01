@@ -17,6 +17,7 @@ interface Props {
     code: string;
     description: string;
     databaseId?: string;
+    sourceName?: string;
     onClose: () => void;
 }
 
@@ -24,22 +25,27 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     MATERIAL: { label: 'Materiais', icon: Package, color: '#2563eb' },
     MAO_DE_OBRA: { label: 'Mão de Obra', icon: HardHat, color: '#16a34a' },
     EQUIPAMENTO: { label: 'Equipamentos', icon: Wrench, color: '#d97706' },
+    SERVICO: { label: 'Serviços', icon: Wrench, color: '#0ea5e9' },
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
 };
 
-export function CompositionDrawer({ code, description, databaseId, onClose }: Props) {
+export function CompositionDrawer({ code, description, databaseId, sourceName, onClose }: Props) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedAux, setExpandedAux] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        const url = `/api/engineering/compositions/${encodeURIComponent(code)}${databaseId ? `?databaseId=${databaseId}` : ''}`;
+        const params = new URLSearchParams();
+        if (databaseId) params.set('databaseId', databaseId);
+        if (sourceName) params.set('sourceName', sourceName);
+        const qs = params.toString();
+        const url = `/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`;
         fetch(url, { headers: hdrs() })
             .then(r => { if (!r.ok) throw new Error('not_found'); return r.json(); })
             .then(d => { setData(d); setLoading(false); })
             .catch(() => { setError('Composição não encontrada na base oficial.'); setLoading(false); });
-    }, [code, databaseId]);
+    }, [code, databaseId, sourceName]);
 
     const toggleAux = (id: string) => setExpandedAux(prev => {
         const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
@@ -98,6 +104,12 @@ export function CompositionDrawer({ code, description, databaseId, onClose }: Pr
 
                     {data && !error && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {data.hasAnalyticalItems === false && (
+                                <div style={{ padding: 12, borderRadius: 6, border: '1px solid rgba(217,119,6,0.25)', background: 'rgba(217,119,6,0.08)', color: '#92400e', fontSize: '0.82rem', lineHeight: 1.45 }}>
+                                    <strong>Preço sintético encontrado, mas a CPU analítica não está importada.</strong>
+                                    <div style={{ marginTop: 3 }}>A linha exibida representa o serviço/preço da base. Importe a planilha analítica para ver os insumos detalhados.</div>
+                                </div>
+                            )}
                             {Object.entries(GROUP_META).map(([groupKey, meta]) => {
                                 const items = data.groups?.[groupKey] || [];
                                 if (items.length === 0) return null;
