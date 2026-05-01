@@ -284,7 +284,8 @@ function isSubLevelGrouper(itemNum: string): boolean {
  * Post-classification: infer ETAPA/SUBETAPA from structural signals
  * when the AI incorrectly classifies groupers as COMPOSICAO.
  */
-function postClassifyTypes(items: Array<Record<string, any>>, repairs: string[]): void {
+export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: string[]): void {
+    const _repairs = repairs || [];
     const allItemNums = new Set(items.map(it => String(it.item || '').trim()));
 
     for (const item of items) {
@@ -330,7 +331,7 @@ function postClassifyTypes(items: Array<Record<string, any>>, repairs: string[])
 
         // Apply reclassification
         if (inferredType) {
-            repairs.push(`type_reclassify:${itemNum}:${currentType}->${inferredType}`);
+            _repairs.push(`type_reclassify:${itemNum}:${currentType}->${inferredType}`);
             item.type = inferredType;
             item.quantity = 0;
             item.unitCost = 0;

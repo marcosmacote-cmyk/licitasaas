@@ -11,7 +11,7 @@ import axios from 'axios';
 import https from 'https';
 import { submitJob } from '../services/backgroundJobService';
 import { classifyEngineeringAttachments } from '../services/engineering/documentClassifier';
-import { parseAndNormalizeEngineeringExtraction } from '../services/engineering/resultNormalizer';
+import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -1093,6 +1093,8 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // Priority 1: Use _engineeringBudgetItems from Etapa 1.5 (dedicated extraction)
             const engBudgetItems = schemaV2?._engineeringBudgetItems;
             if (Array.isArray(engBudgetItems) && engBudgetItems.length > 0 && !forceRefresh) {
+                // Apply post-classification to fix cached items from before the type-fix
+                postClassifyTypes(engBudgetItems);
                 console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
                 await enrichWithOfficialPrices(engBudgetItems, engineeringConfig);
                 return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
