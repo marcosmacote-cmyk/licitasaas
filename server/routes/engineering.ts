@@ -258,6 +258,82 @@ function compositionIncludes() {
     };
 }
 
+function compositionOrderBy() {
+    return [
+        { database: { referenceYear: 'desc' as const } },
+        { database: { referenceMonth: 'desc' as const } },
+        { updatedAt: 'desc' as const },
+    ];
+}
+
+async function findCompositionWithItems(codeVariants: string[], where: any) {
+    return prisma.engineeringComposition.findFirst({
+        where: { ...where, code: { in: codeVariants }, items: { some: {} } },
+        include: compositionIncludes(),
+        orderBy: compositionOrderBy(),
+    });
+}
+
+async function findBestAnalyticalComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string) {
+    const requestedDatabase = databaseId
+        ? await prisma.engineeringDatabase.findUnique({
+            where: { id: databaseId },
+            select: { id: true, name: true, uf: true, type: true, tenantId: true, payrollExemption: true },
+        })
+        : null;
+
+    const propriaWhere: any = { database: { name: 'PROPRIA' } };
+    if (tenantId) propriaWhere.database.tenantId = tenantId;
+    const propria = await findCompositionWithItems(codeVariants, propriaWhere);
+    if (propria) return propria;
+
+    if (databaseId) {
+        const exact = await findCompositionWithItems(codeVariants, { databaseId });
+        if (exact) return exact;
+    }
+
+    const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || sourceName);
+    if (dbSourceName) {
+        const sameSourceAndUfWhere: any = { database: { name: dbSourceName } };
+        if (requestedDatabase?.uf) sameSourceAndUfWhere.database.uf = requestedDatabase.uf;
+        if (typeof requestedDatabase?.payrollExemption === 'boolean') {
+            sameSourceAndUfWhere.database.payrollExemption = requestedDatabase.payrollExemption;
+        }
+        const sameSourceAndUf = await findCompositionWithItems(codeVariants, sameSourceAndUfWhere);
+        if (sameSourceAndUf) return sameSourceAndUf;
+
+        const sameSource = await findCompositionWithItems(codeVariants, { database: { name: dbSourceName } });
+        if (sameSource) return sameSource;
+    }
+
+    return findCompositionWithItems(codeVariants, { database: { type: 'OFICIAL' } });
+}
+
+async function findFallbackComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string) {
+    const include = compositionIncludes();
+
+    if (!databaseId) {
+        const propriaDatabaseWhere: any = { name: 'PROPRIA' };
+        if (tenantId) propriaDatabaseWhere.tenantId = tenantId;
+        const propria = await prisma.engineeringComposition.findFirst({
+            where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
+            include,
+            orderBy: compositionOrderBy(),
+        });
+        if (propria) return propria;
+    }
+
+    const where: any = { code: { in: codeVariants } };
+    if (databaseId) where.databaseId = databaseId;
+    else if (sourceName) where.database = { name: sourceName };
+
+    return prisma.engineeringComposition.findFirst({
+        where,
+        include,
+        orderBy: compositionOrderBy(),
+    });
+}
+
 // ═══════════════════════════════════════════════════════════
 // GET /api/engineering/compositions/:code
 // Busca composição por código com drill-down completo de insumos
@@ -269,27 +345,8 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
         const codeVariants = buildCompositionCodeVariants(code);
 
-        const where: any = { code: { in: codeVariants } };
-        if (databaseId) where.databaseId = databaseId;
-        else if (sourceName) where.database = { name: sourceName };
-
-        // Try to find in PROPRIA first, then fallback to others
-        let composition = null;
-        if (!databaseId) {
-            const propriaDatabaseWhere: any = { name: 'PROPRIA' };
-            if (req.user?.tenantId) propriaDatabaseWhere.tenantId = req.user.tenantId;
-            composition = await prisma.engineeringComposition.findFirst({
-                where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
-                include: compositionIncludes()
-            });
-        }
-
-        if (!composition) {
-            composition = await prisma.engineeringComposition.findFirst({
-                where,
-                include: compositionIncludes()
-            });
-        }
+        let composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
+        if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
 
         if (!composition) {
             const itemWhere: any = { code: { in: codeVariants } };
@@ -406,7 +463,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         }));
 
         // Group by type for nice display
-        const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], AUXILIAR: [] };
+        const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };
         for (const ci of enrichedItems) {
             if (ci.auxiliaryComposition) {
                 groups.AUXILIAR.push(ci);

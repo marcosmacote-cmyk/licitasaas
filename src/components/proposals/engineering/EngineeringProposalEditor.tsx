@@ -1137,7 +1137,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
+                                {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria','CPU',''].map((h,i) => (
                                     <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, width: i === 4 ? '24%' : i === 1 ? 80 : undefined, fontSize: '0.72rem' }}>{h}</th>
                                 ))}
                             </tr>
@@ -1178,7 +1178,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     <IconComp size={11} /> {meta.label}
                                                 </span>
                                             </td>
-                                            <td colSpan={8} style={{ padding: '8px 12px' }}>
+                                            <td colSpan={9} style={{ padding: '8px 12px' }}>
                                                 <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
                                                     style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
                                                     onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
@@ -1275,6 +1275,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it, () => applyBasePriceToItem(it.id))}</td>
+                                                <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                                                    {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && it.sourceName !== 'PROPRIA' && (
+                                                        <button
+                                                            className="prop-icon-btn"
+                                                            title="Ver composição analítica (CPU)"
+                                                            onClick={() => setCompositionItem(it)}
+                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
+                                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
+                                                        >
+                                                            <Database size={14} color="var(--color-primary)" />
+                                                        </button>
+                                                    )}
+                                                </td>
                                                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                                     <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                 </td>
@@ -1292,7 +1306,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     };
                                     rows.push(
                                         <tr key={`${it.id}-insumos`} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td colSpan={12} style={{ padding: 0 }}>
+                                            <td colSpan={13} style={{ padding: 0 }}>
                                                 <div style={{ margin: '0 16px 8px 40px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(14,116,144,0.12)', overflow: 'hidden', background: 'rgba(14,116,144,0.02)' }}>
                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
                                                         <thead>
@@ -1338,7 +1352,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 return rows;
                             })}
                             {items.length === 0 && (
-                                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                <tr><td colSpan={13} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                     {extractionMeta?.status === 'empty_extraction' ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                                             <div style={{ padding: '12px 16px', background: 'rgba(217,119,6,0.1)', borderRadius: 8, color: '#b45309', maxWidth: 600 }}>
