@@ -418,8 +418,53 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         throw new Error(`Extração de engenharia falhou: ${err.message}`);
     }
 
+    // TASK-05: Diagnóstico detalhado quando extração retorna 0 itens
     if (engItems.length === 0) {
-        throw new Error('Gemini não extraiu nenhum item da planilha');
+        const diagnostics = {
+            pdfsProcessed: rawPdfBuffers.length,
+            pdfSources: rawPdfBuffers.map(p => ({
+                source: p.source,
+                sizeKB: Math.round(p.buffer.length / 1024),
+            })),
+            pageTargetingUsed: targetingUsed,
+            zeroxFallbackUsed,
+            modelUsed,
+            possibleCauses: [] as string[],
+        };
+
+        // Detectar causas prováveis
+        if (rawPdfBuffers.length === 0) {
+            diagnostics.possibleCauses.push('Nenhum PDF disponível para extração');
+        } else if (rawPdfBuffers.every(p => p.buffer.length < 50 * 1024)) {
+            diagnostics.possibleCauses.push('Todos os PDFs são muito pequenos (<50KB) — podem não conter planilha orçamentária');
+        }
+        if (targetingUsed && !zeroxFallbackUsed) {
+            diagnostics.possibleCauses.push('Page targeting pode ter excluído páginas com a planilha');
+        }
+        if (!zeroxFallbackUsed && zeroxFallbackCandidates.length > 0) {
+            diagnostics.possibleCauses.push('PDF pode ser escaneado (imagem) — OCR Zerox não foi acionado');
+        }
+        if (diagnostics.possibleCauses.length === 0) {
+            diagnostics.possibleCauses.push('PDFs analisados não parecem conter planilha orçamentária estruturada');
+        }
+
+        // Persistir diagnóstico no schemaV2 para o frontend ler
+        try {
+            await mergeEngineeringResults(biddingId, [], undefined, {
+                ...diagnostics,
+                status: 'empty_extraction',
+                extractedAt: new Date().toISOString(),
+            });
+        } catch (persistErr: any) {
+            logger.warn(`[Engineering-BG] ⚠️ Falha ao persistir diagnóstico: ${persistErr.message}`);
+        }
+
+        const causeText = diagnostics.possibleCauses.join('; ');
+        throw new Error(
+            `Nenhum item orçamentário encontrado em ${rawPdfBuffers.length} PDF(s). ` +
+            `Diagnóstico: ${causeText}. ` +
+            `Tente enviar a planilha orçamentária manualmente.`
+        );
     }
 
     await updateJobProgress(job.id, tenantId, {

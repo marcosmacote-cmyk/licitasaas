@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { logger } from '../lib/logger';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
@@ -14,7 +14,6 @@ import { classifyEngineeringAttachments } from '../services/engineering/document
 import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 function refreshSubmittedPriceAudit(item: any) {
     const audit = item?.priceAudit;
@@ -1277,6 +1276,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                         config: {
                             systemInstruction: { role: 'system', parts: [{ text: prompt }] },
                             temperature: 0.15, maxOutputTokens: 65536,
+                            responseMimeType: 'application/json',
                         }
                     });
                 }
@@ -1294,6 +1294,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 config: {
                     systemInstruction: { role: 'system', parts: [{ text: prompt }] },
                     temperature: 0.2, maxOutputTokens: 65536,
+                    responseMimeType: 'application/json',
                 }
             });
         }
@@ -1317,6 +1318,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                         config: {
                             systemInstruction: { role: 'system', parts: [{ text: prompt }] },
                             temperature: 0.15, maxOutputTokens: 65536,
+                            responseMimeType: 'application/json',
                         }
                     });
                     const pdfItems = parseAndNormalizeEngineeringExtraction(pdfResult?.text || '').engineeringItems as any[];

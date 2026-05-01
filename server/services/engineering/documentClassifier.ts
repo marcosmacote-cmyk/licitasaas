@@ -93,7 +93,15 @@ export function classifyEngineeringAttachments(
     options: ClassificationOptions = {}
 ): EngineeringDocumentClassification {
     const maxDocuments = options.maxDocuments ?? 4;
-    const minScore = options.minScore ?? 18;
+
+    // TASK-03: Score mínimo adaptativo — processos com poucos docs aceitam PDFs genéricos
+    // Municípios pequenos têm 1-3 anexos; rejeitar tudo = extração impossível
+    const totalActive = (attachments || []).filter(att => att && att.ativo !== false).length;
+    const baseMinScore = options.minScore ?? 18;
+    const minScore = totalActive <= 2 ? -30 :   // Aceita quase tudo (1-2 docs)
+                     totalActive <= 4 ? -10 :   // Mais permissivo (3-4 docs)
+                     totalActive <= 6 ? 5 :     // Moderado (5-6 docs)
+                     baseMinScore;               // Restritivo padrão (7+ docs)
 
     const classified = (attachments || [])
         .filter(att => att && att.ativo !== false && attachmentUrl(att))

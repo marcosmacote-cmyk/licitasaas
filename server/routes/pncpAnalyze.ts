@@ -299,9 +299,12 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const tipoId = arq.tipoDocumentoId;
+            // TASK-04: Detect planilha keywords inside edital filenames
+            // Municípios pequenos nomeiam "Edital_Orcamento.pdf" ou "Edital_Planilha.pdf"
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orcamentaria') || n.includes('orçamento') || n.includes('orcamentario')) return 'planilha_orcamentaria';
+            if (n.includes('composic') || n.includes('custo unitario') || n.includes('custo_unitario')) return 'composicao_custos';
             if (tipoId === 2 || (n.includes('edital') && !n.includes('anexo'))) return 'edital';
             if (tipoId === 4 || n.includes('termo_referencia') || n.includes('tr_')) return 'termo_referencia';
-            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento')) return 'planilha_orcamentaria';
             if (n.includes('cronograma')) return 'cronograma';
             if (n.includes('bdi') || n.includes('encargos')) return 'bdi_encargos';
             if (n.includes('modelo_proposta') || n.includes('modelo de proposta') || n.includes('modelo_carta')) return 'modelo_proposta';
@@ -309,7 +312,6 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             if (n.includes('minuta') || n.includes('contrato')) return 'minuta_contrato';
             if (n.includes('projeto') || n.includes('planta') || n.includes('memorial')) return 'projeto_engenharia';
             if (n.includes('aviso')) return 'aviso_publicacao';
-            if (n.includes('composic') || n.includes('custo')) return 'composicao_custos';
             return 'anexo_geral';
         };
 
@@ -826,7 +828,47 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // Portanto, para processos de engenharia, SEMPRE executamos a E1.5 — ela não compete
         // com a E1, ela ENRIQUECE os dados com metadados que só o prompt especializado extrai.
         const detectedTipoObjeto = (extractionJson.process_identification?.tipo_objeto || '').toLowerCase();
-        const isEngineeringProcess = detectedTipoObjeto.includes('engenharia') || detectedTipoObjeto.includes('obra');
+
+        // TASK-02: Cascata determinística para detecção de engenharia
+        // Não depender APENAS da classificação da IA — usar fallback por keywords
+        let isEngineeringProcess = detectedTipoObjeto.includes('engenharia') || detectedTipoObjeto.includes('obra');
+
+        // Fallback 1: Keywords no objeto (detecta quando IA classifica como servico_comum)
+        if (!isEngineeringProcess) {
+            const objText = [
+                extractionJson.process_identification?.objeto_resumido || '',
+                extractionJson.process_identification?.objeto_completo || '',
+            ].join(' ').toLowerCase();
+
+            const ENGINEERING_KEYWORDS = [
+                'obra', 'construção', 'construcao', 'reforma predial', 'pavimentação', 'pavimentacao',
+                'drenagem', 'terraplanagem', 'edificação', 'edificacao', 'saneamento',
+                'planilha orçamentária', 'planilha orcamentaria', 'sinapi', 'seinfra',
+                'fundação', 'fundacao', 'engenharia civil', 'recuperação de estrada',
+                'recuperacao de estrada', 'serviços de engenharia', 'servicos de engenharia',
+                'implantação de', 'implantacao de', 'urbanização', 'urbanizacao',
+            ];
+
+            const matchedKeyword = ENGINEERING_KEYWORDS.find(k => objText.includes(k));
+            if (matchedKeyword) {
+                isEngineeringProcess = true;
+                logger.info(
+                    `[PNCP-V2] 🔧 tipo_objeto="${detectedTipoObjeto}" mas keyword "${matchedKeyword}" ` +
+                    `detectada no objeto → tratando como engenharia`
+                );
+            }
+        }
+
+        // Fallback 2: Presença de PDFs classificados como planilha orçamentária no catálogo
+        if (!isEngineeringProcess) {
+            const hasBudgetPdf = pncpAttachments.some((a: any) =>
+                a.purpose === 'planilha_orcamentaria' || a.purpose === 'composicao_custos'
+            );
+            if (hasBudgetPdf) {
+                isEngineeringProcess = true;
+                logger.info(`[PNCP-V2] 🔧 Planilha orçamentária no catálogo → tratando como engenharia`);
+            }
+        }
 
         if (isEngineeringProcess) {
             // ═══════════════════════════════════════════════════════════════
@@ -845,14 +887,27 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             // Flag para disparar job APÓS o pipeline salvar o resultado
             (v2Result as any)._pendingEngineeringExtraction = true;
             
-            // Collect PDF URLs for the background job
-            const planilhaUrls = pncpAttachments
+            // TASK-01: Collect PDF URLs — com fallback para todos os PDFs quando nenhuma planilha específica
+            let planilhaUrls = pncpAttachments
                 .filter((a: any) => a.ativo && a.url && (
                     a.purpose === 'planilha_orcamentaria' ||
                     a.purpose === 'composicao_custos' ||
                     a.purpose === 'anexo_geral'
                 ))
                 .map((a: any) => a.url);
+
+            // SAFETY NET: Se nenhuma planilha específica, enviar TODOS os PDFs baixados
+            // Municípios pequenos frequentemente embutem a planilha no corpo do edital
+            if (planilhaUrls.length === 0 && pncpAttachments.length > 0) {
+                planilhaUrls = pncpAttachments
+                    .filter((a: any) => a.ativo && a.url && a.downloaded)
+                    .slice(0, 4)
+                    .map((a: any) => a.url);
+                logger.info(
+                    `[PNCP-V2] ⚠️ Nenhuma planilha classificada — enviando ${planilhaUrls.length} PDF(s) ` +
+                    `ao BG job como fallback total`
+                );
+            }
             (v2Result as any)._engineeringPdfUrls = planilhaUrls;
             
             // Inform the user
@@ -2062,6 +2117,26 @@ Responda APENAS com JSON array:
                             orderBy: { sessionDate: 'desc' },
                             select: { id: true, title: true },
                         });
+                        if (matchedBidding) {
+                            logger.info(`[PNCP-V2] ✅ Bidding encontrado por orgao fallback: ${matchedBidding.id}`);
+                        }
+                    }
+
+                    // TASK-06: Fallback 3 — buscar pelo pncpLink (mais confiável que processNumber)
+                    if (!matchedBidding && orgao_cnpj && ano && numero_sequencial) {
+                        const expectedPncpLink = `${orgao_cnpj}/${ano}/${numero_sequencial}`;
+                        matchedBidding = await prisma.biddingProcess.findFirst({
+                            where: {
+                                tenantId: req.user.tenantId,
+                                pncpLink: { contains: expectedPncpLink },
+                                aiAnalysis: { isNot: null },
+                            },
+                            orderBy: { createdAt: 'desc' },
+                            select: { id: true, title: true },
+                        });
+                        if (matchedBidding) {
+                            logger.info(`[PNCP-V2] ✅ Bidding encontrado por pncpLink: ${matchedBidding.id} (${expectedPncpLink})`);
+                        }
                     }
                     
                     if (matchedBidding) {
@@ -2076,9 +2151,15 @@ Responda APENAS com JSON array:
                                 pdfUrls,
                             }
                         });
-                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${matchedBidding.id} (${pdfUrls.length} PDFs) [matched by ${processNumber ? 'processNumber' : 'orgao'}]`);
+                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${matchedBidding.id} (${pdfUrls.length} PDFs) [matched by ${processNumber ? 'processNumber' : 'orgao/pncpLink'}]`);
                     } else {
-                        logger.warn(`[PNCP-V2] ⚠️ Could not find bidding for engineering job (process=${processNumber}, orgao=${orgao})`);
+                        // TASK-06: Upgrade para error — falha de dispatch nunca deve ser silenciosa
+                        logger.error(
+                            `[PNCP-V2] ❌ FALHA DISPATCH: Não encontrou bidding para job de engenharia. ` +
+                            `process="${processNumber}", orgao="${orgao}", ` +
+                            `cnpj=${orgao_cnpj}/${ano}/${numero_sequencial}, tenant=${req.user.tenantId}. ` +
+                            `O módulo de engenharia NÃO será populado automaticamente.`
+                        );
                     }
                 } catch (err: any) {
                     logger.warn(`[PNCP-V2] ⚠️ Failed to dispatch engineering BG job: ${err.message}`);
