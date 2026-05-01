@@ -1049,7 +1049,7 @@ router.post('/price-audit', async (req: any, res: any) => {
         }
 
         const audited = items.map((item: any) => ({ ...item }));
-        await enrichWithOfficialPrices(audited, engineeringConfig);
+        await enrichWithOfficialPrices(audited, engineeringConfig, { tenantId: req.user?.tenantId });
         res.json({ items: audited });
     } catch (e: any) {
         console.error('[Engineering Price Audit] Error:', e);
@@ -1088,7 +1088,7 @@ router.post('/ai-extract-bdi', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
-        const { textChunk, biddingId, engineeringConfig, forceRefresh } = req.body;
+        const { textChunk, biddingId, engineeringConfig, forceRefresh, proposalId } = req.body;
         
         let extractionText = textChunk;
 
@@ -1104,6 +1104,20 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // para extrair a planilha completa. Se disponível, é SEMPRE superior.
             // ═══════════════════════════════════════════════════
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
+            const extractionMeta = schemaV2?._engineeringExtractionMeta;
+            
+            // Priority 0: Quarantined extraction must never autopublish cached items.
+            if (!forceRefresh && extractionMeta?.status === 'quality_quarantine') {
+                console.log(`[Engineering AI-Populate] ⚠️ Extração anterior em quarentena. Bloqueando autopreenchimento.`);
+                return res.json({
+                    items: [],
+                    source: 'quality_quarantine',
+                    count: 0,
+                    validation: schemaV2?._engineeringValidation || null,
+                    diagnostic: schemaV2?._engineeringValidation?.issues || [],
+                    message: 'A extração foi colocada em quarentena por baixa qualidade. Revise os alertas antes de publicar itens na proposta.'
+                });
+            }
             
             // Priority 1: Use _engineeringBudgetItems from Etapa 1.5 (dedicated extraction)
             const engBudgetItems = schemaV2?._engineeringBudgetItems;
@@ -1111,12 +1125,11 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 // Apply post-classification to fix cached items from before the type-fix
                 postClassifyTypes(engBudgetItems);
                 console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
-                await enrichWithOfficialPrices(engBudgetItems, engineeringConfig);
+                await enrichWithOfficialPrices(engBudgetItems, engineeringConfig, { tenantId: req.user?.tenantId });
                 return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
             }
             
             // Priority 1.1: If extraction ran but found 0 items, check diagnostics to avoid infinite loop
-            const extractionMeta = schemaV2?._engineeringExtractionMeta;
             if (Array.isArray(engBudgetItems) && engBudgetItems.length === 0 && !forceRefresh && extractionMeta?.status === 'empty_extraction') {
                 console.log(`[Engineering AI-Populate] ⚠️ Extração anterior retornou 0 itens. Repassando diagnóstico ao frontend.`);
                 return res.json({ 
@@ -1181,7 +1194,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                     console.log(`[Engineering AI-Populate] ⚠️ GUARD ANTI-ETAPA: ${stageCount}/${itensV2.length} itens (${Math.round(stageRatio * 100)}%) parecem etapas/capítulos. Rejeitando V2 e forçando extração dedicada.`);
                 } else {
                     console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2 (≥ ${MIN_V2_ITEMS_FOR_ENGINEERING}, ${stageCount} etapas detectadas)`);
-                    const items = await mapV2ToEngineering(itensV2, engineeringConfig);
+                    const items = await mapV2ToEngineering(itensV2, engineeringConfig, req.user?.tenantId);
                     return res.json({ items, source: 'v2_itens_licitados', count: items.length });
                 }
             }
@@ -1245,6 +1258,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 targetTitle: `Planilha Orçamentária — ${bidding?.processNumber || bidding?.title || 'Edital'}`,
                 input: {
                     biddingId,
+                    proposalId,
                     pdfUrls,
                     documentSelection: {
                         total: classifiedDocs.summary.total,
@@ -1362,7 +1376,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
         }
         
         // Auto-lookup for prices against registered databases
-        await enrichWithOfficialPrices(items, engineeringConfig);
+        await enrichWithOfficialPrices(items, engineeringConfig, { tenantId: req.user?.tenantId });
 
         // Auto-save composições PRÓPRIAS to the database
         const ownComps = items.filter((it: any) => {
@@ -1701,7 +1715,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
  * Mapeia itens_licitados do V2 para formato de engenharia
  * e faz auto-match contra as bases oficiais cadastradas (SINAPI/SEINFRA)
  */
-async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any): Promise<any[]> {
+async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any, tenantId?: string | null): Promise<any[]> {
     const items = itensV2.map((item: any) => {
         // Priority 1: Use V2's explicit sourceCode/sourceBase (new fields from enriched prompt)
         let sourceName = item.sourceBase || '';
@@ -1742,7 +1756,7 @@ async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any): Prom
     });
 
     // Enrich with official database prices
-    await enrichWithOfficialPrices(items, engineeringConfig);
+    await enrichWithOfficialPrices(items, engineeringConfig, { tenantId });
     
     return items;
 }

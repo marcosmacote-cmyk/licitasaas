@@ -21,10 +21,13 @@ export interface PriceAudit {
     extractedUnitCost?: number;
     matchedUnitCost?: number | null;
     matchedDatabaseId?: string | null;
+    matchedCode?: string | null;
     matchedSourceName?: string | null;
     matchedUf?: string | null;
     matchedReference?: string | null;
     matchedPayrollExemption?: boolean | null;
+    matchMethod?: 'code_exact' | 'description_similarity' | 'none';
+    confidence?: number;
     deltaValue?: number | null;
     deltaPercent?: number | null;
     warnings?: string[];

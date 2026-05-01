@@ -48,7 +48,7 @@ import { callGeminiWithRetry } from './ai/gemini.service';
  * Main handler — registered as 'engineering_extraction' in the job worker.
  */
 export async function engineeringExtractionHandler(job: any): Promise<any> {
-    const { biddingId, pdfUrls, documentSelection } = job.input;
+    const { biddingId, pdfUrls, documentSelection, proposalId } = job.input;
     const tenantId = job.tenantId;
 
     logger.info(`[Engineering-BG] 🏗️ Starting extraction for bidding ${biddingId} (${pdfUrls?.length || 0} PDF URLs)`);
@@ -564,17 +564,22 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         // Fetch engineeringConfig from the proposal (if exists) to respect regime/data-base
         let engineeringConfig: any = undefined;
         try {
-            const proposal = await prisma.priceProposal.findFirst({
-                where: { biddingProcessId: biddingId },
-                select: { engineeringConfig: true },
-                orderBy: { updatedAt: 'desc' },
-            });
+            const proposal = proposalId
+                ? await prisma.priceProposal.findFirst({
+                    where: { id: proposalId, biddingProcessId: biddingId },
+                    select: { engineeringConfig: true },
+                })
+                : await prisma.priceProposal.findFirst({
+                    where: { biddingProcessId: biddingId },
+                    select: { engineeringConfig: true },
+                    orderBy: { updatedAt: 'desc' },
+                });
             if (proposal?.engineeringConfig) {
                 engineeringConfig = proposal.engineeringConfig;
             }
         } catch { /* no proposal yet — enrich without config */ }
 
-        const enrichResult = await enrichWithOfficialPrices(engItems, engineeringConfig);
+        const enrichResult = await enrichWithOfficialPrices(engItems, engineeringConfig, { tenantId });
         logger.info(`[Engineering-BG] 🔍 Price audit: ${enrichResult.matched}/${enrichResult.total} itens matched against official DB`);
     } catch (err: any) {
         logger.warn(`[Engineering-BG] ⚠️ Enrichment partial: ${err.message}`);
@@ -602,7 +607,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         progress: 90,
         progressMsg: validationReport.publishable
             ? `Validação OK (${validationReport.qualityScore}%) — Salvando resultados...`
-            : `⚠️ Qualidade baixa (${validationReport.qualityScore}%) — Salvando com ressalvas...`
+            : `⚠️ Qualidade baixa (${validationReport.qualityScore}%) — Enviando para quarentena...`
     });
 
     // ── Step 4: Merge into schemaV2 (include validation report) ──
@@ -612,12 +617,15 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         zeroxFallback: zeroxFallbackMeta,
         originalSizeKB: Math.round(totalOriginalKB),
         submittedSizeKB: Math.round(totalTrimmedKB),
+        status: validationReport.publishable ? 'published' : 'quality_quarantine',
     });
 
     const warningCount = validationReport.issues.filter(i => i.severity === 'warning' || i.severity === 'error').length;
     await updateJobProgress(job.id, tenantId, {
         progress: 100,
-        progressMsg: `✅ ${engItems.length} itens extraídos (qualidade: ${validationReport.qualityScore}%${warningCount > 0 ? `, ${warningCount} alertas` : ''})`
+        progressMsg: validationReport.publishable
+            ? `✅ ${engItems.length} itens extraídos (qualidade: ${validationReport.qualityScore}%${warningCount > 0 ? `, ${warningCount} alertas` : ''})`
+            : `⚠️ ${engItems.length} itens extraídos, mas mantidos em quarentena (qualidade: ${validationReport.qualityScore}%${warningCount > 0 ? `, ${warningCount} alertas` : ''})`
     });
 
     // ── Step 5: Auto-benchmark (if this bidding matches a known case) ──
@@ -640,6 +648,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         withCodes: finalWithCodes,
         elapsed: ((Date.now() - t0) / 1000).toFixed(1),
         source: 'engineering_bg_extraction',
+        published: validationReport.publishable,
         model: modelUsed,
         pageTargeting: targetingUsed,
         zeroxFallback: zeroxFallbackUsed ? zeroxFallbackMeta : null,
@@ -680,8 +689,15 @@ async function mergeEngineeringResults(
 
     const schemaV2 = (bidding.aiAnalysis.schemaV2 as any) || {};
 
-    // 1. Store raw engineering items for ai-populate to use directly
-    schemaV2._engineeringBudgetItems = engItems;
+    // 1. Store only publishable items for ai-populate. Low-quality extraction stays in quarantine.
+    const publishable = validationReport ? validationReport.publishable : true;
+    if (publishable) {
+        schemaV2._engineeringBudgetItems = engItems;
+        delete schemaV2._engineeringBudgetItemsQuarantine;
+    } else {
+        schemaV2._engineeringBudgetItems = [];
+        schemaV2._engineeringBudgetItemsQuarantine = engItems;
+    }
 
     // 1.5. Store validation report
     if (validationReport) {
@@ -704,6 +720,28 @@ async function mergeEngineeringResults(
             ...extractionMeta,
             extractedAt: new Date().toISOString(),
         };
+    }
+
+    if (!publishable) {
+        if (extractionMeta) {
+            schemaV2._engineeringExtractionMeta = {
+                ...schemaV2._engineeringExtractionMeta,
+                ...extractionMeta,
+                status: 'quality_quarantine',
+                extractedAt: new Date().toISOString(),
+            };
+        }
+
+        await prisma.aiAnalysis.update({
+            where: { id: bidding.aiAnalysis.id },
+            data: { schemaV2 },
+        });
+
+        logger.warn(
+            `[Engineering-BG] ⚠️ Quarantine: ${engItems.length} itens não publicados no schemaV2 ` +
+            `(quality=${validationReport?.qualityScore ?? 'N/I'}%).`
+        );
+        return;
     }
 
     // 2. Convert to itens_licitados format (for the UI report)

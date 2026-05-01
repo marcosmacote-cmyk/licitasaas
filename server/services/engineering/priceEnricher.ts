@@ -12,6 +12,7 @@
  *  Agora ambos usam esta função centralizada.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
 // ── Types ──
@@ -22,10 +23,13 @@ export interface EngineeringPriceAudit {
     extractedUnitCost: number;
     matchedUnitCost: number | null;
     matchedDatabaseId?: string | null;
+    matchedCode?: string | null;
     matchedSourceName?: string | null;
     matchedUf?: string | null;
     matchedReference?: string;
     matchedPayrollExemption?: boolean;
+    matchMethod?: 'code_exact' | 'description_similarity' | 'none';
+    confidence?: number;
     deltaValue: number | null;
     deltaPercent: number | null;
     warnings: string[];
@@ -36,6 +40,12 @@ export interface EngineeringConfig {
     regimeOneracao?: string; // "ONERADO" | "DESONERADO"
     basesConsideradas?: string[]; // ["SINAPI", "SEINFRA", "SICOR"]
     [key: string]: any;
+}
+
+export interface PriceEnrichmentOptions {
+    tenantId?: string | null;
+    includeOwnTenantDatabase?: boolean;
+    allowSemanticFallback?: boolean;
 }
 
 // ── Utility Functions ──
@@ -125,7 +135,7 @@ export function chooseBestCandidate(
     item: any,
     config: EngineeringConfig | undefined,
     targetDate: { year: number; month: number } | null
-): { candidate: any; score: number; warnings: string[] } | null {
+): { candidate: any; score: number; warnings: string[]; matchMethod?: EngineeringPriceAudit['matchMethod']; confidence?: number } | null {
     if (candidates.length === 0) return null;
     const desiredDesonerado = config?.regimeOneracao
         ? String(config.regimeOneracao).toUpperCase() === 'DESONERADO'
@@ -151,21 +161,59 @@ export function chooseBestCandidate(
 
 // ── Main Enrichment Function ──
 
-async function semanticFallbackMatch(item: any, engineeringConfig: EngineeringConfig | undefined, targetDate: { year: number; month: number } | null) {
+function buildDatabaseWhere(options?: PriceEnrichmentOptions) {
+    const or: any[] = [{ type: 'OFICIAL' }];
+    if (options?.tenantId && options.includeOwnTenantDatabase !== false) {
+        or.push({ tenantId: options.tenantId });
+    }
+    return { OR: or };
+}
+
+function semanticAccessSql(options?: PriceEnrichmentOptions) {
+    if (options?.tenantId && options.includeOwnTenantDatabase !== false) {
+        return Prisma.sql`AND (d.type = 'OFICIAL' OR d."tenantId" = ${options.tenantId})`;
+    }
+    return Prisma.sql`AND d.type = 'OFICIAL'`;
+}
+
+function semanticSourceSql(engineeringConfig?: EngineeringConfig) {
+    const desiredSources = Array.isArray(engineeringConfig?.basesConsideradas)
+        ? engineeringConfig.basesConsideradas.map((b: string) => normalizeSourceName(b)).filter(Boolean)
+        : [];
+    if (desiredSources.length === 0) return Prisma.empty;
+    return Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(desiredSources)})`;
+}
+
+async function semanticFallbackMatch(
+    item: any,
+    engineeringConfig: EngineeringConfig | undefined,
+    targetDate: { year: number; month: number } | null,
+    options?: PriceEnrichmentOptions
+) {
     if (!item.description || item.description.length < 5) return null;
     
     try {
+        const accessFilter = semanticAccessSql(options);
+        const sourceFilter = semanticSourceSql(engineeringConfig);
         const compRows: any[] = await prisma.$queryRaw`
-            SELECT id, code, description, unit, "totalPrice" as "matchedPrice", 'COMPOSICAO' as "matchType", similarity(description, ${item.description}) as sim
-            FROM "EngineeringComposition"
-            WHERE description % ${item.description} AND similarity(description, ${item.description}) > 0.65
+            SELECT c.id, c.code, c.description, c.unit, c."totalPrice" as "matchedPrice", 'COMPOSICAO' as "matchType", similarity(c.description, ${item.description}) as sim
+            FROM "EngineeringComposition" c
+            INNER JOIN "EngineeringDatabase" d ON d.id = c."databaseId"
+            WHERE c.description % ${item.description}
+              AND similarity(c.description, ${item.description}) > 0.78
+              ${accessFilter}
+              ${sourceFilter}
             ORDER BY sim DESC LIMIT 5
         `;
         
         const itemRows: any[] = await prisma.$queryRaw`
-            SELECT id, code, description, unit, price as "matchedPrice", 'INSUMO' as "matchType", similarity(description, ${item.description}) as sim
-            FROM "EngineeringItem"
-            WHERE description % ${item.description} AND similarity(description, ${item.description}) > 0.65
+            SELECT i.id, i.code, i.description, i.unit, i.price as "matchedPrice", 'INSUMO' as "matchType", similarity(i.description, ${item.description}) as sim
+            FROM "EngineeringItem" i
+            INNER JOIN "EngineeringDatabase" d ON d.id = i."databaseId"
+            WHERE i.description % ${item.description}
+              AND similarity(i.description, ${item.description}) > 0.78
+              ${accessFilter}
+              ${sourceFilter}
             ORDER BY sim DESC LIMIT 5
         `;
 
@@ -179,11 +227,11 @@ async function semanticFallbackMatch(item: any, engineeringConfig: EngineeringCo
         const [dbComps, dbItems] = await Promise.all([
             compIds.length > 0 ? prisma.engineeringComposition.findMany({
                 where: { id: { in: compIds } },
-                include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
+                include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
             }) : Promise.resolve([]),
             itemIds.length > 0 ? prisma.engineeringItem.findMany({
                 where: { id: { in: itemIds } },
-                include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
+                include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
             }) : Promise.resolve([])
         ]);
 
@@ -204,8 +252,11 @@ async function semanticFallbackMatch(item: any, engineeringConfig: EngineeringCo
 
         const best = chooseBestCandidate(fullCandidates, item, engineeringConfig, targetDate);
         if (best) {
-            best.warnings.push(`Match sugerido por similaridade de descrição (${Math.round(best.candidate.similarityScore * 100)}%)`);
-            return best;
+            const confidence = Math.round((Number(best.candidate.similarityScore) || 0) * 100);
+            best.warnings.push(`Match sugerido por similaridade de descrição (${confidence}%) — exige revisão manual`);
+            best.matchMethod = 'description_similarity';
+            best.confidence = confidence;
+            return confidence >= 78 ? best : null;
         }
     } catch (e: any) {
         console.error('Semantic match fallback failed:', e.message);
@@ -213,7 +264,11 @@ async function semanticFallbackMatch(item: any, engineeringConfig: EngineeringCo
     return null;
 }
 
-export async function enrichWithOfficialPrices(items: any[], engineeringConfig?: EngineeringConfig): Promise<{ matched: number; total: number }> {
+export async function enrichWithOfficialPrices(
+    items: any[],
+    engineeringConfig?: EngineeringConfig,
+    options: PriceEnrichmentOptions = {}
+): Promise<{ matched: number; total: number }> {
     const itemsWithCode = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A');
     const itemsWithoutCode = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && (!it.code || it.code === 'N/A'));
     
@@ -223,12 +278,12 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
 
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
+            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(options) },
+            include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
         prisma.engineeringComposition.findMany({
-            where: { code: { in: codes, mode: 'insensitive' } },
-            include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
+            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(options) },
+            include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
     ]);
 
@@ -263,22 +318,43 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
             continue;
         }
 
+        best.matchMethod = 'code_exact';
+        best.confidence = best.warnings.length > 0 ? 82 : 98;
         applyBestCandidate(item, best, extractedUnitCost);
         matched++;
     }
 
+    if (options.allowSemanticFallback === false) {
+        for (const item of unmatchedItems) {
+            const extractedUnitCost = Number(item.unitCost) || 0;
+            item.priceAudit = {
+                status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
+                extractedUnitCost,
+                matchedUnitCost: null,
+                matchMethod: 'none',
+                confidence: 0,
+                deltaValue: null,
+                deltaPercent: null,
+                warnings: ['código não encontrado nas bases permitidas'],
+            };
+        }
+        return { matched, total: itemsWithCode.length + itemsWithoutCode.length };
+    }
+
     for (const item of unmatchedItems) {
         const extractedUnitCost = Number(item.unitCost) || 0;
-        const best = await semanticFallbackMatch(item, engineeringConfig, targetDate);
+        const best = await semanticFallbackMatch(item, engineeringConfig, targetDate, options);
 
         if (!best) {
             item.priceAudit = {
                 status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
                 extractedUnitCost,
                 matchedUnitCost: null,
+                matchMethod: 'none',
+                confidence: 0,
                 deltaValue: null,
                 deltaPercent: null,
-                warnings: ['código não encontrado e sem similaridade textual nas bases oficiais'],
+                warnings: ['código não encontrado e sem similaridade textual confiável nas bases permitidas'],
             };
             continue;
         }
@@ -293,11 +369,14 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
 function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
     const matchedCandidate = best.candidate;
     const matchedUnitCost = Number(matchedCandidate.matchedPrice) || 0;
+    const matchMethod = best.matchMethod || 'code_exact';
     const regimeMismatch = best.warnings.some((warning: string) => warning.includes('regime'));
     const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
     const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
     const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
-    const status: EngineeringPriceAuditStatus = regimeMismatch
+    const status: EngineeringPriceAuditStatus = matchMethod === 'description_similarity'
+        ? 'BASE_INCOMPATIVEL'
+        : regimeMismatch
         ? 'BASE_INCOMPATIVEL'
         : hasRelevantDelta
         ? 'DIVERGENT'
@@ -306,19 +385,24 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
             : 'OK';
 
     // Mantém o preço extraído do edital. Só completa metadados seguros.
-    if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
-    if ((!item.sourceName || item.sourceName === 'PROPRIA') && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
-    if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+    if (matchMethod === 'code_exact') {
+        if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
+        if ((!item.sourceName || item.sourceName === 'PROPRIA') && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
+        if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+    }
 
     item.priceAudit = {
         status,
         extractedUnitCost,
         matchedUnitCost,
         matchedDatabaseId: matchedCandidate.database?.id || null,
+        matchedCode: matchedCandidate.code || null,
         matchedSourceName: matchedCandidate.database?.name || null,
         matchedUf: matchedCandidate.database?.uf || null,
         matchedReference: formatReference(matchedCandidate.database),
         matchedPayrollExemption: Boolean(matchedCandidate.database?.payrollExemption),
+        matchMethod,
+        confidence: typeof best.confidence === 'number' ? best.confidence : (status === 'OK' ? 98 : 82),
         deltaValue,
         deltaPercent,
         warnings: best.warnings,

@@ -145,6 +145,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [isAuditing, setIsAuditing] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
     const [extractionMeta, setExtractionMeta] = useState<any>(null);
+    const [activeExtractionJobId, setActiveExtractionJobId] = useState<string | null>(null);
+    const extractionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Search modal
     const [showSearch, setShowSearch] = useState(false);
@@ -211,6 +213,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     }, []);
 
     useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
+
+    useEffect(() => {
+        return () => {
+            if (extractionPollRef.current) clearInterval(extractionPollRef.current);
+        };
+    }, []);
 
     // Ref para input de importação Excel oculto
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -279,20 +287,36 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     // AI extraction
     const handleExtractAI = async (options: { isPolling?: boolean, forceRestart?: boolean } = {}) => {
         const { isPolling = false, forceRestart = false } = options;
+        if (!isPolling && activeExtractionJobId && !forceRestart) {
+            setSaveMsg(
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
+                    <Loader2 size={14} className="spin" /> Extração em andamento. Aguarde a conclusão antes de iniciar outra.
+                </span>
+            );
+            return;
+        }
         if (!isPolling && items.length > 0) {
             if (!window.confirm('Já existem itens na planilha. Deseja substituí-los completamente por uma nova extração da IA? (Isso iniciará uma nova extração do zero)')) {
                 return;
             }
         }
+        if (forceRestart && extractionPollRef.current) {
+            clearInterval(extractionPollRef.current);
+            extractionPollRef.current = null;
+            setActiveExtractionJobId(null);
+        }
         setIsExtracting(true);
+        let keepExtracting = false;
+        let shouldAutoClearMessage = true;
         try {
             const forceRefresh = forceRestart || (!isPolling && items.length > 0);
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig, forceRefresh })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
             if (data.items?.length > 0) {
+                setActiveExtractionJobId(null);
                 const mapped = data.items.map((ai: any, i: number) => {
                     const aiType: EngItemType = (['ETAPA','SUBETAPA','COMPOSICAO','INSUMO'].includes(ai.type)) ? ai.type : 'COMPOSICAO';
                     const isGroup = isGrouper(aiType);
@@ -334,6 +358,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
             } else if (data.source === 'pending_background_job') {
+                keepExtracting = true;
+                shouldAutoClearMessage = false;
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
                         <Loader2 size={14} className="spin" /> {data.pendingJob?.progressMsg || data.message}
@@ -341,37 +367,52 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 );
                 // Auto-poll: check job status every 5s and re-extract when done
                 if (data.pendingJob?.jobId) {
-                    const pollJob = async () => {
-                        const jobId = data.pendingJob.jobId;
-                        let attempts = 0;
-                        const maxAttempts = 60; // 5 minutes max
-                        const poll = setInterval(async () => {
-                            attempts++;
-                            if (attempts > maxAttempts) { clearInterval(poll); return; }
-                            try {
-                                const jobRes = await fetch(`/api/analyze-edital/jobs/${jobId}`, { headers: hdrs() });
-                                if (!jobRes.ok) return;
-                                const job = await jobRes.json();
-                                setSaveMsg(
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
-                                        <Loader2 size={14} className="spin" /> {job.progressMsg || `Extraindo... ${job.progress || 0}%`}
-                                    </span>
-                                );
-                                if (job.status === 'COMPLETED' || job.status === 'FAILED') {
-                                    clearInterval(poll);
-                                    if (job.status === 'COMPLETED') {
-                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
-                                        // Re-trigger to get the items now available in schemaV2
-                                        setTimeout(() => handleExtractAI({ isPolling: true }), 1000);
-                                    } else {
-                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
-                                    }
+                    const jobId = data.pendingJob.jobId;
+                    setActiveExtractionJobId(jobId);
+                    if (extractionPollRef.current) clearInterval(extractionPollRef.current);
+                    let attempts = 0;
+                    const maxAttempts = 360; // 30 minutes max: accommodates large engineering PDFs and queue wait.
+                    extractionPollRef.current = setInterval(async () => {
+                        attempts++;
+                        if (attempts > maxAttempts) {
+                            if (extractionPollRef.current) clearInterval(extractionPollRef.current);
+                            extractionPollRef.current = null;
+                            setActiveExtractionJobId(null);
+                            setIsExtracting(false);
+                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração excedeu 30 minutos. Verifique a Central de Notificações ou reinicie a extração.</span>);
+                            return;
+                        }
+                        try {
+                            const jobRes = await fetch(`/api/analyze-edital/jobs/${jobId}`, { headers: hdrs() });
+                            if (!jobRes.ok) return;
+                            const job = await jobRes.json();
+                            setSaveMsg(
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
+                                    <Loader2 size={14} className="spin" /> {job.progressMsg || `Extraindo... ${job.progress || 0}%`}
+                                </span>
+                            );
+                            if (job.status === 'COMPLETED' || job.status === 'FAILED') {
+                                if (extractionPollRef.current) clearInterval(extractionPollRef.current);
+                                extractionPollRef.current = null;
+                                setActiveExtractionJobId(null);
+                                if (job.status === 'COMPLETED') {
+                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
+                                    setTimeout(() => handleExtractAI({ isPolling: true }), 1000);
+                                } else {
+                                    setIsExtracting(false);
+                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
                                 }
-                            } catch {}
-                        }, 5000);
-                    };
-                    pollJob();
+                            }
+                        } catch {}
+                    }, 5000);
                 }
+            } else if (data.source === 'quality_quarantine') {
+                setExtractionMeta({ status: 'quality_quarantine', validation: data.validation, possibleCauses: data.diagnostic });
+                setSaveMsg(
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
+                        <AlertTriangle size={14} /> Extração em quarentena: qualidade insuficiente para preencher a planilha automaticamente.
+                    </span>
+                );
             } else if (data.source === 'empty_extraction') {
                 setExtractionMeta({ status: 'empty_extraction', possibleCauses: data.diagnostic });
                 setSaveMsg(
@@ -394,8 +435,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             ); 
         }
         finally { 
-            setIsExtracting(false); 
-            setTimeout(() => setSaveMsg(null), 8000); 
+            if (!keepExtracting) setIsExtracting(false); 
+            if (shouldAutoClearMessage) setTimeout(() => setSaveMsg(null), 8000); 
         }
     };
 
