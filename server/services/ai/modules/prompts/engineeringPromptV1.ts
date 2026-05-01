@@ -44,17 +44,44 @@ REGRAS DE CLASSIFICAÇÃO
 - NUNCA crie itens baseados em "O licitante deverá comprovar...", "Multa de 2%...", "Prazo de entrega...".
 - EXTRAIA APENAS dados que estejam claramente formatados em ESTRUTURA DE PLANILHA ORÇAMENTÁRIA (tabelas com código, descrição, unidade, quantidade e preço).
 
+🚨🚨🚨 REGRA ANTI-COMPOSIÇÃO (CRÍTICA — NÃO EXTRAIA COMPOSIÇÕES DE CUSTOS):
+  Documentos de engenharia frequentemente contêm DUAS tabelas diferentes:
+
+  a) **PLANILHA ORÇAMENTÁRIA SINTÉTICA** (= O QUE EXTRAIR)
+     - Colunas: ITEM | CÓDIGO | DESCRIÇÃO DO SERVIÇO | UNID | QTD | PREÇO UNIT. | TOTAL
+     - Cada linha é um SERVIÇO COMPLETO (ex: "DEMOLIÇÃO DE ALVENARIA", "CONTRAPISO", "PINTURA ACRÍLICA")
+     - Códigos como C2989, 87640, 14025/ORSE, CP-01
+     - Este é o documento CORRETO para extrair.
+
+  b) **COMPOSIÇÕES DE CUSTOS UNITÁRIOS / CPU** (= NÃO EXTRAIR)
+     - Mostra os INSUMOS INDIVIDUAIS de cada composição (SERVENTE H, PEDREIRO H, CIMENTO KG, AREIA M3)
+     - Códigos numéricos puros de 5 dígitos que são códigos de INSUMO, não de COMPOSIÇÃO
+     - Itens repetidos dezenas de vezes (cada composição lista os mesmos insumos)
+     - Se você está vendo "SERVENTE H", "PEDREIRO H", "CARPINTEIRO H" como itens separados → PARE!
+       Você está lendo a CPU, não a planilha sintética.
+
+  COMO DIFERENCIAR:
+  - Se os itens são "SERVENTE", "PEDREIRO", "CIMENTO", "AREIA" → CPU (ERRADO)
+  - Se os itens são "LOCAÇÃO DA OBRA", "ESCAVAÇÃO MANUAL", "CHAPISCO", "REBOCO" → Planilha Sintética (CORRETO)
+  - Se a mesma descrição se repete mais de 3 vezes → CPU (ERRADO)
+
+🚨🚨🚨 REGRA ANTI-DUPLICAÇÃO (CRÍTICA):
+  - NUNCA emita o mesmo item (mesma descrição + mesmos valores) mais de 1 vez.
+  - Se a planilha mostra o mesmo serviço aplicado em vários locais/pavimentos, extraia APENAS 1 linha com a SOMA das quantidades.
+  - Se você está gerando itens 3.1.1, 3.1.2, 3.1.3... com a MESMA descrição e MESMOS valores → PARE! Isso é alucinação.
+
 ═══════════════════════════════════════════════════════════
 REGRAS DE EXTRAÇÃO — CRÍTICAS
 ═══════════════════════════════════════════════════════════
 
-1. OBJETIVO: Extrair TODOS os itens da planilha orçamentária, incluindo sub-itens.
+1. OBJETIVO: Extrair TODOS os itens da PLANILHA ORÇAMENTÁRIA SINTÉTICA, incluindo sub-itens.
    Procure tabelas denominadas: 'Planilha Orçamentária', 'Orçamento Estimado', 
    'Quantitativos', 'Planilha de Custos', 'Orçamento Base', 'Estimativa de Custos',
    'Planilha Analítica', 'Planilha Sintética' ou similar.
+   🚨 NÃO extraia das tabelas 'Composições de Custos Unitários', 'CPU', 'Composições Auxiliares'.
 
 2. EXTRAIA TODOS OS ITENS DA PLANILHA. Se encontrar a descrição dos serviços sem quantitativos (mas claramente em formato de tabela orçamentária), extraia com quantity=0 e unitCost=0.
-   🚨 ALERTA: NÃO confunda checklists de documentos, cronogramas físico-financeiros ou listas de exigências com a Planilha Orçamentária. Itens de orçamento sempre descrevem serviços de engenharia tangíveis.
+   🚨 ALERTA: NÃO confunda checklists de documentos, cronogramas físico-financeiros, listas de exigências ou COMPOSIÇÕES DE CUSTOS UNITÁRIOS com a Planilha Orçamentária. Itens de orçamento sempre descrevem serviços de engenharia completos, não insumos individuais (mão de obra, material).
 
 3. CÓDIGOS OFICIAIS SÃO PRIORIDADE MÁXIMA. A coluna "CÓDIGO" da planilha contém a referência
    oficial do serviço. Identifique o BANCO DE ORIGEM pelo padrão do código:

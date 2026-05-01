@@ -210,7 +210,7 @@ function classifyEngineeringItem(item: any): EngineeringItemQuality {
  */
 export function screenEngineeringItems(items: any[]): EngineeringItemScreeningResult {
     const itemQuality = items.map(classifyEngineeringItem);
-    const acceptedItems: any[] = [];
+    let acceptedItems: any[] = [];
     const rejectedItems: any[] = [];
 
     items.forEach((item, index) => {
@@ -230,6 +230,50 @@ export function screenEngineeringItems(items: any[]): EngineeringItemScreeningRe
             acceptedItems.push(itemWithQuality);
         }
     });
+
+    // ── DEDUPLICATION: Collapse items with identical description + values ──
+    // Prevents catastrophic duplication (e.g., 486 copies of the same item)
+    const deduplicatedItems: any[] = [];
+    const fingerprints = new Map<string, { item: any; count: number }>();
+
+    for (const item of acceptedItems) {
+        const type = String(item.type || '').toUpperCase();
+        // Don't deduplicate ETAPAs/SUBETAPAs — they are structural
+        if (type === 'ETAPA' || type === 'SUBETAPA') {
+            deduplicatedItems.push(item);
+            continue;
+        }
+
+        const desc = String(item.description || '').toLowerCase().trim().substring(0, 80);
+        const qty = Number(item.quantity) || 0;
+        const cost = Number(item.unitCost) || 0;
+        const fp = `${desc}|${qty}|${cost}`;
+
+        const existing = fingerprints.get(fp);
+        if (existing) {
+            existing.count++;
+            // Keep the first occurrence, skip duplicates
+        } else {
+            fingerprints.set(fp, { item, count: 1 });
+            deduplicatedItems.push(item);
+        }
+    }
+
+    // Count total duplicates removed
+    let totalDuplicatesRemoved = 0;
+    for (const [, entry] of fingerprints) {
+        if (entry.count > 1) {
+            totalDuplicatesRemoved += entry.count - 1;
+        }
+    }
+
+    if (totalDuplicatesRemoved > 0) {
+        logger.warn(
+            `[EngValidator] 🧹 Deduplication removed ${totalDuplicatesRemoved} duplicate item(s) ` +
+            `(${acceptedItems.length} → ${deduplicatedItems.length} items).`
+        );
+        acceptedItems = deduplicatedItems;
+    }
 
     if (rejectedItems.length > 0) {
         logger.warn(`[EngValidator] Screening rejeitou ${rejectedItems.length}/${items.length} linha(s) não orçamentárias antes do merge.`);
