@@ -151,26 +151,76 @@ export function chooseBestCandidate(
 
 // ── Main Enrichment Function ──
 
-/**
- * Compara itens extraídos contra bases oficiais cadastradas sem sobrescrever
- * o preço do edital. O resultado fica em item.priceAudit.
- *
- * Suporta:
- * - Múltiplos candidatos por código (mesmo código em bases diferentes)
- * - Scoring multidimensional (fonte, data-base, regime)
- * - Regime onerado/desonerado via engineeringConfig
- * - Data-base de referência via engineeringConfig
- * - Batch query (2 queries total, não N+1)
- */
+async function semanticFallbackMatch(item: any, engineeringConfig: EngineeringConfig | undefined, targetDate: { year: number; month: number } | null) {
+    if (!item.description || item.description.length < 5) return null;
+    
+    try {
+        const compRows: any[] = await prisma.$queryRaw`
+            SELECT id, code, description, unit, "totalPrice" as "matchedPrice", 'COMPOSICAO' as "matchType", similarity(description, ${item.description}) as sim
+            FROM "EngineeringComposition"
+            WHERE description % ${item.description} AND similarity(description, ${item.description}) > 0.65
+            ORDER BY sim DESC LIMIT 5
+        `;
+        
+        const itemRows: any[] = await prisma.$queryRaw`
+            SELECT id, code, description, unit, price as "matchedPrice", 'INSUMO' as "matchType", similarity(description, ${item.description}) as sim
+            FROM "EngineeringItem"
+            WHERE description % ${item.description} AND similarity(description, ${item.description}) > 0.65
+            ORDER BY sim DESC LIMIT 5
+        `;
+
+        if (compRows.length === 0 && itemRows.length === 0) return null;
+
+        const allSimCandidates = [...compRows, ...itemRows].sort((a, b) => b.sim - a.sim);
+        
+        const compIds = compRows.map(c => c.id);
+        const itemIds = itemRows.map(i => i.id);
+
+        const [dbComps, dbItems] = await Promise.all([
+            compIds.length > 0 ? prisma.engineeringComposition.findMany({
+                where: { id: { in: compIds } },
+                include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
+            }) : Promise.resolve([]),
+            itemIds.length > 0 ? prisma.engineeringItem.findMany({
+                where: { id: { in: itemIds } },
+                include: { database: { select: { id: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } }
+            }) : Promise.resolve([])
+        ]);
+
+        const fullCandidates = [];
+        for (const sim of allSimCandidates) {
+            let full;
+            if (sim.matchType === 'COMPOSICAO') full = dbComps.find(c => c.id === sim.id);
+            if (sim.matchType === 'INSUMO') full = dbItems.find(i => i.id === sim.id);
+            if (full) {
+                fullCandidates.push({
+                    ...full,
+                    matchType: sim.matchType,
+                    matchedPrice: Number(sim.matchedPrice) || 0,
+                    similarityScore: sim.sim
+                });
+            }
+        }
+
+        const best = chooseBestCandidate(fullCandidates, item, engineeringConfig, targetDate);
+        if (best) {
+            best.warnings.push(`Match sugerido por similaridade de descrição (${Math.round(best.candidate.similarityScore * 100)}%)`);
+            return best;
+        }
+    } catch (e: any) {
+        console.error('Semantic match fallback failed:', e.message);
+    }
+    return null;
+}
+
 export async function enrichWithOfficialPrices(items: any[], engineeringConfig?: EngineeringConfig): Promise<{ matched: number; total: number }> {
-    const enrichable = items.filter(it =>
-        it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A'
-    );
-    if (enrichable.length === 0) return { matched: 0, total: 0 };
+    const itemsWithCode = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.code && it.code !== 'N/A');
+    const itemsWithoutCode = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && (!it.code || it.code === 'N/A'));
+    
+    if (itemsWithCode.length === 0 && itemsWithoutCode.length === 0) return { matched: 0, total: 0 };
 
-    const codes = [...new Set(enrichable.flatMap(it => buildCodeVariants(it.code)))];
+    const codes = [...new Set(itemsWithCode.flatMap(it => buildCodeVariants(it.code)))];
 
-    // Batch fetch all matching items (2 queries total instead of 2N)
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
             where: { code: { in: codes, mode: 'insensitive' } },
@@ -182,7 +232,6 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
         }),
     ]);
 
-    // Build arrays per code (same code may exist in multiple DBs)
     const byCode = new Map<string, any[]>();
     for (const dbItem of dbItems) {
         const candidate = { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 };
@@ -201,12 +250,26 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
 
     const targetDate = parseDataBaseMonth(engineeringConfig?.dataBase);
     let matched = 0;
+    const unmatchedItems: any[] = [...itemsWithoutCode];
 
-    for (const item of enrichable) {
+    for (const item of itemsWithCode) {
         const codeLower = normalizeOfficialCode(item.code).toLowerCase();
         const extractedUnitCost = Number(item.unitCost) || 0;
         const candidates = byCode.get(codeLower) || [];
         const best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
+
+        if (!best) {
+            unmatchedItems.push(item);
+            continue;
+        }
+
+        applyBestCandidate(item, best, extractedUnitCost);
+        matched++;
+    }
+
+    for (const item of unmatchedItems) {
+        const extractedUnitCost = Number(item.unitCost) || 0;
+        const best = await semanticFallbackMatch(item, engineeringConfig, targetDate);
 
         if (!best) {
             item.priceAudit = {
@@ -215,45 +278,49 @@ export async function enrichWithOfficialPrices(items: any[], engineeringConfig?:
                 matchedUnitCost: null,
                 deltaValue: null,
                 deltaPercent: null,
-                warnings: ['código não encontrado nas bases oficiais cadastradas'],
+                warnings: ['código não encontrado e sem similaridade textual nas bases oficiais'],
             };
             continue;
         }
 
-        const matchedCandidate = best.candidate;
-        const matchedUnitCost = Number(matchedCandidate.matchedPrice) || 0;
-        const regimeMismatch = best.warnings.some((warning: string) => warning.includes('regime'));
-        const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
-        const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
-        const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
-        const status: EngineeringPriceAuditStatus = regimeMismatch
-            ? 'BASE_INCOMPATIVEL'
-            : hasRelevantDelta
-            ? 'DIVERGENT'
-            : best.warnings.length > 0
-                ? 'BASE_INCOMPATIVEL'
-                : 'OK';
-
-        // Mantém o preço extraído do edital. Só completa metadados seguros.
-        if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
-        if ((!item.sourceName || item.sourceName === 'PROPRIA') && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
-        if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
-
-        item.priceAudit = {
-            status,
-            extractedUnitCost,
-            matchedUnitCost,
-            matchedDatabaseId: matchedCandidate.database?.id || null,
-            matchedSourceName: matchedCandidate.database?.name || null,
-            matchedUf: matchedCandidate.database?.uf || null,
-            matchedReference: formatReference(matchedCandidate.database),
-            matchedPayrollExemption: Boolean(matchedCandidate.database?.payrollExemption),
-            deltaValue,
-            deltaPercent,
-            warnings: best.warnings,
-        };
+        applyBestCandidate(item, best, extractedUnitCost);
         matched++;
     }
 
-    return { matched, total: enrichable.length };
+    return { matched, total: itemsWithCode.length + itemsWithoutCode.length };
+}
+
+function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
+    const matchedCandidate = best.candidate;
+    const matchedUnitCost = Number(matchedCandidate.matchedPrice) || 0;
+    const regimeMismatch = best.warnings.some((warning: string) => warning.includes('regime'));
+    const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
+    const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+    const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
+    const status: EngineeringPriceAuditStatus = regimeMismatch
+        ? 'BASE_INCOMPATIVEL'
+        : hasRelevantDelta
+        ? 'DIVERGENT'
+        : best.warnings.length > 0 && !best.warnings.some((w: string) => w.includes('similaridade'))
+            ? 'BASE_INCOMPATIVEL'
+            : 'OK';
+
+    // Mantém o preço extraído do edital. Só completa metadados seguros.
+    if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
+    if ((!item.sourceName || item.sourceName === 'PROPRIA') && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
+    if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+
+    item.priceAudit = {
+        status,
+        extractedUnitCost,
+        matchedUnitCost,
+        matchedDatabaseId: matchedCandidate.database?.id || null,
+        matchedSourceName: matchedCandidate.database?.name || null,
+        matchedUf: matchedCandidate.database?.uf || null,
+        matchedReference: formatReference(matchedCandidate.database),
+        matchedPayrollExemption: Boolean(matchedCandidate.database?.payrollExemption),
+        deltaValue,
+        deltaPercent,
+        warnings: best.warnings,
+    };
 }

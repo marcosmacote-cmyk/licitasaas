@@ -914,13 +914,29 @@ router.get('/proposals/:id/items', async (req: any, res: any) => {
             }),
             prisma.priceProposal.findUnique({
                 where: { id: proposalId },
-                select: { bdiConfig: true, engineeringConfig: true }
+                select: { 
+                    bdiConfig: true, 
+                    engineeringConfig: true,
+                    biddingProcess: {
+                        select: {
+                            aiAnalysis: { select: { schemaV2: true } }
+                        }
+                    }
+                }
             })
         ]);
+        
+        let extractionMeta = null;
+        if (proposal?.biddingProcess?.aiAnalysis?.schemaV2) {
+            const schemaV2 = proposal.biddingProcess.aiAnalysis.schemaV2 as any;
+            extractionMeta = schemaV2?._engineeringExtractionMeta || null;
+        }
+
         res.json({ 
             items, 
             bdiConfig: proposal?.bdiConfig,
-            engineeringConfig: proposal?.engineeringConfig
+            engineeringConfig: proposal?.engineeringConfig,
+            extractionMeta
         });
     } catch (e: any) {
         console.error('Error loading engineering items:', e);
@@ -1097,6 +1113,19 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 console.log(`[Engineering AI-Populate] 🏗️ Usando ${engBudgetItems.length} itens da Etapa 1.5 (extração dedicada)`);
                 await enrichWithOfficialPrices(engBudgetItems, engineeringConfig);
                 return res.json({ items: engBudgetItems, source: 'v2_engineering_budget', count: engBudgetItems.length });
+            }
+            
+            // Priority 1.1: If extraction ran but found 0 items, check diagnostics to avoid infinite loop
+            const extractionMeta = schemaV2?._engineeringExtractionMeta;
+            if (Array.isArray(engBudgetItems) && engBudgetItems.length === 0 && !forceRefresh && extractionMeta?.status === 'empty_extraction') {
+                console.log(`[Engineering AI-Populate] ⚠️ Extração anterior retornou 0 itens. Repassando diagnóstico ao frontend.`);
+                return res.json({ 
+                    items: [], 
+                    source: 'empty_extraction', 
+                    count: 0, 
+                    diagnostic: extractionMeta.possibleCauses || [],
+                    message: `A IA não encontrou a planilha. Possíveis causas: ${(extractionMeta.possibleCauses || []).join('; ')}`
+                });
             }
             
             if (forceRefresh) {

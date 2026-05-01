@@ -144,6 +144,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [isExtracting, setIsExtracting] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
+    const [extractionMeta, setExtractionMeta] = useState<any>(null);
 
     // Search modal
     const [showSearch, setShowSearch] = useState(false);
@@ -230,6 +231,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         setEngineeringConfig(engConfig);
                         if (savedCronograma) setCronogramaData(savedCronograma);
                     }
+                    if (data.extractionMeta) setExtractionMeta(data.extractionMeta);
                 }
             }).catch(console.error);
 
@@ -275,7 +277,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     }, [hasUnsavedChanges]);
 
     // AI extraction
-    const handleExtractAI = async (isPolling: boolean = false) => {
+    const handleExtractAI = async (options: { isPolling?: boolean, forceRestart?: boolean } = {}) => {
+        const { isPolling = false, forceRestart = false } = options;
         if (!isPolling && items.length > 0) {
             if (!window.confirm('Já existem itens na planilha. Deseja substituí-los completamente por uma nova extração da IA? (Isso iniciará uma nova extração do zero)')) {
                 return;
@@ -283,8 +286,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         }
         setIsExtracting(true);
         try {
+            const forceRefresh = forceRestart || (!isPolling && items.length > 0);
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh: !isPolling && items.length > 0 })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, forceRefresh })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -358,7 +362,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     if (job.status === 'COMPLETED') {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Extração concluída! Recarregando itens...</span>);
                                         // Re-trigger to get the items now available in schemaV2
-                                        setTimeout(() => handleExtractAI(true), 1000);
+                                        setTimeout(() => handleExtractAI({ isPolling: true }), 1000);
                                     } else {
                                         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
                                     }
@@ -368,6 +372,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     };
                     pollJob();
                 }
+            } else if (data.source === 'empty_extraction') {
+                setExtractionMeta({ status: 'empty_extraction', possibleCauses: data.diagnostic });
+                setSaveMsg(
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
+                        <AlertTriangle size={14} /> IA não encontrou itens. {data.message}
+                    </span>
+                );
             } else { 
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
@@ -1250,7 +1261,31 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             })}
                             {items.length === 0 && (
                                 <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                                    Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente
+                                    {extractionMeta?.status === 'empty_extraction' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                                            <div style={{ padding: '12px 16px', background: 'rgba(217,119,6,0.1)', borderRadius: 8, color: '#b45309', maxWidth: 600 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, marginBottom: 8 }}>
+                                                    <AlertTriangle size={18} />
+                                                    Nenhum item foi extraído
+                                                </div>
+                                                <ul style={{ textAlign: 'left', fontSize: '0.8rem', margin: 0, paddingLeft: 20 }}>
+                                                    {(extractionMeta.possibleCauses || []).map((cause: string, i: number) => (
+                                                        <li key={i}>{cause}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                                                <button className="btn btn-outline" onClick={() => handleExtractAI({ forceRestart: true })} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <Wand2 size={14} /> Tentar novamente (Forçar)
+                                                </button>
+                                                <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <Upload size={14} /> Fazer upload manual
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <span>Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente</span>
+                                    )}
                                 </td></tr>
                             )}
                             </tbody>
