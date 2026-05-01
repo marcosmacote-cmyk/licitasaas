@@ -351,7 +351,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                 if (hydrated.hydrated) {
                     composition = await prisma.engineeringComposition.findUnique({
                         where: { id: composition.id },
-                        include: { items: { include: { item: true }, orderBy: { createdAt: 'asc' } }, database: { select: { name: true, uf: true } } }
+                        include: compositionIncludes()
                     });
                 }
             } catch (e: any) {
@@ -359,28 +359,34 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             }
         }
 
+        if (!composition) {
+            return res.status(404).json({ error: 'Composição não encontrada após atualização', code, codeVariants });
+        }
+
+        const resolvedComposition = composition;
+
         if (
-            composition.items.length === 0 &&
-            String(composition.database?.type || '').toUpperCase() === 'OFICIAL'
+            resolvedComposition.items.length === 0 &&
+            String(resolvedComposition.database?.type || '').toUpperCase() === 'OFICIAL'
         ) {
             const syntheticRow = {
-                id: `synthetic-composition-${composition.id}`,
+                id: `synthetic-composition-${resolvedComposition.id}`,
                 coefficient: 1,
-                price: composition.totalPrice,
+                price: resolvedComposition.totalPrice,
                 item: {
-                    id: `synthetic-item-${composition.id}`,
-                    code: composition.code,
-                    description: composition.description,
-                    unit: composition.unit,
-                    price: composition.totalPrice,
+                    id: `synthetic-item-${resolvedComposition.id}`,
+                    code: resolvedComposition.code,
+                    description: resolvedComposition.description,
+                    unit: resolvedComposition.unit,
+                    price: resolvedComposition.totalPrice,
                     type: 'SERVICO',
                 },
             };
             return res.json({
-                ...composition,
+                ...resolvedComposition,
                 items: [syntheticRow],
                 groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [syntheticRow], AUXILIAR: [] },
-                totalDirect: composition.totalPrice,
+                totalDirect: resolvedComposition.totalPrice,
                 hasAnalyticalItems: false,
                 synthetic: true,
                 message: 'Composição oficial encontrada, mas sem itens analíticos importados nesta base.',
@@ -388,7 +394,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         }
 
         // Enrich with auxiliary compositions if any
-        const enrichedItems = await Promise.all((composition?.items || []).map(async (ci: any) => {
+        const enrichedItems = await Promise.all(resolvedComposition.items.map(async (ci: any) => {
             if (ci.auxiliaryCompositionId) {
                 const aux = await prisma.engineeringComposition.findUnique({
                     where: { id: ci.auxiliaryCompositionId },
@@ -412,7 +418,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         }
 
         res.json({
-            ...composition,
+            ...resolvedComposition,
             items: enrichedItems,
             groups,
             totalDirect: enrichedItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0),
