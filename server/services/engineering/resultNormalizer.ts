@@ -224,6 +224,125 @@ function extractItems(payload: unknown, repairs: string[]): Array<Record<string,
     return [];
 }
 
+// ═══════════════════════════════════════════════════════════
+// POST-CLASSIFICATION: Fix groupers that AI marked as COMPOSICAO
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Known stage/grouper description patterns.
+ * Items matching these are almost certainly ETAPAs or SUBETAPAs, not compositions.
+ */
+const STAGE_DESCRIPTION_PATTERNS = [
+    /^SERVI[CÇ]OS?\s+(PRELIMIN|FINAIS|GERAIS|COMPLEMENTAR|T[EÉ]CNICOS)/i,
+    /^ADMINISTRA[CÇ][AÃ]O/i,
+    /^DEMOLI[CÇ][OÕ]ES/i,
+    /^TRANSPORTE/i,
+    /^EQUIPAMENTOS?\s*(E\s+INSUMOS)?$/i,
+    /^PINTURA$/i,
+    /^INSTALA[CÇ][OÕ]ES/i,
+    /^INFRAESTRUTURA$/i,
+    /^SUPERESTRUTURA$/i,
+    /^TERRAPLENAGEM$/i,
+    /^DRENAGEM$/i,
+    /^PAVIMENTA[CÇ][AÃ]O$/i,
+    /^COBERTURA$/i,
+    /^REVESTIMENTO/i,
+    /^ALVENARIA/i,
+    /^FUNDA[CÇ][OÕ]ES/i,
+    /^ESQUADRIAS/i,
+    /^LIMPEZA\s+(FINAL|GERAL|DA\s+OBRA)/i,
+    /^(M[AÃ]O\s+DE\s+OBRA|ENCARGOS)/i,
+    /^CONJUNTOS?\s+E\s+LUMIN[AÁ]RIAS/i,
+    /^SERVI[CÇ]OS?\s+FINAIS/i,
+    /^ILUMINA[CÇ][AÃ]O/i,
+    /^SINALIZA[CÇ][AÃ]O$/i,
+    /^MOVIMENTA[CÇ][AÃ]O\s+DE\s+TERRA/i,
+    /^ESTRUTURA\s+(MET[AÁ]LICA|DE\s+CONCRETO)/i,
+    /^IMPERMEABILIZA[CÇ][AÃ]O$/i,
+    /^PAISAGISMO$/i,
+    /^ESGOTO/i,
+    /^[AÁ]GUA\s+(FRIA|PLUVIAL)/i,
+];
+
+/**
+ * Detect if an item number is a top-level grouper (e.g., "1", "2", "3")
+ * or a sub-level grouper ending in ".0" (e.g., "1.0", "2.0")
+ */
+function isTopLevelNumber(itemNum: string): boolean {
+    const trimmed = itemNum.trim();
+    if (/^\d+$/.test(trimmed)) return true;
+    if (/^\d+\.0$/.test(trimmed)) return true;
+    return false;
+}
+
+function isSubLevelGrouper(itemNum: string): boolean {
+    const trimmed = itemNum.trim();
+    return /^\d+\.\d+$/.test(trimmed);
+}
+
+/**
+ * Post-classification: infer ETAPA/SUBETAPA from structural signals
+ * when the AI incorrectly classifies groupers as COMPOSICAO.
+ */
+function postClassifyTypes(items: Array<Record<string, any>>, repairs: string[]): void {
+    const allItemNums = new Set(items.map(it => String(it.item || '').trim()));
+
+    for (const item of items) {
+        const itemNum = String(item.item || '').trim();
+        const desc = String(item.description || '').trim();
+        const currentType = String(item.type || 'COMPOSICAO');
+
+        // Skip items already classified as ETAPA or SUBETAPA
+        if (currentType === 'ETAPA' || currentType === 'SUBETAPA') continue;
+
+        let inferredType: string | null = null;
+
+        // ── Signal 1: Top-level number with children → ETAPA ──
+        if (isTopLevelNumber(itemNum)) {
+            const baseNum = itemNum.replace(/\.0$/, '');
+            const hasChildren = Array.from(allItemNums).some(n =>
+                n !== itemNum && n.startsWith(baseNum + '.')
+            );
+            if (hasChildren) {
+                inferredType = 'ETAPA';
+            }
+        }
+
+        // ── Signal 2: Known stage description patterns ──
+        if (!inferredType && STAGE_DESCRIPTION_PATTERNS.some(p => p.test(desc))) {
+            const baseNum = itemNum.replace(/\.0$/, '');
+            const hasChildren = Array.from(allItemNums).some(n => n.startsWith(baseNum + '.'));
+            if (hasChildren) {
+                inferredType = 'ETAPA';
+            } else if (isTopLevelNumber(itemNum)) {
+                inferredType = 'ETAPA';
+            }
+        }
+
+        // ── Signal 3: Sub-level with children → SUBETAPA ──
+        if (!inferredType && isSubLevelGrouper(itemNum)) {
+            const prefix = itemNum + '.';
+            const hasChildren = Array.from(allItemNums).some(n => n.startsWith(prefix));
+            if (hasChildren) {
+                inferredType = 'SUBETAPA';
+            }
+        }
+
+        // Apply reclassification
+        if (inferredType) {
+            repairs.push(`type_reclassify:${itemNum}:${currentType}->${inferredType}`);
+            item.type = inferredType;
+            item.quantity = 0;
+            item.unitCost = 0;
+            item.unit = '';
+            item.sourceName = '';
+            item.code = '';
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+
 export function normalizeEngineeringItems(items: Array<Record<string, unknown>>): NormalizedEngineeringExtraction {
     const repairs: string[] = [];
 
@@ -264,6 +383,9 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
 
         return normalized;
     });
+
+    // ── Post-classification: fix groupers that AI marked as COMPOSICAO ──
+    postClassifyTypes(engineeringItems, repairs);
 
     return {
         engineeringItems,
