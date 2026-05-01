@@ -411,6 +411,43 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         const etapas = engItems.filter((it: any) => it.type === 'ETAPA').length;
         const composicoes = engItems.filter((it: any) => it.type === 'COMPOSICAO').length;
 
+        // ── COLUMN SHIFT DETECTION ──
+        // If >30% of composition items have unitCost == quantity, the AI confused columns.
+        const compositionItems = engItems.filter((it: any) => it.type === 'COMPOSICAO' || it.type === 'INSUMO');
+        const shiftedCount = compositionItems.filter((it: any) => {
+            const qty = Number(it.quantity) || 0;
+            const cost = Number(it.unitCost) || 0;
+            return qty > 0 && cost > 0 && Math.abs(qty - cost) < 0.01;
+        }).length;
+        const shiftRatio = compositionItems.length > 0 ? shiftedCount / compositionItems.length : 0;
+
+        if (shiftRatio > 0.30) {
+            logger.error(
+                `[Engineering-BG] 🚨 COLUMN SHIFT DETECTED! ${shiftedCount}/${compositionItems.length} items (${(shiftRatio * 100).toFixed(0)}%) ` +
+                `have unitCost == quantity. The AI is reading the wrong PDF column. ` +
+                `Flagging all shifted items for manual review.`
+            );
+            // Flag shifted items so the UI can warn the user
+            for (const item of compositionItems) {
+                const qty = Number(item.quantity) || 0;
+                const cost = Number(item.unitCost) || 0;
+                if (qty > 0 && cost > 0 && Math.abs(qty - cost) < 0.01) {
+                    item._columnShiftSuspect = true;
+                }
+            }
+        }
+
+        // Also detect absurd total (> R$ 1 billion for items suggests column shift)
+        const globalTotal = compositionItems.reduce((sum: number, it: any) => {
+            return sum + (Number(it.quantity) || 0) * (Number(it.unitCost) || 0);
+        }, 0);
+        if (globalTotal > 1_000_000_000 && compositionItems.length < 1000) {
+            logger.error(
+                `[Engineering-BG] 🚨 ABSURD TOTAL DETECTED! Global total = R$ ${globalTotal.toLocaleString('pt-BR')} ` +
+                `for ${compositionItems.length} items. This strongly suggests column shift in the PDF extraction.`
+            );
+        }
+
         logger.info(`[Engineering-BG] ✅ Extração em ${elapsed}s via ${modelUsed} — ${engItems.length}/${rawItemCount} itens aceitos (${etapas} etapas, ${composicoes} composições, ${withCodes} com código oficial)`);
     } catch (err: any) {
         clearInterval(progressTimer);

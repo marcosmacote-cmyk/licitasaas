@@ -107,12 +107,34 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    → Calcule: unitCost = Preço_com_BDI / (1 + BDI/100)
    → Exemplo: 135,09 / 1.2931 = 104,47
 
-7. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
+🚨🚨🚨 7. ANTI-DESALINHAMENTO DE COLUNAS (REGRA CRÍTICA — COLUMN SHIFT):
+   Planilhas orçamentárias tipicamente têm ESTA ORDEM de colunas:
+   | ITEM | CÓDIGO | DESCRIÇÃO | UNID. | QUANTIDADE | PREÇO UNIT. S/BDI | PREÇO UNIT. C/BDI | TOTAL |
+
+   ERROS COMUNS QUE VOCÊ NÃO PODE COMETER:
+   - NÃO copie o valor da coluna QUANTIDADE para o campo unitCost.
+   - NÃO copie o valor da coluna TOTAL GERAL para unitCost.
+   - O unitCost é o PREÇO DE UMA UNIDADE do serviço, não a quantidade total nem o valor global.
+
+   COMO VERIFICAR SE VOCÊ ESTÁ NA COLUNA CERTA:
+   - Se unitCost == quantity → ERRADO! Você está lendo a coluna de quantidade como preço.
+   - Se unitCost × quantity == um valor astronomicamente alto (ex: bilhões para uma escola) → ERRADO!
+   - Se unitCost para ESCAVAÇÃO, CHAPISCO, REBOCO for > R$100/m² → SUSPEITO, verifique a coluna.
+   - Se unitCost para BARRACÃO, SUBESTAÇÃO, PORTA for < R$10,00 → ERRADO! Estes itens custam milhares.
+   - Itens com Unidade = UN (unitário) e quantity = 1: o unitCost NUNCA pode ser 1,00 para equipamentos ou estruturas complexas.
+
+   PROCEDIMENTO DE VERIFICAÇÃO (OBRIGATÓRIO antes de emitir o JSON):
+   a) Para cada item, confira: unitCost É DIFERENTE de quantity?
+   b) O unitCost faz sentido econômico para aquele tipo de serviço?
+   c) Se quantity * unitCost * 1.30 (BDI médio) somado resultar em bilhões para uma obra pública municipal → VOCÊ ESTÁ NA COLUNA ERRADA. Volte e releia o cabeçalho da tabela.
+
+8. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
    - Antes de gerar a saída, faça a conta: para cada item, (quantidade × unitCost).
    - A soma de todos os totais (ou a soma com BDI aplicado) DEVE bater exatamente com o valor global estimado do edital.
+   - Se a soma resultar em BILHÕES para uma obra de escola/pavimentação → há column shift. RECOMECE a extração.
    - Ajuste possíveis erros de OCR verificando se a matemática fecha.
 
-8. COMPOSIÇÕES PRÓPRIAS: Para qualquer composição que NÃO referencie um banco oficial
+9. COMPOSIÇÕES PRÓPRIAS: Para qualquer composição que NÃO referencie um banco oficial
    (SINAPI, SEINFRA, SICRO, ORSE), extraia os insumos detalhados no campo "insumos".
    Cada insumo deve ter: description, type (MATERIAL/MAO_DE_OBRA/EQUIPAMENTO), 
    unit, coefficient, unitPrice.
@@ -237,5 +259,13 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO (sem BDI)
 7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global.
+
+🚨🚨🚨 8. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
+   ANTES de emitir o JSON final, verifique:
+   a) O unitCost NÃO pode ser igual à quantity. Se for, você está na coluna errada.
+   b) Serviços de escavação, chapisco, reboco, limpeza: unitCost típico é R$ 5 a R$ 80/m².
+   c) Barracões, subestações, portões: unitCost típico é R$ 1.000 a R$ 50.000/un.
+   d) Se o Total Global da sua extração ultrapassar R$ 1 bilhão para uma escola ou pavimentação municipal → COLUMN SHIFT. Releia o cabeçalho das colunas e reextraia.
+   e) Identifique PRIMEIRO o cabeçalho da tabela no PDF. Localize explicitamente as colunas: QUANTIDADE, PREÇO UNITÁRIO (S/BDI), PREÇO COM BDI, TOTAL. Só então extraia os valores.
 `;
 
