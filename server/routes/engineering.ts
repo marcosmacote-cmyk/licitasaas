@@ -1752,6 +1752,8 @@ async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any, tenan
             unit: type === 'ETAPA' || type === 'SUBETAPA' ? '' : (item.unit || 'UN'),
             quantity: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.quantity || 1),
             unitCost: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.referencePrice || 0),
+            unitPrice: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.unitPriceWithBdi || item.unitPrice || 0),
+            totalPrice: type === 'ETAPA' || type === 'SUBETAPA' ? 0 : (item.totalPrice || 0),
         };
     });
 

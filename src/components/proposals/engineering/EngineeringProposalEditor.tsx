@@ -62,6 +62,7 @@ interface Props { proposalId: string; biddingId: string; }
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
+const hasPositiveNumber = (value: unknown) => Number.isFinite(Number(value)) && Number(value) > 0;
 
 function parseLocaleNumber(value: unknown, fallback = 0): number {
     if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
@@ -74,9 +75,28 @@ function parseLocaleNumber(value: unknown, fallback = 0): number {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function hasEditalPriceSnapshot(item: EngItem): boolean {
+    return item.priceOrigin === 'EDITAL'
+        && !isGrouper(item.type)
+        && (hasPositiveNumber(item.officialUnitPrice) || hasPositiveNumber(item.officialTotalPrice));
+}
+
+function preserveEditalPricing(item: EngItem, config: EngineeringConfig): EngItem {
+    if (!hasEditalPriceSnapshot(item)) return item;
+
+    const unitPrice = hasPositiveNumber(item.officialUnitPrice)
+        ? Number(item.officialUnitPrice)
+        : Number(item.unitPrice) || 0;
+    const totalPrice = hasPositiveNumber(item.officialTotalPrice)
+        ? Number(item.officialTotalPrice)
+        : applyPrecision((Number(item.quantity) || 0) * unitPrice, config);
+
+    return { ...item, unitPrice, totalPrice };
+}
+
 const AUDIT_META = {
     OK: { label: 'OK', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.08)' },
-    DIVERGENT: { label: 'Divergente', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
+    DIVERGENT: { label: 'Base difere', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
     BASE_INCOMPATIVEL: { label: 'Base incompat.', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
     SEM_MATCH: { label: 'Sem match', color: '#64748b', bg: 'rgba(100,116,139,0.10)' },
 } as const;
@@ -110,9 +130,10 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     const hasBasePrice = typeof audit.matchedUnitCost === 'number' && audit.matchedUnitCost > 0;
     const hasRegimeMismatch = (audit.warnings || []).some(w => String(w).toLowerCase().includes('regime'));
     const title = [
+        'Auditoria: comparação do custo sem BDI contra base oficial.',
         audit.matchedSourceName ? `Base: ${audit.matchedSourceName} ${audit.matchedReference || ''}` : '',
         typeof audit.matchedUnitCost === 'number' ? `Preço base: ${fmt(audit.matchedUnitCost)}` : '',
-        typeof audit.extractedUnitCost === 'number' ? `Preço edital: ${fmt(audit.extractedUnitCost)}` : '',
+        typeof audit.extractedUnitCost === 'number' ? `Custo extraído do edital: ${fmt(audit.extractedUnitCost)}` : '',
         ...(audit.warnings || []),
     ].filter(Boolean).join('\n');
 
@@ -203,6 +224,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         return its.map(it => {
             if (isGrouper(it.type)) return it;
             const audited = { ...it, priceAudit: refreshPriceAudit(it) };
+            if (hasEditalPriceSnapshot(audited)) {
+                return preserveEditalPricing(audited, config);
+            }
             // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
             const itemBdi = config.bdiDiferenciado && audited.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
@@ -538,10 +562,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             if (it.id !== id) return it;
             const updated = { ...it, [field]: value };
             if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria' || field === 'sourceName' || field === 'code') {
-                if (field === 'unitCost' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
-                const itemBdi = resolveItemBdi(updated);
-                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
-                updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
+                if (hasEditalPriceSnapshot(updated)) {
+                    Object.assign(updated, preserveEditalPricing(updated, engineeringConfig));
+                } else {
+                    const itemBdi = resolveItemBdi(updated);
+                    updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                    updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                }
                 updated.priceAudit = refreshPriceAudit(updated);
             }
             return updated;
@@ -720,7 +748,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 const colDesc = findCol('DESCRI', 'SERVIÇO', 'SERVICO', 'ESPECIFICA');
                 const colUn = findCol('UNID', 'UN.');
                 const colQtd = findCol('QUANT', 'QTD');
-                const colCusto = findCol('CUSTO', 'PREÇO UNIT', 'PRECO UNIT', 'VL UNIT', 'P.U.', 'VALOR UNIT');
+                const isWithBdiHeader = (h: string) => h.includes('COM BDI') || h.includes('C/BDI') || h.includes('C/ BDI');
+                const colCusto = header.findIndex(h => !isWithBdiHeader(h) && ['CUSTO', 'PREÇO UNIT', 'PRECO UNIT', 'VL UNIT', 'P.U.', 'VALOR UNIT'].some(a => h.includes(a)));
+                const colPrecoBdi = header.findIndex(h => isWithBdiHeader(h) && ['PREÇO', 'PRECO', 'VALOR', 'UNIT'].some(a => h.includes(a)));
                 const colTotal = findCol('TOTAL', 'VALOR TOTAL', 'PREÇO TOTAL', 'PRECO TOTAL');
                 const colCodigo = findCol('CÓDIGO', 'CODIGO', 'CÓD', 'REF');
                 const colBase = findCol('BASE', 'FONTE', 'REFER');
@@ -742,6 +772,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     const unit = colUn >= 0 ? String(row[colUn] ?? '').trim() : '';
                     const qty = colQtd >= 0 ? parseLocaleNumber(row[colQtd]) : 0;
                     const cost = colCusto >= 0 ? parseLocaleNumber(row[colCusto]) : 0;
+                    const unitPriceFromSheet = colPrecoBdi >= 0 ? parseLocaleNumber(row[colPrecoBdi]) : 0;
+                    const totalFromSheet = colTotal >= 0 ? parseLocaleNumber(row[colTotal]) : 0;
                     const code = colCodigo >= 0 ? String(row[colCodigo] ?? '').trim() : '';
                     const base = colBase >= 0 ? String(row[colBase] ?? '').trim() : '';
 
@@ -755,7 +787,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     }
 
                     const isGroup = isGrouper(type);
-                    const up = isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision);
+                    const up = isGroup ? 0 : (unitPriceFromSheet > 0 ? unitPriceFromSheet : applyBdi(cost, effectiveBdi, engineeringConfig.precision));
+                    const totalFromValues = applyPrecision(qty * up, engineeringConfig);
 
                     imported.push({
                         id: `xls-${Date.now()}-${r}`,
@@ -767,7 +800,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         quantity: isGroup ? 0 : qty,
                         unitCost: isGroup ? 0 : cost,
                         unitPrice: up,
-                        totalPrice: isGroup ? 0 : applyPrecision(qty * up, engineeringConfig),
+                        totalPrice: isGroup ? 0 : (totalFromSheet > 0 ? totalFromSheet : totalFromValues),
+                        priceOrigin: isGroup ? undefined : (unitPriceFromSheet > 0 || totalFromSheet > 0 ? 'EDITAL' : 'MANUAL'),
+                        officialUnitCost: isGroup ? undefined : cost,
+                        officialUnitPrice: unitPriceFromSheet > 0 ? unitPriceFromSheet : undefined,
+                        officialTotalPrice: totalFromSheet > 0 ? totalFromSheet : undefined,
                         type,
                     });
                 }
@@ -1203,7 +1240,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('65px'), color: 'var(--color-text-secondary)' }} />
+                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('86px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
                                                 {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && (
                                                     <button title="Editar composição" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
                                                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}

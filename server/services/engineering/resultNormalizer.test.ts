@@ -79,6 +79,31 @@ describe('parseAndNormalizeEngineeringExtraction', () => {
         });
     });
 
+    it('preserves original unit price with BDI and total from the budget sheet', () => {
+        const result = parseAndNormalizeEngineeringExtraction(JSON.stringify({
+            engineeringItems: [
+                {
+                    item: '1.2',
+                    type: 'COMPOSICAO',
+                    sourceName: 'SINAPI',
+                    code: '97053',
+                    description: 'SINALIZAÇÃO COM FITA FIXADA EM CONE PLÁSTICO',
+                    unit: 'M',
+                    quantity: '312',
+                    unitCost: '11,08',
+                    unitPriceWithBdi: '14,09',
+                    totalWithBdi: '4.396,08',
+                },
+            ],
+        }));
+
+        expect(result.engineeringItems[0]).toMatchObject({
+            unitCost: 11.08,
+            unitPrice: 14.09,
+            totalPrice: 4396.08,
+        });
+    });
+
     it('salvages valid items from a malformed large JSON response', () => {
         const result = parseAndNormalizeEngineeringExtraction(`
             {

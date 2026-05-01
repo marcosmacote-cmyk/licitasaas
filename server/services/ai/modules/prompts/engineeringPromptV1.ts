@@ -120,18 +120,21 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 5. UNIDADES DE MEDIDA: Use exatamente como estão no documento.
    Comuns: M2, M3, M, KG, UN, VB, CJ, L, H, MÊS, GL, etc.
 
-6. PREÇOS E CUSTOS (CRÍTICO — CAMPO unitCost): 
+6. PREÇOS E CUSTOS (CRÍTICO — CAMPOS unitCost, unitPrice, totalPrice): 
    PLANILHAS ORÇAMENTÁRIAS DE OBRAS TÊM DUAS COLUNAS DE PREÇO:
    - "PREÇO UNITÁRIO S/ BDI" ← USE ESTA COLUNA para o campo unitCost
-   - "PREÇO UNITÁRIO C/ BDI" ← NUNCA use esta coluna
+   - "PREÇO UNITÁRIO C/ BDI" ou "Valor Unit com BDI" ← USE ESTA COLUNA para o campo unitPrice
+   - "TOTAL" ou "Valor Total" ← USE ESTA COLUNA para o campo totalPrice
    
    COMO IDENTIFICAR:
    - A coluna S/BDI tem valores MENORES (ex: 104,47)
-   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← NÃO USE
+   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← extraia em unitPrice, NÃO coloque em unitCost
+   - O total geralmente é Quantidade × Preço com BDI, já arredondado pela planilha. PRESERVE exatamente.
    - O cabeçalho geralmente mostra o BDI (ex: "BDI: 29,31%")
    
    Se a planilha informar APENAS "Preço com BDI" e a taxa do BDI:
    → Calcule: unitCost = Preço_com_BDI / (1 + BDI/100)
+   → Mantenha unitPrice = Preço_com_BDI original
    → Exemplo: 135,09 / 1.2931 = 104,47
 
 🚨🚨🚨 7. ANTI-DESALINHAMENTO DE COLUNAS (REGRA CRÍTICA — COLUMN SHIFT):
@@ -156,8 +159,9 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    c) Se quantity * unitCost * 1.30 (BDI médio) somado resultar em bilhões para uma obra pública municipal → VOCÊ ESTÁ NA COLUNA ERRADA. Volte e releia o cabeçalho da tabela.
 
 8. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
-   - Antes de gerar a saída, faça a conta: para cada item, (quantidade × unitCost).
-   - A soma de todos os totais (ou a soma com BDI aplicado) DEVE bater exatamente com o valor global estimado do edital.
+   - Antes de gerar a saída, faça a conta: para cada item, confira quantidade × unitCost e quantidade × unitPrice.
+   - A soma de todos os totalPrice DEVE bater exatamente com o valor global estimado do edital.
+   - NÃO recalcule/reescreva unitPrice ou totalPrice se a planilha já trouxe essas colunas; preserve os arredondamentos originais.
    - Se a soma resultar em BILHÕES para uma obra de escola/pavimentação → há column shift. RECOMECE a extração.
    - Ajuste possíveis erros de OCR verificando se a matemática fecha.
 
@@ -180,7 +184,9 @@ FORMATO DE SAÍDA (JSON)
       "description": "SERVIÇOS PRELIMINARES",
       "unit": "",
       "quantity": 0,
-      "unitCost": 0
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 0
     },
     {
       "item": "1.1",
@@ -200,7 +206,9 @@ FORMATO DE SAÍDA (JSON)
        "description": "PLACA DE OBRA EM CHAPA DE AÇO GALVANIZADO",
        "unit": "M2",
        "quantity": 3.00,
-       "unitCost": 183.41
+       "unitCost": 183.41,
+       "unitPrice": 236.54,
+       "totalPrice": 709.62
      },
      {
        "item": "1.1.2",
@@ -210,7 +218,9 @@ FORMATO DE SAÍDA (JSON)
        "description": "CONTRAPISO EM ARGAMASSA TRAÇO 1:4 (CIMENTO E AREIA)",
        "unit": "M2",
        "quantity": 189.00,
-       "unitCost": 48.26
+       "unitCost": 48.26,
+       "unitPrice": 62.40,
+       "totalPrice": 11793.60
      },
      {
        "item": "1.1.3",
@@ -220,7 +230,9 @@ FORMATO DE SAÍDA (JSON)
        "description": "JANELA BASCULANTE EM ALUMÍNIO ANODIZADO",
        "unit": "M2",
        "quantity": 103.20,
-       "unitCost": 1618.01
+       "unitCost": 1618.01,
+       "unitPrice": 2092.29,
+       "totalPrice": 215924.33
      },
      {
        "item": "1.1.4",
@@ -230,7 +242,9 @@ FORMATO DE SAÍDA (JSON)
        "description": "FACHADA EM ESTRUTURA METÁLICA COM CHAPA PERFURADA",
        "unit": "M2",
        "quantity": 765.72,
-       "unitCost": 346.93
+       "unitCost": 346.93,
+       "unitPrice": 448.62,
+       "totalPrice": 343560.39
      },
     {
       "item": "2.0",
@@ -240,7 +254,9 @@ FORMATO DE SAÍDA (JSON)
       "description": "INFRAESTRUTURA",
       "unit": "",
       "quantity": 0,
-      "unitCost": 0
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 0
     },
     {
       "item": "2.1",
@@ -250,7 +266,9 @@ FORMATO DE SAÍDA (JSON)
       "description": "CIMENTO PORTLAND CP-II 50KG",
       "unit": "SC",
       "quantity": 120,
-      "unitCost": 38.50
+      "unitCost": 38.50,
+      "unitPrice": 49.78,
+      "totalPrice": 5973.60
     }
   ]
 }
@@ -260,6 +278,7 @@ REGRAS FINAIS
 ═══════════════════════════════════════════════════════════
 - NÃO invente itens que não existam no documento
 - NÃO converta unidades de medida (use como está)
+- NÃO arredonde novamente os valores com BDI; unitPrice e totalPrice devem reproduzir a planilha quando existirem
 - NÃO omita itens — extraia TODOS, mesmo sem preço
 - ETAPAS e SUBETAPAS DEVEM ter quantity=0 e unitCost=0
 - Composições PRÓPRIAS DEVEM ter o campo "insumos" quando possível
@@ -284,10 +303,11 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
 3. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço
 4. Preserve a numeração hierárquica (1.0, 1.1, 1.1.1, etc.)
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
-6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO (sem BDI)
-7. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de (Qtd × Custo Unitário) × (1 + BDI) de todos os itens bata com o Total Global.
+6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
+7. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
+8. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de totalPrice de todos os itens bata com o Total Global. Se totalPrice não existir, use Qtd × unitPrice.
 
-🚨🚨🚨 8. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
+🚨🚨🚨 9. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
    ANTES de emitir o JSON final, verifique:
    a) O unitCost NÃO pode ser igual à quantity. Se for, você está na coluna errada.
    b) Serviços de escavação, chapisco, reboco, limpeza: unitCost típico é R$ 5 a R$ 80/m².
@@ -295,4 +315,3 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
    d) Se o Total Global da sua extração ultrapassar R$ 1 bilhão para uma escola ou pavimentação municipal → COLUMN SHIFT. Releia o cabeçalho das colunas e reextraia.
    e) Identifique PRIMEIRO o cabeçalho da tabela no PDF. Localize explicitamente as colunas: QUANTIDADE, PREÇO UNITÁRIO (S/BDI), PREÇO COM BDI, TOTAL. Só então extraia os valores.
 `;
-

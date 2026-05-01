@@ -753,6 +753,8 @@ async function mergeEngineeringResults(
         unit: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? '' : (it.unit || 'UN'),
         quantity: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.quantity) || 1),
         referencePrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitCost) || 0),
+        unitPriceWithBdi: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.unitPrice) || 0),
+        totalPrice: (it.type === 'ETAPA' || it.type === 'SUBETAPA') ? 0 : (Number(it.totalPrice) || 0),
         multiplier: 1,
         multiplierLabel: '',
         _engineeringType: it.type,
