@@ -2083,88 +2083,20 @@ Responda APENAS com JSON array:
 
         sendResult(finalPayload);
 
-        // ── Engineering Background Job (fire-and-forget) ──
-        // If engineering was detected, dispatch a background job to extract the full planilha.
-        // This runs AFTER the user gets their analysis result (~200s) and does NOT block anything.
+        // ── Engineering Background Job — DISABLED ──
+        // The automatic engineering extraction during PNCP analysis has been disabled.
+        // Reason: The extraction should only run when the user explicitly requests it
+        // from the Engineering Proposal editor (Produção → Proposta de Engenharia → Extrair IA).
+        // This ensures:
+        //   1. User has configured BDI and Data-Base before extraction
+        //   2. Resources are not wasted on processes the user may never elaborate
+        //   3. The correct document (planilha sintética) is targeted, not compositions
+        // The trigger point is now exclusively in server/routes/engineering.ts
         if ((v2Result as any)._pendingEngineeringExtraction) {
-            const pdfUrls = (v2Result as any)._engineeringPdfUrls || [];
-            // We need the biddingId — it's saved by the frontend after receiving the result.
-            // Use a short delay to ensure the frontend has persisted the analysis.
-            setTimeout(async () => {
-                try {
-                    const processNumber = v2Result.process_identification?.numero_processo || '';
-                    const orgao = v2Result.process_identification?.orgao || '';
-                    
-                    // Find the EXACT bidding by processNumber + tenant (not "most recent")
-                    let matchedBidding = processNumber ? await prisma.biddingProcess.findFirst({
-                        where: {
-                            tenantId: req.user.tenantId,
-                            processNumber: processNumber,
-                            aiAnalysis: { isNot: null },
-                        },
-                        orderBy: { sessionDate: 'desc' },
-                        select: { id: true, title: true },
-                    }) : null;
-
-                    // Fallback: if no exact match by processNumber, try by title containing orgao
-                    if (!matchedBidding && orgao) {
-                        matchedBidding = await prisma.biddingProcess.findFirst({
-                            where: {
-                                tenantId: req.user.tenantId,
-                                title: { contains: orgao.substring(0, 30), mode: 'insensitive' },
-                                aiAnalysis: { isNot: null },
-                            },
-                            orderBy: { sessionDate: 'desc' },
-                            select: { id: true, title: true },
-                        });
-                        if (matchedBidding) {
-                            logger.info(`[PNCP-V2] ✅ Bidding encontrado por orgao fallback: ${matchedBidding.id}`);
-                        }
-                    }
-
-                    // TASK-06: Fallback 3 — buscar pelo pncpLink (mais confiável que processNumber)
-                    if (!matchedBidding && orgao_cnpj && ano && numero_sequencial) {
-                        const expectedPncpLink = `${orgao_cnpj}/${ano}/${numero_sequencial}`;
-                        matchedBidding = await prisma.biddingProcess.findFirst({
-                            where: {
-                                tenantId: req.user.tenantId,
-                                pncpLink: { contains: expectedPncpLink },
-                                aiAnalysis: { isNot: null },
-                            },
-                            orderBy: { sessionDate: 'desc' },
-                            select: { id: true, title: true },
-                        });
-                        if (matchedBidding) {
-                            logger.info(`[PNCP-V2] ✅ Bidding encontrado por pncpLink: ${matchedBidding.id} (${expectedPncpLink})`);
-                        }
-                    }
-                    
-                    if (matchedBidding) {
-                        const engJob = await submitJob({
-                            tenantId: req.user.tenantId,
-                            userId: req.user.id,
-                            type: 'engineering_extraction' as any,
-                            targetId: matchedBidding.id,
-                            targetTitle: `Planilha Orçamentária — ${matchedBidding.title || processNumber}`,
-                            input: {
-                                biddingId: matchedBidding.id,
-                                pdfUrls,
-                            }
-                        });
-                        logger.info(`[PNCP-V2] 🏗️ Engineering BG job dispatched: ${engJob.jobId} for bidding ${matchedBidding.id} (${pdfUrls.length} PDFs) [matched by ${processNumber ? 'processNumber' : 'orgao/pncpLink'}]`);
-                    } else {
-                        // TASK-06: Upgrade para error — falha de dispatch nunca deve ser silenciosa
-                        logger.error(
-                            `[PNCP-V2] ❌ FALHA DISPATCH: Não encontrou bidding para job de engenharia. ` +
-                            `process="${processNumber}", orgao="${orgao}", ` +
-                            `cnpj=${orgao_cnpj}/${ano}/${numero_sequencial}, tenant=${req.user.tenantId}. ` +
-                            `O módulo de engenharia NÃO será populado automaticamente.`
-                        );
-                    }
-                } catch (err: any) {
-                    logger.warn(`[PNCP-V2] ⚠️ Failed to dispatch engineering BG job: ${err.message}`);
-                }
-            }, 5000); // 5s delay to allow frontend save
+            logger.info(
+                `[PNCP-V2] 🏗️ Engineering extraction detected but NOT auto-dispatched. ` +
+                `User should trigger extraction manually from Produção → Proposta de Engenharia.`
+            );
         }
 
     } catch (error: any) {
