@@ -2131,7 +2131,7 @@ Responda APENAS com JSON array:
                                 pncpLink: { contains: expectedPncpLink },
                                 aiAnalysis: { isNot: null },
                             },
-                            orderBy: { createdAt: 'desc' },
+                            orderBy: { sessionDate: 'desc' },
                             select: { id: true, title: true },
                         });
                         if (matchedBidding) {
