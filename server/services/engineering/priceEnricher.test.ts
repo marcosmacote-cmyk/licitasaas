@@ -14,6 +14,14 @@ vi.mock('../../lib/prisma', () => ({
     },
 }));
 
+vi.mock('@prisma/client', () => ({
+    Prisma: {
+        sql: (strings: TemplateStringsArray, ...values: any[]) => ({ strings, values }),
+        join: (values: any[]) => values,
+        empty: { strings: [], values: [] },
+    },
+}));
+
 import { enrichWithOfficialPrices } from './priceEnricher';
 
 describe('enrichWithOfficialPrices', () => {
