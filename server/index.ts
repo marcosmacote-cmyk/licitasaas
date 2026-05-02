@@ -272,6 +272,43 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
+// TEMPORARY DIAGNOSTIC — Will be removed after diagnosis
+app.get('/api/diag-comp', async (_req, res) => {
+    try {
+        const dbs = await prisma.engineeringDatabase.findMany({
+            select: { id: true, name: true, type: true, uf: true, compositionCount: true, itemCount: true }
+        });
+        const result = [];
+        for (const db of dbs) {
+            const compCount = await prisma.engineeringComposition.count({ where: { databaseId: db.id } });
+            const compWithItems = await prisma.engineeringComposition.count({
+                where: { databaseId: db.id, items: { some: {} } }
+            });
+            const compItemCount = await prisma.engineeringCompositionItem.count({
+                where: { composition: { databaseId: db.id } }
+            });
+            result.push({
+                name: db.name, type: db.type, uf: db.uf,
+                compositions: compCount,
+                compositionsWithAnalytical: compWithItems,
+                analyticalItems: compItemCount,
+                items: db.itemCount,
+            });
+        }
+        const sample = await prisma.engineeringComposition.findMany({
+            where: { code: { in: ['91877', '091877', '0091877'] } },
+            include: { items: { take: 5, include: { item: true } }, database: { select: { name: true } } }
+        });
+        res.json({ databases: result, sample91877: sample.map(s => ({
+            db: s.database.name, code: s.code, desc: s.description.substring(0, 60),
+            totalPrice: s.totalPrice, itemsCount: s.items.length,
+            items: s.items.map(i => ({ desc: i.item?.description?.substring(0, 50), coef: i.coefficient, price: i.price }))
+        }))});
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── Admin: Backup Manual do Banco ──
 app.post('/api/admin/backup', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
