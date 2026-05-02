@@ -520,9 +520,27 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
         continue;
       }
 
-      try {
-        const repaired = await prisma.engineeringItem.create({
-          data: {
+      let repairedId = getByCodeVariants(itemIdMap, ci.code);
+      let repairedCode = ci.code;
+
+      if (!repairedId) {
+        const existing = await prisma.engineeringItem.findFirst({
+          where: { databaseId: db!.id, code: { in: buildSinapiCodeVariants(ci.code) } },
+          select: { id: true, code: true, price: true },
+        });
+        if (existing) {
+          repairedId = existing.id;
+          repairedCode = existing.code;
+          if ((Number(existing.price) || 0) <= 0.01) {
+            await prisma.engineeringItem.update({ where: { id: existing.id }, data: { price: unitPrice } });
+          }
+        }
+      }
+
+      if (!repairedId) {
+        const repaired = await prisma.engineeringItem.upsert({
+          where: { databaseId_code: { databaseId: db!.id, code: ci.code } },
+          create: {
             databaseId: db!.id,
             code: ci.code,
             description: ci.description || `Insumo SINAPI ${ci.code}`,
@@ -530,36 +548,26 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
             price: unitPrice,
             type: ci.type || 'MATERIAL',
           },
+          update: { price: unitPrice },
           select: { id: true, code: true },
         });
-        setCodeVariants(itemIdMap, repaired.code, repaired.id);
+        repairedId = repaired.id;
+        repairedCode = repaired.code;
+        insertedItems++;
+      }
+
+      if (repairedId) {
+        setCodeVariants(itemIdMap, repairedCode, repairedId);
         dbCompItems.push({
           compositionId: compId,
-          itemId: repaired.id,
+          itemId: repairedId,
           auxiliaryCompositionId: null,
           coefficient: ci.quantity,
           price: residual,
         });
-        insertedItems++;
         repairedResidualItems++;
-      } catch (e: any) {
-        const existing = await prisma.engineeringItem.findFirst({
-          where: { databaseId: db!.id, code: { in: buildSinapiCodeVariants(ci.code) } },
-          select: { id: true, code: true },
-        });
-        if (existing) {
-          setCodeVariants(itemIdMap, existing.code, existing.id);
-          dbCompItems.push({
-            compositionId: compId,
-            itemId: existing.id,
-            auxiliaryCompositionId: null,
-            coefficient: ci.quantity,
-            price: unitPrice * ci.quantity,
-          });
-          repairedResidualItems++;
-        } else {
-          unresolvedCompItems++;
-        }
+      } else {
+        unresolvedCompItems++;
       }
     }
     
