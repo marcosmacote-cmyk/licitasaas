@@ -1479,11 +1479,32 @@ router.post('/ai-populate', async (req: any, res: any) => {
             const selectedDocs = classifiedDocs.selected.length > 0
                 ? classifiedDocs.selected
                 : classifiedDocs.all.filter(doc => doc.score > (classifiedDocs.summary.total <= 1 ? -999 : -20)).slice(0, 4);
-            const pdfUrls = selectedDocs.map(doc => doc.url);
+            let pdfUrls = selectedDocs.map(doc => doc.url);
+
+            // FIX DOC-04: Se nenhum anexo no schemaV2, construir URLs diretamente da API PNCP
+            if (pdfUrls.length === 0 && bidding?.pncpLink) {
+                const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
+                if (linkMatch) {
+                    const [, cnpj, ano, seq] = linkMatch;
+                    try {
+                        const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+                        const apiRes = await (await import('axios')).default.get(arquivosUrl, { timeout: 20000 });
+                        const arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
+                        console.log(`[Engineering AI-Populate] 📎 PNCP API retornou ${arquivos.length} arquivo(s) via pncpLink fallback`);
+                        for (const arq of arquivos) {
+                            const fileUrl = arq.url || '';
+                            const correctedUrl = fileUrl.includes('pncp-api/v1') ? fileUrl.replace('pncp-api/v1', 'api/pncp/v1') : fileUrl;
+                            if (correctedUrl) pdfUrls.push(correctedUrl);
+                        }
+                    } catch (e: any) {
+                        console.warn(`[Engineering AI-Populate] ⚠️ PNCP API fallback falhou: ${e.message}`);
+                    }
+                }
+            }
 
             console.log(
-                `[Engineering AI-Populate] 📎 Classificador selecionou ${selectedDocs.length}/${classifiedDocs.summary.total} anexo(s): ` +
-                selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ')
+                `[Engineering AI-Populate] 📎 Classificador selecionou ${selectedDocs.length}/${classifiedDocs.summary.total} anexo(s), pdfUrls final: ${pdfUrls.length}: ` +
+                (selectedDocs.length > 0 ? selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ') : pdfUrls.join(', '))
             );
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', userId: 'system' };
