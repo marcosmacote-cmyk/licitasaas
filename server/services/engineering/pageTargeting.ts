@@ -36,6 +36,8 @@ export interface PageTargetingResult {
     reductionPercent: number;          // e.g. 85 means 85% fewer pages
     trimmedPdfBuffer: Buffer | null;   // The PDF with only candidate pages
     strategy: 'targeted' | 'full';     // 'full' if all pages passed or targeting failed
+    isScannedPdf?: boolean;            // true when ≥80% of pages have no extractable text
+    scannedPagesPercent?: number;      // % of pages with no text
 }
 
 // ═══════════════════════════════════════════
@@ -310,6 +312,28 @@ export async function targetBudgetPages(
         };
     }
 
+    // Step 1.5: Detect scanned PDFs (no extractable text layer)
+    const emptyPages = pageTexts.filter(text => text.trim().length < 10).length;
+    const scannedPagesPercent = Math.round((emptyPages / totalPages) * 100);
+    const isScannedPdf = scannedPagesPercent >= 80;
+
+    if (isScannedPdf) {
+        logger.warn(
+            `[PageTargeting] ⚠️ PDF escaneado detectado: ${emptyPages}/${totalPages} páginas sem texto ` +
+            `(${scannedPagesPercent}%). Targeting impossível — requer OCR.`
+        );
+        return {
+            totalPages,
+            candidatePages: [],
+            selectedPageIndices: Array.from({ length: totalPages }, (_, i) => i),
+            reductionPercent: 0,
+            trimmedPdfBuffer: null,
+            strategy: 'full',
+            isScannedPdf: true,
+            scannedPagesPercent,
+        };
+    }
+
     // Step 2: Score each page
     const scores = pageTexts.map((text, idx) => scorePage(text, idx));
     const candidates = scores.filter(s => s.score >= minScore);
@@ -323,6 +347,8 @@ export async function targetBudgetPages(
             reductionPercent: 0,
             trimmedPdfBuffer: null,
             strategy: 'full',
+            isScannedPdf: false,
+            scannedPagesPercent,
         };
     }
 

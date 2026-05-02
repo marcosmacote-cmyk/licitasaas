@@ -239,14 +239,27 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 pdfParts.push({
                     inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                 });
-                if (targeting.totalPages >= 15 && targeting.strategy === 'full' && !targeting.trimmedPdfBuffer) {
+
+                // Detect scanned PDFs — these ALWAYS need OCR
+                if (targeting.isScannedPdf) {
+                    zeroxFallbackCandidates.push({
+                        buffer,
+                        fileName: source,
+                        reason: 'scanned_pdf_no_text_layer',
+                    });
+                    logger.warn(
+                        `[Engineering-BG] 📸 PDF escaneado detectado: "${source}" ` +
+                        `(${targeting.totalPages} pgs, ${targeting.scannedPagesPercent}% sem texto). ` +
+                        `Zerox OCR será acionado obrigatoriamente.`
+                    );
+                } else if (targeting.totalPages >= 15 && targeting.strategy === 'full' && !targeting.trimmedPdfBuffer) {
                     zeroxFallbackCandidates.push({
                         buffer,
                         fileName: source,
                         reason: 'page_targeting_full_document',
                     });
                 }
-                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages)`);
+                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages${targeting.isScannedPdf ? ', SCANNED' : ''})`);
             }
         } catch (err: any) {
             // Page targeting failed — fall back to full PDF
@@ -520,15 +533,23 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         };
 
         // Detectar causas prováveis
+        const hasScannedPdf = zeroxFallbackCandidates.some(c => c.reason === 'scanned_pdf_no_text_layer');
         if (rawPdfBuffers.length === 0) {
             diagnostics.possibleCauses.push('Nenhum PDF disponível para extração');
         } else if (rawPdfBuffers.every(p => p.buffer.length < 50 * 1024)) {
             diagnostics.possibleCauses.push('Todos os PDFs são muito pequenos (<50KB) — podem não conter planilha orçamentária');
         }
-        if (targetingUsed && !zeroxFallbackUsed) {
+        if (hasScannedPdf) {
+            diagnostics.possibleCauses.push(
+                'PDF é escaneado (imagem sem texto pesquisável). ' +
+                (zeroxFallbackUsed
+                    ? 'OCR Zerox foi usado mas não conseguiu extrair itens orçamentários'
+                    : 'OCR Zerox não conseguiu processar o documento')
+            );
+        } else if (targetingUsed && !zeroxFallbackUsed) {
             diagnostics.possibleCauses.push('Page targeting pode ter excluído páginas com a planilha');
         }
-        if (!zeroxFallbackUsed && zeroxFallbackCandidates.length > 0) {
+        if (!zeroxFallbackUsed && zeroxFallbackCandidates.length > 0 && !hasScannedPdf) {
             diagnostics.possibleCauses.push('PDF pode ser escaneado (imagem) — OCR Zerox não foi acionado');
         }
         if (diagnostics.possibleCauses.length === 0) {
