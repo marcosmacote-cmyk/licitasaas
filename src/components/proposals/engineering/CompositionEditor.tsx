@@ -30,8 +30,14 @@ interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
+    officialUnitCost?: number;
     priceAudit?: {
         matchedDatabaseId?: string | null;
+        matchedUnitCost?: number | null;
+        matchedSourceName?: string | null;
+        matchedReference?: string | null;
+        matchedPayrollExemption?: boolean | null;
+        warnings?: string[];
     };
     insumos?: InsumoDetail[];
 }
@@ -51,6 +57,55 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     SERVICO: { label: 'Serviços', icon: Wrench, color: '#0ea5e9' },
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
     OBSERVACAO: { label: 'Observações e Textos', icon: FileText, color: '#64748b' },
+};
+
+const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+const getLineCoefficient = (ci: any) => asNumber(ci?.coefficient);
+
+const getLineUnitPrice = (ci: any) => {
+    const itemData = ci?.item || ci?.auxiliaryComposition;
+    return asNumber(itemData?.price ?? itemData?.totalPrice);
+};
+
+const getLineSubtotal = (ci: any, precision?: any) => {
+    const itemData = ci?.item || ci?.auxiliaryComposition;
+    if (itemData?.isObservation) return 0;
+    const computed = getLineCoefficient(ci) * getLineUnitPrice(ci);
+    if (computed > 0 || getLineUnitPrice(ci) > 0) {
+        return applyPrecision(computed, { precision });
+    }
+    return asNumber(ci?.price);
+};
+
+const normalizeCompositionMath = (raw: any, precision?: any) => {
+    if (!raw) return raw;
+    const groups = { ...(raw.groups || {}) };
+    let total = 0;
+
+    for (const groupKey of Object.keys(groups)) {
+        groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
+            const subtotal = getLineSubtotal(ci, precision);
+            total += subtotal;
+            return { ...ci, price: subtotal };
+        });
+    }
+
+    return {
+        ...raw,
+        groups,
+        items: Object.values(groups).flat(),
+        totalDirect: applyPrecision(total, { precision }),
+        totalPrice: applyPrecision(total, { precision }),
+    };
+};
+
+const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precision?: any) => {
+    let total = 0;
+    for (const groupItems of Object.values(groups || {})) {
+        for (const ci of groupItems || []) total += getLineSubtotal(ci, precision);
+    }
+    return applyPrecision(total, { precision });
 };
 
 export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig }: Props) {
@@ -165,13 +220,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
         updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
 
-        let newTotal = 0;
-        for (const groupKey of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[groupKey]) {
-                newTotal += ci.price || 0;
-            }
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -242,12 +291,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 d.sourceIsEdital = true;
             }
 
-            setData(d);
+            setData(normalizeCompositionMath(d, engineeringConfig?.precision));
         } catch {
             setError('not_found');
         }
         setLoading(false);
-    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos]);
+    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig?.precision]);
 
     useEffect(() => {
         if (currentItem?.code) loadComposition(currentItem.code);
@@ -293,16 +342,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
             const extracted = await res.json();
             
-            // Re-calculate the total
-            let newTotal = 0;
-            for (const groupKey of Object.keys(extracted.groups || {})) {
-                for (const ci of extracted.groups[groupKey]) {
-                    newTotal += ci.price || 0;
-                }
-            }
-            const updated = { ...extracted };
-            updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
-            updated.totalDirect = updated.totalPrice;
+            const updated = normalizeCompositionMath(extracted, engineeringConfig?.precision);
             
             setData(updated);
             setError('');
@@ -392,11 +432,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             updated.groups[groupKey] = updated.groups[groupKey].map((ci: any) => {
                 if (ci.id !== editingField.id) return ci;
                 found = true;
-                const itemData = ci.item || ci.auxiliaryComposition;
-
                 if (editingField.field === 'coef') {
                     const newCoef = newVal;
-                    const unitPrice = itemData?.price || itemData?.totalPrice || 0;
+                    const unitPrice = getLineUnitPrice(ci);
                     return {
                         ...ci,
                         coefficient: newCoef,
@@ -421,14 +459,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             return;
         }
 
-        // Recalculate composition total
-        let newTotal = 0;
-        for (const groupKey of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[groupKey]) {
-                newTotal += ci.price || 0;
-            }
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -563,13 +594,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
         updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
-        let newTotal = 0;
-        for (const k of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[k]) {
-                newTotal += ci.price || 0;
-            }
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -592,7 +617,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             updated.groups[k] = updated.groups[k].map((ci: any) => {
                 if (ci.item?.isObservation) return ci; // skip observations
                 const newCoef = (ci.coefficient || 1) * factor;
-                const unitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                const unitPrice = getLineUnitPrice(ci);
                 return {
                     ...ci,
                     coefficient: newCoef,
@@ -601,11 +626,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             });
         }
 
-        let newTotal = 0;
-        for (const k of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -626,7 +647,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (discountData.target !== 'ALL' && k !== discountData.target) continue;
             
             updated.groups[k] = updated.groups[k].map((ci: any) => {
-                const oldUnitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                const oldUnitPrice = getLineUnitPrice(ci);
                 const newUnitPrice = oldUnitPrice * multiplier;
                 
                 const newItemObj = ci.item ? { ...ci.item, price: newUnitPrice } : undefined;
@@ -641,11 +662,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             });
         }
 
-        let newTotal = 0;
-        for (const k of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -674,7 +691,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             updated.groups[k] = updated.groups[k].map((ci: any) => {
                 if (ci.item?.isObservation) return ci;
                 const newCoef = (ci.coefficient || 1) * factor;
-                const unitPrice = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                const unitPrice = getLineUnitPrice(ci);
                 return {
                     ...ci,
                     coefficient: newCoef,
@@ -700,11 +717,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             }
         });
 
-        let newTotal = 0;
-        for (const k of Object.keys(updated.groups)) {
-            for (const ci of updated.groups[k]) newTotal += ci.price || 0;
-        }
-        updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
 
         setData(updated);
@@ -713,11 +726,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setShowRateioModal(false);
     };
 
-    // Computed total from current data
-    const compositionTotal = data ? (data.totalPrice || data.totalDirect || 0) : 0;
+    // Computed total from analytical lines. The Hub composition is the source of truth;
+    // edital extraction remains only as comparison/audit evidence.
+    const compositionTotal = data ? sumCompositionGroups(data.groups, engineeringConfig?.precision) : 0;
     const compositionItemsCount = data ? Object.values(data.groups || {}).reduce((acc: number, group: any) => acc + (Array.isArray(group) ? group.length : 0), 0) : 0;
 
     if (!currentItem) return null;
+
+    const editalUnitCost = asNumber(currentItem.officialUnitCost || currentItem.unitCost);
+    const priceDelta = editalUnitCost - compositionTotal;
+    const priceDeltaPct = compositionTotal > 0 ? (priceDelta / compositionTotal) * 100 : 0;
+    const hasPriceDivergence = compositionTotal > 0 && Math.abs(priceDelta) > 0.01;
+    const databaseReference = data?.database
+        ? [
+            data.database.name,
+            data.database.uf,
+            data.database.referenceMonth && data.database.referenceYear
+                ? `${String(data.database.referenceMonth).padStart(2, '0')}/${data.database.referenceYear}`
+                : data.database.version,
+            typeof data.database.payrollExemption === 'boolean'
+                ? (data.database.payrollExemption ? 'Desonerado' : 'Onerado')
+                : '',
+        ].filter(Boolean).join(' · ')
+        : '';
 
     const editor = (
         <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', background: 'var(--color-bg-base)' }}>
@@ -989,11 +1020,52 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     </div>
                                 </div>
                             )}
+                            {hasPriceDivergence && !data.sourceIsEdital && data.hasAnalyticalItems !== false && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14,
+                                    padding: '12px 14px', borderRadius: 6,
+                                    border: '1px solid rgba(220,38,38,0.22)',
+                                    background: 'rgba(220,38,38,0.06)',
+                                    color: '#991b1b', fontSize: '0.82rem', lineHeight: 1.45,
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                        <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                                        <div>
+                                            <strong>Preço do orçamento diverge da composição oficial do Hub.</strong>
+                                            <div style={{ marginTop: 3 }}>
+                                                Orçamento base: <strong>{fmt(editalUnitCost)}</strong> · CPU Hub: <strong>{fmt(compositionTotal)}</strong>
+                                                {' '}· Diferença: <strong>{fmt(priceDelta)} ({priceDeltaPct.toFixed(2)}%)</strong>.
+                                            </div>
+                                            <div style={{ marginTop: 3, color: '#7f1d1d' }}>
+                                                Verifique data-base, UF, regime de encargos sociais e se o edital usou composição/adaptação própria.
+                                                {databaseReference ? ` Base consultada: ${databaseReference}.` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!currentItem) return;
+                                            onUpdateItem(currentItem.id, { unitCost: compositionTotal });
+                                            setHasChanges(true);
+                                        }}
+                                        style={{
+                                            flexShrink: 0, padding: '6px 10px', borderRadius: 4,
+                                            border: '1px solid rgba(153,27,27,0.25)',
+                                            background: 'white', color: '#991b1b',
+                                            cursor: 'pointer', fontSize: '0.72rem', fontWeight: 800,
+                                        }}
+                                        title="Atualizar o custo sem BDI deste item na planilha usando a CPU oficial"
+                                    >
+                                        Aplicar CPU
+                                    </button>
+                                </div>
+                            )}
                             {Object.entries(GROUP_META).map(([groupKey, meta]) => {
                                 const groupItems = data.groups?.[groupKey] || [];
                                 if (groupItems.length === 0) return null;
                                 const Icon = meta.icon;
-                                const groupTotal = groupItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0);
+                                const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
 
                                 return (
@@ -1034,7 +1106,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 {/* Rows */}
                                                 {groupItems.map((ci: any, idx: number) => {
                                                     const itemData = ci.item || ci.auxiliaryComposition;
-                                                    const unitPrice = itemData?.price || itemData?.totalPrice || 0;
+                                                    const unitPrice = getLineUnitPrice(ci);
+                                                    const lineSubtotal = getLineSubtotal(ci, engineeringConfig?.precision);
                                                     const isEditingCoef = editingField?.id === ci.id && editingField?.field === 'coef';
                                                     const isEditingPrice = editingField?.id === ci.id && editingField?.field === 'price';
 
@@ -1131,7 +1204,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             )}
 
                                                             <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: itemData?.isObservation ? 'transparent' : meta.color }}>
-                                                                {!itemData?.isObservation && fmt(ci.price)}
+                                                                {!itemData?.isObservation && fmt(lineSubtotal)}
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center' }}>
@@ -1139,13 +1212,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                     const updated = { ...data, groups: { ...data.groups } };
                                                                     updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
                                                                     
-                                                                    let newTotal = 0;
-                                                                    for (const k of Object.keys(updated.groups)) {
-                                                                        for (const item of updated.groups[k]) {
-                                                                            newTotal += item.price || 0;
-                                                                        }
-                                                                    }
-                                                                    updated.totalPrice = applyPrecision(newTotal, { precision: engineeringConfig?.precision });
+                                                                    updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
                                                                     updated.totalDirect = updated.totalPrice;
                                                                     
                                                                     setData(updated);

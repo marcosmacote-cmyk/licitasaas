@@ -12,6 +12,14 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtCoef = (v: number) => v.toFixed(4);
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
+const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const getLineUnitPrice = (ci: any) => asNumber((ci?.item || ci?.auxiliaryComposition)?.price ?? (ci?.item || ci?.auxiliaryComposition)?.totalPrice);
+const getLineSubtotal = (ci: any) => {
+    const computed = asNumber(ci?.coefficient) * getLineUnitPrice(ci);
+    return computed > 0 || getLineUnitPrice(ci) > 0 ? computed : asNumber(ci?.price);
+};
+const getCompositionTotal = (data: any) => Object.values(data?.groups || {})
+    .reduce((total: number, group: any) => total + (Array.isArray(group) ? group.reduce((s: number, ci: any) => s + getLineSubtotal(ci), 0) : 0), 0);
 
 interface Props {
     code: string;
@@ -43,7 +51,14 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
         const url = `/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`;
         fetch(url, { headers: hdrs() })
             .then(r => { if (!r.ok) throw new Error('not_found'); return r.json(); })
-            .then(d => { setData(d); setLoading(false); })
+            .then(d => {
+                const groups = { ...(d.groups || {}) };
+                for (const key of Object.keys(groups)) {
+                    groups[key] = (groups[key] || []).map((ci: any) => ({ ...ci, price: getLineSubtotal(ci) }));
+                }
+                setData({ ...d, groups, totalDirect: getCompositionTotal({ groups }), totalPrice: getCompositionTotal({ groups }) });
+                setLoading(false);
+            })
             .catch(() => { setError('Composição não encontrada na base oficial.'); setLoading(false); });
     }, [code, databaseId, sourceName]);
 
@@ -114,7 +129,7 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
                                 const items = data.groups?.[groupKey] || [];
                                 if (items.length === 0) return null;
                                 const Icon = meta.icon;
-                                const groupTotal = items.reduce((s: number, ci: any) => s + (ci.price || 0), 0);
+                                const groupTotal = items.reduce((s: number, ci: any) => s + getLineSubtotal(ci), 0);
 
                                 return (
                                     <div key={groupKey} style={{ border: `1px solid ${meta.color}20`, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -143,6 +158,8 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
                                         {items.map((ci: any, idx: number) => {
                                             const isAux = groupKey === 'AUXILIAR';
                                             const itemData = ci.item || ci.auxiliaryComposition;
+                                            const unitPrice = getLineUnitPrice(ci);
+                                            const lineSubtotal = getLineSubtotal(ci);
                                             const isExpanded = expandedAux.has(ci.id);
 
                                             return (
@@ -164,8 +181,8 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
                                                         </div>
                                                         <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>{itemData?.unit || '—'}</span>
                                                         <span style={{ fontSize: '0.75rem', textAlign: 'right', fontFamily: 'monospace' }}>{fmtCoef(ci.coefficient)}</span>
-                                                        <span style={{ fontSize: '0.75rem', textAlign: 'right' }}>{fmt(itemData?.price || itemData?.totalPrice || 0)}</span>
-                                                        <span style={{ fontSize: '0.75rem', textAlign: 'right', fontWeight: 600, color: meta.color }}>{fmt(ci.price)}</span>
+                                                        <span style={{ fontSize: '0.75rem', textAlign: 'right' }}>{fmt(unitPrice)}</span>
+                                                        <span style={{ fontSize: '0.75rem', textAlign: 'right', fontWeight: 600, color: meta.color }}>{fmt(lineSubtotal)}</span>
                                                     </div>
 
                                                     {/* Expanded auxiliary composition */}
@@ -177,7 +194,7 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
                                                                     <span style={{ textAlign: 'center', color: 'var(--color-text-tertiary)' }}>{subCi.item?.unit || '—'}</span>
                                                                     <span style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmtCoef(subCi.coefficient)}</span>
                                                                     <span style={{ textAlign: 'right' }}>{fmt(subCi.item?.price || 0)}</span>
-                                                                    <span style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(subCi.price)}</span>
+                                                                    <span style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(getLineSubtotal(subCi))}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -205,7 +222,7 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
                                 </div>
                             </div>
                             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                                {fmt(data.totalPrice || data.totalDirect || 0)}
+                                {fmt(getCompositionTotal(data))}
                             </div>
                         </div>
                     </div>
