@@ -41,9 +41,10 @@ REGRAS DE CLASSIFICAÇÃO
 - Na dúvida entre COMPOSICAO e INSUMO → use COMPOSICAO
 
 🚨 REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
-- IGNORE ABSOLUTAMENTE todo e qualquer texto narrativo, regras do edital, exigências de habilitação, sanções, multas, ou descrições de atestados de capacidade técnica.
-- NUNCA crie itens baseados em "O licitante deverá comprovar...", "Multa de 2%...", "Prazo de entrega...".
-- EXTRAIA APENAS dados que estejam claramente formatados em ESTRUTURA DE PLANILHA ORÇAMENTÁRIA (tabelas com código, descrição, unidade, quantidade e preço).
+- IGNORE ABSOLUTAMENTE todo e qualquer texto narrativo, como "ESPECIFICAÇÕES DE SERVIÇOS", "MEMORIAL DESCRITIVO", "PROJETO BÁSICO", regras do edital ou exigências de habilitação.
+- É muito comum o documento de Especificações ter numeração (ex: "2.1 Escavação"). VOCÊ DEVE IGNORAR ISSO. NÃO misture a numeração do texto com a da tabela.
+- EXTRAIA APENAS E EXCLUSIVAMENTE dados que estejam na Tabela da PLANILHA ORÇAMENTÁRIA.
+- A numeração do item (ex: 1.1, 1.2) DEVE ser extraída EXCLUSIVAMENTE da coluna "ITEM" da própria tabela. Se a tabela diz "1.2", escreva "1.2", mesmo que o texto do memorial diga "2.2".
 
 🚨🚨🚨 REGRA ANTI-COMPOSIÇÃO (CRÍTICA — NÃO EXTRAIA COMPOSIÇÕES DE CUSTOS):
   Documentos de engenharia frequentemente contêm DUAS tabelas diferentes:
@@ -290,6 +291,8 @@ REGRAS FINAIS
 
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
+
+🚨🚨🚨 AVISO CRÍTICO: O documento pode conter dezenas de páginas de texto narrativo como "Memorial Descritivo" ou "Especificações Técnicas", que frequentemente possuem numeração própria (ex: 2.1, 2.2). IGNORE ISSO COMPLETAMENTE. Foque APENAS nas páginas que contêm a TABELA da Planilha Orçamentária. NUNCA misture a numeração das especificações com a da tabela.
 
 ATENÇÃO — PRIORIDADES ORDENADAS:
 
