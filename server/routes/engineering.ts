@@ -258,6 +258,49 @@ function compositionIncludes() {
     };
 }
 
+// ═══════════════════════════════════════════════════════════
+// DIAGNOSTIC — Temporary endpoint to check composition data state
+// ═══════════════════════════════════════════════════════════
+router.get('/diagnostic/compositions', async (_req: any, res: any) => {
+    try {
+        const dbs = await prisma.engineeringDatabase.findMany({
+            select: { id: true, name: true, type: true, uf: true, compositionCount: true, itemCount: true }
+        });
+        
+        const result = [];
+        for (const db of dbs) {
+            const compCount = await prisma.engineeringComposition.count({ where: { databaseId: db.id } });
+            const compWithItems = await prisma.engineeringComposition.count({
+                where: { databaseId: db.id, items: { some: {} } }
+            });
+            const compItemCount = await prisma.engineeringCompositionItem.count({
+                where: { composition: { databaseId: db.id } }
+            });
+            result.push({
+                name: db.name, type: db.type, uf: db.uf,
+                compositions: compCount,
+                compositionsWithAnalytical: compWithItems,
+                analyticalItems: compItemCount,
+                itemsInDb: db.itemCount,
+            });
+        }
+        
+        // Check specific code 91877
+        const sample = await prisma.engineeringComposition.findMany({
+            where: { code: { in: ['91877', '091877', '0091877'] } },
+            include: { items: { take: 5, include: { item: true } }, database: { select: { name: true } } }
+        });
+        
+        res.json({ databases: result, sampleCode91877: sample.map(s => ({
+            db: s.database.name, code: s.code, desc: s.description.substring(0, 60),
+            totalPrice: s.totalPrice, itemsCount: s.items.length,
+            items: s.items.map(i => ({ desc: i.item?.description?.substring(0, 50), coef: i.coefficient, price: i.price }))
+        }))});
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 function compositionOrderBy() {
     return [
         { database: { referenceYear: 'desc' as const } },
