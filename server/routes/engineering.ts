@@ -388,8 +388,18 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
         const codeVariants = buildCompositionCodeVariants(code);
 
+        logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} codeVariants=${codeVariants.join(',')}`);
+
         let composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
+        if (composition) {
+            logger.info(`[CompositionLookup] ✅ ANALYTICAL found: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
+        } else {
+            logger.info(`[CompositionLookup] ⚠️ No analytical found, trying fallback...`);
+        }
         if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
+        if (composition) {
+            logger.info(`[CompositionLookup] Fallback result: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
+        }
 
         if (!composition) {
             const itemWhere: any = { code: { in: codeVariants } };
