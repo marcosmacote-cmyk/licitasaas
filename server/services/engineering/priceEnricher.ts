@@ -390,8 +390,8 @@ export async function enrichWithOfficialPrices(
         const matchedPrice = Number(best.candidate.matchedPrice) || 0;
         const confidenceResult = calculateMatchConfidence(best, extractedUnitCost, matchedPrice);
         best.confidence = confidenceResult.confidence;
-        best._confidenceLevel = confidenceResult.confidenceLevel;
-        best._confidenceFactors = confidenceResult.factors;
+        (best as any)._confidenceLevel = confidenceResult.confidenceLevel;
+        (best as any)._confidenceFactors = confidenceResult.factors;
         applyBestCandidate(item, best, extractedUnitCost);
         matched++;
     }
