@@ -1362,6 +1362,25 @@ router.post('/ai-populate', async (req: any, res: any) => {
             
             if (forceRefresh) {
                 console.log(`[Engineering AI-Populate] 🔄 forceRefresh=true — invalidando cache e forçando nova extração`);
+                // FIX DOC-03: Limpar cache de empty_extraction/quarantine para permitir nova tentativa
+                try {
+                    await prisma.$executeRaw`
+                        UPDATE "BiddingProcess" 
+                        SET "aiAnalysis" = jsonb_set(
+                            jsonb_set(
+                                COALESCE("aiAnalysis", '{}'::jsonb),
+                                '{schemaV2,_engineeringExtractionMeta}',
+                                'null'::jsonb
+                            ),
+                            '{schemaV2,_engineeringBudgetItems}',
+                            'null'::jsonb
+                        )
+                        WHERE id = ${biddingId}
+                    `;
+                    console.log(`[Engineering AI-Populate] 🧹 Cache de extração limpo para ${biddingId}`);
+                } catch (clearErr: any) {
+                    console.warn(`[Engineering AI-Populate] ⚠️ Falha ao limpar cache: ${clearErr.message}`);
+                }
             }
 
             // Priority 2: Use V2 itens_licitados if they have enough items
@@ -1459,7 +1478,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
             const classifiedDocs = classifyEngineeringAttachments(attachments, { maxDocuments: 4 });
             const selectedDocs = classifiedDocs.selected.length > 0
                 ? classifiedDocs.selected
-                : classifiedDocs.all.filter(doc => doc.score > -20).slice(0, 4);
+                : classifiedDocs.all.filter(doc => doc.score > (classifiedDocs.summary.total <= 1 ? -999 : -20)).slice(0, 4);
             const pdfUrls = selectedDocs.map(doc => doc.url);
 
             console.log(
