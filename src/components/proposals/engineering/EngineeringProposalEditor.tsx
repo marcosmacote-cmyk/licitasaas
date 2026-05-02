@@ -224,10 +224,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         return its.map(it => {
             if (isGrouper(it.type)) return it;
             const audited = { ...it, priceAudit: refreshPriceAudit(it) };
-            if (hasEditalPriceSnapshot(audited)) {
-                return preserveEditalPricing(audited, config);
-            }
-            // BDI diferenciado: FORNECIMENTO usa bdiFornecimento, OBRA usa BDI global
+            // FIX BDI-01: Sempre recalcula unitPrice = unitCost × (1+BDI/100).
+            // O officialUnitPrice/officialTotalPrice são mantidos como campos de auditoria
+            // para comparação, mas NUNCA congelam o preço do licitante.
             const itemBdi = config.bdiDiferenciado && audited.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
                 : _bdi;
@@ -563,13 +562,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             const updated = { ...it, [field]: value };
             if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria' || field === 'sourceName' || field === 'code') {
                 if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
-                if (hasEditalPriceSnapshot(updated)) {
-                    Object.assign(updated, preserveEditalPricing(updated, engineeringConfig));
-                } else {
-                    const itemBdi = resolveItemBdi(updated);
-                    updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
-                    updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
-                }
+                // FIX BDI-01: Sempre recalcula com BDI do usuário, sem congelar no preço do edital
+                const itemBdi = resolveItemBdi(updated);
+                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
                 updated.priceAudit = refreshPriceAudit(updated);
             }
             return updated;
