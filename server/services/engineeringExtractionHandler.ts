@@ -142,7 +142,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                             const apiClassified = classifyEngineeringAttachments(arquivos, { maxDocuments: 4 });
                             const apiSelected = apiClassified.selected.length > 0
                                 ? apiClassified.selected
-                                : apiClassified.all.filter(doc => doc.score > -20).slice(0, 4);
+                                : apiClassified.all.filter(doc => doc.score > (arquivos.length <= 1 ? -999 : -20)).slice(0, 4);
 
                             logger.info(
                                 `[Engineering-BG] 📎 API classifier selected ${apiSelected.length}/${apiClassified.summary.total}: ` +
@@ -558,11 +558,15 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         }
         // Causa 4: O documento principal é só o edital (sem anexo de planilha)
         // Detectar quando o único PDF disponível não contém dados orçamentários
+        // FIX DOC-02: Só aciona este diagnóstico para PDFs pequenos (<500KB).
+        // PDFs grandes (ex: 98 pgs) quase sempre têm a planilha embutida — o nome do arquivo é irrelevante.
         else if (rawPdfBuffers.length === 1) {
             const singleSource = rawPdfBuffers[0].source.toLowerCase();
-            const isEditalOnly = /edital|minuta|licitac|aviso/i.test(singleSource) &&
+            const singleSize = rawPdfBuffers[0].buffer.length;
+            const isSmallEditalOnly = singleSize < 500 * 1024 && 
+                /edital|minuta|licitac|aviso/i.test(singleSource) &&
                 !/planilh|or[cç]ament|quantitat|composi[cç]/i.test(singleSource);
-            if (isEditalOnly) {
+            if (isSmallEditalOnly) {
                 diagnostics.possibleCauses.push(
                     'O único documento disponível é o edital (texto jurídico), sem planilha orçamentária anexa. ' +
                     'O órgão não publicou os anexos de engenharia no PNCP.'

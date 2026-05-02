@@ -96,12 +96,15 @@ export function classifyEngineeringAttachments(
 
     // TASK-03: Score mínimo adaptativo — processos com poucos docs aceitam PDFs genéricos
     // Municípios pequenos têm 1-3 anexos; rejeitar tudo = extração impossível
+    // FIX DOC-01: Com apenas 1 documento, SEMPRE processa — muitas prefeituras embarcam
+    // a planilha orçamentária DENTRO do edital (ex: Santa Maria/PA, 98 pgs com planilha na pg 62)
     const totalActive = (attachments || []).filter(att => att && att.ativo !== false).length;
     const baseMinScore = options.minScore ?? 18;
-    const minScore = totalActive <= 2 ? -30 :   // Aceita quase tudo (1-2 docs)
-                     totalActive <= 4 ? -10 :   // Mais permissivo (3-4 docs)
-                     totalActive <= 6 ? 5 :     // Moderado (5-6 docs)
-                     baseMinScore;               // Restritivo padrão (7+ docs)
+    const minScore = totalActive <= 1 ? -999 :   // SEMPRE aceita o único doc disponível
+                     totalActive <= 2 ? -30 :    // Aceita quase tudo (2 docs)
+                     totalActive <= 4 ? -10 :    // Mais permissivo (3-4 docs)
+                     totalActive <= 6 ? 5 :      // Moderado (5-6 docs)
+                     baseMinScore;                // Restritivo padrão (7+ docs)
 
     const classified = (attachments || [])
         .filter(att => att && att.ativo !== false && attachmentUrl(att))
