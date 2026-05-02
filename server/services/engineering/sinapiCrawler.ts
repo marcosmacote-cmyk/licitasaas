@@ -454,6 +454,25 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     const dbCompItems = [];
     let unresolvedCompItems = 0;
     let unresolvedParents = 0;
+    let repairedResidualItems = 0;
+    const resolvedTotalByParent = new Map<string, number>();
+    const unresolvedByParent = new Map<string, { compId: string; ci: ParsedCompositionItem }[]>();
+
+    const addResolvedTotal = (parentCode: string, price: number) => {
+      const key = buildSinapiCodeVariants(parentCode)[0] || parentCode;
+      resolvedTotalByParent.set(key, (resolvedTotalByParent.get(key) || 0) + price);
+    };
+
+    const getResolvedTotal = (parentCode: string) => {
+      const key = buildSinapiCodeVariants(parentCode)[0] || parentCode;
+      return resolvedTotalByParent.get(key) || 0;
+    };
+
+    const addUnresolved = (compId: string, ci: ParsedCompositionItem) => {
+      const key = buildSinapiCodeVariants(ci.parentCode)[0] || ci.parentCode;
+      unresolvedByParent.set(key, [...(unresolvedByParent.get(key) || []), { compId, ci }]);
+    };
+
     for (const ci of data.compositionItems) {
       const compId = getByCodeVariants(compIdMap, ci.parentCode);
       if (!compId) {
@@ -469,9 +488,12 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
       const auxCompId = isSvc ? (getByCodeVariants(compIdMap, ci.code) || null) : null;
 
       if (!itemId && !auxCompId) {
-        unresolvedCompItems++;
+        if (!isSvc) addUnresolved(compId, ci);
+        else unresolvedCompItems++;
         continue;
       }
+
+      addResolvedTotal(ci.parentCode, totalPrice);
       
       dbCompItems.push({
         compositionId: compId,
@@ -480,6 +502,65 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
         coefficient: ci.quantity,
         price: totalPrice
       });
+    }
+
+    for (const unresolvedRows of unresolvedByParent.values()) {
+      if (unresolvedRows.length !== 1) {
+        unresolvedCompItems += unresolvedRows.length;
+        continue;
+      }
+
+      const { compId, ci } = unresolvedRows[0];
+      const parentTotal = getByCodeVariants(priceMap, ci.parentCode) || 0;
+      const residual = parentTotal - getResolvedTotal(ci.parentCode);
+      const unitPrice = ci.quantity > 0 && residual > 0.01 ? residual / ci.quantity : 0;
+
+      if (unitPrice <= 0) {
+        unresolvedCompItems++;
+        continue;
+      }
+
+      try {
+        const repaired = await prisma.engineeringItem.create({
+          data: {
+            databaseId: db!.id,
+            code: ci.code,
+            description: ci.description || `Insumo SINAPI ${ci.code}`,
+            unit: ci.unit || 'UN',
+            price: unitPrice,
+            type: ci.type || 'MATERIAL',
+          },
+          select: { id: true, code: true },
+        });
+        setCodeVariants(itemIdMap, repaired.code, repaired.id);
+        dbCompItems.push({
+          compositionId: compId,
+          itemId: repaired.id,
+          auxiliaryCompositionId: null,
+          coefficient: ci.quantity,
+          price: residual,
+        });
+        insertedItems++;
+        repairedResidualItems++;
+      } catch (e: any) {
+        const existing = await prisma.engineeringItem.findFirst({
+          where: { databaseId: db!.id, code: { in: buildSinapiCodeVariants(ci.code) } },
+          select: { id: true, code: true },
+        });
+        if (existing) {
+          setCodeVariants(itemIdMap, existing.code, existing.id);
+          dbCompItems.push({
+            compositionId: compId,
+            itemId: existing.id,
+            auxiliaryCompositionId: null,
+            coefficient: ci.quantity,
+            price: unitPrice * ci.quantity,
+          });
+          repairedResidualItems++;
+        } else {
+          unresolvedCompItems++;
+        }
+      }
     }
     
     for (let i = 0; i < dbCompItems.length; i += 2000) {
@@ -491,7 +572,8 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     if (unresolvedParents > 0 || unresolvedCompItems > 0) {
       console.warn(
         `[SINAPI Crawler] ⚠️ ${baseName} ${uf} ${version} ${regime}: ` +
-        `${unresolvedParents} dependência(s) sem composição-pai e ${unresolvedCompItems} sem insumo/composição vinculável`
+        `${unresolvedParents} dependência(s) sem composição-pai, ${unresolvedCompItems} sem insumo/composição vinculável ` +
+        `e ${repairedResidualItems} reparada(s) por residual da CPU`
       );
     }
   }
