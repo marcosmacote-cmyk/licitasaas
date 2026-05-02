@@ -2458,18 +2458,18 @@ router.post('/bases/sync-sinapi', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
-        const { ufs = ['CE'], months = 12, includeDesonerado = true } = req.body;
+        const { ufs = ['CE'], months = 12, includeDesonerado = true, force = false } = req.body;
 
-        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: UFs=${ufs.join(',')}, meses=${months}, desonerado=${includeDesonerado}`);
+        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: UFs=${ufs.join(',')}, meses=${months}, desonerado=${includeDesonerado}, force=${force}`);
 
         // Run in background — don't block the HTTP response
         res.json({
-            message: `Sync SINAPI iniciado em background para ${ufs.join(', ')} (${months} meses, ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'})`,
+            message: `Sync SINAPI iniciado em background para ${ufs.join(', ')} (${months} meses, ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'}${force ? ', forçado' : ''})`,
             status: 'started',
         });
 
         // Fire and forget
-        syncSinapi({ ufs, months, includeDesonerado }).then(report => {
+        syncSinapi({ ufs, months, includeDesonerado, force }).then(report => {
             console.log(`[SINAPI Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
         }).catch(err => {
             console.error(`[SINAPI Sync] ❌ Erro fatal:`, err);

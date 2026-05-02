@@ -84,6 +84,8 @@ export interface PrecisionConfig {
 export interface EngineeringConfig {
     objeto: string;
     basesConsideradas: string[];
+    /** UF usada para escolher a base oficial estadual correta (ex: SINAPI PA, CE, SP). */
+    ufReferencia?: string;
     dataBase: string;
     /** Data base específica para cada banco selecionado (ex: SINAPI -> 2026-03) */
     dataBases?: Record<string, string>;
@@ -99,6 +101,7 @@ export interface EngineeringConfig {
 export const DEFAULT_ENGINEERING_CONFIG: EngineeringConfig = {
     objeto: '',
     basesConsideradas: ['SINAPI', 'SEINFRA', 'SICOR'],
+    ufReferencia: '',
     dataBase: '',
     regimeOneracao: 'DESONERADO',
     encargosSociais: { horista: 114.3, mensalista: 47.8 },

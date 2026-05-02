@@ -158,8 +158,8 @@ export function EngineeringHub() {
         }
     };
 
-    const handleSyncSinapi = async () => {
-        if (!confirm('Iniciar download SINAPI Nacional?\n\n🗺️ Todos os 27 estados do Brasil\n📅 Últimos 12 meses\n🔄 Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.')) return;
+    const handleSyncSinapi = async (force = false) => {
+        if (!confirm(`Iniciar download SINAPI Nacional${force ? ' com reprocessamento forçado' : ''}?\n\n🗺️ Todos os 27 estados do Brasil\n📅 Últimos 12 meses\n🔄 Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\n${force ? 'Bases existentes serão reimportadas para reparar composições analíticas.' : 'Bases já baixadas serão puladas automaticamente.'}`)) return;
         
         setSyncing(true);
         try {
@@ -169,11 +169,11 @@ export function EngineeringHub() {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ ufs: ['ALL'], months: 12, includeDesonerado: true })
+                body: JSON.stringify({ ufs: ['ALL'], months: 12, includeDesonerado: true, force })
             });
             
             if (res.ok) {
-                alert('Sync SINAPI iniciado em background!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.');
+                alert(`Sync SINAPI iniciado em background${force ? ' (forçado)' : ''}!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.`);
                 // Poll for updates
                 setTimeout(fetchBases, 30000);
                 setTimeout(fetchBases, 60000);
@@ -436,7 +436,7 @@ export function EngineeringHub() {
                 {isAdmin && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button 
-                            onClick={handleSyncSinapi}
+                            onClick={() => handleSyncSinapi()}
                             disabled={syncing}
                             style={{ 
                                 background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', border: 'none', 
@@ -448,6 +448,22 @@ export function EngineeringHub() {
                         >
                             {syncing ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
                             {syncing ? 'Sincronizando...' : 'Sync SINAPI (Nacional)'}
+                        </button>
+
+                        <button
+                            onClick={() => handleSyncSinapi(true)}
+                            disabled={syncing}
+                            title="Reimporta bases existentes para reparar composições analíticas incompletas"
+                            style={{
+                                background: 'linear-gradient(135deg, #047857, #0d9488)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncing ? 'wait' : 'pointer',
+                                opacity: syncing ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(13,148,136,0.25)'
+                            }}
+                        >
+                            {syncing ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+                            Reprocessar SINAPI
                         </button>
 
                         <button

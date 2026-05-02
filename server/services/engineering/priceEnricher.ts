@@ -46,6 +46,8 @@ export interface EngineeringPriceAudit {
 
 export interface EngineeringConfig {
     dataBase?: string;       // "2026-04" — data-base do orçamento
+    dataBases?: Record<string, string>; // "SINAPI" -> "2026-04"
+    ufReferencia?: string;   // UF da obra/base de referência, ex: "PA"
     regimeOneracao?: string; // "ONERADO" | "DESONERADO"
     basesConsideradas?: string[]; // ["SINAPI", "SEINFRA", "SICOR"]
     [key: string]: any;
@@ -91,6 +93,20 @@ function normalizeSourceName(sourceName: string): string {
     return source;
 }
 
+function normalizeUf(value?: string | null): string {
+    const uf = String(value || '').trim().toUpperCase();
+    const match = uf.match(/[A-Z]{2}/);
+    return match ? match[0] : '';
+}
+
+function getTargetDateForSource(config: EngineeringConfig | undefined, sourceName: string, fallback: { year: number; month: number } | null) {
+    const normalizedSource = normalizeSourceName(sourceName);
+    const sourceSpecific = config?.dataBases?.[normalizedSource]
+        || config?.dataBases?.[sourceName]
+        || config?.dataBases?.[String(sourceName || '').toUpperCase()];
+    return parseDataBaseMonth(sourceSpecific || config?.dataBase) || fallback;
+}
+
 function buildCodeVariants(code: string): string[] {
     const normalized = normalizeOfficialCode(code);
     const variants = new Set([String(code || '').trim(), normalized]);
@@ -119,6 +135,10 @@ export function buildCandidateScore(
     targetDate: { year: number; month: number } | null
 ): { score: number; warnings: string[] } {
     const db = candidate.database || {};
+    const dbName = String(db.name || '').toUpperCase();
+    const effectiveTargetDate = getTargetDateForSource(config, dbName, targetDate);
+    const desiredUf = normalizeUf(config?.ufReferencia || config?.uf || config?.estado);
+    const candidateUf = normalizeUf(db.uf);
     const desiredSources = Array.isArray(config?.basesConsideradas)
         ? config.basesConsideradas.map((b: string) => normalizeSourceName(b))
         : [];
@@ -128,7 +148,6 @@ export function buildCandidateScore(
 
     let score = 0;
     const warnings: string[] = [];
-    const dbName = String(db.name || '').toUpperCase();
     const itemSource = normalizeSourceName(sourceName);
 
     // Source match scoring
@@ -136,11 +155,18 @@ export function buildCandidateScore(
     else if (desiredSources.includes(dbName)) score += 20;
     else if ((itemSource && itemSource !== 'PROPRIA') || desiredSources.length > 0) warnings.push('fonte fora das bases configuradas');
 
+    // UF match scoring. SINAPI/SICRO/SBC/SEINFRA are state-sensitive; without
+    // this, equal code/date/regime candidates can randomly fall back to another UF.
+    if (desiredUf && candidateUf) {
+        if (candidateUf === desiredUf) score += 35;
+        else warnings.push(`UF incompatível (${candidateUf}, esperado ${desiredUf})`);
+    }
+
     // Date match scoring
-    if (targetDate) {
-        const exactDate = db.referenceYear === targetDate.year && db.referenceMonth === targetDate.month;
-        const versionDate = String(db.version || '').includes(`${String(targetDate.month).padStart(2, '0')}/${targetDate.year}`)
-            || String(db.version || '').includes(`${targetDate.year}-${String(targetDate.month).padStart(2, '0')}`);
+    if (effectiveTargetDate) {
+        const exactDate = db.referenceYear === effectiveTargetDate.year && db.referenceMonth === effectiveTargetDate.month;
+        const versionDate = String(db.version || '').includes(`${String(effectiveTargetDate.month).padStart(2, '0')}/${effectiveTargetDate.year}`)
+            || String(db.version || '').includes(`${effectiveTargetDate.year}-${String(effectiveTargetDate.month).padStart(2, '0')}`);
         if (exactDate || versionDate) score += 30;
         else warnings.push(`data-base incompatível (${formatReference(db)})`);
     } else if (!db.referenceYear && !db.referenceMonth && !db.version) {

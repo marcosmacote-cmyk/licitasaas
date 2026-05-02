@@ -57,6 +57,11 @@ const TYPE_META: Record<EngItemType, { label: string; color: string; bg: string;
     INSUMO:     { label: 'Insumo',      color: '#b45309', bg: 'rgba(180,83,9,0.06)',   icon: Package },
 };
 
+const BRAZILIAN_UFS = [
+    'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT',
+    'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
+];
+
 interface Props { proposalId: string; biddingId: string; }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1429,6 +1434,19 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Objeto da Obra</label>
                                     <textarea className="form-input" rows={2} value={engineeringConfig.objeto} onChange={e => updateEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Ex: Construção de quadra poliesportiva..." style={{ width: '100%', resize: 'none', fontSize: '0.85rem', padding: '8px 12px', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)' }} />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>UF da Obra / Base Oficial</label>
+                                    <select
+                                        className="form-select"
+                                        value={engineeringConfig.ufReferencia || ''}
+                                        onChange={e => updateEngineeringConfig({ ...engineeringConfig, ufReferencia: e.target.value })}
+                                        style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}
+                                    >
+                                        <option value="">Automático</option>
+                                        {BRAZILIAN_UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                    </select>
                                 </div>
 
                                 {/* Bases */}

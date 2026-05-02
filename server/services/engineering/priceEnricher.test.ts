@@ -105,6 +105,72 @@ describe('enrichWithOfficialPrices', () => {
         }));
     });
 
+    it('prefers the configured UF when the same SINAPI code exists in multiple states', async () => {
+        mocks.engineeringCompositionFindMany.mockResolvedValueOnce([
+            {
+                id: 'comp-ce',
+                code: '103689',
+                description: 'FORNECIMENTO E INSTALACAO DE PLACA DE OBRA',
+                unit: 'M2',
+                totalPrice: 64.65,
+                database: {
+                    id: 'db-ce',
+                    type: 'OFICIAL',
+                    tenantId: null,
+                    name: 'SINAPI',
+                    uf: 'CE',
+                    version: '10/2025',
+                    referenceMonth: 10,
+                    referenceYear: 2025,
+                    payrollExemption: true,
+                },
+            },
+            {
+                id: 'comp-pa',
+                code: '103689',
+                description: 'FORNECIMENTO E INSTALACAO DE PLACA DE OBRA',
+                unit: 'M2',
+                totalPrice: 470.47,
+                database: {
+                    id: 'db-pa',
+                    type: 'OFICIAL',
+                    tenantId: null,
+                    name: 'SINAPI',
+                    uf: 'PA',
+                    version: '10/2025',
+                    referenceMonth: 10,
+                    referenceYear: 2025,
+                    payrollExemption: true,
+                },
+            },
+        ]);
+
+        const items = [{
+            item: '1.1',
+            type: 'COMPOSICAO',
+            sourceName: 'SINAPI',
+            code: '103689',
+            description: 'FORNECIMENTO E INSTALACAO DE PLACA DE OBRA',
+            unit: 'M2',
+            quantity: 6,
+            unitCost: 470.47,
+        }];
+
+        await enrichWithOfficialPrices(items, {
+            basesConsideradas: ['SINAPI'],
+            dataBases: { SINAPI: '2025-10' },
+            regimeOneracao: 'DESONERADO',
+            ufReferencia: 'PA',
+        }, { tenantId: 'tenant-a' });
+
+        expect(items[0].priceAudit).toMatchObject({
+            status: 'OK',
+            matchedDatabaseId: 'db-pa',
+            matchedUnitCost: 470.47,
+            matchedUf: 'PA',
+        });
+    });
+
     it('keeps description matches as review-only suggestions, not confirmed OK matches', async () => {
         mocks.queryRaw
             .mockResolvedValueOnce([

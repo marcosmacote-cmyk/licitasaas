@@ -364,6 +364,44 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
 
 interface SyncResult { success: boolean; message: string; databaseId?: string; itemCount?: number; compositionCount?: number; }
 
+function normalizeSinapiLookupCode(code: string): string {
+  return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function buildSinapiCodeVariants(code: string): string[] {
+  const raw = normalizeSinapiLookupCode(code);
+  const variants = new Set<string>();
+  if (!raw) return [];
+
+  variants.add(raw);
+  const numeric = raw.match(/^0*(\d+)$/);
+  if (numeric) {
+    const value = numeric[1];
+    variants.add(value);
+    variants.add(value.padStart(4, '0'));
+    variants.add(value.padStart(5, '0'));
+    variants.add(value.padStart(6, '0'));
+    variants.add(value.padStart(7, '0'));
+    variants.add(value.padStart(8, '0'));
+  }
+
+  return [...variants].filter(Boolean);
+}
+
+function setCodeVariants<T>(map: Map<string, T>, code: string, value: T) {
+  for (const variant of buildSinapiCodeVariants(code)) {
+    if (!map.has(variant)) map.set(variant, value);
+  }
+}
+
+function getByCodeVariants<T>(map: Map<string, T>, code: string): T | undefined {
+  for (const variant of buildSinapiCodeVariants(code)) {
+    const hit = map.get(variant);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
 async function persistItems(baseName: string, uf: string, month: number, year: number, desonerado: boolean, data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }): Promise<SyncResult> {
   const version = `${String(month).padStart(2, '0')}/${year}`;
   const regime = desonerado ? 'Desonerado' : 'Onerado';
@@ -402,31 +440,41 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   
   // Create a map to lookup prices for the items
   const priceMap = new Map<string, number>();
-  for (const it of data.items) priceMap.set(it.code, it.price);
+  for (const it of data.items) setCodeVariants(priceMap, it.code, it.price);
   
   let insertedCompItems = 0;
   if (data.compositionItems && data.compositionItems.length > 0) {
     // Fetch all composition IDs inserted
     const comps = await prisma.engineeringComposition.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
     const compIdMap = new Map<string, string>();
-    for (const c of comps) compIdMap.set(c.code, c.id);
+    for (const c of comps) setCodeVariants(compIdMap, c.code, c.id);
     
     // Fetch all item IDs inserted
     const itms = await prisma.engineeringItem.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
     const itemIdMap = new Map<string, string>();
-    for (const c of itms) itemIdMap.set(c.code, c.id);
+    for (const c of itms) setCodeVariants(itemIdMap, c.code, c.id);
     
     const dbCompItems = [];
+    let unresolvedCompItems = 0;
+    let unresolvedParents = 0;
     for (const ci of data.compositionItems) {
-      const compId = compIdMap.get(ci.parentCode);
-      if (!compId) continue;
+      const compId = getByCodeVariants(compIdMap, ci.parentCode);
+      if (!compId) {
+        unresolvedParents++;
+        continue;
+      }
       
-      let unitPrice = priceMap.get(ci.code) || 0;
-      let totalPrice = unitPrice * ci.quantity;
+      const unitPrice = getByCodeVariants(priceMap, ci.code) || 0;
+      const totalPrice = unitPrice * ci.quantity;
       
       const isSvc = ci.type === 'SERVICO';
-      const itemId = isSvc ? null : (itemIdMap.get(ci.code) || null);
-      const auxCompId = isSvc ? (compIdMap.get(ci.code) || null) : null;
+      const itemId = isSvc ? null : (getByCodeVariants(itemIdMap, ci.code) || null);
+      const auxCompId = isSvc ? (getByCodeVariants(compIdMap, ci.code) || null) : null;
+
+      if (!itemId && !auxCompId) {
+        unresolvedCompItems++;
+        continue;
+      }
       
       dbCompItems.push({
         compositionId: compId,
@@ -442,6 +490,13 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
       const r = await prisma.engineeringCompositionItem.createMany({ data: chunk, skipDuplicates: true });
       insertedCompItems += r.count;
     }
+
+    if (unresolvedParents > 0 || unresolvedCompItems > 0) {
+      console.warn(
+        `[SINAPI Crawler] ⚠️ ${baseName} ${uf} ${version} ${regime}: ` +
+        `${unresolvedParents} dependência(s) sem composição-pai e ${unresolvedCompItems} sem insumo/composição vinculável`
+      );
+    }
   }
 
   await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
@@ -453,7 +508,7 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 // Main Orchestrator
 // ═══════════════════════════════════════════════════════════
 
-export interface SyncOptions { ufs: string[]; months: number; includeDesonerado: boolean; baseName?: string; }
+export interface SyncOptions { ufs: string[]; months: number; includeDesonerado: boolean; baseName?: string; force?: boolean; }
 export interface SyncReport { started: string; finished: string; totalAttempted: number; totalSuccess: number; totalFailed: number; results: SyncResult[]; }
 
 /** Parse national 2025+ Excel extracting ALL UF columns at once */
@@ -582,7 +637,7 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
 }
 
 export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
-  const { ufs: requestedUfs, months, includeDesonerado, baseName = 'SINAPI' } = options;
+  const { ufs: requestedUfs, months, includeDesonerado, baseName = 'SINAPI', force = false } = options;
   const isAllUfs = requestedUfs.includes('ALL') || requestedUfs.length >= 27;
   const ufs = isAllUfs ? ALL_UFS : requestedUfs;
   const started = new Date().toISOString();
@@ -605,8 +660,17 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         const version = `${String(month).padStart(2, '0')}/${year}`;
 
         // Check if ALL UFs already synced for this month
-        const existingCount = await prisma.engineeringDatabase.count({
-          where: { name: baseName, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL', compositionCount: { gt: 0 } }
+        const existingCount = force ? 0 : await prisma.engineeringDatabase.count({
+          where: {
+            name: baseName,
+            referenceMonth: month,
+            referenceYear: year,
+            payrollExemption: desonerado,
+            type: 'OFICIAL',
+            itemCount: { gt: 0 },
+            compositionCount: { gt: 0 },
+            compositions: { some: { items: { some: {} } } },
+          }
         });
         if (existingCount >= 27) { console.log(`[SINAPI Crawler] ⏭️ ${version} ${regime}: ${existingCount}/27 UFs já completas`); continue; }
 
@@ -643,7 +707,19 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
           const data = allUfData.get(uf)!;
           if (data.items.length === 0) { results.push({ success: false, message: `${uf}: sem dados` }); continue; }
           // Check if this specific UF already synced
-          const ex = await prisma.engineeringDatabase.findFirst({ where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL', compositionCount: { gt: 0 } } });
+          const ex = force ? null : await prisma.engineeringDatabase.findFirst({
+            where: {
+              name: baseName,
+              uf,
+              referenceMonth: month,
+              referenceYear: year,
+              payrollExemption: desonerado,
+              type: 'OFICIAL',
+              itemCount: { gt: 0 },
+              compositionCount: { gt: 0 },
+              compositions: { some: { items: { some: {} } } },
+            }
+          });
           if (ex) { results.push({ success: true, message: `Já existente: ${uf}` }); continue; }
           results.push(await persistItems(baseName, uf, month, year, desonerado, data));
         }
@@ -675,7 +751,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
           hasDependencies = compItemCount > 0;
         }
 
-        if (existing && existing.itemCount > 0 && existing.compositionCount > 0 && hasDependencies) { 
+        if (!force && existing && existing.itemCount > 0 && existing.compositionCount > 0 && hasDependencies) { 
           results.push({ success: true, message: `Já existente: ${existing.itemCount} itens, ${existing.compositionCount} composições` }); 
           continue; 
         }
