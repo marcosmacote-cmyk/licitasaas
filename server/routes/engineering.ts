@@ -431,13 +431,14 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         }
 
         const resolvedComposition = composition;
+        let analyticalFallback: any = null;
 
         if (
             resolvedComposition.items.length === 0 &&
             String(resolvedComposition.database?.type || '').toUpperCase() === 'OFICIAL'
         ) {
             // ── RETRY: Try to find ANY composition with this code that HAS analytical items ──
-            const analyticalFallback = await prisma.engineeringComposition.findFirst({
+            analyticalFallback = await prisma.engineeringComposition.findFirst({
                 where: {
                     code: { in: codeVariants },
                     items: { some: {} },
@@ -450,6 +451,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                 logger.info(`[CompositionLookup] 🔄 Found analytical version in db=${analyticalFallback.database?.name} (${analyticalFallback.items.length} items) — using instead of empty composition`);
                 composition = analyticalFallback;
             } else {
+                analyticalFallback = null;
                 const syntheticRow = {
                     id: `synthetic-composition-${resolvedComposition.id}`,
                     coefficient: 1,
@@ -475,8 +477,12 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             }
         }
 
+        // Track if analytical data came from a different database than the price match
+        const analyticalCrossDb = analyticalFallback && analyticalFallback.databaseId !== resolvedComposition.databaseId;
+
         // Enrich with auxiliary compositions if any
-        const enrichedItems = await Promise.all(resolvedComposition.items.map(async (ci: any) => {
+        const finalComposition = analyticalFallback || composition;
+        const enrichedItems = await Promise.all(finalComposition.items.map(async (ci: any) => {
             if (ci.auxiliaryCompositionId) {
                 const aux = await prisma.engineeringComposition.findUnique({
                     where: { id: ci.auxiliaryCompositionId },
@@ -500,10 +506,20 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         }
 
         res.json({
-            ...resolvedComposition,
+            ...finalComposition,
             items: enrichedItems,
             groups,
             totalDirect: enrichedItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0),
+            hasAnalyticalItems: enrichedItems.length > 0,
+            // Cache: the database where analytical items were found (if different from price match)
+            ...(analyticalCrossDb ? {
+                analyticalDatabaseId: analyticalFallback.databaseId,
+                analyticalSourceInfo: {
+                    databaseName: analyticalFallback.database?.name,
+                    databaseUf: analyticalFallback.database?.uf,
+                    note: `Composição analítica obtida de ${analyticalFallback.database?.name || 'outra base'} (${analyticalFallback.items.length} insumos)`,
+                },
+            } : {}),
         });
 
     } catch (e: any) {

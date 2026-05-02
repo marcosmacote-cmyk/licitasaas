@@ -30,6 +30,15 @@ export interface EngineeringPriceAudit {
     matchedPayrollExemption?: boolean;
     matchMethod?: 'code_exact' | 'description_similarity' | 'none';
     confidence?: number;
+    confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
+    confidenceFactors?: {
+        sourceMatch: boolean;
+        dateMatch: boolean;
+        regimeMatch: boolean;
+        priceDeviation: number | null;   // % deviation
+        matchType: string;               // code_exact | description_similarity
+    };
+    analyticalDatabaseId?: string | null;  // Cache: DB where analytical items were found
     deltaValue: number | null;
     deltaPercent: number | null;
     warnings: string[];
@@ -128,6 +137,65 @@ export function buildCandidateScore(
     }
 
     return { score, warnings };
+}
+
+/**
+ * Calculate a detailed confidence score for a price match.
+ * Returns a 0-100 score with detailed factors explaining the confidence level.
+ */
+export function calculateMatchConfidence(
+    best: { score: number; warnings: string[]; matchMethod?: string; confidence?: number },
+    extractedUnitCost: number,
+    matchedUnitCost: number,
+): { confidence: number; confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW'; factors: EngineeringPriceAudit['confidenceFactors'] } {
+    let confidence = 0;
+    const factors: EngineeringPriceAudit['confidenceFactors'] = {
+        sourceMatch: false,
+        dateMatch: false,
+        regimeMatch: false,
+        priceDeviation: null,
+        matchType: best.matchMethod || 'none',
+    };
+
+    // Factor 1: Match method (40 points max)
+    if (best.matchMethod === 'code_exact') {
+        confidence += 40;
+    } else if (best.matchMethod === 'description_similarity') {
+        confidence += Math.min(30, Math.round((best.confidence || 0) * 0.3));
+    }
+
+    // Factor 2: Source/date/regime score from buildCandidateScore (30 points max)
+    // best.score ranges 0-90 (40 source + 30 date + 20 regime)
+    const sourceScore = Math.min(30, Math.round(best.score * 0.33));
+    confidence += sourceScore;
+    factors.sourceMatch = best.score >= 40; // At least source matched
+    factors.dateMatch = best.score >= 70;   // Source + date matched
+    factors.regimeMatch = best.score >= 80; // Source + date + regime matched
+
+    // Factor 3: Price deviation (30 points max)
+    if (extractedUnitCost > 0 && matchedUnitCost > 0) {
+        const deviation = Math.abs((extractedUnitCost - matchedUnitCost) / matchedUnitCost) * 100;
+        factors.priceDeviation = Math.round(deviation * 100) / 100;
+        if (deviation <= 5) confidence += 30;        // Excellent match
+        else if (deviation <= 15) confidence += 20;  // Good match
+        else if (deviation <= 30) confidence += 10;  // Moderate deviation
+        else confidence += 0;                        // Large deviation
+    } else {
+        confidence += 15; // Can't compare prices, neutral
+    }
+
+    // Factor 4: Warning penalty (-5 per non-regime warning)
+    const nonRegimeWarnings = best.warnings.filter(w => !w.includes('regime') && !w.includes('similaridade')).length;
+    confidence -= nonRegimeWarnings * 5;
+
+    // Clamp
+    confidence = Math.max(0, Math.min(100, confidence));
+
+    const confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW' =
+        confidence >= 75 ? 'HIGH' :
+        confidence >= 50 ? 'MEDIUM' : 'LOW';
+
+    return { confidence, confidenceLevel, factors };
 }
 
 export function chooseBestCandidate(
@@ -319,7 +387,11 @@ export async function enrichWithOfficialPrices(
         }
 
         best.matchMethod = 'code_exact';
-        best.confidence = best.warnings.length > 0 ? 82 : 98;
+        const matchedPrice = Number(best.candidate.matchedPrice) || 0;
+        const confidenceResult = calculateMatchConfidence(best, extractedUnitCost, matchedPrice);
+        best.confidence = confidenceResult.confidence;
+        best._confidenceLevel = confidenceResult.confidenceLevel;
+        best._confidenceFactors = confidenceResult.factors;
         applyBestCandidate(item, best, extractedUnitCost);
         matched++;
     }
@@ -403,6 +475,9 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
         matchedPayrollExemption: Boolean(matchedCandidate.database?.payrollExemption),
         matchMethod,
         confidence: typeof best.confidence === 'number' ? best.confidence : (status === 'OK' ? 98 : 82),
+        confidenceLevel: best._confidenceLevel || (status === 'OK' ? 'HIGH' : 'MEDIUM'),
+        confidenceFactors: best._confidenceFactors || undefined,
+        analyticalDatabaseId: null,  // Will be populated by composition lookup if needed
         deltaValue,
         deltaPercent,
         warnings: best.warnings,

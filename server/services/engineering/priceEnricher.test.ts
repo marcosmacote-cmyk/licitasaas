@@ -73,8 +73,12 @@ describe('enrichWithOfficialPrices', () => {
             matchedCode: 'C0054',
             matchedDatabaseId: 'db-seinfra',
             matchMethod: 'code_exact',
-            confidence: 98,
         });
+        // New multidimensional confidence: code_exact(40) + source(~13) + price_match(30) = ~83
+        expect(items[0].priceAudit.confidence).toBeGreaterThanOrEqual(70);
+        expect(items[0].priceAudit.confidenceLevel).toBeDefined();
+        expect(items[0].priceAudit.confidenceFactors).toBeDefined();
+        expect(items[0].priceAudit.confidenceFactors.sourceMatch).toBe(true);
     });
 
     it('scopes database lookups to official databases plus the current tenant only', async () => {
@@ -161,5 +165,64 @@ describe('enrichWithOfficialPrices', () => {
             confidence: 88,
         });
         expect(items[0].priceAudit.warnings.join(' ')).toContain('exige revisão manual');
+    });
+});
+
+// ── Pure unit tests for calculateMatchConfidence (no DB needed) ──
+import { calculateMatchConfidence } from './priceEnricher';
+
+describe('calculateMatchConfidence', () => {
+    it('returns HIGH confidence for code_exact + source match + exact price', () => {
+        const result = calculateMatchConfidence(
+            { score: 90, warnings: [], matchMethod: 'code_exact' },
+            100, 100 // exact price match
+        );
+        expect(result.confidence).toBeGreaterThanOrEqual(85);
+        expect(result.confidenceLevel).toBe('HIGH');
+        expect(result.factors.sourceMatch).toBe(true);
+        expect(result.factors.priceDeviation).toBe(0);
+    });
+
+    it('returns LOW confidence for code_exact but large price deviation + warnings', () => {
+        const result = calculateMatchConfidence(
+            { score: 40, warnings: ['data-base incompatível'], matchMethod: 'code_exact' },
+            100, 200 // 100% deviation
+        );
+        expect(result.confidence).toBeLessThan(75);
+        expect(result.confidenceLevel).toBe('LOW');
+    });
+
+    it('returns LOW confidence for description_similarity with warnings', () => {
+        const result = calculateMatchConfidence(
+            { score: 20, warnings: ['fonte fora das bases', 'data-base incompatível'], matchMethod: 'description_similarity', confidence: 80 },
+            50, 100 // 100% deviation
+        );
+        expect(result.confidence).toBeLessThan(50);
+        expect(result.confidenceLevel).toBe('LOW');
+    });
+
+    it('gives 30 bonus points for price deviation <= 5%', () => {
+        const exact = calculateMatchConfidence(
+            { score: 40, warnings: [], matchMethod: 'code_exact' },
+            100, 103 // 3% deviation
+        );
+        const large = calculateMatchConfidence(
+            { score: 40, warnings: [], matchMethod: 'code_exact' },
+            100, 200 // 100% deviation
+        );
+        expect(exact.confidence - large.confidence).toBeGreaterThanOrEqual(25);
+    });
+
+    it('factors include detailed breakdown', () => {
+        const result = calculateMatchConfidence(
+            { score: 70, warnings: [], matchMethod: 'code_exact' },
+            48.26, 47.50 // 1.6% deviation
+        );
+        expect(result.factors).toMatchObject({
+            sourceMatch: true,
+            dateMatch: true,
+            matchType: 'code_exact',
+        });
+        expect(result.factors.priceDeviation).toBeCloseTo(1.6, 0);
     });
 });
