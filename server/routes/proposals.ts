@@ -96,7 +96,7 @@ router.get('/detail/:id', authenticateToken, async (req: any, res) => {
 // POST create proposal
 router.post('/', authenticateToken, async (req: any, res) => {
     try {
-        const { biddingProcessId, companyProfileId, bdiPercentage, taxPercentage, socialCharges, validityDays, notes } = req.body;
+        const { biddingProcessId, companyProfileId, bdiPercentage, taxPercentage, socialCharges, validityDays, notes, objectType } = req.body;
 
         // Fetch company for default images and letter
         const company = await prisma.companyProfile.findUnique({ where: { id: companyProfileId } });
@@ -115,6 +115,7 @@ router.post('/', authenticateToken, async (req: any, res) => {
                 bdiPercentage: bdiPercentage || 0,
                 taxPercentage: taxPercentage || 0,
                 socialCharges: socialCharges || 0,
+                objectType: objectType || 'AQUISICAO',
                 validityDays: validityDays || 60,
                 notes: notes || null,
                 headerImage: company?.defaultProposalHeader || null,

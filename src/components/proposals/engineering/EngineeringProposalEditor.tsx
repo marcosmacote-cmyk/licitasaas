@@ -248,13 +248,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Load items on mount
     useEffect(() => {
+        if (extractionPollRef.current) {
+            clearInterval(extractionPollRef.current);
+            extractionPollRef.current = null;
+        }
+        setItems([]);
+        setExtractionMeta(null);
+        setActiveExtractionJobId(null);
+        setIsExtracting(false);
+        setSaveMsg(null);
+        setHasUnsavedChanges(false);
+        setCronogramaData(null);
+
         fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
             .then(r => r.json()).then(data => {
                 if (Array.isArray(data)) {
                     // Fallback for old data structure
-                    if (data.length > 0) setItems(data);
+                    setItems(data);
                 } else if (data && data.items) {
-                    setItems(data.items);
+                    setItems(Array.isArray(data.items) ? data.items : []);
                     if (data.bdiConfig) setBdiConfig(data.bdiConfig);
                     if (data.engineeringConfig) {
                         // FIX ARQ-04: Restore cronograma data from saved config
@@ -262,7 +274,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         setEngineeringConfig(engConfig);
                         if (savedCronograma) setCronogramaData(savedCronograma);
                     }
-                    if (data.extractionMeta) setExtractionMeta(data.extractionMeta);
+                    setExtractionMeta(data.extractionMeta || null);
                 }
             }).catch(console.error);
 
@@ -332,7 +344,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         let keepExtracting = false;
         let shouldAutoClearMessage = true;
         try {
-            const forceRefresh = forceRestart || (!isPolling && items.length > 0);
+            const hasCachedFailure = extractionMeta?.status === 'empty_extraction' || extractionMeta?.status === 'quality_quarantine';
+            const forceRefresh = forceRestart || (!isPolling && (items.length > 0 || hasCachedFailure));
             const res = await fetch('/api/engineering/ai-populate', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig, forceRefresh })
             });

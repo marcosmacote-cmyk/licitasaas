@@ -1324,9 +1324,31 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // ═══════════════════════════════════════════════════
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
             const extractionMeta = schemaV2?._engineeringExtractionMeta;
+            const currentProposal = proposalId
+                ? await prisma.priceProposal.findFirst({
+                    where: { id: proposalId, tenantId: req.user?.tenantId },
+                    select: { id: true, version: true, createdAt: true },
+                })
+                : null;
+            const extractionCacheDate = extractionMeta?.extractedAt ? new Date(extractionMeta.extractedAt) : null;
+            const failedCacheStatus = extractionMeta?.status === 'empty_extraction' || extractionMeta?.status === 'quality_quarantine';
+            const proposalStartedAfterFailedCache = Boolean(
+                currentProposal &&
+                failedCacheStatus &&
+                extractionCacheDate &&
+                !Number.isNaN(extractionCacheDate.getTime()) &&
+                currentProposal.createdAt > extractionCacheDate
+            );
+            const canUseFailedExtractionCache = !forceRefresh && !proposalStartedAfterFailedCache;
+
+            if (proposalStartedAfterFailedCache) {
+                console.log(
+                    `[Engineering AI-Populate] 🔄 Proposta v${currentProposal?.version} criada após falha ${extractionMeta?.status}; ignorando cache para permitir nova extração.`
+                );
+            }
             
             // Priority 0: Quarantined extraction must never autopublish cached items.
-            if (!forceRefresh && extractionMeta?.status === 'quality_quarantine') {
+            if (canUseFailedExtractionCache && extractionMeta?.status === 'quality_quarantine') {
                 console.log(`[Engineering AI-Populate] ⚠️ Extração anterior em quarentena. Bloqueando autopreenchimento.`);
                 return res.json({
                     items: [],
@@ -1349,7 +1371,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
             }
             
             // Priority 1.1: If extraction ran but found 0 items, check diagnostics to avoid infinite loop
-            if (Array.isArray(engBudgetItems) && engBudgetItems.length === 0 && !forceRefresh && extractionMeta?.status === 'empty_extraction') {
+            if (Array.isArray(engBudgetItems) && engBudgetItems.length === 0 && canUseFailedExtractionCache && extractionMeta?.status === 'empty_extraction') {
                 console.log(`[Engineering AI-Populate] ⚠️ Extração anterior retornou 0 itens. Repassando diagnóstico ao frontend.`);
                 return res.json({ 
                     items: [], 
