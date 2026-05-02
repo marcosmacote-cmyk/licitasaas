@@ -530,30 +530,67 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             zeroxFallbackUsed,
             modelUsed,
             possibleCauses: [] as string[],
+            recommendation: '',
         };
 
-        // Detectar causas prováveis
+        // Detectar causas prováveis — ordenadas por probabilidade
         const hasScannedPdf = zeroxFallbackCandidates.some(c => c.reason === 'scanned_pdf_no_text_layer');
+
+        // Causa 1: Nenhum PDF disponível
         if (rawPdfBuffers.length === 0) {
             diagnostics.possibleCauses.push('Nenhum PDF disponível para extração');
-        } else if (rawPdfBuffers.every(p => p.buffer.length < 50 * 1024)) {
-            diagnostics.possibleCauses.push('Todos os PDFs são muito pequenos (<50KB) — podem não conter planilha orçamentária');
+            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente usando o botão "Salvar Planilha".';
         }
-        if (hasScannedPdf) {
+        // Causa 2: PDFs muito pequenos
+        else if (rawPdfBuffers.every(p => p.buffer.length < 50 * 1024)) {
+            diagnostics.possibleCauses.push('Todos os PDFs são muito pequenos (<50KB) — podem não conter planilha orçamentária');
+            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente.';
+        }
+        // Causa 3: PDF escaneado (imagem)
+        else if (hasScannedPdf) {
             diagnostics.possibleCauses.push(
                 'PDF é escaneado (imagem sem texto pesquisável). ' +
                 (zeroxFallbackUsed
-                    ? 'OCR Zerox foi usado mas não conseguiu extrair itens orçamentários'
-                    : 'OCR Zerox não conseguiu processar o documento')
+                    ? 'OCR foi tentado mas não conseguiu extrair itens orçamentários'
+                    : 'OCR não conseguiu processar o documento')
             );
-        } else if (targetingUsed && !zeroxFallbackUsed) {
-            diagnostics.possibleCauses.push('Page targeting pode ter excluído páginas com a planilha');
+            diagnostics.recommendation = 'Envie a planilha orçamentária em formato digital (não escaneado).';
         }
-        if (!zeroxFallbackUsed && zeroxFallbackCandidates.length > 0 && !hasScannedPdf) {
-            diagnostics.possibleCauses.push('PDF pode ser escaneado (imagem) — OCR Zerox não foi acionado');
+        // Causa 4: O documento principal é só o edital (sem anexo de planilha)
+        // Detectar quando o único PDF disponível não contém dados orçamentários
+        else if (rawPdfBuffers.length === 1) {
+            const singleSource = rawPdfBuffers[0].source.toLowerCase();
+            const isEditalOnly = /edital|minuta|licitac|aviso/i.test(singleSource) &&
+                !/planilh|or[cç]ament|quantitat|composi[cç]/i.test(singleSource);
+            if (isEditalOnly) {
+                diagnostics.possibleCauses.push(
+                    'O único documento disponível é o edital (texto jurídico), sem planilha orçamentária anexa. ' +
+                    'O órgão não publicou os anexos de engenharia no PNCP.'
+                );
+            } else {
+                diagnostics.possibleCauses.push(
+                    'O documento analisado não contém planilha orçamentária com itens de engenharia.'
+                );
+            }
+            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente. Verifique se os anexos estão disponíveis no portal BLL/ComprasNet do órgão.';
         }
+        // Causa 5: Múltiplos PDFs mas nenhum tem dados orçamentários
+        else {
+            if (targetingUsed && !zeroxFallbackUsed) {
+                diagnostics.possibleCauses.push('Page targeting pode ter excluído páginas com a planilha');
+            }
+            if (!zeroxFallbackUsed && zeroxFallbackCandidates.length > 0 && !hasScannedPdf) {
+                diagnostics.possibleCauses.push('PDF pode ser escaneado (imagem) — OCR Zerox não foi acionado');
+            }
+            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente.';
+        }
+
+        // Fallback
         if (diagnostics.possibleCauses.length === 0) {
-            diagnostics.possibleCauses.push('PDFs analisados não parecem conter planilha orçamentária estruturada');
+            diagnostics.possibleCauses.push(
+                'Nenhum dos PDFs analisados contém planilha orçamentária estruturada com itens de engenharia.'
+            );
+            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente usando o botão "Salvar Planilha".';
         }
 
         // Persistir diagnóstico no schemaV2 para o frontend ler
@@ -568,10 +605,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         }
 
         const causeText = diagnostics.possibleCauses.join('; ');
+        const recText = diagnostics.recommendation || 'Tente enviar a planilha orçamentária manualmente.';
         throw new Error(
             `Nenhum item orçamentário encontrado em ${rawPdfBuffers.length} PDF(s). ` +
             `Diagnóstico: ${causeText}. ` +
-            `Tente enviar a planilha orçamentária manualmente.`
+            recText
         );
     }
 
