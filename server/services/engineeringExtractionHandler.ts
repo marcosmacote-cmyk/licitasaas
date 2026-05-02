@@ -568,7 +568,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 !/planilh|or[cç]ament|quantitat|composi[cç]/i.test(singleSource);
             if (isSmallEditalOnly) {
                 diagnostics.possibleCauses.push(
-                    'O único documento disponível é o edital (texto jurídico), sem planilha orçamentária anexa. ' +
+                    `O único documento disponível é o edital (texto jurídico), sem planilha orçamentária anexa [Size: ${singleSize} bytes]. ` +
                     'O órgão não publicou os anexos de engenharia no PNCP.'
                 );
             } else {
