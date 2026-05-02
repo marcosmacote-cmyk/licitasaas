@@ -18,6 +18,14 @@ const fmtCoef = (v: number) => v.toFixed(4);
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
 
+interface InsumoDetail {
+    type: string;
+    description: string;
+    unit: string;
+    coefficient: number;
+    unitPrice: number;
+}
+
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
@@ -25,6 +33,7 @@ interface EngItem {
     priceAudit?: {
         matchedDatabaseId?: string | null;
     };
+    insumos?: InsumoDetail[];
 }
 
 interface Props {
@@ -201,12 +210,44 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`, { headers: hdrs() });
             if (!res.ok) throw new Error('not_found');
             const d = await res.json();
+
+            // ── FALLBACK: When database has no analytical items, use AI-extracted insumos ──
+            if (d.hasAnalyticalItems === false && currentItem?.insumos && currentItem.insumos.length > 0) {
+                const fallbackGroups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };
+                let fallbackTotal = 0;
+                currentItem.insumos.forEach((ins, idx) => {
+                    const groupKey = (['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'SERVICO', 'AUXILIAR'].includes(ins.type)) ? ins.type : 'MATERIAL';
+                    const subtotal = ins.coefficient * ins.unitPrice;
+                    fallbackTotal += subtotal;
+                    if (!fallbackGroups[groupKey]) fallbackGroups[groupKey] = [];
+                    fallbackGroups[groupKey].push({
+                        id: `insumo-${idx}`,
+                        coefficient: ins.coefficient,
+                        price: subtotal,
+                        item: {
+                            id: `insumo-item-${idx}`,
+                            code: '',
+                            description: ins.description,
+                            unit: ins.unit,
+                            type: groupKey,
+                            price: ins.unitPrice,
+                        },
+                    });
+                });
+                d.groups = fallbackGroups;
+                d.items = Object.values(fallbackGroups).flat();
+                d.totalPrice = fallbackTotal;
+                d.totalDirect = fallbackTotal;
+                d.hasAnalyticalItems = true;
+                d.sourceIsEdital = true;
+            }
+
             setData(d);
         } catch {
             setError('not_found');
         }
         setLoading(false);
-    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName]);
+    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos]);
 
     useEffect(() => {
         if (currentItem?.code) loadComposition(currentItem.code);
@@ -925,7 +966,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     <div>
                                         <strong>Preço sintético encontrado, mas a CPU analítica não está importada.</strong>
                                         <div style={{ marginTop: 3 }}>
-                                            A linha abaixo representa o serviço/preço cadastrado na base. Para ver materiais, mão de obra e equipamentos, sincronize ou importe a planilha analítica da base oficial correspondente.
+                                            A linha abaixo representa o serviço/preço cadastrado na base. Importe a planilha analítica para ver os insumos detalhados.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {data.sourceIsEdital && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                                    padding: '12px 14px', borderRadius: 6,
+                                    border: '1px solid rgba(37,99,235,0.25)',
+                                    background: 'rgba(37,99,235,0.06)',
+                                    color: '#1e40af', fontSize: '0.82rem', lineHeight: 1.45,
+                                }}>
+                                    <Wand2 size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                                    <div>
+                                        <strong>Composição extraída do Edital pela IA.</strong>
+                                        <div style={{ marginTop: 3 }}>
+                                            Os insumos abaixo foram extraídos automaticamente do projeto básico/orçamento do edital. 
+                                            Para usar a composição da base oficial, importe a planilha analítica SINAPI/SEINFRA.
                                         </div>
                                     </div>
                                 </div>
