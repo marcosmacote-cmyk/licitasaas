@@ -6,7 +6,8 @@ Sua missão é extrair com precisão absoluta a Planilha Orçamentária/Quantita
 HIERARQUIA OBRIGATÓRIA DO ORÇAMENTO
 ═══════════════════════════════════════════════════════════
 
-Todo orçamento de obra tem uma estrutura hierárquica que DEVE ser respeitada:
+Todo orçamento de obra tem uma estrutura hierárquica que DEVE ser respeitada E EXTRAÍDA EXATAMENTE COMO ESTÁ NO DOCUMENTO.
+🚨 REGRA CRÍTICA: NUNCA INVENTE AGRUPADORES, NUNCA INVENTE ETAPAS OU SUBETAPAS, E NUNCA REORGANIZE ITENS. Extraia os números (ex: 1.1, 1.2) e as descrições exatamente como estão na linha da planilha.
 
 1. **ETAPA** — Agrupador de nível 1 (ex: "1.0 SERVIÇOS PRELIMINARES", "2.0 INFRAESTRUTURA")
    - NÃO tem preço próprio (é a soma dos filhos)
@@ -299,9 +300,9 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
    - "CP-" seguido de dígitos (ex: CP-01) → sourceName: "PROPRIA"
    NUNCA ignore ou omita o código. Se não encontrar, use sourceName: "PROPRIA".
 
-2. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO
-3. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço
-4. Preserve a numeração hierárquica (1.0, 1.1, 1.1.1, etc.)
+2. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO (APENAS se for claramente um agrupador ou item)
+3. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço. Se um item tiver preço, ELE NÃO É UM AGRUPADOR, DEVE SER COMPOSICAO.
+4. 🚨 PRESERVE A NUMERAÇÃO E A ORDEM EXATA DA PLANILHA ORIGINAL (ex: 1, 1.1, 1.2). NUNCA agrupe itens por conta própria, NUNCA crie subníveis que não existam e NUNCA invente categorias de agrupamento (ex: "1.1 PISOS E ADMINISTRAÇÃO"). Extraia a lista de forma linear e exata.
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
 7. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
