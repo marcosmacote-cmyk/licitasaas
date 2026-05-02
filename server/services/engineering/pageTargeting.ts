@@ -61,7 +61,7 @@ const HIGH_WEIGHT_KEYWORDS = [
 
 /** Keywords that indicate budget content (medium weight) */
 const MEDIUM_WEIGHT_KEYWORDS = [
-    'sinapi', 'seinfra', 'siproce', 'sicro', 'orse',
+    'sinapi', 'seinfra', 'siproce', 'sicro', 'orse', 'sedop',
     'composição', 'composicao', 'composição de custos',
     'bdi', 'encargos sociais', 'leis sociais',
     'cronograma físico', 'cronograma fisico',
@@ -91,6 +91,26 @@ const NUMERIC_PATTERNS = [
     /\b\d{5,6}\b/g,                     // SINAPI codes: 87640
     /\d+\/ORSE/g,                       // ORSE codes: 14025/ORSE
     /CP-\d+/g,                          // Própria: CP-01
+    /\b0\d{5}\b/g,                      // SEDOP codes: 030011
+];
+
+/** 
+ * Negative keywords — pages containing these are likely narrative text
+ * (memorial descritivo, especificações técnicas), NOT budget tables.
+ * Each match SUBTRACTS points from the page score.
+ */
+const NEGATIVE_KEYWORDS = [
+    'memorial descritivo',
+    'especificação de serviços', 'especificacao de servicos',
+    'caderno de encargos',
+    'projeto básico', 'projeto basico',
+    'normas abnt', 'nbr ',
+    'segurança do trabalho', 'seguranca do trabalho',
+    'metodologia executiva',
+    'deverão ser obedecidas',
+    'conforme projeto',
+    'cronograma físico', 'cronograma fisico',
+    '30 dias', '60 dias', '90 dias', '120 dias',
 ];
 
 // ═══════════════════════════════════════════
@@ -220,8 +240,16 @@ function scorePage(text: string, pageIndex: number): PageScore {
     if (itemNumbers && itemNumbers.length >= 5) score += 8;
     else if (itemNumbers && itemNumbers.length >= 2) score += 4;
 
-    // Cap at 100
-    score = Math.min(100, score);
+    // Negative keywords penalty — narrative pages (-4 points each)
+    for (const kw of NEGATIVE_KEYWORDS) {
+        const kwNorm = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normalized.includes(kwNorm)) {
+            score -= 4;
+        }
+    }
+
+    // Cap at 0-100
+    score = Math.max(0, Math.min(100, score));
 
     return {
         pageIndex,

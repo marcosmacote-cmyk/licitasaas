@@ -296,6 +296,12 @@ export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: s
         // Skip items already classified as ETAPA or SUBETAPA
         if (currentType === 'ETAPA' || currentType === 'SUBETAPA') continue;
 
+        // FIX NORM-01: NEVER reclassify items that have a valid code AND positive price.
+        // These are real compositions (e.g., "1.1 ADMINISTRAÇÃO DE OBRA" with code CXXXX and price).
+        const hasValidCode = item.code && item.code !== 'N/A' && item.code !== '';
+        const hasPrice = Number(item.unitCost) > 0 || Number(item.unitPrice) > 0;
+        if (hasValidCode && hasPrice) continue;
+
         let inferredType: string | null = null;
 
         // ── Signal 1: Top-level number with children → ETAPA ──

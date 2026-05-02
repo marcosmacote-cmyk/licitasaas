@@ -73,9 +73,16 @@ export function formatReference(db: any): string {
 }
 
 function normalizeOfficialCode(code: string): string {
-    const value = String(code || '').trim().toUpperCase();
+    let value = String(code || '').trim().toUpperCase();
+    // Strip internal spaces (e.g., "C 1937" → "C1937")
+    value = value.replace(/\s+/g, '');
+    // ORSE normalization: strip leading zeros
     const orse = value.match(/^0*(\d+)\/ORSE$/);
-    return orse ? `${orse[1]}/ORSE` : value;
+    if (orse) return `${orse[1]}/ORSE`;
+    // Strip leading zeros from pure numeric codes (SINAPI): "087640" → "87640"
+    const pureNum = value.match(/^0+(\d{4,})$/);
+    if (pureNum) return pureNum[1];
+    return value;
 }
 
 function normalizeSourceName(sourceName: string): string {
@@ -87,8 +94,21 @@ function normalizeSourceName(sourceName: string): string {
 function buildCodeVariants(code: string): string[] {
     const normalized = normalizeOfficialCode(code);
     const variants = new Set([String(code || '').trim(), normalized]);
+    // ORSE variants: padded and unpadded
     const orse = normalized.match(/^(\d+)\/ORSE$/);
     if (orse) variants.add(`${orse[1].padStart(5, '0')}/ORSE`);
+    // Pure numeric: generate both padded (6-digit) and unpadded versions for SINAPI/SEDOP
+    const numMatch = normalized.match(/^(\d+)$/);
+    if (numMatch) {
+        const num = numMatch[1];
+        variants.add(num);                         // unpadded
+        variants.add(num.padStart(5, '0'));         // 5-digit padded
+        variants.add(num.padStart(6, '0'));         // 6-digit padded
+        variants.add(num.replace(/^0+/, '') || '0'); // strip all leading zeros
+    }
+    // Strip spaces variant
+    const noSpaces = normalized.replace(/\s+/g, '');
+    if (noSpaces !== normalized) variants.add(noSpaces);
     return [...variants].filter(Boolean);
 }
 

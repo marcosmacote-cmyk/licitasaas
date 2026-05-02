@@ -107,13 +107,18 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    e) SICOR-MG → similar ao SICRO, referências de Minas Gerais
       → sourceName: "SICOR", code: conforme documento
 
-   f) PRÓPRIA/COMPOSIÇÃO PRÓPRIA → códigos no formato "CP-xx" ou sem código oficial
-      Exemplos: CP-01, CP-02, CP-24
-      → sourceName: "PROPRIA", code: "CP-01"
+   f) SEDOP → códigos numéricos de 6 dígitos, usados no Pará
+      Exemplos: 030011, 280026
+      → sourceName: "SEDOP", code: "030011"
 
-   IMPORTANTE: O cabeçalho da planilha geralmente indica as tabelas de referência usadas,
-   como "TABELAS REFERÊNCIA: SEINFRA 028.1 // SINAPI 07/25 // ORSE JULHO-2025".
-   Use essa informação para confirmar os bancos de referência.
+   g) PRÓPRIA/COMPOSIÇÃO PRÓPRIA → códigos no formato "CP-xx", "CPUxx", 
+      códigos inventados pelo autor do orçamento, ou sem código oficial
+      Exemplos: CP-01, CPU04, pavdiv2024, 1.14
+      → sourceName: "PROPRIA", code: conforme documento
+
+   IMPORTANTE: Muitas planilhas têm uma coluna "Banco" que indica diretamente a fonte 
+   (ex: SINAPI, SEDOP, Próprio). USE ESSA COLUNA quando disponível — ela é a fonte mais confiável.
+   O cabeçalho ou rodapé da planilha também pode indicar as bases de referência.
 
    Se NÃO houver código oficial, use sourceName: "PROPRIA" e code: o número do item.
 
@@ -176,14 +181,20 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 FORMATO DE SAÍDA (JSON)
 ═══════════════════════════════════════════════════════════
 
+IMPORTANTE: O exemplo abaixo mostra uma planilha REAL. Note que:
+- "1" é ETAPA (sem preço)
+- "1.1" já é COMPOSICAO (tem código + preço) — NÃO É subetapa!
+- "4" é ETAPA, "4.1" é SUBETAPA (sem preço), "4.1.1" é COMPOSICAO
+- A profundidade varia. Respeite o que a planilha mostra.
+
 {
   "engineeringItems": [
     {
-      "item": "1.0",
+      "item": "1",
       "type": "ETAPA",
-      "sourceName": "PROPRIA",
-      "code": "1.0",
-      "description": "SERVIÇOS PRELIMINARES",
+      "sourceName": "",
+      "code": "",
+      "description": "SERVIÇOS INICIAIS",
       "unit": "",
       "quantity": 0,
       "unitCost": 0,
@@ -192,68 +203,34 @@ FORMATO DE SAÍDA (JSON)
     },
     {
       "item": "1.1",
-      "type": "SUBETAPA",
-      "sourceName": "PROPRIA",
-      "code": "1.1",
-      "description": "MOBILIZAÇÃO E INSTALAÇÃO",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0
+      "type": "COMPOSICAO",
+      "sourceName": "SINAPI",
+      "code": "103689",
+      "description": "FORNECIMENTO E INSTALAÇÃO DE PLACA DE OBRA COM CHAPA GALVANIZADA",
+      "unit": "m²",
+      "quantity": 6,
+      "unitCost": 470.47,
+      "unitPrice": 597.97,
+      "totalPrice": 3587.82
     },
-     {
-       "item": "1.1.1",
-       "type": "COMPOSICAO",
-       "sourceName": "SEINFRA",
-       "code": "C0054",
-       "description": "PLACA DE OBRA EM CHAPA DE AÇO GALVANIZADO",
-       "unit": "M2",
-       "quantity": 3.00,
-       "unitCost": 183.41,
-       "unitPrice": 236.54,
-       "totalPrice": 709.62
-     },
-     {
-       "item": "1.1.2",
-       "type": "COMPOSICAO",
-       "sourceName": "SINAPI",
-       "code": "87640",
-       "description": "CONTRAPISO EM ARGAMASSA TRAÇO 1:4 (CIMENTO E AREIA)",
-       "unit": "M2",
-       "quantity": 189.00,
-       "unitCost": 48.26,
-       "unitPrice": 62.40,
-       "totalPrice": 11793.60
-     },
-     {
-       "item": "1.1.3",
-       "type": "COMPOSICAO",
-       "sourceName": "ORSE",
-       "code": "14025/ORSE",
-       "description": "JANELA BASCULANTE EM ALUMÍNIO ANODIZADO",
-       "unit": "M2",
-       "quantity": 103.20,
-       "unitCost": 1618.01,
-       "unitPrice": 2092.29,
-       "totalPrice": 215924.33
-     },
-     {
-       "item": "1.1.4",
-       "type": "COMPOSICAO",
-       "sourceName": "PROPRIA",
-       "code": "CP-01",
-       "description": "FACHADA EM ESTRUTURA METÁLICA COM CHAPA PERFURADA",
-       "unit": "M2",
-       "quantity": 765.72,
-       "unitCost": 346.93,
-       "unitPrice": 448.62,
-       "totalPrice": 343560.39
-     },
     {
-      "item": "2.0",
-      "type": "ETAPA",
+      "item": "1.2",
+      "type": "COMPOSICAO",
       "sourceName": "PROPRIA",
-      "code": "2.0",
-      "description": "INFRAESTRUTURA",
+      "code": "1.14",
+      "description": "ADMINISTRAÇÃO LOCAL DA OBRA",
+      "unit": "MÊS",
+      "quantity": 6,
+      "unitCost": 24208.25,
+      "unitPrice": 30768.69,
+      "totalPrice": 184612.14
+    },
+    {
+      "item": "4",
+      "type": "ETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "RUA EURIPEDES JOAQUIM DE CARVALHO",
       "unit": "",
       "quantity": 0,
       "unitCost": 0,
@@ -261,19 +238,48 @@ FORMATO DE SAÍDA (JSON)
       "totalPrice": 0
     },
     {
-      "item": "2.1",
-      "type": "INSUMO",
-      "sourceName": "SEINFRA",
-      "code": "I0054",
-      "description": "CIMENTO PORTLAND CP-II 50KG",
-      "unit": "SC",
-      "quantity": 120,
-      "unitCost": 38.50,
-      "unitPrice": 49.78,
-      "totalPrice": 5973.60
+      "item": "4.1",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "SERVIÇOS DE TERRAPLENAGEM E SUBLEITO",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 0
+    },
+    {
+      "item": "4.1.1",
+      "type": "COMPOSICAO",
+      "sourceName": "SINAPI",
+      "code": "99064",
+      "description": "LOCAÇÃO DE PAVIMENTAÇÃO",
+      "unit": "M",
+      "quantity": 284.82,
+      "unitCost": 0.54,
+      "unitPrice": 0.69,
+      "totalPrice": 196.53
+    },
+    {
+      "item": "5.3.3",
+      "type": "COMPOSICAO",
+      "sourceName": "SEDOP",
+      "code": "030011",
+      "description": "Aterro incluindo carga, descarga, transporte e apiloamento",
+      "unit": "m³",
+      "quantity": 145.64,
+      "unitCost": 156.75,
+      "unitPrice": 199.23,
+      "totalPrice": 29015.86
     }
   ]
 }
+
+REGRA DE CLASSIFICAÇÃO PELO CONTEÚDO DA LINHA:
+- Se a linha TEM código (SINAPI, SEINFRA, SEDOP, ORSE, CP-xx) E tem preço → type: "COMPOSICAO"
+- Se a linha NÃO TEM código E NÃO TEM preço → type: "ETAPA" ou "SUBETAPA" (conforme nível)
+- NUNCA classifique uma linha com preço e código como ETAPA ou SUBETAPA
 
 ═══════════════════════════════════════════════════════════
 REGRAS FINAIS
@@ -287,6 +293,7 @@ REGRAS FINAIS
 - Se você NÃO ENCONTRAR uma planilha orçamentária detalhada com itens e preços, RETORNE UM ARRAY VAZIO [].
 - NUNCA invente itens genéricos baseados no objeto do edital.
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
+- 🚨 NÃO EXTRAIA O CRONOGRAMA FÍSICO-FINANCEIRO. Ele é uma tabela com colunas de meses (30 DIAS, 60 DIAS...) e percentuais. IGNORE-O.
 `;
 
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
