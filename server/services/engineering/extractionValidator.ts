@@ -501,6 +501,137 @@ export function validateEngineeringExtraction(
         }
     }
 
+    // ── Check 9: Orphan items (composições sem etapa pai) ──
+    const allItemNums = items.map(it => String(it.item || ''));
+    const etapaNumbers = new Set(etapas.map(it => String(it.item || '').replace(/\.0$/, '')));
+    const orphanItems = leafItems.filter(it => {
+        const itemNum = String(it.item || '');
+        const parentNum = itemNum.split('.').slice(0, 1).join('.');
+        return parentNum !== itemNum && !etapaNumbers.has(parentNum);
+    });
+    if (orphanItems.length > 0 && etapas.length > 0) {
+        const orphanRatio = orphanItems.length / leafItems.length;
+        if (orphanRatio > 0.3) {
+            issues.push({
+                code: 'EV09',
+                severity: 'warning',
+                message: `${orphanItems.length} itens órfãos (sem etapa pai). Hierarquia pode estar incompleta.`,
+                affectedItems: orphanItems.map(it => it.item).filter(Boolean).slice(0, 10),
+            });
+            score -= 5;
+        }
+    }
+
+    // ── Check 10: Code format validation for known bases ──
+    const invalidCodeItems: string[] = [];
+    for (const it of leafItems) {
+        const code = String(it.code || '').trim();
+        const source = String(it.sourceName || '').toUpperCase();
+        if (!code || code === 'N/A' || source === 'PROPRIA') continue;
+
+        let isValid = true;
+        if (source === 'SINAPI') {
+            // SINAPI codes are 5-6 digit numbers
+            isValid = /^\d{4,7}$/.test(code.replace(/^0+/, ''));
+        } else if (source === 'SEINFRA') {
+            // SEINFRA codes: C followed by digits, or just digits
+            isValid = /^C?\d{3,6}$/i.test(code);
+        } else if (source === 'ORSE') {
+            // ORSE: digits or digits/ORSE
+            isValid = /^\d{1,6}(\/ORSE)?$/i.test(code);
+        }
+        // Other bases: skip format check
+
+        if (!isValid) {
+            invalidCodeItems.push(it.item);
+        }
+    }
+    if (invalidCodeItems.length > 3) {
+        issues.push({
+            code: 'EV10',
+            severity: 'warning',
+            message: `${invalidCodeItems.length} itens com formato de código inválido para a base declarada. Possível confusão de colunas na extração.`,
+            affectedItems: invalidCodeItems.slice(0, 10),
+        });
+        score -= Math.min(invalidCodeItems.length, 8);
+    }
+
+    // ── Check 11: Description length anomalies ──
+    const shortDescItems = leafItems.filter(it => {
+        const desc = String(it.description || '').trim();
+        return desc.length >= 3 && desc.length < 10;
+    });
+    const longDescItems = leafItems.filter(it => {
+        const desc = String(it.description || '').trim();
+        return desc.length > 300;
+    });
+    if (shortDescItems.length > leafItems.length * 0.3) {
+        issues.push({
+            code: 'EV11',
+            severity: 'warning',
+            message: `${shortDescItems.length} itens com descrição muito curta (<10 chars). Possível extração truncada.`,
+            affectedItems: shortDescItems.map(it => it.item).filter(Boolean).slice(0, 5),
+        });
+        score -= 5;
+    }
+    if (longDescItems.length > 5) {
+        issues.push({
+            code: 'EV11',
+            severity: 'info',
+            message: `${longDescItems.length} itens com descrição muito longa (>300 chars). Pode incluir texto extra do edital.`,
+        });
+    }
+
+    // ── Check 12: Unit/Quantity consistency ──
+    const noUnitItems = leafItems.filter(it => {
+        const qty = Number(it.quantity) || 0;
+        const unit = String(it.unit || '').trim();
+        return qty > 0 && !unit;
+    });
+    if (noUnitItems.length > 3) {
+        issues.push({
+            code: 'EV12',
+            severity: 'warning',
+            message: `${noUnitItems.length} itens com quantidade mas sem unidade. Extração pode ter confundido colunas.`,
+            affectedItems: noUnitItems.map(it => it.item).filter(Boolean).slice(0, 5),
+        });
+        score -= 3;
+    }
+
+    // ── Check 13: Numbering sequence gaps ──
+    const sortedLeafNums = leafItems
+        .map(it => String(it.item || ''))
+        .filter(n => /^\d+\.\d+/.test(n))
+        .sort((a, b) => {
+            const pa = a.split('.').map(Number);
+            const pb = b.split('.').map(Number);
+            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                const diff = (pa[i] || 0) - (pb[i] || 0);
+                if (diff !== 0) return diff;
+            }
+            return 0;
+        });
+
+    // Count large gaps (missing items > 3)
+    let gapCount = 0;
+    for (let i = 1; i < sortedLeafNums.length; i++) {
+        const prevParts = sortedLeafNums[i - 1].split('.').map(Number);
+        const currParts = sortedLeafNums[i].split('.').map(Number);
+        // Same parent etapa, check sequence
+        if (prevParts.length >= 2 && currParts.length >= 2 && prevParts[0] === currParts[0]) {
+            const gap = currParts[currParts.length - 1] - prevParts[prevParts.length - 1];
+            if (gap > 5) gapCount++;
+        }
+    }
+    if (gapCount > 3) {
+        issues.push({
+            code: 'EV13',
+            severity: 'info',
+            message: `${gapCount} lacunas na numeração detectadas. Possíveis itens faltantes na extração.`,
+        });
+        score -= 2;
+    }
+
     // Clamp score
     score = Math.max(0, Math.min(100, score));
 
