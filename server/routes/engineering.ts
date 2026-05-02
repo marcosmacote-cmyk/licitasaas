@@ -1363,21 +1363,20 @@ router.post('/ai-populate', async (req: any, res: any) => {
             if (forceRefresh) {
                 console.log(`[Engineering AI-Populate] 🔄 forceRefresh=true — invalidando cache e forçando nova extração`);
                 // FIX DOC-03: Limpar cache de empty_extraction/quarantine para permitir nova tentativa
+                // O schemaV2 está na tabela AiAnalysis (não BiddingProcess!)
                 try {
-                    await prisma.$executeRaw`
-                        UPDATE "BiddingProcess" 
-                        SET "aiAnalysis" = jsonb_set(
-                            jsonb_set(
-                                COALESCE("aiAnalysis", '{}'::jsonb),
-                                '{schemaV2,_engineeringExtractionMeta}',
-                                'null'::jsonb
-                            ),
-                            '{schemaV2,_engineeringBudgetItems}',
-                            'null'::jsonb
-                        )
-                        WHERE id = ${biddingId}
-                    `;
-                    console.log(`[Engineering AI-Populate] 🧹 Cache de extração limpo para ${biddingId}`);
+                    const aiAnalysis = await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } });
+                    if (aiAnalysis?.schemaV2) {
+                        const schema = aiAnalysis.schemaV2 as any;
+                        delete schema._engineeringExtractionMeta;
+                        delete schema._engineeringBudgetItems;
+                        delete schema._engineeringValidation;
+                        await prisma.aiAnalysis.update({
+                            where: { biddingProcessId: biddingId },
+                            data: { schemaV2: schema }
+                        });
+                        console.log(`[Engineering AI-Populate] 🧹 Cache de extração limpo para ${biddingId}`);
+                    }
                 } catch (clearErr: any) {
                     console.warn(`[Engineering AI-Populate] ⚠️ Falha ao limpar cache: ${clearErr.message}`);
                 }
