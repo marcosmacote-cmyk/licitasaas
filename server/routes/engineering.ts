@@ -479,28 +479,43 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             resolvedComposition.items.length === 0 &&
             String(resolvedComposition.database?.type || '').toUpperCase() === 'OFICIAL'
         ) {
-            const syntheticRow = {
-                id: `synthetic-composition-${resolvedComposition.id}`,
-                coefficient: 1,
-                price: resolvedComposition.totalPrice,
-                item: {
-                    id: `synthetic-item-${resolvedComposition.id}`,
-                    code: resolvedComposition.code,
-                    description: resolvedComposition.description,
-                    unit: resolvedComposition.unit,
-                    price: resolvedComposition.totalPrice,
-                    type: 'SERVICO',
+            // ── RETRY: Try to find ANY composition with this code that HAS analytical items ──
+            const analyticalFallback = await prisma.engineeringComposition.findFirst({
+                where: {
+                    code: { in: codeVariants },
+                    items: { some: {} },
                 },
-            };
-            return res.json({
-                ...resolvedComposition,
-                items: [syntheticRow],
-                groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [syntheticRow], AUXILIAR: [] },
-                totalDirect: resolvedComposition.totalPrice,
-                hasAnalyticalItems: false,
-                synthetic: true,
-                message: 'Composição oficial encontrada, mas sem itens analíticos importados nesta base.',
+                include: compositionIncludes(),
+                orderBy: compositionOrderBy(),
             });
+
+            if (analyticalFallback && analyticalFallback.items.length > 0) {
+                logger.info(`[CompositionLookup] 🔄 Found analytical version in db=${analyticalFallback.database?.name} (${analyticalFallback.items.length} items) — using instead of empty composition`);
+                composition = analyticalFallback;
+            } else {
+                const syntheticRow = {
+                    id: `synthetic-composition-${resolvedComposition.id}`,
+                    coefficient: 1,
+                    price: resolvedComposition.totalPrice,
+                    item: {
+                        id: `synthetic-item-${resolvedComposition.id}`,
+                        code: resolvedComposition.code,
+                        description: resolvedComposition.description,
+                        unit: resolvedComposition.unit,
+                        price: resolvedComposition.totalPrice,
+                        type: 'SERVICO',
+                    },
+                };
+                return res.json({
+                    ...resolvedComposition,
+                    items: [syntheticRow],
+                    groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [syntheticRow], AUXILIAR: [] },
+                    totalDirect: resolvedComposition.totalPrice,
+                    hasAnalyticalItems: false,
+                    synthetic: true,
+                    message: 'Composição oficial encontrada, mas sem itens analíticos importados nesta base.',
+                });
+            }
         }
 
         // Enrich with auxiliary compositions if any
