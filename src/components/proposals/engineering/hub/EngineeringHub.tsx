@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter } from 'lucide-react';
 import { CompositionEditor } from '../CompositionEditor';
+import { apiFetch } from '../../../../services/apiClient';
 
 interface EngDatabase {
     id: string;
@@ -186,27 +187,22 @@ export function EngineeringHub() {
         
         setSyncing(true);
         try {
-            const res = await fetch('/api/engineering/bases/sync-sinapi', {
+            await apiFetch('/api/engineering/bases/sync-sinapi', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify(body)
             });
-            
-            if (res.ok) {
-                alert(`Sync SINAPI iniciado em background${force ? ' (forçado)' : ''}!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.`);
-                // Poll for updates
-                setTimeout(fetchBases, 30000);
-                setTimeout(fetchBases, 60000);
-                setTimeout(fetchBases, 120000);
-            } else {
-                const err = await res.json();
-                alert('Erro: ' + (err.error || 'Falha ao iniciar sync'));
+
+            alert(`Sync SINAPI iniciado em background${force ? ' (forçado)' : ''}!\n\nAcompanhe o progresso nos logs do servidor.\nRecarregue esta página em alguns minutos para ver as novas bases.`);
+            // Poll for updates
+            setTimeout(fetchBases, 30000);
+            setTimeout(fetchBases, 60000);
+            setTimeout(fetchBases, 120000);
+        } catch (err: any) {
+            if (err?.code === 'AUTH_EXPIRED') {
+                alert('Sua sessão expirou. Faça login novamente e repita o reprocessamento SINAPI.');
+                return;
             }
-        } catch (err) {
-            alert('Erro de conexão');
+            alert('Erro: ' + (err?.message || 'Falha ao iniciar sync SINAPI'));
         } finally {
             setSyncing(false);
         }

@@ -99,18 +99,25 @@ export async function apiFetch<T = any>(
         } as ApiError;
     }
 
-    // ── Token expirado → redireciona para login ──
-    if (response.status === 401) {
+    // ── Token expirado/inválido → redireciona para login ──
+    if (response.status === 401 || response.status === 403) {
         const body = await response.json().catch(() => ({}));
-        const msg = body?.error || '';
+        const msg = String(body?.error || '').toLowerCase();
 
         // Só notifica sessão expirada se for um problema de JWT (não tentativa de login)
-        if (msg.includes('expirou') || msg.includes('inválido') || msg.includes('expired') || msg.includes('jwt')) {
+        if (
+            msg.includes('token') ||
+            msg.includes('sessão') ||
+            msg.includes('expirou') ||
+            msg.includes('inválido') ||
+            msg.includes('expired') ||
+            msg.includes('jwt')
+        ) {
             notifySessionExpired();
             throw {
                 message: 'Sua sessão expirou. Faça login novamente.',
                 code: 'AUTH_EXPIRED',
-                status: 401,
+                status: response.status,
             } as ApiError;
         }
 
