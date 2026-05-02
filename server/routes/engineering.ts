@@ -2452,27 +2452,49 @@ import { syncSinapi, importFromBuffer as importSinapiFromBuffer } from '../servi
 import { getLatestOrsePeriods, hydrateOrseCompositionDetails, searchOrseInsumos, searchOrseServices, syncOrse } from '../services/engineering/orseCrawler';
 import { getLatestSicorPublications, getSicorRegions, hasConfiguredSicorAuthToken, syncSicorMg, validateSicorAuthToken } from '../services/engineering/sicorMgSync';
 
+let sinapiSyncJob: { startedAt: string; requestedBy?: string; description: string } | null = null;
+
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
         if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
-        const { ufs = ['CE'], months = 12, includeDesonerado = true, force = false } = req.body;
+        if (sinapiSyncJob) {
+            return res.status(409).json({
+                error: 'Sync SINAPI já está em execução',
+                status: 'running',
+                job: sinapiSyncJob,
+            });
+        }
 
-        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: UFs=${ufs.join(',')}, meses=${months}, desonerado=${includeDesonerado}, force=${force}`);
+        const { ufs = ['CE'], months = 12, includeDesonerado = true, force = false, targetPeriods } = req.body;
+        const periods = Array.isArray(targetPeriods)
+            ? targetPeriods
+                .map((p: any) => ({ month: Number(p.month), year: Number(p.year) }))
+                .filter((p: any) => p.month >= 1 && p.month <= 12 && p.year >= 2009)
+            : undefined;
+        const description = periods?.length
+            ? `${ufs.join(',')} ${periods.map((p: any) => `${String(p.month).padStart(2, '0')}/${p.year}`).join(',')} ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'}${force ? ' force' : ''}`
+            : `${ufs.join(',')} ${months} meses ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'}${force ? ' force' : ''}`;
+
+        console.log(`[SINAPI Sync] 🚀 Admin ${req.user?.email} disparou sync: ${description}`);
+        sinapiSyncJob = { startedAt: new Date().toISOString(), requestedBy: req.user?.email, description };
 
         // Run in background — don't block the HTTP response
         res.json({
-            message: `Sync SINAPI iniciado em background para ${ufs.join(', ')} (${months} meses, ${includeDesonerado ? 'Onerado+Desonerado' : 'Apenas Onerado'}${force ? ', forçado' : ''})`,
+            message: `Sync SINAPI iniciado em background: ${description}`,
             status: 'started',
+            job: sinapiSyncJob,
         });
 
         // Fire and forget
-        syncSinapi({ ufs, months, includeDesonerado, force }).then(report => {
+        syncSinapi({ ufs, months, includeDesonerado, force, targetPeriods: periods }).then(report => {
             console.log(`[SINAPI Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
         }).catch(err => {
             console.error(`[SINAPI Sync] ❌ Erro fatal:`, err);
+        }).finally(() => {
+            sinapiSyncJob = null;
         });
 
     } catch (e: any) {

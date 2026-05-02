@@ -508,7 +508,14 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 // Main Orchestrator
 // ═══════════════════════════════════════════════════════════
 
-export interface SyncOptions { ufs: string[]; months: number; includeDesonerado: boolean; baseName?: string; force?: boolean; }
+export interface SyncOptions {
+  ufs: string[];
+  months: number;
+  includeDesonerado: boolean;
+  baseName?: string;
+  force?: boolean;
+  targetPeriods?: { month: number; year: number }[];
+}
 export interface SyncReport { started: string; finished: string; totalAttempted: number; totalSuccess: number; totalFailed: number; results: SyncResult[]; }
 
 /** Parse national 2025+ Excel extracting ALL UF columns at once */
@@ -644,9 +651,20 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
   const results: SyncResult[] = [];
   const now = new Date();
   const targetMonths: { month: number; year: number }[] = [];
-  for (let i = 0; i < months; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    targetMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+  if (Array.isArray(options.targetPeriods) && options.targetPeriods.length > 0) {
+    for (const period of options.targetPeriods) {
+      const month = Number(period.month);
+      const year = Number(period.year);
+      if (month >= 1 && month <= 12 && year >= 2009 && year <= now.getFullYear() + 1) {
+        targetMonths.push({ month, year });
+      }
+    }
+  }
+  if (targetMonths.length === 0) {
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      targetMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+    }
   }
 
   console.log(`[SINAPI Crawler] 🚀 Sync: ${isAllUfs ? 'ALL (27 UFs)' : ufs.join(',')} × ${months} meses`);
