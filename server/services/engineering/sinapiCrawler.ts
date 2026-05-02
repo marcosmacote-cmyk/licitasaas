@@ -157,6 +157,16 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
 export interface ParsedItem { code: string; description: string; unit: string; price: number; type: string; }
 export interface ParsedCompositionItem { parentCode: string; type: string; code: string; description: string; unit: string; quantity: number; }
 
+function parseSinapiNumber(value: any): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  const cleaned = String(value).replace(/[^\d.,\-]/g, '');
+  if (!cleaned) return 0;
+  return cleaned.includes(',') && (!cleaned.includes('.') || cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.'))
+    ? parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0
+    : parseFloat(cleaned.replace(/,/g, '')) || 0;
+}
+
 function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const items: ParsedItem[] = [];
@@ -288,17 +298,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
       if (!code || !desc || code.length < 2 || code === '0') continue;
 
       // Read price from the UF column
-      let price = 0;
-      const raw = r[ufColIdx];
-      if (typeof raw === 'number') price = raw;
-      else if (raw) {
-        const c = String(raw).replace(/[^\d.,\-]/g, '');
-        if (c) {
-          price = c.includes(',') && (!c.includes('.') || c.lastIndexOf(',') > c.lastIndexOf('.'))
-            ? parseFloat(c.replace(/\./g, '').replace(',', '.')) || 0
-            : parseFloat(c.replace(/,/g, '')) || 0;
-        }
-      }
+      const price = parseSinapiNumber(r[ufColIdx]);
       if (price <= 0) continue;
 
       // Determine type
@@ -342,10 +342,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
             }
             const desc = String(r[dI] ?? '').trim();
             if (!code || !desc || code.length < 2 || code === '0') continue;
-            let price = 0;
-            const raw = r[ceIdx];
-            if (typeof raw === 'number') price = raw;
-            else if (raw) { const c = String(raw).replace(/[^\d.,\-]/g, ''); price = parseFloat(c.replace(',', '.')) || 0; }
+            const price = parseSinapiNumber(r[ceIdx]);
             if (price <= 0) continue;
             items.push({ code, description: desc, unit: uI >= 0 ? String(r[uI] ?? 'UN').trim() : 'UN', price, type: 'SERVICO' });
           }
@@ -587,13 +584,7 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
       else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
 
       for (const [uf, colIdx] of Object.entries(ufColMap)) {
-        let price = 0;
-        const raw = r[colIdx];
-        if (typeof raw === 'number') price = raw;
-        else if (raw) {
-          const c = String(raw).replace(/[^\d.,\-]/g, '');
-          if (c) price = c.includes(',') && (!c.includes('.') || c.lastIndexOf(',') > c.lastIndexOf('.')) ? parseFloat(c.replace(/\./g, '').replace(',', '.')) || 0 : parseFloat(c.replace(/,/g, '')) || 0;
-        }
+        const price = parseSinapiNumber(r[colIdx]);
         if (price <= 0) continue;
         result.get(uf)!.items.push({ code, description: desc, unit, price, type });
       }
@@ -606,6 +597,7 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
     if (upper !== 'ANALÍTICO' && upper !== 'ANALITICO') continue;
     const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     let headerIdx = -1, parentCodeCol = 1, typeCol = 2, ccodeCol = 3, cdescCol = 4, cunitCol = 5, qtyCol = 6;
+    const analyticalUfColMap: Record<string, number> = {};
     for (let i = 0; i < Math.min(rows.length, 20); i++) {
       const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
       if (row.includes('GRUPO') && row.some((c: string) => c.includes('COEFICIENTE'))) {
@@ -616,11 +608,19 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
         cdescCol = row.findIndex((c: string) => c === 'DESCRIÇÃO');
         cunitCol = row.findIndex((c: string) => c === 'UNIDADE');
         qtyCol = row.findIndex((c: string) => c === 'COEFICIENTE');
+        for (let j = Math.max(0, i - 3); j <= i; j++) {
+          const headerRow = rows[j].map((c: any) => String(c).trim().toUpperCase());
+          for (const uf of ALL_UFS) {
+            const idx = headerRow.indexOf(uf);
+            if (idx >= 0) analyticalUfColMap[uf] = idx;
+          }
+        }
         break;
       }
     }
     if (headerIdx < 0) continue;
     const compItems: ParsedCompositionItem[] = [];
+    let analyticalPriceItems = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
       const parentCode = String(r[parentCodeCol] ?? '').trim();
@@ -628,16 +628,26 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
       if (!parentCode || !code || code === '0') continue;
       const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
       const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
-      let qty = 0;
-      const rawQty = r[qtyCol];
-      if (typeof rawQty === 'number') qty = rawQty;
-      else if (rawQty) { const c = String(rawQty).replace(/[^\d.,\-]/g, ''); if (c) qty = parseFloat(c.replace(',', '.')) || 0; }
+      const description = String(r[cdescCol] ?? '').trim();
+      const unit = String(r[cunitCol] ?? '').trim() || 'UN';
+      const qty = parseSinapiNumber(r[qtyCol]);
       if (qty <= 0) continue;
-      compItems.push({ parentCode, type, code, description: String(r[cdescCol] ?? '').trim(), unit: String(r[cunitCol] ?? '').trim() || 'UN', quantity: qty });
+      compItems.push({ parentCode, type, code, description, unit, quantity: qty });
+
+      // Some SINAPI national analytical rows carry the priced child item by UF
+      // even when that child is absent or unpriced in the synthetic item sheet.
+      // Capture those prices too so dependencies such as 00004813 do not become
+      // unresolved/invisible in the CPU.
+      for (const [uf, colIdx] of Object.entries(analyticalUfColMap)) {
+        const price = parseSinapiNumber(r[colIdx]);
+        if (price <= 0 || !description) continue;
+        result.get(uf)!.items.push({ code, description, unit, price, type });
+        analyticalPriceItems++;
+      }
     }
     // Share composition items across all UFs (coefficients are universal)
     for (const uf of ALL_UFS) result.get(uf)!.compositionItems.push(...compItems);
-    console.log(`[SINAPI Parse] ✅ Analítico: ${compItems.length} itens de composição (compartilhados entre ${ALL_UFS.length} UFs)`);
+    console.log(`[SINAPI Parse] ✅ Analítico: ${compItems.length} itens de composição (compartilhados entre ${ALL_UFS.length} UFs) + ${analyticalPriceItems} preço(s) por UF`);
   }
 
   return result;
