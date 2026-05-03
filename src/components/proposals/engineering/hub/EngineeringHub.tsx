@@ -164,8 +164,8 @@ export function EngineeringHub() {
         let confirmText = 'Iniciar download SINAPI Nacional?\n\n🗺️ Todos os 27 estados do Brasil\n📅 Últimos 12 meses\n🔄 Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.';
 
         if (force) {
-            const uf = (prompt('UF para reprocessar (ex: PA, CE, SP):', 'PA') || '').trim().toUpperCase();
-            if (!/^[A-Z]{2}$/.test(uf)) return alert('UF inválida.');
+            const uf = (prompt('UF para reprocessar (ex: PA, CE, SP) ou ALL para todos os estados:', 'PA') || '').trim().toUpperCase();
+            if (uf !== 'ALL' && !/^[A-Z]{2}$/.test(uf)) return alert('UF inválida.');
             const dataBase = (prompt('Data-base SINAPI para reprocessar (AAAA-MM):', '2025-10') || '').trim();
             const match = dataBase.match(/^(\d{4})-(\d{2})$/);
             if (!match) return alert('Data-base inválida. Use AAAA-MM.');
@@ -174,13 +174,13 @@ export function EngineeringHub() {
             if (month < 1 || month > 12 || year < 2009) return alert('Data-base inválida.');
 
             body = {
-                ufs: [uf],
+                ufs: uf === 'ALL' ? ['ALL'] : [uf],
                 months: 1,
                 includeDesonerado: true,
                 force: true,
                 targetPeriods: [{ month, year }]
             };
-            confirmText = `Reprocessar SINAPI ${uf} ${dataBase}?\n\n🔄 Onerado + Desonerado\n\nBases existentes dessa UF/data serão reimportadas para reparar composições analíticas.`;
+            confirmText = `Reprocessar SINAPI ${uf} ${dataBase}?\n\n🔄 Onerado + Desonerado\n\nBases existentes ${uf === 'ALL' ? 'de todos os estados nessa data' : 'dessa UF/data'} serão reimportadas para reparar composições analíticas.`;
         }
 
         if (!confirm(confirmText)) return;

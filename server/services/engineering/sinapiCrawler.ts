@@ -214,9 +214,12 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
       
       if (headerIdx >= 0) {
         let count = 0;
+        let currentParentCode = '';
         for (let i = headerIdx + 1; i < rows.length; i++) {
           const r = rows[i];
-          const parentCode = String(r[parentCodeCol] ?? '').trim();
+          const explicitParentCode = String(r[parentCodeCol] ?? '').trim();
+          if (explicitParentCode && explicitParentCode !== '0') currentParentCode = explicitParentCode;
+          const parentCode = explicitParentCode || currentParentCode;
           const code = String(r[codeCol] ?? '').trim();
           if (!parentCode || !code || code === '0') continue;
           
@@ -360,6 +363,45 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
 // ═══════════════════════════════════════════════════════════
 
 interface SyncResult { success: boolean; message: string; databaseId?: string; itemCount?: number; compositionCount?: number; }
+
+async function getAnalyticalCoverage(databaseId: string): Promise<{ total: number; incomplete: number; worstCoverage: number }> {
+  const rows: Array<{ total: any; incomplete: any; worstCoverage: any }> = await prisma.$queryRaw`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (
+        WHERE c."totalPrice" > 0
+          AND COALESCE(ci.total, 0) < (c."totalPrice" * 0.85)
+      )::int AS incomplete,
+      COALESCE(MIN(
+        CASE
+          WHEN c."totalPrice" > 0 THEN COALESCE(ci.total, 0) / c."totalPrice"
+          ELSE 1
+        END
+      ), 1)::float AS "worstCoverage"
+    FROM "EngineeringComposition" c
+    LEFT JOIN (
+      SELECT "compositionId", SUM(price) AS total
+      FROM "EngineeringCompositionItem"
+      GROUP BY "compositionId"
+    ) ci ON ci."compositionId" = c.id
+    WHERE c."databaseId" = ${databaseId}
+  `;
+  const row = rows[0] || { total: 0, incomplete: 0, worstCoverage: 1 };
+  return {
+    total: Number(row.total) || 0,
+    incomplete: Number(row.incomplete) || 0,
+    worstCoverage: Number(row.worstCoverage) || 1,
+  };
+}
+
+async function hasCompleteAnalyticalCoverage(databaseId: string): Promise<boolean> {
+  const depCount = await prisma.engineeringCompositionItem.count({
+    where: { composition: { databaseId } },
+  });
+  if (depCount <= 0) return false;
+  const coverage = await getAnalyticalCoverage(databaseId);
+  return coverage.incomplete === 0;
+}
 
 function normalizeSinapiLookupCode(code: string): string {
   return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
@@ -587,6 +629,14 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   }
 
   await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
+  const coverage = await getAnalyticalCoverage(db!.id);
+  if (coverage.incomplete > 0) {
+    console.warn(
+      `[SINAPI Crawler] ⚠️ ${baseName} ${uf} ${version} ${regime}: ` +
+      `${coverage.incomplete}/${coverage.total} composição(ões) com soma analítica abaixo de 85% do preço sintético ` +
+      `(pior cobertura ${(coverage.worstCoverage * 100).toFixed(1)}%).`
+    );
+  }
   console.log(`[SINAPI Crawler] ✅ ${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições + ${insertedCompItems} dependências`);
   return { success: true, message: `${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
 }
@@ -606,7 +656,7 @@ export interface SyncOptions {
 export interface SyncReport { started: string; finished: string; totalAttempted: number; totalSuccess: number; totalFailed: number; results: SyncResult[]; }
 
 /** Parse national 2025+ Excel extracting ALL UF columns at once */
-function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }> {
+export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }> {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const result = new Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }>();
   for (const uf of ALL_UFS) result.set(uf, { items: [], compositionItems: [] });
@@ -711,9 +761,12 @@ function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<string, { i
     if (headerIdx < 0) continue;
     const compItems: ParsedCompositionItem[] = [];
     let analyticalPriceItems = 0;
+    let currentParentCode = '';
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      const parentCode = String(r[parentCodeCol] ?? '').trim();
+      const explicitParentCode = String(r[parentCodeCol] ?? '').trim();
+      if (explicitParentCode && explicitParentCode !== '0') currentParentCode = explicitParentCode;
+      const parentCode = explicitParentCode || currentParentCode;
       const code = String(r[ccodeCol] ?? '').trim();
       if (!parentCode || !code || code === '0') continue;
       const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
@@ -778,7 +831,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         const version = `${String(month).padStart(2, '0')}/${year}`;
 
         // Check if ALL UFs already synced for this month
-        const existingCount = force ? 0 : await prisma.engineeringDatabase.count({
+        const existingDbs = force ? [] : await prisma.engineeringDatabase.findMany({
           where: {
             name: baseName,
             referenceMonth: month,
@@ -787,9 +840,13 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
             type: 'OFICIAL',
             itemCount: { gt: 0 },
             compositionCount: { gt: 0 },
-            compositions: { some: { items: { some: {} } } },
-          }
+          },
+          select: { id: true },
         });
+        let existingCount = 0;
+        for (const existingDb of existingDbs) {
+          if (await hasCompleteAnalyticalCoverage(existingDb.id)) existingCount++;
+        }
         if (existingCount >= 27) { console.log(`[SINAPI Crawler] ⏭️ ${version} ${regime}: ${existingCount}/27 UFs já completas`); continue; }
 
         console.log(`\n[SINAPI Crawler] 📥 Nacional ${version} ${regime} (${27 - existingCount} UFs pendentes)...`);
@@ -835,10 +892,9 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
               type: 'OFICIAL',
               itemCount: { gt: 0 },
               compositionCount: { gt: 0 },
-              compositions: { some: { items: { some: {} } } },
             }
           });
-          if (ex) { results.push({ success: true, message: `Já existente: ${uf}` }); continue; }
+          if (ex && await hasCompleteAnalyticalCoverage(ex.id)) { results.push({ success: true, message: `Já existente: ${uf}` }); continue; }
           results.push(await persistItems(baseName, uf, month, year, desonerado, data));
         }
         await new Promise(r => setTimeout(r, 3000));
@@ -861,15 +917,12 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
           where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL' }
         });
         
-        let hasDependencies = false;
+        let hasCompleteCoverage = false;
         if (existing) {
-          const compItemCount = await prisma.engineeringCompositionItem.count({
-            where: { composition: { databaseId: existing.id } }
-          });
-          hasDependencies = compItemCount > 0;
+          hasCompleteCoverage = await hasCompleteAnalyticalCoverage(existing.id);
         }
 
-        if (!force && existing && existing.itemCount > 0 && existing.compositionCount > 0 && hasDependencies) { 
+        if (!force && existing && existing.itemCount > 0 && existing.compositionCount > 0 && hasCompleteCoverage) { 
           results.push({ success: true, message: `Já existente: ${existing.itemCount} itens, ${existing.compositionCount} composições` }); 
           continue; 
         }
