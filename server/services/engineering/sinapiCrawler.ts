@@ -21,10 +21,11 @@ const ALL_UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT
 export async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
   let browser: any = null;
   try {
-    const puppeteer = await import('puppeteer-core');
+    const puppeteerModule = require('puppeteer-core');
+    const puppeteer = puppeteerModule.default ?? puppeteerModule;
     const execPath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
     
-    browser = await puppeteer.default.launch({
+    browser = await puppeteer.launch({
       executablePath: execPath,
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
