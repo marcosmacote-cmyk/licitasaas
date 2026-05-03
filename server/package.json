@@ -8,6 +8,7 @@
     "start": "npx prisma migrate deploy && node dist/index.js",
     "dev": "nodemon index.ts",
     "test": "vitest run --passWithNoTests",
+    "sinapi:reprocess": "ts-node scripts/reprocess-sinapi.ts",
     "postinstall": "npx prisma generate"
   },
   "keywords": [],
