@@ -3,7 +3,6 @@
  * Usa Chromium do sistema (Alpine: /usr/bin/chromium-browser)
  */
 import * as XLSX from 'xlsx';
-import AdmZip from 'adm-zip';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -123,6 +122,7 @@ export async function downloadSinapiViaBrowser(uf: string, month: number, year: 
 // ═══════════════════════════════════════════════════════════
 
 function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
+  const AdmZip = require('adm-zip');
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
   
