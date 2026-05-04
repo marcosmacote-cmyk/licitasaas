@@ -123,7 +123,7 @@ async function purgeTargets(targets: PurgeTarget[]) {
       DELETE FROM "EngineeringCompositionItem" ci
       USING "EngineeringComposition" aux
       WHERE ci."auxiliaryCompositionId" = aux.id
-        AND aux."databaseId" = ANY($1::uuid[])
+        AND aux."databaseId" = ANY($1::text[])
     `, ids);
 
     const compositions = await tx.engineeringComposition.deleteMany({ where: { databaseId: { in: ids } } });
