@@ -17,6 +17,8 @@ import { prisma } from '../../lib/prisma';
 const PORTAL_URL = 'https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx';
 
 const ALL_UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+// SINAPI attributes unavailable local prices to SP in official composition costs (%AS).
+const SINAPI_ATTRIBUTED_PRICE_UF = 'SP';
 
 export async function downloadSinapiViaBrowser(uf: string, month: number, year: number, desonerado: boolean, downloadDir: string): Promise<string | null> {
   let browser: any = null;
@@ -277,7 +279,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
     const isComposition = compSheets.includes(upper);
 
     // Find the header row with UF columns (AC, AL, AM, ..., CE, ..., TO)
-    let headerIdx = -1, ufColIdx = -1;
+    let headerIdx = -1, ufColIdx = -1, fallbackUfColIdx = -1;
     let codeCol = -1, descCol = -1, unitCol = -1, groupCol = -1;
 
     for (let i = 0; i < Math.min(rows.length, 20); i++) {
@@ -287,6 +289,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
         // This row has the UF as a column header
         headerIdx = i;
         ufColIdx = ceIdx;
+        fallbackUfColIdx = row.indexOf(SINAPI_ATTRIBUTED_PRICE_UF);
         // Find other columns in this row or previous rows
         for (let j = Math.max(0, i - 3); j <= i; j++) {
           const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
@@ -321,7 +324,11 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
       if (!code || !desc || code.length < 2 || code === '0') continue;
 
       // Read price from the UF column
-      const price = parseSinapiNumber(r[ufColIdx]);
+      const localPrice = parseSinapiNumber(r[ufColIdx]);
+      const attributedPrice = !isComposition && targetUf !== SINAPI_ATTRIBUTED_PRICE_UF && fallbackUfColIdx >= 0
+        ? parseSinapiNumber(r[fallbackUfColIdx])
+        : 0;
+      const price = localPrice > 0 ? localPrice : attributedPrice;
       if (price <= 0) continue;
 
       // Determine type
@@ -732,8 +739,12 @@ export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<stri
       else if (group.includes('COMPOS') || group.includes('SERV')) type = 'SERVICO';
       else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
 
+      const attributedPrice = !isComposition && ufColMap[SINAPI_ATTRIBUTED_PRICE_UF] !== undefined
+        ? parseSinapiNumber(r[ufColMap[SINAPI_ATTRIBUTED_PRICE_UF]])
+        : 0;
       for (const [uf, colIdx] of Object.entries(ufColMap)) {
-        const price = parseSinapiNumber(r[colIdx]);
+        const localPrice = parseSinapiNumber(r[colIdx]);
+        const price = localPrice > 0 || uf === SINAPI_ATTRIBUTED_PRICE_UF ? localPrice : attributedPrice;
         if (price <= 0) continue;
         result.get(uf)!.items.push({ code, description: desc, unit, price, type });
       }

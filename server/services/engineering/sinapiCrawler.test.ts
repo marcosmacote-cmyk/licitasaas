@@ -89,4 +89,52 @@ describe('SINAPI crawler parser', () => {
       }),
     ]));
   });
+
+  it('uses the SINAPI attributed SP price when a child item has no local UF price', () => {
+    const ufHeaders = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'PA', 'SP', 'TO'];
+    const buffer = workbookBuffer({
+      ISD: [
+        ['SINAPI'],
+        ['RELATÓRIO DE PREÇOS DE INSUMOS'],
+        ['Mês de Referência:', '02/2026'],
+        ['Data de emissão:', '23/03/2026'],
+        ['Classificação', 'Código do\r\nInsumo', 'Descrição do Insumo', 'Unidade', 'Origem de\r\nPreço', ...ufHeaders],
+        ['MATERIAL', '39873', 'JUNTA DE EXPANSAO DE COBRE, PONTA X PONTA, 22 MM', 'UN', 'CR', '', '', '', '', '', '', '', '', '', '', 563.28, ''],
+      ],
+      CSD: [
+        ['SINAPI'],
+        ['RELATÓRIO DE CUSTOS DE COMPOSIÇÕES'],
+        ['Mês de Referência:', '02/2026'],
+        ['Data de emissão:', '23/03/2026'],
+        ['Grupo', 'Código da\r\nComposição', 'Descrição', 'Unidade', ...ufHeaders.flatMap(uf => [uf, ''])],
+        ['Instalações em Cobre', '93052', 'JUNTA DE EXPANSÃO EM COBRE, DN 22 MM', 'UN', ...ufHeaders.flatMap(uf => [uf === 'PA' ? 568.42 : 570, 0])],
+      ],
+      ANALÍTICO: [
+        ['SINAPI'],
+        ['RELATÓRIO ANALÍTICO DE COMPOSIÇÕES'],
+        ['Mês de Referência:', '02/2026'],
+        ['Data de emissão:', '23/03/2026'],
+        ['Grupo', 'Código da\r\nComposição', 'Tipo Item', 'Código do\r\nItem', 'Descrição', 'Unidade', 'Coeficiente', 'Situação'],
+        ['Instalações em Cobre', '93052', 'INSUMO', '39873', 'JUNTA DE EXPANSAO DE COBRE, PONTA X PONTA, 22 MM', 'UN', 1, 'COM PREÇO'],
+      ],
+    });
+
+    const parsed = parseExcelAllUFs(buffer, false);
+    const pa = parsed.get('PA');
+
+    expect(pa?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: '39873',
+        description: 'JUNTA DE EXPANSAO DE COBRE, PONTA X PONTA, 22 MM',
+        price: 563.28,
+      }),
+    ]));
+    expect(pa?.compositionItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        parentCode: '93052',
+        code: '39873',
+        quantity: 1,
+      }),
+    ]));
+  });
 });
