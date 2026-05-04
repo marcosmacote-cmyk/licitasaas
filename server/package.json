@@ -9,6 +9,7 @@
     "dev": "nodemon index.ts",
     "test": "vitest run --passWithNoTests",
     "hub:audit": "ts-node scripts/audit-engineering-hub.ts",
+    "hub:purge": "ts-node scripts/purge-engineering-hub.ts",
     "sinapi:reprocess": "ts-node scripts/reprocess-sinapi.ts",
     "postinstall": "npx prisma generate"
   },
