@@ -105,6 +105,35 @@ function normalizeMatchCode(source: string, code: string): string {
   return cleaned.replace(/\s+/g, '');
 }
 
+function normalizedCodeSql(sourceName: string): string {
+  if (NUMERIC_CODE_SOURCES.has(sourceName)) {
+    return `
+      CASE
+        WHEN TRIM("code") ~ '^[0-9]+$' THEN COALESCE(NULLIF(REGEXP_REPLACE(TRIM("code"), '^0+', ''), ''), '0')
+        ELSE UPPER(REGEXP_REPLACE(TRIM("code"), '\\s+', '', 'g'))
+      END
+    `;
+  }
+  return `UPPER(REGEXP_REPLACE(TRIM("code"), '\\s+', '', 'g'))`;
+}
+
+async function findDuplicateNormalizedCodes(tableName: 'EngineeringItem' | 'EngineeringComposition', databaseId: string, sourceName: string) {
+  const normalized = normalizedCodeSql(sourceName);
+  return prisma.$queryRawUnsafe<Array<{ normalizedCode: string; count: bigint }>>(`
+    SELECT normalized_code AS "normalizedCode", COUNT(*) AS count
+    FROM (
+      SELECT ${normalized} AS normalized_code
+      FROM "${tableName}"
+      WHERE "databaseId" = $1
+        AND TRIM("code") <> ''
+    ) codes
+    GROUP BY normalized_code
+    HAVING COUNT(*) > 1
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+  `, databaseId);
+}
+
 function addFinding(findings: Finding[], finding: Finding) {
   findings.push(finding);
 }
@@ -261,16 +290,7 @@ Padrao: somente leitura. Use --fix-counters apenas para corrigir contadores exib
       });
     }
 
-    const items = await prisma.engineeringItem.findMany({
-      where: { databaseId: db.id },
-      select: { code: true },
-    });
-    const itemCodes = new Map<string, number>();
-    for (const item of items) {
-      const code = normalizeMatchCode(sourceName, item.code);
-      itemCodes.set(code, (itemCodes.get(code) || 0) + 1);
-    }
-    const duplicatedItemCodes = [...itemCodes.entries()].filter(([, count]) => count > 1).slice(0, 10);
+    const duplicatedItemCodes = await findDuplicateNormalizedCodes('EngineeringItem', db.id, sourceName);
     if (duplicatedItemCodes.length > 0) {
       addFinding(findings, {
         severity: 'high',
@@ -278,20 +298,11 @@ Padrao: somente leitura. Use --fix-counters apenas para corrigir contadores exib
         databaseId: db.id,
         database: key,
         message: 'Codigos de itens colidem apos normalizacao de match.',
-        sample: duplicatedItemCodes,
+        sample: duplicatedItemCodes.map(row => [row.normalizedCode, Number(row.count)]),
       });
     }
 
-    const compositions = await prisma.engineeringComposition.findMany({
-      where: { databaseId: db.id },
-      select: { code: true },
-    });
-    const compositionCodes = new Map<string, number>();
-    for (const composition of compositions) {
-      const code = normalizeMatchCode(sourceName, composition.code);
-      compositionCodes.set(code, (compositionCodes.get(code) || 0) + 1);
-    }
-    const duplicatedCompositionCodes = [...compositionCodes.entries()].filter(([, count]) => count > 1).slice(0, 10);
+    const duplicatedCompositionCodes = await findDuplicateNormalizedCodes('EngineeringComposition', db.id, sourceName);
     if (duplicatedCompositionCodes.length > 0) {
       addFinding(findings, {
         severity: 'high',
@@ -299,7 +310,7 @@ Padrao: somente leitura. Use --fix-counters apenas para corrigir contadores exib
         databaseId: db.id,
         database: key,
         message: 'Codigos de composicoes colidem apos normalizacao de match.',
-        sample: duplicatedCompositionCodes,
+        sample: duplicatedCompositionCodes.map(row => [row.normalizedCode, Number(row.count)]),
       });
     }
 

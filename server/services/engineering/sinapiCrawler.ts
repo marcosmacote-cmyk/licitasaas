@@ -168,6 +168,34 @@ function parseSinapiNumber(value: any): number {
     : parseFloat(cleaned.replace(/,/g, '')) || 0;
 }
 
+function extractSinapiCodeFromFormula(formula: any): string {
+  const text = String(formula || '');
+  if (!text) return '';
+
+  const quotedArgs = [...text.matchAll(/"([^"]*\d{2,}[^"]*)"/g)]
+    .map(match => match[1].replace(/\D/g, ''))
+    .filter(Boolean);
+  if (quotedArgs.length > 0) return quotedArgs[quotedArgs.length - 1];
+
+  const numericArgs = [...text.matchAll(/(?:,|;)\s*([0-9]{2,})(?=\s*[),;])/g)]
+    .map(match => match[1])
+    .filter(Boolean);
+  if (numericArgs.length > 0) return numericArgs[numericArgs.length - 1];
+
+  const trailing = text.match(/([0-9]{2,})\s*\)?\s*$/);
+  return trailing ? trailing[1] : '';
+}
+
+function readSinapiCodeCell(workbook: XLSX.WorkBook, sheetName: string, rowIndex: number, colIndex: number, rawValue: any): string {
+  let code = String(rawValue ?? '').trim();
+  if ((code && code !== '0' && code.length >= 2) || colIndex < 0) return code;
+
+  const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })];
+  const formulaCode = extractSinapiCodeFromFormula((cell as any)?.f);
+  if (formulaCode) code = formulaCode;
+  return code;
+}
+
 function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const items: ParsedItem[] = [];
@@ -218,10 +246,10 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
         let currentParentCode = '';
         for (let i = headerIdx + 1; i < rows.length; i++) {
           const r = rows[i];
-          const explicitParentCode = String(r[parentCodeCol] ?? '').trim();
+          const explicitParentCode = readSinapiCodeCell(workbook, sheetName, i, parentCodeCol, r[parentCodeCol]);
           if (explicitParentCode && explicitParentCode !== '0') currentParentCode = explicitParentCode;
           const parentCode = explicitParentCode || currentParentCode;
-          const code = String(r[codeCol] ?? '').trim();
+          const code = readSinapiCodeCell(workbook, sheetName, i, codeCol, r[codeCol]);
           if (!parentCode || !code || code === '0') continue;
           
           const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
@@ -286,16 +314,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
     let count = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      let code = String(r[codeCol] ?? '').trim();
-      
-      // Handle Caixa's HYPERLINK formulas that evaluate to 0 in CSD/CCD
-      if (!code || code === '0' || code.length < 2) {
-        const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: i, c: codeCol })];
-        if (cell && cell.f) {
-          const match = cell.f.match(/,?(\d+)\s*\)$/);
-          if (match) code = match[1];
-        }
-      }
+      const code = readSinapiCodeCell(workbook, sheetName, i, codeCol, r[codeCol]);
 
       const desc = String(r[descCol] ?? '').trim();
       const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
@@ -336,14 +355,7 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
           console.log(`[SINAPI Parse] 🔄 Fallback aba "${sheetName}": UF col=${ceIdx}`);
           for (let j = i + 1; j < rows.length; j++) {
             const r = rows[j];
-            let code = String(r[cI] ?? '').trim();
-            if (!code || code === '0' || code.length < 2) {
-              const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: j, c: cI })];
-              if (cell && cell.f) {
-                const match = cell.f.match(/,?(\d+)\s*\)$/);
-                if (match) code = match[1];
-              }
-            }
+            const code = readSinapiCodeCell(workbook, sheetName, j, cI, r[cI]);
             const desc = String(r[dI] ?? '').trim();
             if (!code || !desc || code.length < 2 || code === '0') continue;
             const price = parseSinapiNumber(r[ceIdx]);
@@ -708,11 +720,7 @@ export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<stri
 
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      let code = String(r[codeCol] ?? '').trim();
-      if (!code || code === '0' || code.length < 2) {
-        const cell = workbook.Sheets[sheetName][XLSX.utils.encode_cell({ r: i, c: codeCol })];
-        if (cell && cell.f) { const match = cell.f.match(/,?(\d+)\s*\)$/); if (match) code = match[1]; }
-      }
+      const code = readSinapiCodeCell(workbook, sheetName, i, codeCol, r[codeCol]);
       const desc = String(r[descCol] ?? '').trim();
       const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
       if (!code || !desc || code.length < 2 || code === '0') continue;
@@ -765,10 +773,10 @@ export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<stri
     let currentParentCode = '';
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      const explicitParentCode = String(r[parentCodeCol] ?? '').trim();
+      const explicitParentCode = readSinapiCodeCell(workbook, sheetName, i, parentCodeCol, r[parentCodeCol]);
       if (explicitParentCode && explicitParentCode !== '0') currentParentCode = explicitParentCode;
       const parentCode = explicitParentCode || currentParentCode;
-      const code = String(r[ccodeCol] ?? '').trim();
+      const code = readSinapiCodeCell(workbook, sheetName, i, ccodeCol, r[ccodeCol]);
       if (!parentCode || !code || code === '0') continue;
       const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
       const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
