@@ -526,6 +526,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // AI BDI extraction
     const [isExtractingBdi, setIsExtractingBdi] = useState(false);
+    const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
     const handleExtractBdi = async () => {
         setIsExtractingBdi(true);
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Lendo edital com IA em busca do BDI...</span>);
@@ -664,14 +665,26 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         }
     };
 
-    const addTypedItem = (type: EngItemType) => {
+    const addTypedItem = (type: EngItemType, insertAfterId?: string) => {
         const isGroup = isGrouper(type);
         setHasUnsavedChanges(true);
-        setItems(prev => renumberItems([...prev, {
-            id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
-            description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
-            unitCost: 0, unitPrice: 0, totalPrice: 0, type, priceOrigin: isGroup ? undefined : 'MANUAL',
-        }]));
+        setItems(prev => {
+            const newItem = {
+                id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
+                description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
+                unitCost: 0, unitPrice: 0, totalPrice: 0, type, priceOrigin: isGroup ? undefined : ('MANUAL' as const),
+            };
+            let newList = [...prev];
+            if (insertAfterId) {
+                const idx = newList.findIndex(it => it.id === insertAfterId);
+                if (idx >= 0) {
+                    newList.splice(idx + 1, 0, newItem);
+                    return renumberItems(newList);
+                }
+            }
+            newList.push(newItem);
+            return renumberItems(newList);
+        });
     };
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1168,9 +1181,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 // ── ETAPA / SUBETAPA ROW (header style) ──
                                 const SortableRow = ({ id, isGroup, meta, hasInsumos, isExpanded, children }: any) => {
                                     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-                                    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined };
+                                    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined, position: 'relative' as const };
                                     return (
-                                        <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}>
+                                        <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}
+                                            onMouseEnter={() => setHoveredRowId(id)}
+                                            onMouseLeave={() => setHoveredRowId(null)}
+                                        >
                                             {children(listeners)}
                                         </tr>
                                     );
@@ -1192,14 +1208,30 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                     <IconComp size={11} /> {meta.label}
                                                 </span>
                                             </td>
-                                            <td colSpan={8} style={{ padding: '8px 12px' }}>
-                                                <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
-                                                    style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
-                                                    onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
-                                                    onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
-                                                />
-                                            </td>
-                                                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                    <td colSpan={9} style={{ padding: '8px 12px' }}>
+                                                        <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
+                                                            style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
+                                                            onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
+                                                            onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '6px 8px', textAlign: 'center', position: 'relative', width: 40 }}>
+                                                        {hoveredRowId === it.id && (
+                                                            <div style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
+                                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
+                                                                {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
+                                                                    const m = TYPE_META[t];
+                                                                    return (
+                                                                        <button key={t} onClick={() => addTypedItem(t, it.id)} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
+                                                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
+                                                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
+                                                                            <Icon size={13} />
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                         <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                     </td>
                                                 </>
@@ -1288,8 +1320,24 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it, () => applyBasePriceToItem(it.id))}</td>
-                                                <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                                <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it, () => applyBasePriceToItem(it.id))}</td>
+                                                <td style={{ padding: '6px 8px', textAlign: 'center', position: 'relative', width: 40 }}>
+                                                    {hoveredRowId === it.id && (
+                                                        <div style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
+                                                            {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
+                                                                const m = TYPE_META[t];
+                                                                return (
+                                                                    <button key={t} onClick={() => addTypedItem(t, it.id)} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
+                                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
+                                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
+                                                                        <Icon size={13} />
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                     <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                 </td>
                                             </>
