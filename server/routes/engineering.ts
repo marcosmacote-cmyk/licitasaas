@@ -1301,6 +1301,42 @@ router.post('/ai-extract-bdi', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-config
+// Extrai configurações do orçamento (objeto, UF, bases, data, regime) via IA
+// ═══════════════════════════════════════════════════════════
+import { extractConfigFromBidding, extractEncargosFromBidding } from '../services/engineering/configAiExtractor';
+
+router.post('/ai-extract-config', async (req: any, res: any) => {
+    try {
+        const { biddingId } = req.body;
+        if (!biddingId) return res.status(400).json({ error: 'biddingId é obrigatório' });
+        const data = await extractConfigFromBidding(biddingId);
+        if (!data || !data.found) return res.json({ found: false, message: 'Configurações não encontradas no edital.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI Config] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair configurações', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-encargos
+// Extrai encargos sociais (composição analítica) via IA
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-encargos', async (req: any, res: any) => {
+    try {
+        const { biddingId } = req.body;
+        if (!biddingId) return res.status(400).json({ error: 'biddingId é obrigatório' });
+        const data = await extractEncargosFromBidding(biddingId);
+        if (!data || !data.found) return res.json({ found: false, message: 'Encargos sociais não encontrados no edital.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI Encargos] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair encargos', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
 // Pipeline: V2 itens_licitados → AI extraction (fallback)

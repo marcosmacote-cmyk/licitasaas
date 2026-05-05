@@ -31,6 +31,8 @@ export interface BdiConfig {
     mode: 'SIMPLIFICADO' | 'TCU';
     bdiGlobal: number;     // Used in SIMPLIFICADO mode
     tcu: BdiTcuParams;     // Used in TCU mode
+    /** BDI Diferenciado — parâmetros TCU para Fornecimento/Materiais/Equipamentos */
+    tcuFornecimento?: BdiTcuParams;
 }
 
 /** Default TCU params based on Acórdão 2622/2013 — Construção de Edifícios (mediana) */
@@ -44,10 +46,22 @@ export const DEFAULT_TCU_PARAMS: BdiTcuParams = {
     tributos: 5.65,  // PIS 0.65% + COFINS 3.00% + ISS 2.00%
 };
 
+/** Default TCU params — Fornecimento de Materiais/Equipamentos (Acórdão 2622/2013) */
+export const DEFAULT_TCU_FORNECIMENTO_PARAMS: BdiTcuParams = {
+    adminCentral: 4.00,
+    seguros: 0.25,
+    garantias: 0.00,
+    riscos: 0.97,
+    despFinanceiras: 0.59,
+    lucro: 4.07,
+    tributos: 5.65,  // PIS 0.65% + COFINS 3.00% + ISS 2.00%
+};
+
 export const DEFAULT_BDI_CONFIG: BdiConfig = {
     mode: 'SIMPLIFICADO',
     bdiGlobal: 25.0,
     tcu: { ...DEFAULT_TCU_PARAMS },
+    tcuFornecimento: { ...DEFAULT_TCU_FORNECIMENTO_PARAMS },
 };
 
 /**

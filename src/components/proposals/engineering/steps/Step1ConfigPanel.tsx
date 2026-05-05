@@ -3,9 +3,9 @@
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
 import { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save } from 'lucide-react';
-import { calculateBdiTCU, autoDistributeBdi, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
-import type { EngineeringConfig } from '../types';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users } from 'lucide-react';
+import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
+import type { EngineeringConfig, EncargosSociaisGrupo } from '../types';
 
 const BRAZILIAN_UFS = [
     'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -27,18 +27,24 @@ interface Props {
     isExtractingBdi: boolean;
     isAuditing: boolean;
     isSaving: boolean;
+    isExtractingConfig?: boolean;
+    isExtractingEncargos?: boolean;
     onConfigChange: (config: EngineeringConfig) => void;
     onBdiChange: (config: BdiConfig) => void;
     onExtractBdi: () => void;
+    onExtractConfig?: () => void;
+    onExtractEncargos?: () => void;
     onSyncBases: () => void;
     onSave: () => void;
     onNext: () => void;
 }
 
 export function Step1ConfigPanel({
-    engineeringConfig, bdiConfig, isExtractingBdi, isAuditing, isSaving,
-    onConfigChange, onBdiChange, onExtractBdi, onSyncBases, onSave, onNext,
+    engineeringConfig, bdiConfig, isExtractingBdi, isExtractingConfig, isExtractingEncargos, isAuditing, isSaving,
+    onConfigChange, onBdiChange, onExtractBdi, onExtractConfig, onExtractEncargos, onSyncBases, onSave, onNext,
 }: Props) {
+    const [showEncargosDetail, setShowEncargosDetail] = useState(false);
+    const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
     const effectiveBdi = bdiConfig.bdiGlobal;
 
     const updateTcu = (field: keyof BdiTcuParams, val: number) => {
@@ -46,6 +52,14 @@ export function Step1ConfigPanel({
         const calculatedBdi = calculateBdiTCU(nextTcu);
         onBdiChange({ ...bdiConfig, tcu: nextTcu, bdiGlobal: calculatedBdi });
     };
+
+    const updateTcuFornecimento = (field: keyof BdiTcuParams, val: number) => {
+        const nextTcu = { ...(bdiConfig.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS), [field]: val };
+        const calculatedBdi = calculateBdiTCU(nextTcu);
+        onConfigChange({ ...engineeringConfig, bdiFornecimento: calculatedBdi });
+        onBdiChange({ ...bdiConfig, tcuFornecimento: nextTcu });
+    };
+    const tcuF = bdiConfig.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS;
 
     const sectionStyle: React.CSSProperties = {
         background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
@@ -64,9 +78,17 @@ export function Step1ConfigPanel({
 
                 {/* ═══ LEFT COLUMN: Dados do Orçamento ═══ */}
                 <div style={sectionStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <Wrench size={18} color="var(--color-primary)" />
-                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Dados do Orçamento</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Wrench size={18} color="var(--color-primary)" />
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Dados do Orçamento</h3>
+                        </div>
+                        {onExtractConfig && (
+                            <button style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.6 : 1 }}
+                                onClick={onExtractConfig} disabled={isExtractingConfig}>
+                                {isExtractingConfig ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair via IA
+                            </button>
+                        )}
                     </div>
 
                     {/* Objeto */}
@@ -190,15 +212,53 @@ export function Step1ConfigPanel({
                             Ativar BDI Diferenciado (Acórdão TCU 2622)
                         </label>
                         {engineeringConfig.bdiDiferenciado && (
-                            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(180,83,9,0.2)' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Taxa de BDI para Fornecimento / Materiais (%)</label>
-                                <div style={{ position: 'relative', width: '50%' }}>
-                                    <input type="number" step="0.01" className="form-input"
-                                        style={{ width: '100%', fontSize: '0.9rem', fontWeight: 700, paddingRight: 30, color: '#92400e', borderColor: 'rgba(180,83,9,0.3)', background: 'white' }}
-                                        value={engineeringConfig.bdiFornecimento || 14.02}
-                                        onChange={e => onConfigChange({ ...engineeringConfig, bdiFornecimento: parseLocaleNumber(e.target.value) })} />
-                                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 700, color: '#92400e' }}>%</span>
+                            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(180,83,9,0.2)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                {/* BDI Fornecimento Global */}
+                                <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.15)', textAlign: 'center' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>BDI Fornecimento / Materiais (%)</label>
+                                    <input type="number" className="form-input" value={engineeringConfig.bdiFornecimento || 14.02}
+                                        onChange={e => { const val = parseLocaleNumber(e.target.value); onConfigChange({ ...engineeringConfig, bdiFornecimento: val }); }}
+                                        style={{ fontSize: '1.6rem', fontWeight: 800, color: '#b45309', textAlign: 'center', width: '100%', border: 'none', background: 'transparent', outline: 'none' }} step="0.01" />
                                 </div>
+                                {/* TCU Fornecimento Breakdown */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    {([['adminCentral', 'Adm. Central (%)'], ['seguros', 'Seguros (%)'], ['garantias', 'Garantias (%)'], ['riscos', 'Riscos (%)']] as const).map(([key, label]) => (
+                                        <div key={key}>
+                                            <label style={{ ...labelStyle, marginBottom: 3, color: '#92400e' }}>{label}</label>
+                                            <input type="number" className="form-input" value={tcuF[key]}
+                                                onChange={e => updateTcuFornecimento(key, parseLocaleNumber(e.target.value))}
+                                                style={{ ...inputStyle, padding: '5px 8px', borderColor: 'rgba(180,83,9,0.2)' }} step="0.01" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div style={{ borderTop: '1px dashed rgba(180,83,9,0.15)', margin: '2px 0' }} />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, color: '#92400e' }}>Desp. Financeiras (%)</label>
+                                        <input type="number" className="form-input" value={tcuF.despFinanceiras}
+                                            onChange={e => updateTcuFornecimento('despFinanceiras', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '5px 8px', borderColor: 'rgba(180,83,9,0.2)' }} step="0.01" />
+                                    </div>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, color: '#92400e' }}>Lucro (%)</label>
+                                        <input type="number" className="form-input" value={tcuF.lucro}
+                                            onChange={e => updateTcuFornecimento('lucro', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '5px 8px', borderColor: 'rgba(180,83,9,0.3)' }} step="0.01" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ ...labelStyle, marginBottom: 3, color: '#92400e' }}>Tributos — PIS+COFINS+ISS (%)</label>
+                                    <input type="number" className="form-input" value={tcuF.tributos}
+                                        onChange={e => updateTcuFornecimento('tributos', parseLocaleNumber(e.target.value))}
+                                        style={{ ...inputStyle, padding: '5px 8px', borderColor: 'rgba(180,83,9,0.2)' }} step="0.01" />
+                                </div>
+                                <div style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.25)', padding: 10, borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '0.65rem', color: '#92400E', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>BDI CALCULADO — Fornecimento (TCU 2622)</span>
+                                    <span style={{ fontSize: '1.2rem', color: '#b45309', fontWeight: 800 }}>{calculateBdiTCU(tcuF).toFixed(2)}%</span>
+                                </div>
+                                <span style={{ fontSize: '0.65rem', color: '#b45309', lineHeight: 1.4 }}>
+                                    Itens classificados como "EQUIPAMENTO" ou "MATERIAL" aplicarão esta taxa em vez do BDI Global.
+                                </span>
                             </div>
                         )}
                     </div>
@@ -282,10 +342,20 @@ export function Step1ConfigPanel({
 
                     {/* Encargos Sociais */}
                     <div style={sectionStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <Calculator size={18} color="#6d28d9" />
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Users size={18} color="#6d28d9" />
+                                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
+                            </div>
+                            {onExtractEncargos && (
+                                <button style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(109,40,217,0.1)', color: '#6d28d9', border: 'none', borderRadius: 'var(--radius-sm)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.6 : 1 }}
+                                    onClick={onExtractEncargos} disabled={isExtractingEncargos}>
+                                    {isExtractingEncargos ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair via IA
+                                </button>
+                            )}
                         </div>
+
+                        {/* Totals */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                             <div style={{ padding: 16, borderRadius: 8, background: 'rgba(30,64,175,0.04)', border: '1px solid rgba(30,64,175,0.15)', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', marginBottom: 4 }}>Total Horista</div>
@@ -301,6 +371,103 @@ export function Step1ConfigPanel({
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value) } })}
                                     style={{ width: '100%', marginTop: 8, textAlign: 'center', fontSize: '0.85rem', fontWeight: 600 }} />
                             </div>
+                        </div>
+
+                        {/* Analytical Breakdown Toggle */}
+                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                            <button onClick={() => setShowEncargosDetail(!showEncargosDetail)}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 0' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: showEncargosDetail ? '#6d28d9' : 'var(--color-text-primary)' }}>Composição Analítica</span>
+                                <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: showEncargosDetail ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            </button>
+                            {showEncargosDetail && (() => {
+                                const es = engineeringConfig.encargosSociais;
+                                const gh = es?.grupoHorista || {} as Partial<EncargosSociaisGrupo>;
+                                const updateGH = (field: keyof EncargosSociaisGrupo, val: number) => {
+                                    const next = { ...gh, [field]: val };
+                                    const sumA = (next.inss||0)+(next.sesi||0)+(next.senai||0)+(next.incra||0)+(next.sebrae||0)+(next.salarioEducacao||0)+(next.fgts||0)+(next.seguroAcidente||0);
+                                    const sumB = (next.decimoTerceiro||0)+(next.ferias||0);
+                                    const sumC = (next.avisoPrevio||0)+(next.auxilioDoenca||0)+(next.licencaPaternidade||0)+(next.faltaJustificada||0)+(next.diasChuva||0);
+                                    const reincD = Math.round(sumB * sumA / 100 * 100) / 100;
+                                    next.reincidenciaGrupoA = reincD;
+                                    const sumE = (next.valeTransporte||0)+(next.alimentacao||0)+(next.epiUniformes||0);
+                                    const total = Math.round((sumA + sumB + sumC + reincD + sumE) * 100) / 100;
+                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...es, horista: total, grupoHorista: next } });
+                                };
+                                const groups: { title: string; color: string; items: [keyof EncargosSociaisGrupo, string][] }[] = [
+                                    { title: 'A — Encargos Básicos', color: '#1e40af', items: [['inss','INSS (20%)'],['sesi','SESI (1,5%)'],['senai','SENAI (1%)'],['incra','INCRA (0,2%)'],['sebrae','SEBRAE (0,6%)'],['salarioEducacao','Sal. Educação (2,5%)'],['fgts','FGTS (8%)'],['seguroAcidente','Seg. Acidente — RAT×FAP']] },
+                                    { title: 'B — Incidentes s/ A', color: '#6d28d9', items: [['decimoTerceiro','13º Salário'],['ferias','Férias + 1/3']] },
+                                    { title: 'C — Complementares', color: '#0e7490', items: [['avisoPrevio','Aviso Prévio'],['auxilioDoenca','Auxílio Doença'],['licencaPaternidade','Lic. Paternidade'],['faltaJustificada','Falta Justificada'],['diasChuva','Dias de Chuva']] },
+                                    { title: 'D — Reincidências', color: '#92400e', items: [['reincidenciaGrupoA','B × A (auto)']] },
+                                    { title: 'E — Complementos', color: '#065f46', items: [['valeTransporte','Vale Transporte'],['alimentacao','Alimentação'],['epiUniformes','EPI / Uniformes']] },
+                                ];
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Horista — os valores são indicativos do que compõe o custo da mão de obra.</span>
+                                        {groups.map(g => (
+                                            <div key={g.title}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: g.color, marginBottom: 4 }}>{g.title}</div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                                    {g.items.map(([key, label]) => (
+                                                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <label style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</label>
+                                                            <input type="number" step="0.01" className="form-input"
+                                                                value={gh[key] || 0}
+                                                                onChange={e => updateGH(key, parseLocaleNumber(e.target.value))}
+                                                                disabled={key === 'reincidenciaGrupoA'}
+                                                                style={{ width: 70, fontSize: '0.75rem', textAlign: 'right', padding: '3px 6px', background: key === 'reincidenciaGrupoA' ? 'var(--color-bg-base)' : 'white' }} />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* 2º Encargo Social */}
+                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                                <input type="checkbox" checked={showEncargos2}
+                                    onChange={e => { setShowEncargos2(e.target.checked); if (!e.target.checked) { const { encargos2, ...rest } = engineeringConfig.encargosSociais as any; onConfigChange({ ...engineeringConfig, encargosSociais: { ...rest, encargoAtivo: 1 } }); } }}
+                                    style={{ accentColor: '#6d28d9' }} />
+                                2º Encargo Social (comparativo)
+                            </label>
+                            {showEncargos2 && (
+                                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <input type="text" className="form-input" placeholder="Ex: Encargos Onerado"
+                                        value={engineeringConfig.encargosSociais?.encargos2?.label || ''}
+                                        onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, label: e.target.value } } })}
+                                        style={{ fontSize: '0.8rem' }} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                        <div>
+                                            <label style={labelStyle}>Horista 2 (%)</label>
+                                            <input type="number" step="0.01" className="form-input"
+                                                value={engineeringConfig.encargosSociais?.encargos2?.horista || 0}
+                                                onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, horista: parseLocaleNumber(e.target.value) } } })}
+                                                style={{ ...inputStyle, textAlign: 'center' }} />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Mensalista 2 (%)</label>
+                                            <input type="number" step="0.01" className="form-input"
+                                                value={engineeringConfig.encargosSociais?.encargos2?.mensalista || 0}
+                                                onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, mensalista: parseLocaleNumber(e.target.value) } } })}
+                                                style={{ ...inputStyle, textAlign: 'center' }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                        {[1, 2].map(n => (
+                                            <label key={n} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? 'rgba(109,40,217,0.06)' : 'transparent', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                <input type="radio" name="encargoAtivo" checked={(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n}
+                                                    onChange={() => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargoAtivo: n as 1|2 } })}
+                                                    style={{ accentColor: '#6d28d9' }} />
+                                                {n === 1 ? 'Encargo Principal' : (engineeringConfig.encargosSociais?.encargos2?.label || 'Encargo 2')}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -47,6 +47,8 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     // UI state
     const [currentStep, setCurrentStep] = useState(1);
     const [isExtractingBdi, setIsExtractingBdi] = useState(false);
+    const [isExtractingConfig, setIsExtractingConfig] = useState(false);
+    const [isExtractingEncargos, setIsExtractingEncargos] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
 
     const effectiveBdi = bdiConfig.bdiGlobal;
@@ -190,6 +192,54 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
         setBdiConfig(config);
     };
 
+    // Extract Config via IA
+    const handleExtractConfig = async () => {
+        setIsExtractingConfig(true);
+        try {
+            const res = await fetch('/api/engineering/ai-extract-config', {
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+            });
+            const result = await res.json();
+            if (result.found && result.data) {
+                const d = result.data;
+                const updates: Partial<EngineeringConfig> = {};
+                if (d.objeto) updates.objeto = d.objeto;
+                if (d.uf) updates.ufReferencia = d.uf;
+                if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
+                if (d.dataBase) updates.dataBase = d.dataBase;
+                if (d.regime) updates.regimeOneracao = d.regime === 'ONERADO' ? 'ONERADO' : 'DESONERADO';
+                setEngineeringConfig(prev => ({ ...prev, ...updates }));
+                setHasUnsavedChanges(true);
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsExtractingConfig(false); }
+    };
+
+    // Extract Encargos Sociais via IA
+    const handleExtractEncargos = async () => {
+        setIsExtractingEncargos(true);
+        try {
+            const res = await fetch('/api/engineering/ai-extract-encargos', {
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+            });
+            const result = await res.json();
+            if (result.found && result.data) {
+                const d = result.data;
+                setEngineeringConfig(prev => ({
+                    ...prev,
+                    encargosSociais: {
+                        ...prev.encargosSociais,
+                        horista: d.totalHorista || prev.encargosSociais.horista,
+                        mensalista: d.totalMensalista || prev.encargosSociais.mensalista,
+                        ...(d.grupoHorista ? { grupoHorista: d.grupoHorista } : {}),
+                    }
+                }));
+                setHasUnsavedChanges(true);
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsExtractingEncargos(false); }
+    };
+
     // ══════════════════════════════════════════
     // RENDER
     // ══════════════════════════════════════════
@@ -238,11 +288,15 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     engineeringConfig={engineeringConfig}
                     bdiConfig={bdiConfig}
                     isExtractingBdi={isExtractingBdi}
+                    isExtractingConfig={isExtractingConfig}
+                    isExtractingEncargos={isExtractingEncargos}
                     isAuditing={isAuditing}
                     isSaving={isSaving}
                     onConfigChange={handleConfigChange}
                     onBdiChange={handleBdiChange}
                     onExtractBdi={handleExtractBdi}
+                    onExtractConfig={handleExtractConfig}
+                    onExtractEncargos={handleExtractEncargos}
                     onSyncBases={syncBases}
                     onSave={handleSave}
                     onNext={() => setCurrentStep(2)}

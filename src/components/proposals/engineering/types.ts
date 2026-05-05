@@ -71,9 +71,45 @@ export const getDepth = (itemNumber: string) => (itemNumber.match(/\./g) || []).
 // ENGINEERING CONFIG — Tipagem forte para engineeringConfig
 // ═══════════════════════════════════════════════════════════
 
+/** Composição analítica de Encargos Sociais por grupo */
+export interface EncargosSociaisGrupo {
+    /** A — Encargos Básicos */
+    inss: number;       // 20.00
+    sesi: number;       // 1.50
+    senai: number;      // 1.00
+    incra: number;      // 0.20
+    sebrae: number;     // 0.60
+    salarioEducacao: number; // 2.50
+    fgts: number;       // 8.00
+    seguroAcidente: number; // 3.00 (RAT × FAP)
+    /** B — Encargos que recebem incidência de A */
+    decimoTerceiro: number; // 8.33
+    ferias: number;         // 12.10 (inclui 1/3)
+    /** C — Encargos Complementares */
+    avisoPrevio: number;       // 5.55
+    auxilioDoenca: number;     // 0.79
+    licencaPaternidade: number;// 0.07
+    faltaJustificada: number;  // 0.71
+    diasChuva: number;         // 1.50
+    /** D — Reincidências (B × A) */
+    reincidenciaGrupoA: number; // auto-calc
+    /** E — Complementos */
+    valeTransporte: number;
+    alimentacao: number;
+    epiUniformes: number;
+}
+
 export interface EncargosSociaisConfig {
     horista: number;
     mensalista: number;
+    /** Composição analítica — Horista */
+    grupoHorista?: Partial<EncargosSociaisGrupo>;
+    /** Composição analítica — Mensalista */
+    grupoMensalista?: Partial<EncargosSociaisGrupo>;
+    /** Segundo encargo social (para comparação) */
+    encargos2?: { horista: number; mensalista: number; label?: string };
+    /** Qual encargo está ativo nas composições: 1 (principal) ou 2 (alternativo) */
+    encargoAtivo?: 1 | 2;
 }
 
 export interface PrecisionConfig {

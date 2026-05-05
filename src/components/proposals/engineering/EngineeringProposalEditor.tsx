@@ -1077,7 +1077,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
                                         <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{item.label}</span>
                                         <input type="number" step="0.01" className="form-input"
-                                            value={engineeringConfig.encargosSociais?.[item.key as keyof typeof engineeringConfig.encargosSociais] ?? item.default}
+                                            value={(engineeringConfig.encargosSociais as any)?.[item.key] ?? item.default}
                                             onChange={e => updateEngineeringConfig({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, [item.key]: parseLocaleNumber(e.target.value) } })}
                                             style={{ width: 80, padding: '3px 6px', fontSize: '0.82rem', textAlign: 'right' }} />
                                     </div>
@@ -1100,7 +1100,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
                                         <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{item.label}</span>
                                         <input type="number" step="0.01" className="form-input"
-                                            value={engineeringConfig.encargosSociais?.[item.key as keyof typeof engineeringConfig.encargosSociais] ?? item.default}
+                                            value={(engineeringConfig.encargosSociais as any)?.[item.key] ?? item.default}
                                             onChange={e => updateEngineeringConfig({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, [item.key]: parseLocaleNumber(e.target.value) } })}
                                             style={{ width: 80, padding: '3px 6px', fontSize: '0.82rem', textAlign: 'right' }} />
                                     </div>
