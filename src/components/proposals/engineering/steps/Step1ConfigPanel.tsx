@@ -318,28 +318,28 @@ export function Step1ConfigPanel({
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
                             </div>
                             {onExtractEncargos && (
-                                <button style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(109,40,217,0.1)', color: '#6d28d9', border: 'none', borderRadius: 'var(--radius-sm)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.6 : 1 }}
+                                <button style={{ padding: '5px 12px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(135deg, rgba(109,40,217,0.08), rgba(139,92,246,0.08))', color: '#6d28d9', border: '1px solid rgba(109,40,217,0.15)', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.6 : 1, fontWeight: 600, transition: 'all 0.2s' }}
                                     onClick={onExtractEncargos} disabled={isExtractingEncargos}>
-                                    {isExtractingEncargos ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair via IA
+                                    {isExtractingEncargos ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} Extrair via IA
                                 </button>
                             )}
                         </div>
 
                         {/* Totals */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                            <div style={{ padding: 16, borderRadius: 8, background: 'rgba(30,64,175,0.04)', border: '1px solid rgba(30,64,175,0.15)', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', marginBottom: 4 }}>Total Horista</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1e40af' }}>{(engineeringConfig.encargosSociais?.horista || 0).toFixed(2)}%</div>
+                            <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(30,64,175,0.04), rgba(59,130,246,0.06))', border: '1px solid rgba(30,64,175,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Horista</div>
+                                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1e40af', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.horista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.horista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, horista: parseLocaleNumber(e.target.value) } })}
-                                    style={{ width: '100%', marginTop: 8, textAlign: 'center', fontSize: '0.85rem', fontWeight: 600 }} />
+                                    style={{ width: '100%', marginTop: 12, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(30,64,175,0.2)' }} />
                             </div>
-                            <div style={{ padding: 16, borderRadius: 8, background: 'rgba(109,40,217,0.04)', border: '1px solid rgba(109,40,217,0.15)', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6d28d9', textTransform: 'uppercase', marginBottom: 4 }}>Total Mensalista</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#6d28d9' }}>{(engineeringConfig.encargosSociais?.mensalista || 0).toFixed(2)}%</div>
+                            <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(109,40,217,0.04), rgba(139,92,246,0.06))', border: '1px solid rgba(109,40,217,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Mensalista</div>
+                                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6d28d9', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.mensalista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.mensalista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value) } })}
-                                    style={{ width: '100%', marginTop: 8, textAlign: 'center', fontSize: '0.85rem', fontWeight: 600 }} />
+                                    style={{ width: '100%', marginTop: 12, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(109,40,217,0.2)' }} />
                             </div>
                         </div>
 
@@ -373,19 +373,19 @@ export function Step1ConfigPanel({
                                 ];
                                 return (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Horista — os valores são indicativos do que compõe o custo da mão de obra.</span>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic', marginBottom: 4 }}>Horista — os valores são indicativos do que compõe o custo da mão de obra.</span>
                                         {groups.map(g => (
-                                            <div key={g.title}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: g.color, marginBottom: 4 }}>{g.title}</div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                            <div key={g.title} style={{ background: 'var(--color-bg-base)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: g.color, marginBottom: 8, letterSpacing: '0.02em' }}>{g.title}</div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                                     {g.items.map(([key, label]) => (
                                                         <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                            <label style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</label>
+                                                            <label style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>{label}</label>
                                                             <input type="number" step="0.01" className="form-input"
                                                                 value={gh[key] || 0}
                                                                 onChange={e => updateGH(key, parseLocaleNumber(e.target.value))}
                                                                 disabled={key === 'reincidenciaGrupoA'}
-                                                                style={{ width: 70, fontSize: '0.75rem', textAlign: 'right', padding: '3px 6px', background: key === 'reincidenciaGrupoA' ? 'var(--color-bg-base)' : 'white' }} />
+                                                                style={{ width: 70, fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 8px', borderRadius: 'var(--radius-sm)', background: key === 'reincidenciaGrupoA' ? 'var(--color-bg-surface)' : 'white', borderColor: key === 'reincidenciaGrupoA' ? 'transparent' : 'var(--color-border)' }} />
                                                         </div>
                                                     ))}
                                                 </div>
@@ -397,42 +397,42 @@ export function Step1ConfigPanel({
                         </div>
 
                         {/* 2º Encargo Social */}
-                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', userSelect: 'none', color: showEncargos2 ? '#6d28d9' : 'var(--color-text-primary)' }}>
                                 <input type="checkbox" checked={showEncargos2}
                                     onChange={e => { setShowEncargos2(e.target.checked); if (!e.target.checked) { const { encargos2, ...rest } = engineeringConfig.encargosSociais as any; onConfigChange({ ...engineeringConfig, encargosSociais: { ...rest, encargoAtivo: 1 } }); } }}
                                     style={{ accentColor: '#6d28d9' }} />
                                 2º Encargo Social (comparativo)
                             </label>
                             {showEncargos2 && (
-                                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ marginTop: 12, padding: 16, background: 'linear-gradient(to right, rgba(109,40,217,0.03), rgba(139,92,246,0.03))', border: '1px solid rgba(109,40,217,0.15)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 12 }}>
                                     <input type="text" className="form-input" placeholder="Ex: Encargos Onerado"
                                         value={engineeringConfig.encargosSociais?.encargos2?.label || ''}
                                         onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, label: e.target.value } } })}
-                                        style={{ fontSize: '0.8rem' }} />
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                        <div>
-                                            <label style={labelStyle}>Horista 2 (%)</label>
+                                        style={{ fontSize: '0.85rem', fontWeight: 600, padding: '8px 12px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(109,40,217,0.2)' }} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div style={{ background: 'white', padding: 10, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
+                                            <label style={{ ...labelStyle, marginBottom: 6, fontSize: '0.68rem', color: '#6d28d9' }}>Horista 2 (%)</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={engineeringConfig.encargosSociais?.encargos2?.horista || 0}
                                                 onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, horista: parseLocaleNumber(e.target.value) } } })}
-                                                style={{ ...inputStyle, textAlign: 'center' }} />
+                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '6px', border: 'none', outline: 'none' }} />
                                         </div>
-                                        <div>
-                                            <label style={labelStyle}>Mensalista 2 (%)</label>
+                                        <div style={{ background: 'white', padding: 10, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
+                                            <label style={{ ...labelStyle, marginBottom: 6, fontSize: '0.68rem', color: '#6d28d9' }}>Mensalista 2 (%)</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={engineeringConfig.encargosSociais?.encargos2?.mensalista || 0}
                                                 onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, mensalista: parseLocaleNumber(e.target.value) } } })}
-                                                style={{ ...inputStyle, textAlign: 'center' }} />
+                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '6px', border: 'none', outline: 'none' }} />
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                         {[1, 2].map(n => (
-                                            <label key={n} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? 'rgba(109,40,217,0.06)' : 'transparent', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                                            <label key={n} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? 'rgba(109,40,217,0.08)' : 'white', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-text-secondary)', transition: 'all 0.2s', boxShadow: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '0 2px 4px rgba(109,40,217,0.1)' : 'none' }}>
                                                 <input type="radio" name="encargoAtivo" checked={(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n}
                                                     onChange={() => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargoAtivo: n as 1|2 } })}
-                                                    style={{ accentColor: '#6d28d9' }} />
-                                                {n === 1 ? 'Encargo Principal' : (engineeringConfig.encargosSociais?.encargos2?.label || 'Encargo 2')}
+                                                    style={{ accentColor: '#6d28d9', width: 16, height: 16 }} />
+                                                {n === 1 ? 'Aplicar Encargo Principal' : `Aplicar ${engineeringConfig.encargosSociais?.encargos2?.label || 'Encargo 2'}`}
                                             </label>
                                         ))}
                                     </div>
