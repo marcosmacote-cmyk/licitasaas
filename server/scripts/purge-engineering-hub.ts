@@ -106,10 +106,7 @@ async function collectTargets(where: any): Promise<PurgeTarget[]> {
   return targets;
 }
 
-async function purgeTargets(targets: PurgeTarget[]) {
-  const ids = targets.map(target => target.id);
-  if (ids.length === 0) return { compositionItems: 0, compositions: 0, items: 0, databases: 0 };
-
+async function purgeBatch(ids: string[]) {
   return prisma.$transaction(async tx => {
     const compositionItemsFromParents = await tx.engineeringCompositionItem.deleteMany({
       where: { composition: { databaseId: { in: ids } } },
@@ -136,7 +133,28 @@ async function purgeTargets(targets: PurgeTarget[]) {
       items: items.count,
       databases: databases.count,
     };
-  }, { timeout: 120_000 });
+  }, { timeout: 600_000 });
+}
+
+async function purgeTargets(targets: PurgeTarget[]) {
+  const ids = targets.map(target => target.id);
+  if (ids.length === 0) return { compositionItems: 0, compositions: 0, items: 0, databases: 0 };
+
+  // Process in batches of 10 databases to avoid transaction timeout on large sets
+  const BATCH_SIZE = 10;
+  const totals = { compositionItems: 0, compositions: 0, items: 0, databases: 0 };
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    console.log(`[Engineering Hub Purge] Lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(ids.length / BATCH_SIZE)} (${batch.length} bases)...`);
+    const result = await purgeBatch(batch);
+    totals.compositionItems += result.compositionItems;
+    totals.compositions += result.compositions;
+    totals.items += result.items;
+    totals.databases += result.databases;
+  }
+
+  return totals;
 }
 
 async function main() {

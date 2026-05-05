@@ -50,3 +50,15 @@ server/diagnose_bucket.cjs
 server/list_supabase.cjs
 server/scripts/deep-supabase-scan.ts
 server/search_cert.cjs
+
+# temp scripts
+check_pncp*
+clear_cache*
+download_pncp*
+edital.pdf
+server/engineering-hub-audit-report.json
+target_test*
+test_bg*
+test_classifier*
+test_db*
+test_url*

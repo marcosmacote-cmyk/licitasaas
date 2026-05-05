@@ -199,9 +199,10 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             const res = await fetch('/api/engineering/ai-extract-config', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
             });
+            if (!res.ok) { alert('Erro ao extrair configurações: ' + (await res.json().catch(() => ({}))).error); return; }
             const result = await res.json();
-            if (result.found && result.data) {
-                const d = result.data;
+            if (result.found) {
+                const d = result.data || result;
                 const updates: Partial<EngineeringConfig> = {};
                 if (d.objeto) updates.objeto = d.objeto;
                 if (d.uf) updates.ufReferencia = d.uf;
@@ -210,8 +211,12 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 if (d.regime) updates.regimeOneracao = d.regime === 'ONERADO' ? 'ONERADO' : 'DESONERADO';
                 setEngineeringConfig(prev => ({ ...prev, ...updates }));
                 setHasUnsavedChanges(true);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas com sucesso</span>);
+                setTimeout(() => setSaveMsg(null), 4000);
+            } else {
+                alert(result.message || 'Configurações não encontradas no edital.');
             }
-        } catch (e) { console.error(e); }
+        } catch (e: any) { alert('Erro: ' + e.message); console.error(e); }
         finally { setIsExtractingConfig(false); }
     };
 
@@ -222,9 +227,10 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             const res = await fetch('/api/engineering/ai-extract-encargos', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
             });
+            if (!res.ok) { alert('Erro ao extrair encargos: ' + (await res.json().catch(() => ({}))).error); return; }
             const result = await res.json();
-            if (result.found && result.data) {
-                const d = result.data;
+            if (result.found) {
+                const d = result.data || result;
                 setEngineeringConfig(prev => ({
                     ...prev,
                     encargosSociais: {
@@ -235,8 +241,12 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     }
                 }));
                 setHasUnsavedChanges(true);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso</span>);
+                setTimeout(() => setSaveMsg(null), 4000);
+            } else {
+                alert(result.message || 'Encargos sociais não encontrados no edital.');
             }
-        } catch (e) { console.error(e); }
+        } catch (e: any) { alert('Erro: ' + e.message); console.error(e); }
         finally { setIsExtractingEncargos(false); }
     };
 
