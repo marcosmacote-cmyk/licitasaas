@@ -34,7 +34,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [isBulkEditing, setIsBulkEditing] = useState(false);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
-    const [objectType, setObjectType] = useState('AQUISICAO'); // AQUISICAO, ENGENHARIA, TERCEIRIZACAO
+    const [objectType, setObjectType] = useState('ENGENHARIA'); // AQUISICAO (hibernado), ENGENHARIA, TERCEIRIZACAO
 
     // ── Cenário Proposta Ajustada ──
     const [adjustedEnabled, setAdjustedEnabled] = useState(false);
@@ -180,7 +180,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     setDiscount(latest.taxPercentage || 0);
                     setRoundingMode(latest.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
                     setValidityDays(latest.validityDays || 60);
-                    setObjectType(latest.objectType || 'AQUISICAO');
+                    setObjectType(latest.objectType || 'ENGENHARIA');
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
                     setLetterContent(latest.letterContent || '');
                     setHeaderImage(latest.headerImage || '');

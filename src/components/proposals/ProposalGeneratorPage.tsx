@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../ui';
 import { useProposal } from '../hooks/useProposal';
 import { ProposalLetterWizard } from './letter/ProposalLetterWizard';
 import { CompositionTab } from './composition';
-import { EngineeringProposalEditor } from './engineering/EngineeringProposalEditor';
+import { EngineeringProposalWizard } from './engineering/EngineeringProposalWizard';
 import { EngineeringHub } from './engineering/hub/EngineeringHub';
 
 interface Props {
@@ -117,14 +117,14 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 </select>
                             </div>
 
-                            {/* Tipo de Objeto (Motor) */}
+                            {/* Tipo de Objeto (Motor) — Foco em Engenharia */}
                             <div>
                                 <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
-                                    <FileText size={11} /> Motor de Proposta (Tipo)
+                                    <FileText size={11} /> Motor de Proposta
                                 </label>
                                 <select value={p.objectType} onChange={e => p.setObjectType(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
-                                    <option value="AQUISICAO">Aquisição / Bens / Serviços Comuns</option>
                                     <option value="ENGENHARIA">Obras e Serviços de Engenharia</option>
+                                    <option value="AQUISICAO" style={{ color: '#999' }}>Bens / Serviços Comuns (Legado)</option>
                                     <option value="TERCEIRIZACAO" disabled>Terceirização de Mão de Obra (Em Breve)</option>
                                 </select>
                             </div>
@@ -728,7 +728,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
 
             {/* ── ENGINEERING MOTOR ── */}
             {p.activeTab === 'items' && p.proposal && p.objectType === 'ENGENHARIA' && (
-                <EngineeringProposalEditor 
+                <EngineeringProposalWizard 
                     proposalId={p.proposal.id} 
                     biddingId={p.selectedBiddingId} 
                 />

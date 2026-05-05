@@ -936,40 +936,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
 
-            {/* Action Bar — simplified: title + save */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{ background: 'var(--color-primary-light)', padding: 8, borderRadius: 'var(--radius-md)' }}>
-                        <TableProperties size={18} color="var(--color-primary)" />
-                    </div>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>Planilha Orçamentária de Engenharia</h3>
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            {items.length} itens · BDI {effectiveBdi.toFixed(2)}% ({bdiConfig.mode})
-                        </span>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                    {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
-                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={handleSave} disabled={isSaving}>
-                        {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
-                        {isSaving ? 'Salvando...' : 'Salvar Planilha'}
-                        {hasUnsavedChanges && !isSaving && (
-                            <span style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', border: '2px solid var(--color-bg-surface)', animation: 'pulse 2s infinite' }} title="Alterações não salvas" />
-                        )}
-                    </button>
-                </div>
-            </div>
-
             {/* Tab Bar — unified navigation */}
             <div style={{ display: 'flex', gap: 4, background: 'var(--color-bg-base)', padding: 4, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                 {[
                     { key: 'planilha' as const, label: 'Orçamento', icon: TableProperties },
                     { key: 'hub_insumos' as const, label: 'Hub de Insumos', icon: Package },
                     { key: 'curva_abc' as const, label: 'Curva ABC', icon: BarChart3 },
-                    { key: 'cronograma' as const, label: 'Cronograma', icon: Calendar },
-                    { key: 'encargos_sociais' as const, label: 'Encargos Sociais', icon: Calculator },
-                    { key: 'caderno' as const, label: 'Caderno', icon: Download },
                 ].map(tab => (
                     <button key={tab.key} onClick={() => { setActiveTab(tab.key); setShowAIMenu(false); setShowToolsMenu(false); }} style={{
                         flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
@@ -1493,147 +1465,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
                 {/* Sidebar: Config + BDI + Totals */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-
-                    {/* Config Panel — collapsible */}
-                    <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                        <button onClick={() => setShowConfigPanel(!showConfigPanel)} style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                            padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'transparent', cursor: 'pointer',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                <Wrench size={14} color="var(--color-primary)" />
-                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Configurações</span>
-                            </div>
-                            <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: showConfigPanel ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                        </button>
-                        {showConfigPanel && (
-                            <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 16, borderTop: '1px solid var(--color-border)', marginTop: 8 }}>
-                                
-                                {/* Objeto */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Objeto da Obra</label>
-                                    <textarea className="form-input" rows={2} value={engineeringConfig.objeto} onChange={e => updateEngineeringConfig({...engineeringConfig, objeto: e.target.value})} placeholder="Ex: Construção de quadra poliesportiva..." style={{ width: '100%', resize: 'none', fontSize: '0.85rem', padding: '8px 12px', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)' }} />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>UF da Obra / Base Oficial</label>
-                                    <select
-                                        className="form-select"
-                                        value={engineeringConfig.ufReferencia || ''}
-                                        onChange={e => updateEngineeringConfig({ ...engineeringConfig, ufReferencia: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}
-                                    >
-                                        <option value="">Automático</option>
-                                        {BRAZILIAN_UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                                    </select>
-                                </div>
-
-                                {/* Bases */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Bases de Referência</label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => {
-                                            const isChecked = engineeringConfig.basesConsideradas.includes(base);
-                                            return (
-                                                <label key={base} style={{ 
-                                                    display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600,
-                                                    background: isChecked ? 'var(--color-primary-light)' : 'var(--color-bg-base)', 
-                                                    color: isChecked ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                                    padding: '4px 10px', borderRadius: 'var(--radius-full)', 
-                                                    border: `1px solid ${isChecked ? 'var(--color-primary)' : 'var(--color-border)'}`, 
-                                                    cursor: 'pointer', transition: 'all 0.2s', userSelect: 'none'
-                                                }}>
-                                                    <input type="checkbox" checked={isChecked} onChange={e => {
-                                                        const b = engineeringConfig.basesConsideradas;
-                                                        updateEngineeringConfig({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter((x: string) => x !== base) })
-                                                    }} style={{ display: 'none' }} />
-                                                    {base}
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Data Base & Regime */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Regime de Desoneração</label>
-                                        <select className="form-select" value={engineeringConfig.regimeOneracao} onChange={e => updateEngineeringConfig({...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO'})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}>
-                                            <option value="DESONERADO">Desonerado</option>
-                                            <option value="ONERADO">Onerado</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Data Base (Referência Temporal)</label>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--color-bg-base)', padding: 10, borderRadius: 'var(--radius-md)' }}>
-                                            {engineeringConfig.basesConsideradas.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Nenhuma base selecionada</span>}
-                                            {engineeringConfig.basesConsideradas.map(base => (
-                                                <div key={base} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
-                                                    <input type="month" className="form-input" 
-                                                        value={engineeringConfig.dataBases?.[base] || engineeringConfig.dataBase || ''} 
-                                                        onChange={e => updateEngineeringConfig({
-                                                            ...engineeringConfig, 
-                                                            dataBase: engineeringConfig.dataBase || e.target.value, // fallback global
-                                                            dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
-                                                        })} 
-                                                        style={{ width: 140, fontSize: '0.8rem', padding: '4px 8px' }} 
-                                                    />
-                                                </div>
-                                            ))}
-                                            {engineeringConfig.basesConsideradas.length > 0 && (
-                                                <button onClick={syncBases} disabled={isAuditing} style={{ marginTop: 4, width: '100%', padding: '6px', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s', opacity: isAuditing ? 0.7 : 1 }}>
-                                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-                                                    Puxar Valores do Hub
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Arredondamento & Casas Decimais */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Critério de Arredondamento</label>
-                                        <select className="form-select" value={engineeringConfig.precision.tipo} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, tipo: e.target.value as 'ROUND' | 'TRUNCATE'}})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }}>
-                                            <option value="ROUND">Arredondar ABNT</option>
-                                            <option value="TRUNCATE">Truncar</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Casas Decimais</label>
-                                        <input type="number" min="2" max="4" className="form-input" value={engineeringConfig.precision.casasDecimais} onChange={e => updateEngineeringConfig({...engineeringConfig, precision: {...engineeringConfig.precision, casasDecimais: parseLocaleNumber(e.target.value)}})} style={{ width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px' }} />
-                                    </div>
-                                </div>
-
-                                {/* BDI Diferenciado toggle */}
-                                <div style={{ background: engineeringConfig.bdiDiferenciado ? 'rgba(180,83,9,0.04)' : 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: `1px solid ${engineeringConfig.bdiDiferenciado ? 'rgba(180,83,9,0.2)' : 'var(--color-border)'}`, padding: 12, transition: 'all 0.2s' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, color: engineeringConfig.bdiDiferenciado ? '#b45309' : 'var(--color-text-primary)', cursor: 'pointer', userSelect: 'none' }}>
-                                        <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
-                                            onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiDiferenciado: e.target.checked })} 
-                                            style={{ width: 16, height: 16, accentColor: '#b45309', cursor: 'pointer' }}/>
-                                        <Split size={16} color={engineeringConfig.bdiDiferenciado ? "#b45309" : "var(--color-text-tertiary)"} />
-                                        Ativar BDI Diferenciado (Acórdão TCU 2622)
-                                    </label>
-                                    
-                                    {engineeringConfig.bdiDiferenciado && (
-                                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(180,83,9,0.2)' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Taxa de BDI para Fornecimento / Materiais (%)</label>
-                                            <div style={{ position: 'relative', width: '50%' }}>
-                                                <input type="number" step="0.01" className="form-input" style={{ width: '100%', fontSize: '0.9rem', fontWeight: 700, paddingRight: 30, color: '#92400e', borderColor: 'rgba(180,83,9,0.3)', background: 'white' }}
-                                                    value={engineeringConfig.bdiFornecimento || 14.02}
-                                                    onChange={e => updateEngineeringConfig({ ...engineeringConfig, bdiFornecimento: parseLocaleNumber(e.target.value) })} />
-                                                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 700, color: '#92400e' }}>%</span>
-                                            </div>
-                                            <span style={{ display: 'block', fontSize: '0.65rem', color: '#b45309', marginTop: 6, lineHeight: 1.4 }}>
-                                                Itens classificados como "EQUIPAMENTO" ou "MATERIAL" aplicarão esta taxa em vez do BDI Global.
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
 
                     {/* BDI Calculator — Unified */}
                     <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: 'var(--space-4)' }}>
