@@ -717,6 +717,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     };
 
     const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
+    const [insertTargetId, setInsertTargetId] = useState<string | null>(null);
 
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
@@ -724,16 +725,28 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
         const typeFromBase = dbItem.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : insertType;
         setHasUnsavedChanges(true);
-        setItems(prev => [...prev, {
-            id: `db-${Date.now()}`, itemNumber: String(prev.length + 1),
-            code: dbItem.code, sourceName: base?.name || 'OFICIAL',
-            description: dbItem.description, unit: dbItem.unit, quantity: 1,
-            unitCost: cost, unitPrice,
-            // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
-            totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: typeFromBase,
-            priceOrigin: 'BASE',
-        }]);
-        setShowSearch(false); setSearchQuery(''); setSearchResults([]);
+        setItems(prev => {
+            const newItem = {
+                id: `db-${Date.now()}`, itemNumber: '',
+                code: dbItem.code, sourceName: base?.name || 'OFICIAL',
+                description: dbItem.description, unit: dbItem.unit, quantity: 1,
+                unitCost: cost, unitPrice,
+                // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
+                totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: typeFromBase,
+                priceOrigin: 'BASE' as const,
+            };
+            let newList = [...prev];
+            if (insertTargetId) {
+                const idx = newList.findIndex(it => it.id === insertTargetId);
+                if (idx >= 0) {
+                    newList.splice(idx + 1, 0, newItem);
+                    return renumberItems(newList);
+                }
+            }
+            newList.push(newItem);
+            return renumberItems(newList);
+        });
+        setShowSearch(false); setSearchQuery(''); setSearchResults([]); setInsertTargetId(null);
     };
 
     // BDI helpers
@@ -1221,8 +1234,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                                 <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
                                                                 {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
                                                                     const m = TYPE_META[t];
+                                                                    const handleClick = () => {
+                                                                        if (t === 'COMPOSICAO' || t === 'INSUMO') {
+                                                                            setInsertType(t);
+                                                                            setInsertTargetId(it.id);
+                                                                            setShowSearch(true);
+                                                                        } else {
+                                                                            addTypedItem(t, it.id);
+                                                                        }
+                                                                    };
                                                                     return (
-                                                                        <button key={t} onClick={() => addTypedItem(t, it.id)} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                        <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
                                                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
                                                                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
                                                                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
@@ -1327,8 +1349,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                                             <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
                                                             {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
                                                                 const m = TYPE_META[t];
+                                                                const handleClick = () => {
+                                                                    if (t === 'COMPOSICAO' || t === 'INSUMO') {
+                                                                        setInsertType(t);
+                                                                        setInsertTargetId(it.id);
+                                                                        setShowSearch(true);
+                                                                    } else {
+                                                                        addTypedItem(t, it.id);
+                                                                    }
+                                                                };
                                                                 return (
-                                                                    <button key={t} onClick={() => addTypedItem(t, it.id)} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                    <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
                                                                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
                                                                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
                                                                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
@@ -1450,11 +1481,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         })}
                         <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
                         <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={() => { setInsertType('COMPOSICAO'); setShowSearch(true); }}>
+                            onClick={() => { setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
                             <Database size={13} /> Buscar Composição
                         </button>
                         <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={() => { setInsertType('INSUMO'); setShowSearch(true); }}>
+                            onClick={() => { setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
                             <Search size={13} /> Buscar Insumo
                         </button>
                     </div>
