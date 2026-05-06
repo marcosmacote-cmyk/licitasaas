@@ -185,7 +185,7 @@ async function extractPagesViaRenderer(pdfBuffer: Buffer, expectedPages: number)
 /**
  * Score a page for budget/cost table likelihood.
  */
-function scorePage(text: string, pageIndex: number): PageScore {
+function scorePage(text: string, pageIndex: number, extraKeywords: string[] = []): PageScore {
     const normalized = text.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
@@ -215,6 +215,15 @@ function scorePage(text: string, pageIndex: number): PageScore {
         const kwNorm = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         if (normalized.includes(kwNorm)) {
             score += 2;
+            matchedKeywords.push(kw);
+        }
+    }
+
+    // Extra keywords (6 points each — caller-defined, e.g. for config extraction)
+    for (const kw of extraKeywords) {
+        const kwNorm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normalized.includes(kwNorm)) {
+            score += 6;
             matchedKeywords.push(kw);
         }
     }
@@ -290,6 +299,8 @@ interface PageTargetingOptions {
     contextPages?: number;
     /** Minimum total pages before targeting kicks in (default: 15) */
     minPagesForTargeting?: number;
+    /** Additional high-weight keywords to match (e.g. for config extraction) */
+    extraKeywords?: string[];
 }
 
 /**
@@ -305,6 +316,7 @@ export async function targetBudgetPages(
         maxPages = 40,
         contextPages = 1,
         minPagesForTargeting = 15,
+        extraKeywords = [],
     } = options;
 
     const t0 = Date.now();
@@ -362,8 +374,8 @@ export async function targetBudgetPages(
         };
     }
 
-    // Step 2: Score each page
-    const scores = pageTexts.map((text, idx) => scorePage(text, idx));
+    // Step 2: Score each page (pass extra keywords)
+    const scores = pageTexts.map((text, idx) => scorePage(text, idx, extraKeywords));
     const candidates = scores.filter(s => s.score >= minScore);
 
     if (candidates.length === 0) {

@@ -75,12 +75,17 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
-    // ── Auto-selecionar empresa quando há apenas 1 cadastrada ──
+    // ── Auto-selecionar empresa: do card do Pipeline (companyProfileId) ou única cadastrada ──
     useEffect(() => {
-        if (!selectedCompanyId && companies.length === 1) {
-            setSelectedCompanyId(companies[0].id);
+        if (!selectedCompanyId) {
+            const bidding = biddings.find(b => b.id === selectedBiddingId);
+            if (bidding?.companyProfileId) {
+                setSelectedCompanyId(bidding.companyProfileId);
+            } else if (companies.length === 1) {
+                setSelectedCompanyId(companies[0].id);
+            }
         }
-    }, [companies, selectedCompanyId]);
+    }, [companies, selectedCompanyId, selectedBiddingId, biddings]);
 
     // ── Inicializar dados de assinatura/banco quando empresa ou processo muda ──
     useEffect(() => {

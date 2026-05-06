@@ -143,12 +143,12 @@ export interface EngineeringConfig {
 
 export const DEFAULT_ENGINEERING_CONFIG: EngineeringConfig = {
     objeto: '',
-    basesConsideradas: ['SINAPI', 'SEINFRA', 'SICOR'],
+    basesConsideradas: [],
     ufReferencia: '',
     dataBase: '',
-    regimeOneracao: 'DESONERADO',
-    encargosSociais: { horista: 114.3, mensalista: 47.8 },
+    regimeOneracao: 'ONERADO',
+    encargosSociais: { horista: 0, mensalista: 0 },
     precision: { tipo: 'ROUND', casasDecimais: 2 },
     bdiDiferenciado: false,
-    bdiFornecimento: 14.02,
+    bdiFornecimento: 0,
 };

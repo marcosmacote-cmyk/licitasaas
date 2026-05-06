@@ -35,31 +35,31 @@ export interface BdiConfig {
     tcuFornecimento?: BdiTcuParams;
 }
 
-/** Default TCU params based on Acórdão 2622/2013 — Construção de Edifícios (mediana) */
+/** Default TCU params — zerado para não confundir com dados do edital */
 export const DEFAULT_TCU_PARAMS: BdiTcuParams = {
-    adminCentral: 4.00,
-    seguros: 0.80,
-    garantias: 0.80,
-    riscos: 0.97,
-    despFinanceiras: 0.59,
-    lucro: 6.16,
-    tributos: 5.65,  // PIS 0.65% + COFINS 3.00% + ISS 2.00%
+    adminCentral: 0,
+    seguros: 0,
+    garantias: 0,
+    riscos: 0,
+    despFinanceiras: 0,
+    lucro: 0,
+    tributos: 0,
 };
 
-/** Default TCU params — Fornecimento de Materiais/Equipamentos (Acórdão 2622/2013) */
+/** Default TCU params — Fornecimento (zerado) */
 export const DEFAULT_TCU_FORNECIMENTO_PARAMS: BdiTcuParams = {
-    adminCentral: 4.00,
-    seguros: 0.25,
-    garantias: 0.00,
-    riscos: 0.97,
-    despFinanceiras: 0.59,
-    lucro: 4.07,
-    tributos: 5.65,  // PIS 0.65% + COFINS 3.00% + ISS 2.00%
+    adminCentral: 0,
+    seguros: 0,
+    garantias: 0,
+    riscos: 0,
+    despFinanceiras: 0,
+    lucro: 0,
+    tributos: 0,
 };
 
 export const DEFAULT_BDI_CONFIG: BdiConfig = {
-    mode: 'SIMPLIFICADO',
-    bdiGlobal: 25.0,
+    mode: 'TCU',
+    bdiGlobal: 0,
     tcu: { ...DEFAULT_TCU_PARAMS },
     tcuFornecimento: { ...DEFAULT_TCU_FORNECIMENTO_PARAMS },
 };

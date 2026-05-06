@@ -56,7 +56,7 @@ const PURPOSE_SCORES: Record<string, number> = {
 
 const POSITIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/planilh/i, 34, 'nome menciona planilha'],
-    [/or[cç]ament/i, 32, 'nome menciona orçamento'],
+    [/or[cç]ament|oramento/i, 32, 'nome menciona orçamento'],
     [/quantitativ/i, 28, 'nome menciona quantitativo'],
     [/composi[cç][aã]o|cpu\b|custo unit/i, 24, 'nome menciona composição/custo unitário'],
     [/\bbdi\b|bonifica/i, 18, 'nome menciona BDI'],
@@ -64,6 +64,7 @@ const POSITIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/sinapi|seinfra|sicro|orse|sicor|siproce/i, 18, 'nome menciona base oficial'],
     [/mem[oó]ria.*c[aá]lculo|curva.?abc/i, 16, 'nome menciona memória de cálculo/curva ABC'],
     [/projeto.?b[aá]sico|termo.?refer[eê]ncia/i, 8, 'documento técnico de apoio'],
+    [/projeto.*completo|anexo.*completo/i, 20, 'nome menciona projeto/anexo completo'],
 ];
 
 const NEGATIVE_PATTERNS: Array<[RegExp, number, string]> = [

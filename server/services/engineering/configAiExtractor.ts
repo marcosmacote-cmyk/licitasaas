@@ -13,6 +13,8 @@ const prisma = new PrismaClient();
 
 // ═══════════════════════════════════════════════════════════
 // Helper: Download PDFs from PNCP for AI extraction
+// Supports page targeting for large PDFs to ensure encargos
+// (typically at the end) are not cut off by size limits.
 // ═══════════════════════════════════════════════════════════
 async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promise<any[]> {
     const bidding = await prisma.biddingProcess.findUnique({
@@ -40,7 +42,7 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promis
 
         const pdfParts: any[] = [];
         let totalSizeKB = 0;
-        const MAX_SIZE_KB = 10000;
+        const MAX_SIZE_KB = 20000; // 20MB — increased to handle large engineering PDFs
 
         for (const doc of selectedDocs.slice(0, maxDocs)) {
             try {
@@ -50,12 +52,41 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promis
 
                 const fileRes = await axios.get(fileUrl, {
                     responseType: 'arraybuffer', httpsAgent: agent,
-                    timeout: 30000, maxRedirects: 5,
+                    timeout: 60000, maxRedirects: 5,
+                    maxContentLength: 30 * 1024 * 1024, // 30MB max download
                 } as any);
                 const buffer = Buffer.from(fileRes.data as ArrayBuffer);
                 if (buffer[0] !== 0x25 || buffer[1] !== 0x50) continue;
 
                 const sizeKB = buffer.length / 1024;
+
+                // For large PDFs (>5MB), use page targeting to extract only relevant pages
+                if (sizeKB > 5000) {
+                    try {
+                        // Dynamic import of page targeting
+                        const { targetBudgetPages } = await import('./pageTargeting');
+                        const targeting = await targetBudgetPages(buffer, {
+                            minScore: 3, // Lower threshold to catch encargos/BDI pages
+                            maxPages: 30,
+                            contextPages: 1,
+                            minPagesForTargeting: 10,
+                            // Custom keywords for config extraction
+                            extraKeywords: ['ENCARGO', 'LEIS SOCIAIS', 'BDI', 'COMPOSIÇÃO DO BDI', 'PLANILHA ORÇAMENTÁRIA', 'DATA BASE', 'CRONOGRAMA'],
+                        });
+                        if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
+                            const trimmedBuf = targeting.trimmedPdfBuffer;
+                            const trimmedSizeKB = trimmedBuf.length / 1024;
+                            if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) break;
+                            totalSizeKB += trimmedSizeKB;
+                            pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
+                            console.log(`[Config-AI] 🎯 Page targeting: ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
+                            continue;
+                        }
+                    } catch (ptErr: any) {
+                        console.warn(`[Config-AI] Page targeting failed: ${ptErr.message}, using full PDF`);
+                    }
+                }
+
                 if (totalSizeKB + sizeKB > MAX_SIZE_KB) break;
                 totalSizeKB += sizeKB;
                 pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
