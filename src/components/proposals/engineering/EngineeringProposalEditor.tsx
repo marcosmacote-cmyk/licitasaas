@@ -174,6 +174,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
 
+    // Sync wizard config into internal state so all calculations use Step 1 values
+    useEffect(() => {
+        if (wizardBdiConfig) setBdiConfig(wizardBdiConfig);
+    }, [wizardBdiConfig]);
+    useEffect(() => {
+        if (wizardConfig) setEngineeringConfig(wizardConfig);
+    }, [wizardConfig]);
+
     // Dashboard sidebar: prefer wizard values (from Step 1) over internal state
     const dashConfig = wizardConfig || engineeringConfig;
     const dashBdi = wizardBdiConfig || bdiConfig;
@@ -1034,6 +1042,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
                                     <div><div>Reauditar Preços</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Confere preços contra bases oficiais</div></div>
+                                </button>
+                                <button onClick={() => { syncBases(); setShowToolsMenu(false); }} disabled={items.length === 0 || isAuditing}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isAuditing ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isAuditing) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <Database size={14} color="var(--color-primary)" />}
+                                    <div><div>Puxar Valores do Hub</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Atualiza preços com a data base configurada</div></div>
                                 </button>
                             </div>
                         </>)}
