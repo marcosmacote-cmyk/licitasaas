@@ -260,7 +260,7 @@ Retorne JSON.`;
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: configPrompt }] }],
-                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
+                config: { responseMimeType: 'application/json', temperature: 0.05 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
@@ -278,7 +278,7 @@ Retorne JSON.`;
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: configPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
-        config: { responseMimeType: 'application/json', responseSchema }
+        config: { responseMimeType: 'application/json', temperature: 0.05 }
     });
     if (!response.text) return null;
     try { return JSON.parse(response.text); } catch { return null; }
@@ -362,7 +362,7 @@ REGRAS:
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
-                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
+                config: { responseMimeType: 'application/json', temperature: 0.1 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
@@ -379,7 +379,7 @@ REGRAS:
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: encargosPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
-        config: { responseMimeType: 'application/json', responseSchema }
+        config: { responseMimeType: 'application/json', temperature: 0.1 }
     });
     if (!response.text) return null;
     try { return JSON.parse(response.text); } catch { return null; }
