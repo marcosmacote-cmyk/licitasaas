@@ -97,15 +97,18 @@ export async function extractConfigFromBidding(biddingId: string): Promise<any |
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const configPrompt = `Você é um engenheiro orçamentista analisando um edital de licitação pública de obras de engenharia.
-Extraia as seguintes informações do edital:
+Extraia TODAS as seguintes informações do edital. Leia o documento inteiro com atenção.
 
-1. **objeto**: Descrição resumida do objeto da obra (máx 200 caracteres)
-2. **uf**: UF onde a obra será executada (sigla de 2 letras)
-3. **bases**: Quais bases de referência de custos o edital exige (SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC). Retorne um array.
-4. **dataBase**: Mês/ano de referência da base de preços (formato YYYY-MM). Se não especificado, retorne null.
-5. **regime**: Se o edital exige regime DESONERADO ou ONERADO. Se não especificado, retorne "DESONERADO".
+1. **objeto**: Descrição resumida do objeto da obra (máx 200 caracteres).
+2. **uf**: UF onde a obra será executada (sigla de 2 letras, ex: CE, PA, SP).
+3. **bases**: Quais bases/tabelas de referência de custos o edital exige. Procure por menções a SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC, SIPROCE, SETOP, EMOP, SUDECAP, DER. Retorne um array de strings.
+4. **dataBase**: Mês/ano de referência da base de preços. Procure por frases como "mês de referência", "data-base", "referência de preços", "preços de" seguido de mês/ano. Formato YYYY-MM. Se houver várias datas para diferentes bases, retorne a mais recente.
+5. **dataBasesPorFonte**: Caso o edital especifique datas-base diferentes para cada tabela (ex: SINAPI março/2026, SEINFRA janeiro/2026), retorne um objeto { "SINAPI": "2026-03", "SEINFRA": "2026-01" }.
+6. **regime**: Procure explicitamente se o edital menciona "desonerado", "onerado", "sem desoneração", "com desoneração", "regime de tributação substitutiva". Retorne exatamente "DESONERADO" ou "ONERADO". Se mencionar desoneração da folha de pagamento, é DESONERADO.
 
-Retorne apenas JSON.`;
+IMPORTANTE: Mesmo que o regime não esteja explícito como "DESONERADO" ou "ONERADO", analise o contexto. Se o edital menciona "sem desoneração da folha de pagamento", retorne "ONERADO". Se menciona tabela SINAPI desonerada, retorne "DESONERADO".
+
+Retorne JSON.`;
 
     const responseSchema = {
         type: Type.OBJECT,
@@ -115,6 +118,7 @@ Retorne apenas JSON.`;
             uf: { type: Type.STRING, nullable: true },
             bases: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
             dataBase: { type: Type.STRING, nullable: true },
+            dataBasesPorFonte: { type: Type.OBJECT, nullable: true, properties: {} },
             regime: { type: Type.STRING, nullable: true },
         },
         required: ['found'] as string[]
@@ -153,12 +157,16 @@ Retorne apenas JSON.`;
 
 // ═══════════════════════════════════════════════════════════
 // Extract Encargos Sociais (composition by groups A-E)
+// Suporta múltiplas bases: retorna encargos por base se o edital tiver
 // ═══════════════════════════════════════════════════════════
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const encargosPrompt = `Você é um engenheiro orçamentista analisando um edital de licitação pública.
 Procure a tabela ou quadro de ENCARGOS SOCIAIS / LEIS SOCIAIS do edital.
+
+ATENÇÃO: Muitos editais de obras públicas apresentam quadros de encargos sociais SEPARADOS para cada base de referência utilizada (SINAPI, SEINFRA, SICRO, etc.). Cada quadro pode ter percentuais diferentes.
+
 Extraia os percentuais (%) para HORISTA e MENSALISTA, agrupados assim:
 
 **Grupo A — Encargos Básicos:** INSS, SESI, SENAI, INCRA, SEBRAE, Salário Educação, FGTS, Seguro Acidente (RAT×FAP)
@@ -167,8 +175,35 @@ Extraia os percentuais (%) para HORISTA e MENSALISTA, agrupados assim:
 **Grupo D — Reincidências:** Incidência do Grupo A sobre Grupo B
 **Grupo E — Complementos:** Vale Transporte, Alimentação, EPI/Uniformes
 
-Se não encontrar a composição detalhada mas encontrar apenas os totais, retorne apenas totalHorista e totalMensalista.
-Retorne apenas JSON com os números (sem símbolo %).`;
+REGRAS:
+- Se o edital apresenta MÚLTIPLOS quadros de encargos (um para cada base), retorne cada um no campo "encargosPorBase" (ex: { "SINAPI": { totalHorista: 114.3, ... }, "SEINFRA": { totalHorista: 108.5, ... } }).
+- Se há apenas UM quadro geral, retorne totalHorista e totalMensalista no nível raiz.
+- Se não encontrar a composição detalhada mas encontrar apenas os totais, retorne apenas totalHorista/totalMensalista.
+- Retorne apenas JSON com os números (sem símbolo %).`;
+
+    const grupoSchema = {
+        type: Type.OBJECT as const, nullable: true,
+        properties: {
+            inss: { type: Type.NUMBER as const }, sesi: { type: Type.NUMBER as const }, senai: { type: Type.NUMBER as const },
+            incra: { type: Type.NUMBER as const }, sebrae: { type: Type.NUMBER as const }, salarioEducacao: { type: Type.NUMBER as const },
+            fgts: { type: Type.NUMBER as const }, seguroAcidente: { type: Type.NUMBER as const },
+            decimoTerceiro: { type: Type.NUMBER as const }, ferias: { type: Type.NUMBER as const },
+            avisoPrevio: { type: Type.NUMBER as const }, auxilioDoenca: { type: Type.NUMBER as const },
+            licencaPaternidade: { type: Type.NUMBER as const }, faltaJustificada: { type: Type.NUMBER as const },
+            diasChuva: { type: Type.NUMBER as const }, reincidenciaGrupoA: { type: Type.NUMBER as const },
+            valeTransporte: { type: Type.NUMBER as const }, alimentacao: { type: Type.NUMBER as const },
+            epiUniformes: { type: Type.NUMBER as const },
+        }
+    };
+
+    const baseEncargosSchema = {
+        type: Type.OBJECT as const, nullable: true,
+        properties: {
+            totalHorista: { type: Type.NUMBER as const, nullable: true },
+            totalMensalista: { type: Type.NUMBER as const, nullable: true },
+            grupoHorista: grupoSchema,
+        }
+    };
 
     const responseSchema = {
         type: Type.OBJECT,
@@ -176,20 +211,18 @@ Retorne apenas JSON com os números (sem símbolo %).`;
             found: { type: Type.BOOLEAN },
             totalHorista: { type: Type.NUMBER, nullable: true },
             totalMensalista: { type: Type.NUMBER, nullable: true },
-            grupoHorista: {
-                type: Type.OBJECT, nullable: true,
+            grupoHorista: grupoSchema,
+            encargosPorBase: {
+                type: Type.OBJECT as const, nullable: true,
                 properties: {
-                    inss: { type: Type.NUMBER }, sesi: { type: Type.NUMBER }, senai: { type: Type.NUMBER },
-                    incra: { type: Type.NUMBER }, sebrae: { type: Type.NUMBER }, salarioEducacao: { type: Type.NUMBER },
-                    fgts: { type: Type.NUMBER }, seguroAcidente: { type: Type.NUMBER },
-                    decimoTerceiro: { type: Type.NUMBER }, ferias: { type: Type.NUMBER },
-                    avisoPrevio: { type: Type.NUMBER }, auxilioDoenca: { type: Type.NUMBER },
-                    licencaPaternidade: { type: Type.NUMBER }, faltaJustificada: { type: Type.NUMBER },
-                    diasChuva: { type: Type.NUMBER }, reincidenciaGrupoA: { type: Type.NUMBER },
-                    valeTransporte: { type: Type.NUMBER }, alimentacao: { type: Type.NUMBER },
-                    epiUniformes: { type: Type.NUMBER },
+                    SINAPI: baseEncargosSchema,
+                    SEINFRA: baseEncargosSchema,
+                    SICRO: baseEncargosSchema,
+                    ORSE: baseEncargosSchema,
+                    SICOR: baseEncargosSchema,
+                    SBC: baseEncargosSchema,
                 }
-            }
+            },
         },
         required: ['found'] as string[]
     };

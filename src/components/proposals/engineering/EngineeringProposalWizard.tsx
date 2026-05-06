@@ -208,6 +208,15 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 if (d.uf) updates.ufReferencia = d.uf;
                 if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
                 if (d.dataBase) updates.dataBase = d.dataBase;
+                // Map per-source data bases
+                if (d.dataBasesPorFonte && typeof d.dataBasesPorFonte === 'object') {
+                    updates.dataBases = d.dataBasesPorFonte;
+                    // Use first available as global fallback
+                    if (!d.dataBase) {
+                        const firstDate = Object.values(d.dataBasesPorFonte)[0];
+                        if (firstDate) updates.dataBase = firstDate as string;
+                    }
+                }
                 if (d.regime) updates.regimeOneracao = d.regime === 'ONERADO' ? 'ONERADO' : 'DESONERADO';
                 setEngineeringConfig(prev => ({ ...prev, ...updates }));
                 setHasUnsavedChanges(true);
@@ -231,15 +240,35 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             const result = await res.json();
             if (result.found) {
                 const d = result.data || result;
-                setEngineeringConfig(prev => ({
-                    ...prev,
-                    encargosSociais: {
-                        ...prev.encargosSociais,
-                        horista: d.totalHorista || prev.encargosSociais.horista,
-                        mensalista: d.totalMensalista || prev.encargosSociais.mensalista,
-                        ...(d.grupoHorista ? { grupoHorista: d.grupoHorista } : {}),
+                const encargosUpdate: any = {
+                    ...engineeringConfig.encargosSociais,
+                    horista: d.totalHorista || engineeringConfig.encargosSociais.horista,
+                    mensalista: d.totalMensalista || engineeringConfig.encargosSociais.mensalista,
+                    ...(d.grupoHorista ? { grupoHorista: d.grupoHorista } : {}),
+                };
+                // Map per-base encargos
+                if (d.encargosPorBase && typeof d.encargosPorBase === 'object') {
+                    const epb: Record<string, any> = {};
+                    for (const [base, vals] of Object.entries(d.encargosPorBase)) {
+                        if (vals && typeof vals === 'object') {
+                            const v = vals as any;
+                            epb[base] = {
+                                horista: v.totalHorista || 0,
+                                mensalista: v.totalMensalista || 0,
+                                ...(v.grupoHorista ? { grupoHorista: v.grupoHorista } : {}),
+                            };
+                        }
                     }
-                }));
+                    if (Object.keys(epb).length > 0) encargosUpdate.encargosPorBase = epb;
+                    // Use first base values as global defaults if no global was found
+                    if (!d.totalHorista && Object.keys(epb).length > 0) {
+                        const firstBase = Object.values(epb)[0] as any;
+                        encargosUpdate.horista = firstBase.horista;
+                        encargosUpdate.mensalista = firstBase.mensalista;
+                        if (firstBase.grupoHorista) encargosUpdate.grupoHorista = firstBase.grupoHorista;
+                    }
+                }
+                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate }));
                 setHasUnsavedChanges(true);
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso</span>);
                 setTimeout(() => setSaveMsg(null), 4000);
@@ -248,6 +277,26 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             }
         } catch (e: any) { alert('Erro: ' + e.message); console.error(e); }
         finally { setIsExtractingEncargos(false); }
+    };
+
+    // Extract BDI Diferenciado (Fornecimento) via IA — reuses BDI endpoint
+    const handleExtractBdiFornecimento = async () => {
+        setIsExtractingBdi(true);
+        try {
+            const res = await fetch('/api/engineering/ai-extract-bdi', {
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
+            const result = await res.json();
+            if (result.data?.tcuFornecimento) {
+                handleBdiChange({ ...bdiConfig, tcuFornecimento: result.data.tcuFornecimento });
+                const calcBdi = calculateBdiTCU(result.data.tcuFornecimento);
+                handleConfigChange({ ...engineeringConfig, bdiFornecimento: calcBdi, bdiDiferenciado: true });
+            } else if (result.data?.globalBdi) {
+                handleConfigChange({ ...engineeringConfig, bdiFornecimento: result.data.globalBdi, bdiDiferenciado: true });
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsExtractingBdi(false); }
     };
 
     // ══════════════════════════════════════════
@@ -305,6 +354,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     onConfigChange={handleConfigChange}
                     onBdiChange={handleBdiChange}
                     onExtractBdi={handleExtractBdi}
+                    onExtractBdiFornecimento={handleExtractBdiFornecimento}
                     onExtractConfig={handleExtractConfig}
                     onExtractEncargos={handleExtractEncargos}
                     onSyncBases={syncBases}

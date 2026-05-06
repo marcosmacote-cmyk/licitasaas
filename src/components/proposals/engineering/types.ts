@@ -110,6 +110,13 @@ export interface EncargosSociaisConfig {
     encargos2?: { horista: number; mensalista: number; label?: string };
     /** Qual encargo está ativo nas composições: 1 (principal) ou 2 (alternativo) */
     encargoAtivo?: 1 | 2;
+    /** Encargos por base de referência (SINAPI, SEINFRA, etc.)
+     *  Cada base pode ter seu próprio conjunto de horista/mensalista/grupoAnalítico */
+    encargosPorBase?: Record<string, {
+        horista: number;
+        mensalista: number;
+        grupoHorista?: Partial<EncargosSociaisGrupo>;
+    }>;
 }
 
 export interface PrecisionConfig {

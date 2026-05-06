@@ -32,6 +32,7 @@ interface Props {
     onConfigChange: (config: EngineeringConfig) => void;
     onBdiChange: (config: BdiConfig) => void;
     onExtractBdi: () => void;
+    onExtractBdiFornecimento?: () => void;
     onExtractConfig?: () => void;
     onExtractEncargos?: () => void;
     onSyncBases: () => void;
@@ -41,7 +42,7 @@ interface Props {
 
 export function Step1ConfigPanel({
     engineeringConfig, bdiConfig, isExtractingBdi, isExtractingConfig, isExtractingEncargos, isAuditing, isSaving,
-    onConfigChange, onBdiChange, onExtractBdi, onExtractConfig, onExtractEncargos, onSyncBases, onSave, onNext,
+    onConfigChange, onBdiChange, onExtractBdi, onExtractBdiFornecimento, onExtractConfig, onExtractEncargos, onSyncBases, onSave, onNext,
 }: Props) {
     const [showEncargosDetail, setShowEncargosDetail] = useState(false);
     const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
@@ -260,13 +261,21 @@ export function Step1ConfigPanel({
 
                         {/* BDI Diferenciado Toggle + Breakdown */}
                         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, color: engineeringConfig.bdiDiferenciado ? '#b45309' : 'var(--color-text-primary)', cursor: 'pointer', userSelect: 'none' }}>
-                                <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
-                                    onChange={e => onConfigChange({ ...engineeringConfig, bdiDiferenciado: e.target.checked })}
-                                    style={{ width: 16, height: 16, accentColor: '#b45309', cursor: 'pointer' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', fontWeight: 600, color: engineeringConfig.bdiDiferenciado ? '#b45309' : 'var(--color-text-primary)', cursor: 'pointer', userSelect: 'none' }}>
+                                    <input type="checkbox" checked={!!engineeringConfig.bdiDiferenciado}
+                                        onChange={e => onConfigChange({ ...engineeringConfig, bdiDiferenciado: e.target.checked })}
+                                        style={{ width: 16, height: 16, accentColor: '#b45309', cursor: 'pointer' }} />
                                 <Split size={16} color={engineeringConfig.bdiDiferenciado ? '#b45309' : 'var(--color-text-tertiary)'} />
                                 Ativar BDI Diferenciado — Fornecimento
                             </label>
+                            {onExtractBdiFornecimento && (
+                                <button style={{ padding: '5px 12px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(135deg, rgba(180,83,9,0.08), rgba(217,119,6,0.08))', color: '#b45309', border: '1px solid rgba(180,83,9,0.15)', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 600, transition: 'all 0.2s', opacity: isExtractingBdi ? 0.6 : 1 }}
+                                    onClick={onExtractBdiFornecimento} disabled={isExtractingBdi}>
+                                    {isExtractingBdi ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} Extrair via IA
+                                </button>
+                            )}
+                            </div>
                             {engineeringConfig.bdiDiferenciado && (
                                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(180,83,9,0.2)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                                     {/* BDI Fornecimento — Read-Only Card */}
