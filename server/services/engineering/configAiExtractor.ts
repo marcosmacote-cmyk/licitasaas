@@ -147,6 +147,12 @@ REGRAS PARA DATA BASE — MUITO IMPORTANTE:
   * "mês-base: SET/2025" → dataBase = "2025-09"
   * "SINAPI 10/2025" → dataBase = "2025-10"
   * "sistema de custos com data referência 09/2025" → dataBase = "2025-09"
+- **FORMATO OGU/TransfereGOV**: Em planilhas da OGU, a data-base aparece no cabeçalho como:
+  * "DATA BASE 09-25" → dataBase = "2025-09" (setembro de 2025)
+  * "DATA BASE 03-26" → dataBase = "2026-03" (março de 2026)
+  * "DATA BASE 12-24" → dataBase = "2024-12" (dezembro de 2024)
+  * O formato é MM-AA onde MM=mês e AA=ano (2 dígitos). CONVERTA para YYYY-MM.
+  * Frequentemente seguido de "(N DES.)" = não desonerado ou "(DES.)" = desonerado.
 - Formato obrigatório: YYYY-MM (ex: 2025-09, 2024-03)
 - Se houver várias datas para diferentes bases, retorne a mais recente como dataBase principal.
 
@@ -155,8 +161,8 @@ Se todas as bases usarem a mesma data, retorne objeto vazio {}.
 
 6. **regime**: Procure explicitamente se o edital menciona:
 - "desonerado", "com desoneração", "desoneração da folha" → retorne "DESONERADO"
-- "onerado", "sem desoneração", "não desonerado" → retorne "ONERADO"
-- Se mencionar tabela SINAPI desonerada → "DESONERADO"
+- "onerado", "sem desoneração", "não desonerado", "(N DES.)" → retorne "ONERADO"
+- Se mencionar tabela SINAPI desonerada ou "(DES.)" → "DESONERADO"
 - Se nada for mencionado sobre desoneração → retorne "DESONERADO" (default TCU)
 
 Retorne JSON.`;
