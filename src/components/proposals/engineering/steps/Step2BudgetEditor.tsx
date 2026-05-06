@@ -9,7 +9,7 @@
  * reflita a configuração atual do Step 1 em tempo real.
  */
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
-import type { EngineeringConfig } from '../types';
+import type { EngineeringConfig, EngItem } from '../types';
 import type { BdiConfig } from '../bdiEngine';
 
 interface Props {
@@ -17,11 +17,12 @@ interface Props {
     biddingId: string;
     engineeringConfig?: EngineeringConfig;
     bdiConfig?: BdiConfig;
+    onItemsChange?: (items: EngItem[]) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onPrev, onNext }: Props) {
+export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onItemsChange, onPrev, onNext }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
@@ -30,6 +31,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 biddingId={biddingId}
                 wizardConfig={engineeringConfig}
                 wizardBdiConfig={bdiConfig}
+                onItemsChange={onItemsChange}
             />
 
             {/* Step navigation footer */}

@@ -69,6 +69,8 @@ interface Props {
     wizardConfig?: EngineeringConfig;
     /** BDI config from the Wizard (Step 1) */
     wizardBdiConfig?: BdiConfig;
+    /** Callback: sync items back to the Wizard for other steps (Cronograma, etc.) */
+    onItemsChange?: (items: EngItem[]) => void;
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -169,7 +171,7 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     );
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig }: Props) {
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange }: Props) {
     const [items, setItems] = useState<EngItem[]>([]);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
@@ -261,6 +263,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
 
+    // Sync items back to Wizard for Cronograma, Carta Proposta, etc.
+    useEffect(() => {
+        if (onItemsChange && items.length > 0) onItemsChange(items);
+    }, [items, onItemsChange]);
+
     useEffect(() => {
         return () => {
             if (extractionPollRef.current) clearInterval(extractionPollRef.current);
@@ -291,8 +298,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     setItems(data);
                 } else if (data && data.items) {
                     setItems(Array.isArray(data.items) ? data.items : []);
-                    if (data.bdiConfig) setBdiConfig(data.bdiConfig);
-                    if (data.engineeringConfig) {
+                    // Only load DB config when NOT inside the Wizard (wizard provides its own)
+                    if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
+                    if (!wizardConfig && data.engineeringConfig) {
                         // FIX ARQ-04: Restore cronograma data from saved config
                         const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
                         setEngineeringConfig(engConfig);

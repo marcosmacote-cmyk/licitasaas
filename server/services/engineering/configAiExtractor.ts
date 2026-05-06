@@ -96,17 +96,37 @@ async function getEditalText(biddingId: string): Promise<string> {
 export async function extractConfigFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const configPrompt = `Você é um engenheiro orçamentista analisando um edital de licitação pública de obras de engenharia.
-Extraia TODAS as seguintes informações do edital. Leia o documento inteiro com atenção.
+    const configPrompt = `Você é um engenheiro orçamentista SÊNIOR analisando um edital de licitação pública de obras de engenharia.
+Extraia TODAS as seguintes informações do edital. Leia o documento inteiro com extrema atenção.
 
 1. **objeto**: Descrição resumida do objeto da obra (máx 200 caracteres).
-2. **uf**: UF onde a obra será executada (sigla de 2 letras, ex: CE, PA, SP).
-3. **bases**: Quais bases/tabelas de referência de custos o edital exige. Procure por menções a SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC, SIPROCE, SETOP, EMOP, SUDECAP, DER. Retorne um array de strings.
-4. **dataBase**: Mês/ano de referência da base de preços. Procure por frases como "mês de referência", "data-base", "referência de preços", "preços de" seguido de mês/ano. Formato YYYY-MM. Se houver várias datas para diferentes bases, retorne a mais recente.
-5. **dataBasesPorFonte**: Caso o edital especifique datas-base diferentes para cada tabela (ex: SINAPI março/2026, SEINFRA janeiro/2026), retorne um objeto { "SINAPI": "2026-03", "SEINFRA": "2026-01" }.
-6. **regime**: Procure explicitamente se o edital menciona "desonerado", "onerado", "sem desoneração", "com desoneração", "regime de tributação substitutiva". Retorne exatamente "DESONERADO" ou "ONERADO". Se mencionar desoneração da folha de pagamento, é DESONERADO.
+2. **uf**: UF onde a obra será executada (sigla de 2 letras, ex: CE, PA, SP). Procure endereço, município, local da obra.
+3. **bases**: Quais bases/tabelas de referência de custos o edital exige. Procure por menções a SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC, SIPROCE, SETOP, EMOP, SUDECAP, DER, SEDOP. Retorne um array de strings com nomes padronizados (em MAIÚSCULAS).
+4. **dataBase**: Mês/ano de referência da base de preços. 
 
-IMPORTANTE: Mesmo que o regime não esteja explícito como "DESONERADO" ou "ONERADO", analise o contexto. Se o edital menciona "sem desoneração da folha de pagamento", retorne "ONERADO". Se menciona tabela SINAPI desonerada, retorne "DESONERADO".
+REGRAS PARA DATA BASE — MUITO IMPORTANTE:
+- A data-base NÃO é a data de publicação do edital nem a data da sessão/abertura.
+- A data-base é o mês de referência das tabelas de custos (SINAPI, SEINFRA, etc.)
+- Procure por expressões como:
+  * "referência" ou "data-base" ou "mês de referência" ou "base de preços"
+  * "SINAPI referente a" ou "SINAPI de" ou "preços referência"
+  * "tabela SINAPI de março/2025" → dataBase = "2025-03"
+  * "SINAPI ref. outubro de 2024" → dataBase = "2024-10"
+  * "preços do mês de setembro/2025" → dataBase = "2025-09"
+  * "mês-base: SET/2025" → dataBase = "2025-09"
+  * "SINAPI 10/2025" → dataBase = "2025-10"
+  * "sistema de custos com data referência 09/2025" → dataBase = "2025-09"
+- Formato obrigatório: YYYY-MM (ex: 2025-09, 2024-03)
+- Se houver várias datas para diferentes bases, retorne a mais recente como dataBase principal.
+
+5. **dataBasesPorFonte**: Caso o edital especifique datas-base DIFERENTES para cada tabela (ex: SINAPI março/2026, SEINFRA janeiro/2026), retorne um objeto. Exemplo: { "SINAPI": "2026-03", "SEINFRA": "2026-01" }.
+Se todas as bases usarem a mesma data, retorne objeto vazio {}.
+
+6. **regime**: Procure explicitamente se o edital menciona:
+- "desonerado", "com desoneração", "desoneração da folha" → retorne "DESONERADO"
+- "onerado", "sem desoneração", "não desonerado" → retorne "ONERADO"
+- Se mencionar tabela SINAPI desonerada → "DESONERADO"
+- Se nada for mencionado sobre desoneração → retorne "DESONERADO" (default TCU)
 
 Retorne JSON.`;
 
@@ -131,7 +151,7 @@ Retorne JSON.`;
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: configPrompt }] }],
-                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
+                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);

@@ -370,6 +370,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     biddingId={biddingId}
                     engineeringConfig={engineeringConfig}
                     bdiConfig={bdiConfig}
+                    onItemsChange={setItems}
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}
                 />
