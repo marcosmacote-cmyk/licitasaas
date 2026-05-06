@@ -121,7 +121,7 @@ Retorne apenas os números (sem o símbolo de %).`;
                                         maxPages: 25,
                                         contextPages: 1,
                                         minPagesForTargeting: 10,
-                                        extraKeywords: ['BDI', 'COMPOSIÇÃO DO BDI', 'BONIFICAÇÃO', 'DESPESAS INDIRETAS', 'ACÓRDÃO TCU', 'LUCRO', 'ADMINISTRAÇÃO CENTRAL', 'TRIBUTOS'],
+                                        extraKeywords: ['BDI', 'B.D.I.', 'LDI', 'L.D.I.', 'COMPOSIÇÃO DO BDI', 'BONIFICAÇÃO', 'DESPESAS INDIRETAS', 'ACÓRDÃO TCU', 'LUCRO', 'ADMINISTRAÇÃO CENTRAL', 'TRIBUTOS'],
                                     });
                                     if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
                                         const trimmedBuf = targeting.trimmedPdfBuffer;

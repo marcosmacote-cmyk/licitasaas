@@ -236,7 +236,11 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             const res = await fetch('/api/engineering/ai-extract-encargos', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
             });
-            if (!res.ok) { alert('Erro ao extrair encargos: ' + (await res.json().catch(() => ({}))).error); return; }
+            if (!res.ok) { 
+                const errJson = await res.json().catch(() => ({}));
+                alert('Erro ao extrair encargos: ' + errJson.error + (errJson.details ? ' - ' + errJson.details : '')); 
+                return; 
+            }
             const result = await res.json();
             if (result.found) {
                 const d = result.data || result;

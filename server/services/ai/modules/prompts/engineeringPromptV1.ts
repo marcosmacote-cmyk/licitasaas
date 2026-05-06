@@ -67,8 +67,11 @@ REGRAS DE CLASSIFICAÇÃO
   - Se os itens são "LOCAÇÃO DA OBRA", "ESCAVAÇÃO MANUAL", "CHAPISCO", "REBOCO" → Planilha Sintética (CORRETO)
   - Se a mesma descrição se repete mais de 3 vezes → CPU (ERRADO)
 
-🚨🚨🚨 REGRA ANTI-DUPLICAÇÃO (CRÍTICA):
+🚨🚨🚨 REGRA ANTI-DUPLICAÇÃO E NUMERAÇÃO (CRÍTICA):
   - NUNCA emita o mesmo item (mesma descrição + mesmos valores) mais de 1 vez.
+  - NUNCA repita o mesmo número de item (ex: "1.3") para múltiplos serviços diferentes.
+  - Se a planilha original mostrar um agrupador "1.3 Movimento de Terra" e os itens abaixo dele não tiverem numeração explícita, VOCÊ DEVE CRIAR a numeração sequencial correta (ex: "1.3.1", "1.3.2", "1.3.3").
+  - É ESTRITAMENTE PROIBIDO retornar 5 itens diferentes todos com o número "1.3". Cada linha DEVE ter um item number único.
   - Se a planilha mostra o mesmo serviço aplicado em vários locais/pavimentos, extraia APENAS 1 linha com a SOMA das quantidades.
   - Se você está gerando itens 3.1.1, 3.1.2, 3.1.3... com a MESMA descrição e MESMOS valores → PARE! Isso é alucinação.
 

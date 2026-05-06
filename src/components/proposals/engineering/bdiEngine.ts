@@ -90,7 +90,16 @@ export function calculateBdiTCU(params: BdiTcuParams): number {
  * necessário para atingir o BDI alvo.
  */
 export function autoDistributeBdi(targetBdi: number): BdiTcuParams {
-    const tcu = { ...DEFAULT_TCU_PARAMS };
+    // Valores medianos do TCU (Acórdão 2622/2013)
+    const tcu: BdiTcuParams = {
+        adminCentral: 4.00,
+        seguros: 0.80,
+        garantias: 0.80,
+        riscos: 0.97,
+        despFinanceiras: 0.59,
+        lucro: 6.16,
+        tributos: 5.65
+    };
     // K1 = (1 + AC + S + G + R) * (1 + DF)
     const ac_s_r_g = (tcu.adminCentral + tcu.seguros + tcu.riscos + tcu.garantias) / 100;
     const K1 = (1 + ac_s_r_g) * (1 + tcu.despFinanceiras / 100);

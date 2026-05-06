@@ -269,14 +269,14 @@ const STAGE_DESCRIPTION_PATTERNS = [
  * or a sub-level grouper ending in ".0" (e.g., "1.0", "2.0")
  */
 function isTopLevelNumber(itemNum: string): boolean {
-    const trimmed = itemNum.trim();
+    const trimmed = itemNum.trim().replace(/\.$/, '');
     if (/^\d+$/.test(trimmed)) return true;
     if (/^\d+\.0$/.test(trimmed)) return true;
     return false;
 }
 
 function isSubLevelGrouper(itemNum: string): boolean {
-    const trimmed = itemNum.trim();
+    const trimmed = itemNum.trim().replace(/\.$/, '');
     return /^\d+\.\d+$/.test(trimmed);
 }
 
@@ -306,7 +306,7 @@ export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: s
 
         // ── Signal 1: Top-level number with children → ETAPA ──
         if (isTopLevelNumber(itemNum)) {
-            const baseNum = itemNum.replace(/\.0$/, '');
+            const baseNum = itemNum.replace(/\.0$/, '').replace(/\.$/, '');
             const hasChildren = Array.from(allItemNums).some(n =>
                 n !== itemNum && n.startsWith(baseNum + '.')
             );
@@ -317,8 +317,8 @@ export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: s
 
         // ── Signal 2: Known stage description patterns ──
         if (!inferredType && STAGE_DESCRIPTION_PATTERNS.some(p => p.test(desc))) {
-            const baseNum = itemNum.replace(/\.0$/, '');
-            const hasChildren = Array.from(allItemNums).some(n => n.startsWith(baseNum + '.'));
+            const baseNum = itemNum.replace(/\.0$/, '').replace(/\.$/, '');
+            const hasChildren = Array.from(allItemNums).some(n => n !== itemNum && n.startsWith(baseNum + '.'));
             if (hasChildren) {
                 inferredType = 'ETAPA';
             } else if (isTopLevelNumber(itemNum)) {
@@ -328,8 +328,9 @@ export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: s
 
         // ── Signal 3: Sub-level with children → SUBETAPA ──
         if (!inferredType && isSubLevelGrouper(itemNum)) {
-            const prefix = itemNum + '.';
-            const hasChildren = Array.from(allItemNums).some(n => n.startsWith(prefix));
+            const baseNum = itemNum.replace(/\.$/, '');
+            const prefix = baseNum + '.';
+            const hasChildren = Array.from(allItemNums).some(n => n !== itemNum && n.startsWith(prefix));
             if (hasChildren) {
                 inferredType = 'SUBETAPA';
             }
