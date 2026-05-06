@@ -250,33 +250,20 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     ...engineeringConfig.encargosSociais,
                     horista: d.totalHorista || engineeringConfig.encargosSociais.horista,
                     mensalista: d.totalMensalista || engineeringConfig.encargosSociais.mensalista,
-                    ...(d.grupoHorista ? { grupoHorista: d.grupoHorista } : {}),
+                    basePrincipal: d.basePrincipal || null,
+                    // SINAPI-aligned groups (A, B, C, D)
+                    grupoA_horista: d.grupoA_horista || 0,
+                    grupoA_mensalista: d.grupoA_mensalista || 0,
+                    grupoB_horista: d.grupoB_horista || 0,
+                    grupoB_mensalista: d.grupoB_mensalista || 0,
+                    grupoC_horista: d.grupoC_horista || 0,
+                    grupoC_mensalista: d.grupoC_mensalista || 0,
+                    grupoD_horista: d.grupoD_horista || 0,
+                    grupoD_mensalista: d.grupoD_mensalista || 0,
                 };
-                // Map per-base encargos
-                if (d.encargosPorBase && typeof d.encargosPorBase === 'object') {
-                    const epb: Record<string, any> = {};
-                    for (const [base, vals] of Object.entries(d.encargosPorBase)) {
-                        if (vals && typeof vals === 'object') {
-                            const v = vals as any;
-                            epb[base] = {
-                                horista: v.totalHorista || 0,
-                                mensalista: v.totalMensalista || 0,
-                                ...(v.grupoHorista ? { grupoHorista: v.grupoHorista } : {}),
-                            };
-                        }
-                    }
-                    if (Object.keys(epb).length > 0) encargosUpdate.encargosPorBase = epb;
-                    // Use first base values as global defaults if no global was found
-                    if (!d.totalHorista && Object.keys(epb).length > 0) {
-                        const firstBase = Object.values(epb)[0] as any;
-                        encargosUpdate.horista = firstBase.horista;
-                        encargosUpdate.mensalista = firstBase.mensalista;
-                        if (firstBase.grupoHorista) encargosUpdate.grupoHorista = firstBase.grupoHorista;
-                    }
-                }
                 setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate }));
                 setHasUnsavedChanges(true);
-                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso</span>);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso ({d.basePrincipal || 'geral'})</span>);
                 setTimeout(() => setSaveMsg(null), 4000);
             } else {
                 alert(result.message || 'Encargos sociais não encontrados no edital.');

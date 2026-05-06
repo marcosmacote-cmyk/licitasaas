@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
-import type { EngineeringConfig, EncargosSociaisGrupo } from '../types';
+import type { EngineeringConfig } from '../types';
 
 const BRAZILIAN_UFS = [
     'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -354,45 +354,55 @@ export function Step1ConfigPanel({
                             </button>
                             {showEncargosDetail && (() => {
                                 const es = engineeringConfig.encargosSociais;
-                                const gh = es?.grupoHorista || {} as Partial<EncargosSociaisGrupo>;
-                                const updateGH = (field: keyof EncargosSociaisGrupo, val: number) => {
-                                    const next = { ...gh, [field]: val };
-                                    const sumA = (next.inss||0)+(next.sesi||0)+(next.senai||0)+(next.incra||0)+(next.sebrae||0)+(next.salarioEducacao||0)+(next.fgts||0)+(next.seguroAcidente||0);
-                                    const sumB = (next.decimoTerceiro||0)+(next.ferias||0);
-                                    const sumC = (next.avisoPrevio||0)+(next.auxilioDoenca||0)+(next.licencaPaternidade||0)+(next.faltaJustificada||0)+(next.diasChuva||0);
-                                    const reincD = Math.round(sumB * sumA / 100 * 100) / 100;
-                                    next.reincidenciaGrupoA = reincD;
-                                    const sumE = (next.valeTransporte||0)+(next.alimentacao||0)+(next.epiUniformes||0);
-                                    const total = Math.round((sumA + sumB + sumC + reincD + sumE) * 100) / 100;
-                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...es, horista: total, grupoHorista: next } });
-                                };
-                                const groups: { title: string; color: string; items: [keyof EncargosSociaisGrupo, string][] }[] = [
-                                    { title: 'A — Encargos Básicos', color: '#1e40af', items: [['inss','INSS (20%)'],['sesi','SESI (1,5%)'],['senai','SENAI (1%)'],['incra','INCRA (0,2%)'],['sebrae','SEBRAE (0,6%)'],['salarioEducacao','Sal. Educação (2,5%)'],['fgts','FGTS (8%)'],['seguroAcidente','Seg. Acidente — RAT×FAP']] },
-                                    { title: 'B — Incidentes s/ A', color: '#6d28d9', items: [['decimoTerceiro','13º Salário'],['ferias','Férias + 1/3']] },
-                                    { title: 'C — Complementares', color: '#0e7490', items: [['avisoPrevio','Aviso Prévio'],['auxilioDoenca','Auxílio Doença'],['licencaPaternidade','Lic. Paternidade'],['faltaJustificada','Falta Justificada'],['diasChuva','Dias de Chuva']] },
-                                    { title: 'D — Reincidências', color: '#92400e', items: [['reincidenciaGrupoA','B × A (auto)']] },
-                                    { title: 'E — Complementos', color: '#065f46', items: [['valeTransporte','Vale Transporte'],['alimentacao','Alimentação'],['epiUniformes','EPI / Uniformes']] },
+                                const groups = [
+                                    { key: 'A', title: 'A — Encargos Sociais Básicos', desc: 'INSS, SESI, SENAI, INCRA, SEBRAE, Sal. Educação, FGTS, SAT/RAT', color: '#1e40af', horista: es?.grupoA_horista || 0, mensalista: es?.grupoA_mensalista || 0 },
+                                    { key: 'B', title: 'B — Encargos Trabalhistas', desc: 'Repouso, Feriados, 13º Sal., Férias + 1/3, Aux. Enfermidade, Lic. Paternidade', color: '#6d28d9', horista: es?.grupoB_horista || 0, mensalista: es?.grupoB_mensalista || 0 },
+                                    { key: 'C', title: 'C — Encargos Rescisórios', desc: 'Aviso Prévio, Férias Indenizadas, Dep. Rescisão, Indenização Adicional', color: '#0e7490', horista: es?.grupoC_horista || 0, mensalista: es?.grupoC_mensalista || 0 },
+                                    { key: 'D', title: 'D — Reincidências', desc: 'Incidência do Grupo A sobre B e sobre Aviso Prévio Trabalhado', color: '#92400e', horista: es?.grupoD_horista || 0, mensalista: es?.grupoD_mensalista || 0 },
                                 ];
+                                const updateGroup = (groupKey: string, field: 'horista' | 'mensalista', val: number) => {
+                                    const fieldName = `grupo${groupKey}_${field}`;
+                                    const nextEs = { ...es, [fieldName]: val };
+                                    // Recalculate totals
+                                    const totalH = (nextEs.grupoA_horista||0) + (nextEs.grupoB_horista||0) + (nextEs.grupoC_horista||0) + (nextEs.grupoD_horista||0);
+                                    const totalM = (nextEs.grupoA_mensalista||0) + (nextEs.grupoB_mensalista||0) + (nextEs.grupoC_mensalista||0) + (nextEs.grupoD_mensalista||0);
+                                    nextEs.horista = Math.round(totalH * 100) / 100;
+                                    nextEs.mensalista = Math.round(totalM * 100) / 100;
+                                    onConfigChange({ ...engineeringConfig, encargosSociais: nextEs });
+                                };
                                 return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic', marginBottom: 4 }}>Horista — os valores são indicativos do que compõe o custo da mão de obra.</span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                                            Estrutura SINAPI — Subtotais por grupo {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
+                                        </span>
+                                        {/* Header */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, fontSize: '0.68rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            <span>Grupo</span>
+                                            <span style={{ textAlign: 'right' }}>Horista (%)</span>
+                                            <span style={{ textAlign: 'right' }}>Mensalista (%)</span>
+                                        </div>
                                         {groups.map(g => (
-                                            <div key={g.title} style={{ background: 'var(--color-bg-base)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: g.color, marginBottom: 8, letterSpacing: '0.02em' }}>{g.title}</div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                                    {g.items.map(([key, label]) => (
-                                                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                            <label style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>{label}</label>
-                                                            <input type="number" step="0.01" className="form-input"
-                                                                value={gh[key] || 0}
-                                                                onChange={e => updateGH(key, parseLocaleNumber(e.target.value))}
-                                                                disabled={key === 'reincidenciaGrupoA'}
-                                                                style={{ width: 70, fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 8px', borderRadius: 'var(--radius-sm)', background: key === 'reincidenciaGrupoA' ? 'var(--color-bg-surface)' : 'white', borderColor: key === 'reincidenciaGrupoA' ? 'transparent' : 'var(--color-border)' }} />
-                                                        </div>
-                                                    ))}
+                                            <div key={g.key} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, alignItems: 'center', background: 'var(--color-bg-base)', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: g.color }}>{g.title}</div>
+                                                    <div style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)', marginTop: 2, lineHeight: 1.2 }}>{g.desc}</div>
                                                 </div>
+                                                <input type="number" step="0.01" className="form-input"
+                                                    value={g.horista}
+                                                    onChange={e => updateGroup(g.key, 'horista', parseLocaleNumber(e.target.value))}
+                                                    style={{ width: '100%', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 6px', borderRadius: 'var(--radius-sm)', borderColor: 'var(--color-border)' }} />
+                                                <input type="number" step="0.01" className="form-input"
+                                                    value={g.mensalista}
+                                                    onChange={e => updateGroup(g.key, 'mensalista', parseLocaleNumber(e.target.value))}
+                                                    style={{ width: '100%', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 6px', borderRadius: 'var(--radius-sm)', borderColor: 'var(--color-border)' }} />
                                             </div>
                                         ))}
+                                        {/* Totals row */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, alignItems: 'center', padding: '8px 10px', borderTop: '2px solid #6d28d9', fontWeight: 800, fontSize: '0.85rem' }}>
+                                            <span style={{ color: '#6d28d9' }}>TOTAL (A+B+C+D)</span>
+                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}%</span>
+                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}%</span>
+                                        </div>
                                     </div>
                                 );
                             })()}

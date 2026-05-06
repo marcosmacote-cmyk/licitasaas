@@ -288,73 +288,56 @@ Retorne JSON.`;
 }
 
 // ═══════════════════════════════════════════════════════════
-// Extract Encargos Sociais (composition by groups A-E)
-// Suporta múltiplas bases: retorna encargos por base se o edital tiver
+// Extract Encargos Sociais — Aligned with SINAPI Methodology
+// Structure: Groups A (Básicos), B (Trabalhistas), C (Rescisórios), D (Reincidências)
 // ═══════════════════════════════════════════════════════════
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const encargosPrompt = `Você é um engenheiro orçamentista analisando um edital de licitação pública.
-Procure a tabela ou quadro de ENCARGOS SOCIAIS / LEIS SOCIAIS do edital.
+    const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais SINAPI.
+Analise o documento e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
 
-ATENÇÃO: Muitos editais de obras públicas apresentam quadros de encargos sociais SEPARADOS para cada base de referência utilizada (SINAPI, SEINFRA, SICRO, etc.). Cada quadro pode ter percentuais diferentes.
+A estrutura padrão SINAPI organiza os encargos em 4 GRUPOS:
 
-Extraia os percentuais (%) para HORISTA e MENSALISTA, agrupados assim:
+GRUPO A — Encargos Sociais Básicos (incidência sobre folha):
+  INSS, SESI, SENAI, INCRA, SEBRAE, Salário Educação, Seguro Acidente (RAT×FAP), FGTS
 
-**Grupo A — Encargos Básicos:** INSS, SESI, SENAI, INCRA, SEBRAE, Salário Educação, FGTS, Seguro Acidente (RAT×FAP)
-**Grupo B — Incidentes:** 13º Salário, Férias + 1/3 constitucional
-**Grupo C — Complementares:** Aviso Prévio, Auxílio Doença, Licença Paternidade, Falta Justificada, Dias de Chuva/Improdutivos
-**Grupo D — Reincidências:** Incidência do Grupo A sobre Grupo B
-**Grupo E — Complementos:** Vale Transporte, Alimentação, EPI/Uniformes
+GRUPO B — Encargos Trabalhistas (pagos ao trabalhador):
+  Repouso Semanal Remunerado, Feriados, 13º Salário, Férias + 1/3 Constitucional,
+  Auxílio Enfermidade, Licença Paternidade, Faltas Justificadas, Dias de Chuva
 
-REGRAS:
-- Se o edital apresenta MÚLTIPLOS quadros de encargos (um para cada base), retorne cada um no campo "encargosPorBase" (ex: { "SINAPI": { totalHorista: 114.3, ... }, "SEINFRA": { totalHorista: 108.5, ... } }).
-- Se há apenas UM quadro geral, retorne totalHorista e totalMensalista no nível raiz.
-- Se não encontrar a composição detalhada mas encontrar apenas os totais, retorne apenas totalHorista/totalMensalista.
-- Retorne apenas JSON com os números (sem símbolo %).`;
+GRUPO C — Encargos Rescisórios:
+  Aviso Prévio Indenizado, Aviso Prévio Trabalhado, Férias Indenizadas,
+  Depósito Rescisão s/ Justa Causa, Indenização Adicional
 
-    const grupoSchema = {
-        type: Type.OBJECT as const, nullable: true,
-        properties: {
-            inss: { type: Type.NUMBER as const }, sesi: { type: Type.NUMBER as const }, senai: { type: Type.NUMBER as const },
-            incra: { type: Type.NUMBER as const }, sebrae: { type: Type.NUMBER as const }, salarioEducacao: { type: Type.NUMBER as const },
-            fgts: { type: Type.NUMBER as const }, seguroAcidente: { type: Type.NUMBER as const },
-            decimoTerceiro: { type: Type.NUMBER as const }, ferias: { type: Type.NUMBER as const },
-            avisoPrevio: { type: Type.NUMBER as const }, auxilioDoenca: { type: Type.NUMBER as const },
-            licencaPaternidade: { type: Type.NUMBER as const }, faltaJustificada: { type: Type.NUMBER as const },
-            diasChuva: { type: Type.NUMBER as const }, reincidenciaGrupoA: { type: Type.NUMBER as const },
-            valeTransporte: { type: Type.NUMBER as const }, alimentacao: { type: Type.NUMBER as const },
-            epiUniformes: { type: Type.NUMBER as const },
-        }
-    };
+GRUPO D — Reincidências:
+  Incidência do Grupo A sobre o Grupo B, Incidência do Grupo A sobre Aviso Prévio Trabalhado
 
-    const baseEncargosSchema = {
-        type: Type.OBJECT as const, nullable: true,
-        properties: {
-            totalHorista: { type: Type.NUMBER as const, nullable: true },
-            totalMensalista: { type: Type.NUMBER as const, nullable: true },
-            grupoHorista: grupoSchema,
-        }
-    };
+INSTRUÇÕES:
+1. Extraia o SUBTOTAL de cada grupo (A, B, C, D) para HORISTA e MENSALISTA
+2. Extraia o TOTAL GERAL (A+B+C+D) para horista e mensalista
+3. Se houver tabelas separadas por BASE (SINAPI, SEINFRA, etc.), extraia a primeira/principal
+4. Se não encontrar composição analítica, retorne apenas os totais
+5. Valores são percentuais (sem símbolo %). Ex: 114.31 (não "114,31%")
+6. Se não encontrar nenhum quadro de encargos, retorne found=false`;
 
+    // Schema SIMPLIFICADO — flat structure, sem nesting excessivo
+    // Gemini rejeita schemas com >100 states
     const responseSchema = {
         type: Type.OBJECT,
         properties: {
             found: { type: Type.BOOLEAN },
             totalHorista: { type: Type.NUMBER, nullable: true },
             totalMensalista: { type: Type.NUMBER, nullable: true },
-            grupoHorista: grupoSchema,
-            encargosPorBase: {
-                type: Type.OBJECT as const, nullable: true,
-                properties: {
-                    SINAPI: baseEncargosSchema,
-                    SEINFRA: baseEncargosSchema,
-                    SICRO: baseEncargosSchema,
-                    ORSE: baseEncargosSchema,
-                    SICOR: baseEncargosSchema,
-                    SBC: baseEncargosSchema,
-                }
-            },
+            grupoA_horista: { type: Type.NUMBER, nullable: true },
+            grupoA_mensalista: { type: Type.NUMBER, nullable: true },
+            grupoB_horista: { type: Type.NUMBER, nullable: true },
+            grupoB_mensalista: { type: Type.NUMBER, nullable: true },
+            grupoC_horista: { type: Type.NUMBER, nullable: true },
+            grupoC_mensalista: { type: Type.NUMBER, nullable: true },
+            grupoD_horista: { type: Type.NUMBER, nullable: true },
+            grupoD_mensalista: { type: Type.NUMBER, nullable: true },
+            basePrincipal: { type: Type.STRING, nullable: true },
         },
         required: ['found'] as string[]
     };
@@ -362,7 +345,7 @@ REGRAS:
     const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
     if (pdfParts.length > 0) {
         try {
-            console.log(`[Encargos-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com responseSchema`);
+            console.log(`[Encargos-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com schema simplificado SINAPI`);
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
@@ -370,7 +353,7 @@ REGRAS:
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
-                console.log(`[Encargos-AI] 📋 Resultado PDF: found=${parsed.found}, totalHorista=${parsed.totalHorista}, totalMensalista=${parsed.totalMensalista}, encargosPorBase=${JSON.stringify(Object.keys(parsed.encargosPorBase || {}))}`);
+                console.log(`[Encargos-AI] 📋 Resultado: found=${parsed.found}, totalH=${parsed.totalHorista}, totalM=${parsed.totalMensalista}, A=${parsed.grupoA_horista}, B=${parsed.grupoB_horista}, C=${parsed.grupoC_horista}, D=${parsed.grupoD_horista}, base=${parsed.basePrincipal}`);
                 if (parsed.found) return parsed;
             }
         } catch (e: any) {

@@ -1202,26 +1202,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--space-4)' }}>
 
                 {/* Table */}
-                <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', tableLayout: 'fixed' }}>
-                        <colgroup>
-                            <col style={{ width: '60px' }} />  {/* Item */}
-                            <col style={{ width: '62px' }} />  {/* Tipo */}
-                            <col style={{ width: '60px' }} />  {/* Base */}
-                            <col style={{ width: '80px' }} />  {/* Código */}
-                            <col />                              {/* Descrição — flex */}
-                            <col style={{ width: '50px' }} />  {/* Unid. */}
-                            <col style={{ width: '65px' }} />  {/* Qtd. */}
-                            <col style={{ width: '90px' }} />  {/* Custo S/BDI */}
-                            <col style={{ width: '90px' }} />  {/* Preço C/BDI */}
-                            <col style={{ width: '100px' }} /> {/* Total */}
-                            <col style={{ width: '90px' }} />  {/* Auditoria */}
-                            <col style={{ width: '36px' }} />  {/* Actions */}
-                        </colgroup>
+                <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 1100 }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h}</th>
+                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? '28%' : i === 0 ? 50 : i === 1 ? 70 : i === 2 ? 56 : i === 3 ? 82 : i === 5 ? 44 : i === 6 ? 56 : i === 7 ? 86 : i === 8 ? 86 : i === 9 ? 90 : i === 10 ? 80 : 36 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -1346,12 +1332,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 </select>
                                             )}
                                         </td>
-                                        <td style={{ padding: '6px 6px', overflow: 'hidden' }}>
-                                            {it.sourceName && <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 4px', borderRadius: 4, fontSize: '0.62rem', fontWeight: 700, display: 'block', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.sourceName}</span>}
+                                        <td style={{ padding: '6px 8px' }}>
+                                            {it.sourceName && <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{it.sourceName}</span>}
                                         </td>
-                                        <td style={{ padding: '6px 6px', overflow: 'hidden' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('100%'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }} />
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('82px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
                                                 {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && (
                                                     <button title="Editar composição" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5, flexShrink: 0 }}
                                                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
@@ -1362,14 +1348,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '6px 6px', overflow: 'hidden' }}>
-                                            <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle('100%'), fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }} />
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
                                         </td>
-                                        <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('100%'), textAlign: 'center', fontSize: '0.72rem' }} />
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center' }} />
                                         </td>
-                                        <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100%'), textAlign: 'right', fontSize: '0.72rem' }} step="0.01" />
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
