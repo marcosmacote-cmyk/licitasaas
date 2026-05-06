@@ -62,7 +62,14 @@ const BRAZILIAN_UFS = [
     'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
 ];
 
-interface Props { proposalId: string; biddingId: string; }
+interface Props {
+    proposalId: string;
+    biddingId: string;
+    /** Config from the Wizard (Step 1) — used for the dashboard sidebar */
+    wizardConfig?: EngineeringConfig;
+    /** BDI config from the Wizard (Step 1) */
+    wizardBdiConfig?: BdiConfig;
+}
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const token = () => localStorage.getItem('token') || '';
@@ -162,10 +169,14 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     );
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig }: Props) {
     const [items, setItems] = useState<EngItem[]>([]);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
+
+    // Dashboard sidebar: prefer wizard values (from Step 1) over internal state
+    const dashConfig = wizardConfig || engineeringConfig;
+    const dashBdi = wizardBdiConfig || bdiConfig;
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
@@ -1471,7 +1482,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: 'var(--space-3) var(--space-4)' }}>
                             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Objeto da Obra</div>
                             <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
-                                {engineeringConfig?.objeto || <span style={{ color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Não definido</span>}
+                                {dashConfig?.objeto || <span style={{ color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Não definido</span>}
                             </div>
                         </div>
 
@@ -1480,13 +1491,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             {/* UF */}
                             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px 12px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>UF</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>{engineeringConfig?.ufReferencia || '—'}</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>{dashConfig?.ufReferencia || '—'}</div>
                             </div>
                             {/* Regime */}
                             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px 12px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Desoneração</div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: engineeringConfig?.regimeOneracao === 'ONERADO' ? '#b45309' : '#059669' }}>
-                                    {engineeringConfig?.regimeOneracao || 'DESONERADO'}
+                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: dashConfig?.regimeOneracao === 'ONERADO' ? '#b45309' : '#059669' }}>
+                                    {dashConfig?.regimeOneracao || 'DESONERADO'}
                                 </div>
                             </div>
                         </div>
@@ -1495,10 +1506,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px 12px' }}>
                             <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Bases de Referência</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {(engineeringConfig?.basesConsideradas || []).map((b: string) => (
+                                {(dashConfig?.basesConsideradas || []).map((b: string) => (
                                     <span key={b} style={{ padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700, borderRadius: 'var(--radius-sm)', background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.15)' }}>{b}</span>
                                 ))}
-                                {(!engineeringConfig?.basesConsideradas || engineeringConfig.basesConsideradas.length === 0) && (
+                                {(!dashConfig?.basesConsideradas || dashConfig.basesConsideradas.length === 0) && (
                                     <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Nenhuma base selecionada</span>
                                 )}
                             </div>
@@ -1507,9 +1518,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         {/* Data Base */}
                         <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px 12px' }}>
                             <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Data Base</div>
-                            {engineeringConfig?.dataBases && Object.keys(engineeringConfig.dataBases).length > 0 ? (
+                            {dashConfig?.dataBases && Object.keys(dashConfig.dataBases).length > 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {Object.entries(engineeringConfig.dataBases).map(([base, date]) => (
+                                    {Object.entries(dashConfig.dataBases).map(([base, date]) => (
                                         <div key={base} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                                             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
                                             <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{date || '—'}</span>
@@ -1518,25 +1529,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                                    {engineeringConfig?.dataBase || <span style={{ color: 'var(--color-text-tertiary)', fontStyle: 'italic', fontWeight: 500 }}>Não definida</span>}
+                                    {dashConfig?.dataBase || <span style={{ color: 'var(--color-text-tertiary)', fontStyle: 'italic', fontWeight: 500 }}>Não definida</span>}
                                 </div>
                             )}
                         </div>
 
                         {/* BDI Cards */}
-                        <div style={{ display: 'grid', gridTemplateColumns: engineeringConfig?.bdiDiferenciado ? '1fr 1fr' : '1fr', gap: 8 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: dashConfig?.bdiDiferenciado ? '1fr 1fr' : '1fr', gap: 8 }}>
                             {/* BDI Serviços */}
                             <div style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(139,92,246,0.06))', borderRadius: 'var(--radius-md)', border: '1px solid rgba(37,99,235,0.12)', padding: '12px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>BDI Serviços</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>{effectiveBdi.toFixed(2)}%</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>{dashBdi.bdiGlobal.toFixed(2)}%</div>
                                 <div style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>TCU 2622</div>
                             </div>
                             {/* BDI Diferenciado */}
-                            {engineeringConfig?.bdiDiferenciado && (
+                            {dashConfig?.bdiDiferenciado && (
                                 <div style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.06), rgba(217,119,6,0.06))', borderRadius: 'var(--radius-md)', border: '1px solid rgba(180,83,9,0.12)', padding: '12px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '0.6rem', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>BDI Fornec.</div>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#b45309', lineHeight: 1 }}>
-                                        {(engineeringConfig.bdiFornecimento || 14.02).toFixed(2)}%
+                                        {(dashConfig.bdiFornecimento || 14.02).toFixed(2)}%
                                     </div>
                                     <div style={{ fontSize: '0.6rem', color: '#92400e', marginTop: 4 }}>Material / Equip.</div>
                                 </div>
@@ -1548,13 +1559,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.6rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Enc. Horista</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#1e40af' }}>
-                                    {(engineeringConfig?.encargosSociais?.horista || 0).toFixed(2)}%
+                                    {(dashConfig?.encargosSociais?.horista || 0).toFixed(2)}%
                                 </div>
                             </div>
                             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.6rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Enc. Mensalista</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#6d28d9' }}>
-                                    {(engineeringConfig?.encargosSociais?.mensalista || 0).toFixed(2)}%
+                                    {(dashConfig?.encargosSociais?.mensalista || 0).toFixed(2)}%
                                 </div>
                             </div>
                         </div>
@@ -1566,7 +1577,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                 <span style={{ fontWeight: 600 }}>{fmt(subtotal)}</span>
                             </div>
                             <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                                <span style={{ color: 'var(--color-text-secondary)' }}>BDI ({effectiveBdi.toFixed(2)}%)</span>
+                                <span style={{ color: 'var(--color-text-secondary)' }}>BDI ({dashBdi.bdiGlobal.toFixed(2)}%)</span>
                                 <span style={{ fontWeight: 600, color: 'var(--color-success)' }}>+ {fmt(total - subtotal)}</span>
                             </div>
                             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

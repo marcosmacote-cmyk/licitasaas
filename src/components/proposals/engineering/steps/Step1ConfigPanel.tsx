@@ -168,13 +168,6 @@ export function Step1ConfigPanel({
                                         style={{ width: 140, fontSize: '0.8rem', padding: '4px 8px' }} />
                                 </div>
                             ))}
-                            {engineeringConfig.basesConsideradas.length > 0 && (
-                                <button onClick={onSyncBases} disabled={isAuditing}
-                                    style={{ marginTop: 4, width: '100%', padding: '6px', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s', opacity: isAuditing ? 0.7 : 1 }}>
-                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-                                    Puxar Valores do Hub
-                                </button>
-                            )}
                         </div>
                     </div>
 

@@ -5,23 +5,32 @@
  * renderiza o EngineeringProposalEditor legado em "modo embutido" (embedded mode).
  * O editor legado continua funcionando 100% — apenas o wrapper de navegação muda.
  * 
- * Na Fase 4 (Polish), as abas internas do editor (Cronograma, Encargos, Caderno)
- * serão ocultadas pois já vivem nos Steps 1, 3 e 5.
+ * Recebe engineeringConfig e bdiConfig do Wizard para que o dashboard sidebar
+ * reflita a configuração atual do Step 1 em tempo real.
  */
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
+import type { EngineeringConfig } from '../types';
+import type { BdiConfig } from '../bdiEngine';
 
 interface Props {
     proposalId: string;
     biddingId: string;
+    engineeringConfig?: EngineeringConfig;
+    bdiConfig?: BdiConfig;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export function Step2BudgetEditor({ proposalId, biddingId, onPrev, onNext }: Props) {
+export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onPrev, onNext }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
-            <EngineeringProposalEditor proposalId={proposalId} biddingId={biddingId} />
+            <EngineeringProposalEditor
+                proposalId={proposalId}
+                biddingId={biddingId}
+                wizardConfig={engineeringConfig}
+                wizardBdiConfig={bdiConfig}
+            />
 
             {/* Step navigation footer */}
             <div style={{

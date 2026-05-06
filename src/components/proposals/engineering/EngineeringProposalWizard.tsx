@@ -363,15 +363,17 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 />
             )}
 
-            {/* Step 2: Budget Editor (delegates to legacy editor) */}
-            {currentStep === 2 && (
+            {/* Step 2: Budget Editor — ALWAYS MOUNTED to preserve state across navigation */}
+            <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
                 <Step2BudgetEditor
                     proposalId={proposalId}
                     biddingId={biddingId}
+                    engineeringConfig={engineeringConfig}
+                    bdiConfig={bdiConfig}
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}
                 />
-            )}
+            </div>
 
             {/* Step 3: Cronograma */}
             {currentStep === 3 && (
