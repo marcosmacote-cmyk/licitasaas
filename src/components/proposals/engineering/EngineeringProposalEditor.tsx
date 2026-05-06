@@ -1362,6 +1362,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 )}
                                             </div>
                                         </td>
+                                        <td style={{ padding: '6px 6px', overflow: 'hidden' }}>
                                             <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle('100%'), fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }} />
                                         </td>
                                         <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
