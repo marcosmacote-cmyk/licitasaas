@@ -7,7 +7,9 @@ import { classifyEngineeringAttachments } from './documentClassifier';
 
 const prisma = new PrismaClient();
 
-export async function extractBdiFromBidding(biddingId: string): Promise<any | null> {
+type BdiExtractionTarget = 'SERVICOS' | 'FORNECIMENTO' | 'ALL';
+
+export async function extractBdiFromBidding(biddingId: string, target: BdiExtractionTarget = 'ALL'): Promise<any | null> {
     const bidding = await prisma.biddingProcess.findUnique({
         where: { id: biddingId },
         include: { aiAnalysis: true }
@@ -20,11 +22,14 @@ export async function extractBdiFromBidding(biddingId: string): Promise<any | nu
     const bdiPrompt = `Você é um engenheiro orçamentista SÊNIOR analisando um edital de licitação pública.
 Seu objetivo é encontrar a COMPOSIÇÃO ANALÍTICA DO BDI (Benefícios e Despesas Indiretas) exigida pelo edital.
 
+ALVO DESTA EXTRAÇÃO: ${target}.
+
 PROCURE POR:
 - Tabelas intituladas "COMPOSIÇÃO DO BDI", "COMPOSIÇÃO DE BDI", "BDI - SERVIÇOS", "BDI ADOTADO"
+- Tabelas separadas como "BDI - FORNECIMENTO", "BDI MATERIAIS", "BDI EQUIPAMENTOS", "BDI DIFERENCIADO", "BDI 2" ou "BDI 3"
 - Referências ao Acórdão TCU 2622/2013 ou TCU 2369/2011
 - Quadros com a fórmula: BDI = {(1+AC+S+G+R)×(1+DF)×(1+L)/(1-I) - 1} × 100
-- Em planilhas OGU do TransfereGOV, o BDI aparece no cabeçalho como "BDI 1", "BDI 2", "BDI 3" (só o percentual global)
+- Em planilhas OGU do TransfereGOV, o BDI aparece no cabeçalho como "BDI 1", "BDI 2", "BDI 3" (só o percentual global). Normalmente BDI 1 é serviços/obra e BDI 2/3 podem ser fornecimento/material/equipamento — confirme pelo cabeçalho ou legenda antes de classificar.
 
 EXTRAIA OBRIGATORIAMENTE os seguintes percentuais individuais (NÃO o BDI total):
 - **adminCentral**: Administração Central (AC) — típico: 3-5%
@@ -41,33 +46,52 @@ REGRAS CRÍTICAS:
 3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração da empresa (tipicamente 4-8%).
 4. Se um componente é "0" ou não mencionado, coloque 0 — NÃO omita o campo.
 5. Os valores individuais são SEMPRE MUITO MENORES que o BDI total.
+6. Se houver BDI diferenciado para fornecimento/materiais/equipamentos, preencha globalBdiFornecimento e, se houver composição, tcuFornecimento.
+7. Se o ALVO for FORNECIMENTO, priorize o BDI de fornecimento. Se não existir BDI de fornecimento no edital, retorne found=false, exceto se o edital disser explicitamente que o BDI único também se aplica a fornecimento.
 
 EXEMPLO de composição válida:
 AC=4.00, S=0.80, G=0.80, R=0.97, DF=0.59, L=6.16, I=5.65 → BDI = 20.35%
 
 Retorne apenas os números (sem o símbolo de %).`;
 
+    const tcuSchema = {
+        type: Type.OBJECT,
+        nullable: true,
+        description: 'Os parâmetros INDIVIDUAIS do BDI conforme Acórdão TCU. Cada campo é um percentual pequeno (0-10%). NÃO colocar o BDI total em nenhum campo.',
+        properties: {
+            adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — tipicamente 3-5%' },
+            seguros: { type: Type.NUMBER, description: 'Seguros (S) — tipicamente 0.5-1%' },
+            garantias: { type: Type.NUMBER, description: 'Garantias (G) — tipicamente 0-1%' },
+            riscos: { type: Type.NUMBER, description: 'Riscos (R) — tipicamente 0.5-1.5%' },
+            despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — tipicamente 0.5-1.5%' },
+            lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — tipicamente 4-8%. NUNCA o BDI total.' },
+            tributos: { type: Type.NUMBER, description: 'Tributos PIS+COFINS+ISS (I) — tipicamente 5-7%' },
+        }
+    };
+
     const responseSchema = {
         type: Type.OBJECT,
         properties: {
             found: { type: Type.BOOLEAN, description: 'Se a tabela de BDI foi encontrada no edital.' },
             globalBdi: { type: Type.NUMBER, description: 'O valor do BDI Global calculado (em percentual).', nullable: true },
-            tcu: {
-                type: Type.OBJECT,
-                nullable: true,
-                description: 'Os parâmetros INDIVIDUAIS do BDI conforme Acórdão TCU. Cada campo é um percentual pequeno (0-10%). NÃO colocar o BDI total em nenhum campo.',
-                properties: {
-                    adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — tipicamente 3-5%' },
-                    seguros: { type: Type.NUMBER, description: 'Seguros (S) — tipicamente 0.5-1%' },
-                    garantias: { type: Type.NUMBER, description: 'Garantias (G) — tipicamente 0-1%' },
-                    riscos: { type: Type.NUMBER, description: 'Riscos (R) — tipicamente 0.5-1.5%' },
-                    despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — tipicamente 0.5-1.5%' },
-                    lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — tipicamente 4-8%. NUNCA o BDI total.' },
-                    tributos: { type: Type.NUMBER, description: 'Tributos PIS+COFINS+ISS (I) — tipicamente 5-7%' },
-                }
-            }
+            tcu: tcuSchema,
+            globalBdiFornecimento: { type: Type.NUMBER, description: 'BDI global específico para fornecimento, materiais ou equipamentos, quando o edital trouxer BDI diferenciado.', nullable: true },
+            tcuFornecimento: tcuSchema,
         },
         required: ['found'] as string[]
+    };
+
+    const sanitizeBdiResult = (parsed: any) => {
+        if (!parsed?.found) return parsed;
+        if (parsed.tcu && parsed.globalBdi && Math.abs(parsed.tcu.lucro - parsed.globalBdi) < 0.5) {
+            console.warn(`[BDI-AI] ⚠️ AI colocou BDI total (${parsed.globalBdi}) no campo Lucro. Removendo tcu para usar apenas globalBdi.`);
+            parsed.tcu = null;
+        }
+        if (parsed.tcuFornecimento && parsed.globalBdiFornecimento && Math.abs(parsed.tcuFornecimento.lucro - parsed.globalBdiFornecimento) < 0.5) {
+            console.warn(`[BDI-AI] ⚠️ AI colocou BDI fornecimento total (${parsed.globalBdiFornecimento}) no campo Lucro. Removendo tcuFornecimento para usar apenas globalBdiFornecimento.`);
+            parsed.tcuFornecimento = null;
+        }
+        return parsed;
     };
 
     // ═══════════════════════════════════════════════════════
@@ -161,13 +185,9 @@ Retorne apenas os números (sem o símbolo de %).`;
                         if (result?.text) {
                             const parsed = JSON.parse(result.text);
                             if (parsed.found) {
-                                // Validation: if tcu.lucro == globalBdi, the AI confused total with component
-                                if (parsed.tcu && parsed.globalBdi && Math.abs(parsed.tcu.lucro - parsed.globalBdi) < 0.5) {
-                                    console.warn(`[BDI-AI] ⚠️ AI colocou BDI total (${parsed.globalBdi}) no campo Lucro. Removendo tcu para usar apenas globalBdi.`);
-                                    parsed.tcu = null;
-                                }
-                                console.log(`[BDI-AI] ✅ BDI extraído via multimodal PDF — global: ${parsed.globalBdi}%, tcu: ${parsed.tcu ? 'SIM (AC=' + parsed.tcu.adminCentral + ', L=' + parsed.tcu.lucro + ', I=' + parsed.tcu.tributos + ')' : 'NÃO (apenas global)'}`);
-                                return parsed;
+                                const sanitized = sanitizeBdiResult(parsed);
+                                console.log(`[BDI-AI] ✅ BDI extraído via multimodal PDF — alvo: ${target}, global: ${sanitized.globalBdi}%, tcu: ${sanitized.tcu ? 'SIM (AC=' + sanitized.tcu.adminCentral + ', L=' + sanitized.tcu.lucro + ', I=' + sanitized.tcu.tributos + ')' : 'NÃO (apenas global)'}, fornecimento: ${sanitized.globalBdiFornecimento || 'N/A'}%`);
+                                return sanitized;
                             }
                         }
                     }
@@ -228,7 +248,7 @@ Retorne apenas os números (sem o símbolo de %).`;
 
     if (!response.text) return null;
     try {
-        return JSON.parse(response.text);
+        return sanitizeBdiResult(JSON.parse(response.text));
     } catch {
         return null;
     }

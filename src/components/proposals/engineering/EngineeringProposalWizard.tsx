@@ -9,7 +9,7 @@ import { StepperBar } from './StepperBar';
 import { Step1ConfigPanel } from './steps/Step1ConfigPanel';
 import { Step2BudgetEditor } from './steps/Step2BudgetEditor';
 import { Step4ProposalLetter } from './steps/Step4ProposalLetter';
-import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, autoDistributeBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, autoDistributeBdi, resolveEffectiveBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { applyPrecision } from './precisionEngine';
 import { CronogramaPanel } from './CronogramaPanel';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
@@ -51,7 +51,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     const [isExtractingEncargos, setIsExtractingEncargos] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
 
-    const effectiveBdi = bdiConfig.bdiGlobal;
+    const effectiveBdi = resolveEffectiveBdi(bdiConfig);
     const billableItems = items.filter(it => !isGrouper(it.type));
     const subtotal = billableItems.reduce((s, it) => s + it.quantity * it.unitCost, 0);
     const total = billableItems.reduce((s, it) => s + it.totalPrice, 0);
@@ -112,11 +112,12 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     const handleSave = async () => {
         setIsSaving(true); setSaveMsg(null);
         try {
+            const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
             const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
             setItems(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items: itemsToSave, bdiConfig, engineeringConfig, cronogramaData })
+                body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig, cronogramaData })
             });
             if (res.ok) {
                 const d = await res.json();
@@ -144,12 +145,13 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
         setIsExtractingBdi(true);
         try {
             const res = await fetch('/api/engineering/ai-extract-bdi', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, target: 'SERVICOS' })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const result = await res.json();
             if (result.data?.tcu) {
-                setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu: { ...prev.tcu, ...result.data.tcu } }));
+                const tcu = { ...bdiConfig.tcu, ...result.data.tcu };
+                setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu, bdiGlobal: calculateBdiTCU(tcu) }));
                 setHasUnsavedChanges(true);
             } else if (result.data?.globalBdi) {
                 setBdiConfig(prev => ({ ...prev, mode: 'SIMPLIFICADO', bdiGlobal: result.data.globalBdi, tcu: autoDistributeBdi(result.data.globalBdi) }));
@@ -217,7 +219,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                         if (firstDate) updates.dataBase = firstDate as string;
                     }
                 }
-                if (d.regime) updates.regimeOneracao = d.regime === 'ONERADO' ? 'ONERADO' : 'DESONERADO';
+                if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
                 setEngineeringConfig(prev => ({ ...prev, ...updates }));
                 setHasUnsavedChanges(true);
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas com sucesso</span>);
@@ -288,7 +290,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
         setIsExtractingBdi(true);
         try {
             const res = await fetch('/api/engineering/ai-extract-bdi', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, target: 'FORNECIMENTO' })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const result = await res.json();
@@ -296,6 +298,8 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 handleBdiChange({ ...bdiConfig, tcuFornecimento: result.data.tcuFornecimento });
                 const calcBdi = calculateBdiTCU(result.data.tcuFornecimento);
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: calcBdi, bdiDiferenciado: true });
+            } else if (result.data?.globalBdiFornecimento) {
+                handleConfigChange({ ...engineeringConfig, bdiFornecimento: result.data.globalBdiFornecimento, bdiDiferenciado: true });
             } else if (result.data?.globalBdi) {
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: result.data.globalBdi, bdiDiferenciado: true });
             }

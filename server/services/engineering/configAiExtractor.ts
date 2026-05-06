@@ -11,38 +11,79 @@ import { classifyEngineeringAttachments } from './documentClassifier';
 
 const prisma = new PrismaClient();
 
+type ExtractionIntent = 'config' | 'encargos';
+
+const INTENT_KEYWORDS: Record<ExtractionIntent, string[]> = {
+    config: [
+        'EDITAL', 'PROJETO BÁSICO', 'PROJETO BASICO', 'TERMO DE REFERÊNCIA', 'TERMO DE REFERENCIA',
+        'OBJETO', 'LOCAL DA OBRA', 'MUNICÍPIO', 'MUNICIPIO', 'UF', 'SINAPI', 'SEINFRA', 'SICRO',
+        'ORSE', 'SICOR', 'SIPROCE', 'SETOP', 'SEDOP', 'DER', 'DATA BASE', 'DATA-BASE',
+        'MÊS DE REFERÊNCIA', 'MES DE REFERENCIA', 'DESONERADO', 'NÃO DESONERADO', 'NAO DESONERADO',
+        'ONERADO', 'REGIME',
+    ],
+    encargos: [
+        'ENCARGOS SOCIAIS', 'LEIS SOCIAIS', 'ENCARGO', 'HORISTA', 'MENSALISTA', 'GRUPO A',
+        'GRUPO B', 'GRUPO C', 'GRUPO D', 'GRUPO E', 'INSS', 'FGTS', 'RAT', 'FAP',
+        'DESONERADO', 'NÃO DESONERADO', 'NAO DESONERADO', 'SINAPI', 'SEINFRA', 'SICRO',
+    ],
+};
+
+function scoreDocForIntent(doc: any, intent: ExtractionIntent): number {
+    const haystack = `${doc.title || ''} ${doc.purpose || ''}`.toLowerCase();
+    let score = Number(doc.score) || 0;
+    if (intent === 'config') {
+        if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 55;
+        if (/planilh|or[cç]ament|data.?base|sinapi|seinfra|sicro|orse|sicor|siproce|sedop|setop|der/.test(haystack)) score += 28;
+        if (/cronograma|bdi|encargo/.test(haystack)) score += 8;
+    } else {
+        if (/encargo|leis.?sociais|m[aã]o.?de.?obra|horista|mensalista/.test(haystack)) score += 70;
+        if (/bdi|composi[cç][aã]o|planilh|or[cç]ament/.test(haystack)) score += 22;
+        if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 16;
+    }
+    return score;
+}
+
+function selectDocsForIntent(arquivos: any[], maxDocs: number, intent: ExtractionIntent) {
+    const classified = classifyEngineeringAttachments(arquivos, { maxDocuments: Math.max(maxDocs, 6), minScore: -50 });
+    return classified.all
+        .map(doc => ({ ...doc, intentScore: scoreDocForIntent(doc, intent) }))
+        .sort((a, b) => b.intentScore - a.intentScore)
+        .slice(0, maxDocs);
+}
+
 // ═══════════════════════════════════════════════════════════
 // Helper: Download PDFs from PNCP for AI extraction
 // Supports page targeting for large PDFs to ensure encargos
 // (typically at the end) are not cut off by size limits.
 // ═══════════════════════════════════════════════════════════
-async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promise<any[]> {
+async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3, intent: ExtractionIntent = 'config'): Promise<any[]> {
     const bidding = await prisma.biddingProcess.findUnique({
         where: { id: biddingId },
         include: { aiAnalysis: true }
     });
-    if (!bidding?.pncpLink) return [];
-
-    const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
-    if (!linkMatch) return [];
-
-    const [, cnpj, ano, seq] = linkMatch;
     const agent = new https.Agent({ rejectUnauthorized: false });
-    const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
 
     try {
-        const apiRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 20000 } as any);
-        const arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
+        const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
+        let arquivos = Array.isArray(schemaV2?.pncp_source?.attachments) ? schemaV2.pncp_source.attachments : [];
+
+        if (arquivos.length === 0 && bidding?.pncpLink) {
+            const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
+            if (!linkMatch) return [];
+
+            const [, cnpj, ano, seq] = linkMatch;
+            const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+            const apiRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 20000 } as any);
+            arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
+        }
         if (arquivos.length === 0) return [];
 
-        const classified = classifyEngineeringAttachments(arquivos, { maxDocuments: maxDocs });
-        const selectedDocs = classified.selected.length > 0
-            ? classified.selected
-            : classified.all.filter(doc => doc.score > -20).slice(0, maxDocs);
+        const selectedDocs = selectDocsForIntent(arquivos, maxDocs, intent);
 
         const pdfParts: any[] = [];
         let totalSizeKB = 0;
         const MAX_SIZE_KB = 20000; // 20MB — increased to handle large engineering PDFs
+        const extraKeywords = INTENT_KEYWORDS[intent];
 
         for (const doc of selectedDocs.slice(0, maxDocs)) {
             try {
@@ -66,12 +107,11 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promis
                         // Dynamic import of page targeting
                         const { targetBudgetPages } = await import('./pageTargeting');
                         const targeting = await targetBudgetPages(buffer, {
-                            minScore: 3, // Lower threshold to catch encargos/BDI pages
-                            maxPages: 30,
-                            contextPages: 1,
+                            minScore: 2,
+                            maxPages: intent === 'config' ? 40 : 35,
+                            contextPages: 2,
                             minPagesForTargeting: 10,
-                            // Custom keywords for config extraction
-                            extraKeywords: ['ENCARGO', 'LEIS SOCIAIS', 'BDI', 'COMPOSIÇÃO DO BDI', 'PLANILHA ORÇAMENTÁRIA', 'DATA BASE', 'CRONOGRAMA'],
+                            extraKeywords,
                         });
                         if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
                             const trimmedBuf = targeting.trimmedPdfBuffer;
@@ -79,7 +119,7 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promis
                             if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) break;
                             totalSizeKB += trimmedSizeKB;
                             pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
-                            console.log(`[Config-AI] 🎯 Page targeting: ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
+                            console.log(`[Config-AI] 🎯 Page targeting (${intent}): ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
                             continue;
                         }
                     } catch (ptErr: any) {
@@ -99,12 +139,44 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3): Promis
 // ═══════════════════════════════════════════════════════════
 // Fallback: text from DocumentChunks or AiAnalysis
 // ═══════════════════════════════════════════════════════════
-async function getEditalText(biddingId: string): Promise<string> {
+function scoreTextForKeywords(text: string, keywords: string[]): number {
+    if (keywords.length === 0) return 0;
+    const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return keywords.reduce((score, kw) => {
+        const needle = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return normalized.includes(needle) ? score + 1 : score;
+    }, 0);
+}
+
+async function getEditalText(biddingId: string, keywords: string[] = []): Promise<string> {
     const chunks = await prisma.documentChunk.findMany({
         where: { biddingProcessId: biddingId },
         orderBy: { id: 'asc' }
     });
-    if (chunks && chunks.length > 0) return chunks.map(c => c.content).join('\n\n');
+    if (chunks && chunks.length > 0) {
+        if (keywords.length === 0) return chunks.map(c => c.content).join('\n\n');
+
+        const scored = chunks
+            .map((chunk, index) => ({ chunk, index, score: scoreTextForKeywords(chunk.content, keywords) }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 35);
+
+        if (scored.length > 0) {
+            const selectedIndexes = new Set<number>();
+            for (const item of scored) {
+                selectedIndexes.add(item.index);
+                if (item.index > 0) selectedIndexes.add(item.index - 1);
+                if (item.index < chunks.length - 1) selectedIndexes.add(item.index + 1);
+            }
+            return Array.from(selectedIndexes)
+                .sort((a, b) => a - b)
+                .map(index => chunks[index].content)
+                .join('\n\n');
+        }
+
+        return chunks.map(c => c.content).join('\n\n');
+    }
 
     const bidding = await prisma.biddingProcess.findUnique({
         where: { id: biddingId },
@@ -163,7 +235,7 @@ Se todas as bases usarem a mesma data, retorne objeto vazio {}.
 - "desonerado", "com desoneração", "desoneração da folha" → retorne "DESONERADO"
 - "onerado", "sem desoneração", "não desonerado", "(N DES.)" → retorne "ONERADO"
 - Se mencionar tabela SINAPI desonerada ou "(DES.)" → "DESONERADO"
-- Se nada for mencionado sobre desoneração → retorne "DESONERADO" (default TCU)
+- Se nada for mencionado sobre desoneração → retorne "UNKNOWN". NÃO chute o regime.
 
 Retorne JSON.`;
 
@@ -182,7 +254,7 @@ Retorne JSON.`;
     };
 
     // Try PDFs first
-    const pdfParts = await downloadPdfsForExtraction(biddingId, 2);
+    const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'config');
     if (pdfParts.length > 0) {
         try {
             const result = await callGeminiWithRetry(ai.models, {
@@ -200,7 +272,7 @@ Retorne JSON.`;
     }
 
     // Fallback: text
-    const text = await getEditalText(biddingId);
+    const text = await getEditalText(biddingId, INTENT_KEYWORDS.config);
     if (text.length < 100) return { found: false };
 
     const response = await ai.models.generateContent({
@@ -284,7 +356,7 @@ REGRAS:
         required: ['found'] as string[]
     };
 
-    const pdfParts = await downloadPdfsForExtraction(biddingId, 3);
+    const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
     if (pdfParts.length > 0) {
         try {
             const result = await callGeminiWithRetry(ai.models, {
@@ -301,7 +373,7 @@ REGRAS:
         }
     }
 
-    const text = await getEditalText(biddingId);
+    const text = await getEditalText(biddingId, INTENT_KEYWORDS.encargos);
     if (text.length < 100) return { found: false };
 
     const response = await ai.models.generateContent({

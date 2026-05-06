@@ -1284,10 +1284,11 @@ import { extractBdiFromBidding } from '../services/engineering/bdiAiExtractor';
 
 router.post('/ai-extract-bdi', async (req: any, res: any) => {
     try {
-        const { biddingId } = req.body;
+        const { biddingId, target } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId é obrigatório' });
         
-        const bdiData = await extractBdiFromBidding(biddingId);
+        const bdiTarget = target === 'SERVICOS' || target === 'FORNECIMENTO' || target === 'ALL' ? target : 'ALL';
+        const bdiData = await extractBdiFromBidding(biddingId, bdiTarget);
         
         if (!bdiData || !bdiData.found) {
             return res.json({ found: false, message: 'Nenhuma tabela de BDI explícita encontrada no edital.' });
