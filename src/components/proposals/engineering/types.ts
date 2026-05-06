@@ -102,9 +102,20 @@ export interface EncargosSociaisGrupo {
 export interface EncargosSociaisConfig {
     horista: number;
     mensalista: number;
-    /** Composição analítica — Horista */
+    /** SINAPI Groups A-D — subtotals per group */
+    grupoA_horista?: number;
+    grupoA_mensalista?: number;
+    grupoB_horista?: number;
+    grupoB_mensalista?: number;
+    grupoC_horista?: number;
+    grupoC_mensalista?: number;
+    grupoD_horista?: number;
+    grupoD_mensalista?: number;
+    /** Base principal identificada pela IA */
+    basePrincipal?: string | null;
+    /** Composição analítica — Horista (legacy) */
     grupoHorista?: Partial<EncargosSociaisGrupo>;
-    /** Composição analítica — Mensalista */
+    /** Composição analítica — Mensalista (legacy) */
     grupoMensalista?: Partial<EncargosSociaisGrupo>;
     /** Segundo encargo social (para comparação) */
     encargos2?: { horista: number; mensalista: number; label?: string };
