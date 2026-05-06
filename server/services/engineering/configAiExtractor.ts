@@ -257,13 +257,15 @@ Retorne JSON.`;
     const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'config');
     if (pdfParts.length > 0) {
         try {
+            console.log(`[Config-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com responseSchema`);
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: configPrompt }] }],
-                config: { responseMimeType: 'application/json', temperature: 0.05 }
+                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
+                console.log(`[Config-AI] 📋 Resultado PDF: found=${parsed.found}, objeto=${(parsed.objeto||'').substring(0,60)}, uf=${parsed.uf}, bases=${JSON.stringify(parsed.bases)}, dataBase=${parsed.dataBase}, regime=${parsed.regime}`);
                 if (parsed.found) return parsed;
             }
         } catch (e: any) {
@@ -275,10 +277,11 @@ Retorne JSON.`;
     const text = await getEditalText(biddingId, INTENT_KEYWORDS.config);
     if (text.length < 100) return { found: false };
 
+    console.log(`[Config-AI] 📝 Fallback texto: ${text.length} chars`);
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: configPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
-        config: { responseMimeType: 'application/json', temperature: 0.05 }
+        config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
     });
     if (!response.text) return null;
     try { return JSON.parse(response.text); } catch { return null; }
@@ -359,13 +362,15 @@ REGRAS:
     const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
     if (pdfParts.length > 0) {
         try {
+            console.log(`[Encargos-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com responseSchema`);
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
-                config: { responseMimeType: 'application/json', temperature: 0.1 }
+                config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
+                console.log(`[Encargos-AI] 📋 Resultado PDF: found=${parsed.found}, totalHorista=${parsed.totalHorista}, totalMensalista=${parsed.totalMensalista}, encargosPorBase=${JSON.stringify(Object.keys(parsed.encargosPorBase || {}))}`);
                 if (parsed.found) return parsed;
             }
         } catch (e: any) {
@@ -376,10 +381,11 @@ REGRAS:
     const text = await getEditalText(biddingId, INTENT_KEYWORDS.encargos);
     if (text.length < 100) return { found: false };
 
+    console.log(`[Encargos-AI] 📝 Fallback texto: ${text.length} chars`);
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: encargosPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
-        config: { responseMimeType: 'application/json', temperature: 0.1 }
+        config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
     });
     if (!response.text) return null;
     try { return JSON.parse(response.text); } catch { return null; }

@@ -350,6 +350,60 @@ export function postClassifyTypes(items: Array<Record<string, any>>, repairs?: s
 }
 
 // ═══════════════════════════════════════════════════════════
+// DEDUPLICATION: Fix repeated item numbers from AI extraction
+// When AI returns multiple items with the same number (e.g., all "1.3"),
+// renumber them sequentially (1.3.1, 1.3.2, etc.)
+// ═══════════════════════════════════════════════════════════
+
+function deduplicateItemNumbers(items: Array<Record<string, any>>, repairs: string[]): void {
+    // Count occurrences of each item number
+    const counts = new Map<string, number>();
+    for (const item of items) {
+        const num = String(item.item || '').trim();
+        if (!num) continue;
+        counts.set(num, (counts.get(num) || 0) + 1);
+    }
+
+    // Find numbers that are duplicated (>1 occurrence)
+    const duplicated = new Map<string, number>();
+    for (const [num, count] of counts) {
+        if (count > 1) {
+            duplicated.set(num, 0); // counter for sequential numbering
+        }
+    }
+
+    if (duplicated.size === 0) return;
+
+    // Log the problem
+    const totalDuplicates = Array.from(duplicated.entries())
+        .map(([num, _]) => `${num}×${counts.get(num)}`)
+        .join(', ');
+
+    // Renumber: for each duplicated number, assign sequential sub-numbers
+    for (const item of items) {
+        const num = String(item.item || '').trim();
+        if (!duplicated.has(num)) continue;
+
+        // Skip groupers — if the FIRST occurrence is a grouper (ETAPA/SUBETAPA), keep it
+        const currentCount = duplicated.get(num)!;
+        if (currentCount === 0 && (item.type === 'ETAPA' || item.type === 'SUBETAPA')) {
+            duplicated.set(num, currentCount + 1);
+            continue;
+        }
+
+        // For compositions/insumos with duplicated numbers, create sub-numbers
+        const subIndex = duplicated.get(num)! + 1;
+        duplicated.set(num, subIndex);
+
+        // If there's already a dot structure, append; otherwise create sub-level
+        const newNum = `${num}.${subIndex}`;
+        item.item = newNum;
+    }
+
+    repairs.push(`dedup_item_numbers:${totalDuplicates}`);
+}
+
+// ═══════════════════════════════════════════════════════════
 
 export function normalizeEngineeringItems(items: Array<Record<string, unknown>>): NormalizedEngineeringExtraction {
     const repairs: string[] = [];
@@ -419,6 +473,9 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
 
     // ── Post-classification: fix groupers that AI marked as COMPOSICAO ──
     postClassifyTypes(engineeringItems, repairs);
+
+    // ── Deduplication: fix repeated item numbers (e.g., all items as "1.3") ──
+    deduplicateItemNumbers(engineeringItems, repairs);
 
     return {
         engineeringItems,

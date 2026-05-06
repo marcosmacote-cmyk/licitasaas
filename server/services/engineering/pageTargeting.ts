@@ -64,6 +64,7 @@ const MEDIUM_WEIGHT_KEYWORDS = [
     'sinapi', 'seinfra', 'siproce', 'sicro', 'orse', 'sedop',
     'composição', 'composicao', 'composição de custos',
     'bdi', 'encargos sociais', 'leis sociais',
+    'horista', 'mensalista', 'grupo a', 'grupo b',
     'cronograma físico', 'cronograma fisico',
     'quantitativo', 'quantitativos',
     'empreitada', 'medição', 'medicao',
