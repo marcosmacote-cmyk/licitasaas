@@ -1484,6 +1484,11 @@ router.post('/ai-populate', async (req: any, res: any) => {
                         delete schema._engineeringExtractionMeta;
                         delete schema._engineeringBudgetItems;
                         delete schema._engineeringValidation;
+                        // FIX CACHE-01: Also clear V2 itens_licitados to prevent stale fallback
+                        if (schema.proposal_analysis?.itens_licitados) {
+                            delete schema.proposal_analysis.itens_licitados;
+                            console.log(`[Engineering AI-Populate] 🧹 Também limpou itens_licitados V2 do cache`);
+                        }
                         await prisma.aiAnalysis.update({
                             where: { biddingProcessId: biddingId },
                             data: { schemaV2: schema }
@@ -1497,7 +1502,8 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
             // Priority 2: Use V2 itens_licitados if they have enough items
             // Guard: V2 items must be real budget items, NOT high-level stages/chapters
-            const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
+            // FIX CACHE-01: Skip V2 fallback entirely when forceRefresh is true — we want a fresh AI extraction
+            const itensV2 = forceRefresh ? undefined : schemaV2?.proposal_analysis?.itens_licitados;
             const MIN_V2_ITEMS_FOR_ENGINEERING = 3;
             
             if (Array.isArray(itensV2) && itensV2.length >= MIN_V2_ITEMS_FOR_ENGINEERING) {
