@@ -1207,7 +1207,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 110 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
+                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 150 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -1240,7 +1240,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             {(listeners: any) => (
                                                 <>
                                                     <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: Math.min(depth, 4) * 12 }}>
                                                             <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: meta.color, opacity: 0.5, display: 'flex' }}><GripVertical size={14} /></button>
                                                             {it.itemNumber}
                                                         </div>
@@ -1301,14 +1301,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         {(listeners: any) => (
                                             <>
                                                 <td style={{ padding: '6px 12px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, paddingLeft: Math.min(depth, 4) * 12 }}>
                                                         <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: 'var(--color-text-tertiary)', display: 'flex', marginRight: 4 }}><GripVertical size={14} /></button>
                                                         {hasInsumos && (
                                                             <button onClick={() => toggleExpand(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: meta.color, display: 'flex' }}>
                                                                 {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                                             </button>
                                                         )}
-                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '80px' : '90px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '80px' : '100px'), fontWeight: 700 }} />
                                                     </div>
                                                 </td>
                                         <td style={{ padding: '6px 8px' }}>
