@@ -1356,6 +1356,42 @@ router.post('/ai-extract-encargos-image', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-config-image
+// Extrai configurações do orçamento a partir de imagem
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-config-image', async (req: any, res: any) => {
+    try {
+        const { imageBase64, mimeType } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 é obrigatório' });
+        const { extractConfigFromImage } = await import('../services/engineering/configAiExtractor');
+        const data = await extractConfigFromImage(imageBase64, mimeType || 'image/png');
+        if (!data || !data.found) return res.json({ found: false, message: 'Não foi possível extrair configurações da imagem.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI Config-Image] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair configurações da imagem', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-bdi-image
+// Extrai tabela de BDI a partir de imagem
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-bdi-image', async (req: any, res: any) => {
+    try {
+        const { imageBase64, mimeType, isOnerado } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 é obrigatório' });
+        const { extractBdiFromImage } = await import('../services/engineering/configAiExtractor');
+        const data = await extractBdiFromImage(imageBase64, mimeType || 'image/png', isOnerado);
+        if (!data || !data.found) return res.json({ found: false, message: 'Não foi possível extrair BDI da imagem.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI BDI-Image] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair BDI da imagem', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
 // Pipeline: V2 itens_licitados → AI extraction (fallback)

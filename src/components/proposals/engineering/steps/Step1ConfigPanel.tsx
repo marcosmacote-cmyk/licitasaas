@@ -186,12 +186,59 @@ export function Step1ConfigPanel({
                             <Wrench size={18} color="var(--color-primary)" />
                             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Dados do Orçamento</h3>
                         </div>
-                        {onExtractConfig && (
-                            <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
-                                onClick={onExtractConfig} disabled={isExtractingConfig}>
-                                {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={async () => {
+                                try {
+                                    const clipItems = await navigator.clipboard.read();
+                                    let imageBlob: Blob | null = null;
+                                    for (const item of clipItems) {
+                                        for (const type of item.types) {
+                                            if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                        }
+                                        if (imageBlob) break;
+                                    }
+                                    if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
+                                    const reader = new FileReader();
+                                    reader.onload = async () => {
+                                        const base64 = (reader.result as string).split(',')[1];
+                                        try {
+                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do Orçamento...</span>);
+                                            const resp = await fetch('/api/engineering/ai-extract-config-image', {
+                                                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type })
+                                            });
+                                            const result = await resp.json();
+                                            if (result.found) {
+                                                const d = result.data || result;
+                                                const updates: any = {};
+                                                if (d.objeto) updates.objeto = d.objeto;
+                                                if (d.uf) updates.ufReferencia = d.uf;
+                                                if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
+                                                if (d.dataBase) updates.dataBase = d.dataBase;
+                                                if (d.dataBasesPorFonte && typeof d.dataBasesPorFonte === 'object') {
+                                                    updates.dataBases = d.dataBasesPorFonte;
+                                                    if (!d.dataBase) updates.dataBase = Object.values(d.dataBasesPorFonte)[0] as string;
+                                                }
+                                                if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
+                                                onConfigChange({ ...engineeringConfig, ...updates });
+                                                setHasUnsavedChanges(true);
+                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas!</span>);
+                                            } else { alert('Não foi possível extrair configurações da imagem.'); setSaveMsg(null); }
+                                            setTimeout(() => setSaveMsg(null), 4000);
+                                        } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                    };
+                                    reader.readAsDataURL(imageBlob);
+                                } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                            }} style={{ padding: '7px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                                <FileImage size={14} /> Colar Imagem
                             </button>
-                        )}
+                            {onExtractConfig && (
+                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
+                                    onClick={onExtractConfig} disabled={isExtractingConfig}>
+                                    {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Objeto */}
@@ -306,10 +353,60 @@ export function Step1ConfigPanel({
                                 <Calculator size={18} color="var(--color-primary)" />
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>BDI — Serviços</h3>
                             </div>
-                            <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s', opacity: isExtractingBdi ? 0.7 : 1 }}
-                                onClick={onExtractBdi} disabled={isExtractingBdi}>
-                                {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={async () => {
+                                    try {
+                                        const clipItems = await navigator.clipboard.read();
+                                        let imageBlob: Blob | null = null;
+                                        for (const item of clipItems) {
+                                            for (const type of item.types) {
+                                                if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                            }
+                                            if (imageBlob) break;
+                                        }
+                                        if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
+                                        const reader = new FileReader();
+                                        reader.onload = async () => {
+                                            const base64 = (reader.result as string).split(',')[1];
+                                            try {
+                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do BDI...</span>);
+                                                const resp = await fetch('/api/engineering/ai-extract-bdi-image', {
+                                                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                    body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type, isOnerado: engineeringConfig.regimeOneracao === 'ONERADO' })
+                                                });
+                                                const result = await resp.json();
+                                                if (result.found) {
+                                                    const d = result.data || result;
+                                                    if (d.tcu) {
+                                                        const rawTcu = d.tcu;
+                                                        if (rawTcu.tributos != null && rawTcu.pis == null) {
+                                                            const total = rawTcu.tributos;
+                                                            rawTcu.pis = 0.65;
+                                                            rawTcu.cofins = 3.00;
+                                                            rawTcu.iss = Math.max(0, total - 0.65 - 3.00);
+                                                            delete rawTcu.tributos;
+                                                        }
+                                                        const tcu = { ...bdiConfig.tcu, ...rawTcu };
+                                                        onBdiChange({ ...bdiConfig, mode: 'TCU', tcu, bdiGlobal: d.tcu.bdiGlobal || bdiConfig.bdiGlobal });
+                                                        setHasUnsavedChanges(true);
+                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> BDI extraído!</span>);
+                                                    }
+                                                } else { alert('Não foi possível extrair BDI da imagem.'); setSaveMsg(null); }
+                                                setTimeout(() => setSaveMsg(null), 4000);
+                                            } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                        };
+                                    reader.readAsDataURL(imageBlob);
+                                } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                            }} style={{ padding: '7px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                                <FileImage size={14} /> Colar Imagem
                             </button>
+                                {onExtractBdi && (
+                                    <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
+                                        onClick={onExtractBdi} disabled={isExtractingBdi}>
+                                        {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* BDI Global — Read-Only Card */}

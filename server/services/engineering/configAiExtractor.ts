@@ -446,3 +446,104 @@ d1(Reinc.A/B), d2(Reinc.A/AP+FGTS). Valores % sem símbolo. Se item=0, retorne 0
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// Extract Config from IMAGE (clipboard paste / upload)
+// ═══════════════════════════════════════════════════════════
+export async function extractConfigFromImage(imageBase64: string, mimeType: string): Promise<any | null> {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const prompt = `Analise esta imagem que contém informações do EDITAL ou PROJETO BÁSICO (Dados do Orçamento).
+Extraia TODAS as seguintes informações:
+1. **objeto**: Transcreva LITERALMENTE o objeto da obra.
+2. **uf**: UF onde a obra será executada (sigla, ex: CE, SP).
+3. **bases**: TODAS as bases/tabelas de custos (SINAPI, SEINFRA, SICRO, ORSE, SBC, PROPRIA, etc.). Retorne array de strings.
+4. **dataBase**: Mês/ano de referência PRINCIPAL (formato YYYY-MM).
+5. **dataBasesPorFonte**: Se houver datas diferentes para bases diferentes, ex: {"SINAPI": "2025-09", "SEINFRA": "2025-08"}.
+6. **regime**: "ONERADO" ou "DESONERADO".
+
+Retorne JSON.`;
+
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            found: { type: Type.BOOLEAN },
+            objeto: { type: Type.STRING, nullable: true },
+            uf: { type: Type.STRING, nullable: true },
+            bases: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+            dataBase: { type: Type.STRING, nullable: true },
+            dataBasesPorFonte: { type: Type.OBJECT, nullable: true, properties: {} },
+            regime: { type: Type.STRING, nullable: true },
+        },
+        required: ['found']
+    };
+
+    try {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [
+                { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
+                { text: prompt }
+            ]}],
+            config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
+        });
+        if (!result?.text) return { found: false };
+        const parsed = JSON.parse(result.text);
+        console.log(`[Config-IMG] 📋 found=${parsed.found}, uf=${parsed.uf}, regime=${parsed.regime}`);
+        return parsed;
+    } catch (e: any) {
+        console.error(`[Config-IMG] ❌ ${e.message}`);
+        return { found: false, error: e.message };
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Extract BDI from IMAGE (clipboard paste / upload)
+// ═══════════════════════════════════════════════════════════
+export async function extractBdiFromImage(imageBase64: string, mimeType: string, isOnerado: boolean = false): Promise<any | null> {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    
+    // Note: this aligns with bdiAiExtractor.ts output format.
+    const prompt = `Analise esta imagem de uma TABELA DE BDI (Benefícios e Despesas Indiretas) do edital.
+Você deve extrair os componentes percentuais (%) da fórmula do TCU 2622.
+
+IMPORTANTE SOBRE TRIBUTOS:
+Se os tributos estiverem detalhados, extraia separadamente: PIS, COFINS, ISS e CPRB.
+${isOnerado ? 'O regime é ONERADO. Extraia também a CSLL (Contribuição Social sobre o Lucro Líquido).' : 'O regime NÃO EXIGE CSLL, mas se a imagem listar ISS, PIS, COFINS, e CPRB, extraia-os.'}
+
+Retorne JSON:
+{
+  "found": true,
+  "bdiType": "TCU",
+  "tcu": {
+    "admLocal": N,
+    "mobilizacao": N,
+    "riscos": N,
+    "seguroGarantia": N,
+    "lucro": N,
+    "pis": N,
+    "cofins": N,
+    "iss": N,
+    "cprb": N,
+    "csll": N
+  }
+}
+Onde N é o número percentual sem o símbolo % (ex: 3.00, 0.65, 1.20). Se um item não existir, retorne 0. Se a imagem mostrar apenas um "Total de Tributos" genérico em vez de detalhar, coloque esse total no campo "iss" e 0 no resto, para preservar a soma.`;
+
+    try {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [
+                { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
+                { text: prompt }
+            ]}],
+            config: { responseMimeType: 'application/json', temperature: 0.1 }
+        });
+        if (!result?.text) return { found: false };
+        const parsed = JSON.parse(result.text);
+        console.log(`[BDI-IMG] 📋 found=${parsed.found}`);
+        return parsed;
+    } catch (e: any) {
+        console.error(`[BDI-IMG] ❌ ${e.message}`);
+        return { found: false, error: e.message };
+    }
+}
+
