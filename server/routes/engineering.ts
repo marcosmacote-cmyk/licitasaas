@@ -1558,6 +1558,20 @@ router.post('/ai-populate', async (req: any, res: any) => {
             console.log(`[Engineering AI-Populate] ⚠️ Dados V2 insuficientes (engBudget=${engBudgetItems?.length || 0}, itensV2=${itensV2?.length || 0}).`);
 
             // ═══════════════════════════════════════════════════
+            // RE-READ: A BG job may have completed and written fresh items
+            // since our initial schemaV2 read. Re-check before falling through.
+            // ═══════════════════════════════════════════════════
+            const freshAiAnalysis = await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } });
+            const freshSchema = freshAiAnalysis?.schemaV2 as any;
+            const freshBudgetItems = freshSchema?._engineeringBudgetItems;
+            if (Array.isArray(freshBudgetItems) && freshBudgetItems.length > 0) {
+                postClassifyTypes(freshBudgetItems);
+                console.log(`[Engineering AI-Populate] 🔄 RE-READ: Encontrou ${freshBudgetItems.length} itens frescos (escritos por job concluído)`);
+                await enrichWithOfficialPrices(freshBudgetItems, engineeringConfig, { tenantId: req.user?.tenantId });
+                return res.json({ items: freshBudgetItems, source: 'v2_engineering_budget_fresh', count: freshBudgetItems.length });
+            }
+
+            // ═══════════════════════════════════════════════════
             // GUARDA: Se há um job de engenharia ativo, NÃO re-extrair
             // O background job vai popular _engineeringBudgetItems quando concluir.
             // Re-extrair aqui duplica custo de IA e cria duas fontes de verdade.
