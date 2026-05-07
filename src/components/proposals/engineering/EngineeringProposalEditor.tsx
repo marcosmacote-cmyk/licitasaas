@@ -441,13 +441,26 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     };
                 });
                 setItems(mapped); // REPLACE instead of append
-                setHasUnsavedChanges(true);
+                // AUTO-SAVE: Persist extracted items immediately so they survive version switches
+                try {
+                    const saveRes = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
+                        method: 'POST', headers: hdrs(),
+                        body: JSON.stringify({ items: mapped, bdiConfig, engineeringConfig })
+                    });
+                    if (saveRes.ok) {
+                        setHasUnsavedChanges(false);
+                    } else {
+                        setHasUnsavedChanges(true);
+                    }
+                } catch {
+                    setHasUnsavedChanges(true);
+                }
                 const etapas = mapped.filter((m: EngItem) => m.type === 'ETAPA').length;
                 const subs = mapped.filter((m: EngItem) => m.type === 'SUBETAPA').length;
                 const comps = mapped.filter((m: EngItem) => m.type === 'COMPOSICAO').length;
                 const insumos = mapped.filter((m: EngItem) => m.type === 'INSUMO').length;
                 const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
-                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens extraídos e salvos: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
             } else if (data.source === 'pending_background_job') {
                 keepExtracting = true;
                 shouldAutoClearMessage = false;
