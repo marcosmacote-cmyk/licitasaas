@@ -299,6 +299,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     // Ref para input de importação Excel oculto
     const fileInputRef = useRef<HTMLInputElement>(null);
+    // Tracks whether the current proposal had items in the DB when loaded.
+    // false = brand-new version → must force fresh extraction, not use cache from prior version.
+    const hasPersistedItemsRef = useRef(false);
 
     // Load items on mount
     useEffect(() => {
@@ -314,13 +317,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setHasUnsavedChanges(false);
         setCronogramaData(null);
 
+        hasPersistedItemsRef.current = false;
         fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
             .then(r => r.json()).then(data => {
                 if (Array.isArray(data)) {
                     // Fallback for old data structure
                     setItems(data);
+                    hasPersistedItemsRef.current = data.length > 0;
                 } else if (data && data.items) {
-                    setItems(Array.isArray(data.items) ? data.items : []);
+                    const loadedItems = Array.isArray(data.items) ? data.items : [];
+                    setItems(loadedItems);
+                    hasPersistedItemsRef.current = loadedItems.length > 0;
                     // Only load DB config when NOT inside the Wizard (wizard provides its own)
                     if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
                     if (!wizardConfig && data.engineeringConfig) {
@@ -400,7 +407,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         let shouldAutoClearMessage = true;
         try {
             const hasCachedFailure = extractionMeta?.status === 'empty_extraction' || extractionMeta?.status === 'quality_quarantine';
-            const forceRefresh = forceRestart || (!isPolling && (items.length > 0 || hasCachedFailure));
+            // FIX VER-03: If this proposal never had items saved (brand-new version),
+            // force a fresh extraction to avoid re-using cached items from a prior version.
+            const isNewEmptyProposal = !hasPersistedItemsRef.current && items.length === 0;
+            const forceRefresh = forceRestart || isNewEmptyProposal || (!isPolling && (items.length > 0 || hasCachedFailure));
             const res = await fetch('/api/engineering/ai-populate', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig, forceRefresh })
             });
@@ -449,6 +459,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     });
                     if (saveRes.ok) {
                         setHasUnsavedChanges(false);
+                        hasPersistedItemsRef.current = true;
                     } else {
                         setHasUnsavedChanges(true);
                     }

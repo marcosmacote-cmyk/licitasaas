@@ -83,7 +83,16 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     // LOAD DATA
     // ══════════════════════════════════════════
     useEffect(() => {
-        setItems([]); setHasUnsavedChanges(false); setCronogramaData(null);
+        // FULL RESET: When proposalId changes (new version or version switch),
+        // reset ALL wizard state to defaults before loading saved data from DB.
+        setItems([]);
+        setHasUnsavedChanges(false);
+        setCronogramaData(null);
+        setBdiConfig({ ...DEFAULT_BDI_CONFIG });
+        setEngineeringConfig({ ...DEFAULT_ENGINEERING_CONFIG });
+        setCurrentStep(1);
+        setSaveMsg(null);
+
         fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
             .then(r => r.json()).then(data => {
                 if (Array.isArray(data)) { setItems(data); }

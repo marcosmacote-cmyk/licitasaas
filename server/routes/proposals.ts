@@ -71,7 +71,15 @@ router.get('/:biddingId', authenticateToken, async (req: any, res) => {
             include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
             orderBy: { version: 'desc' },
         });
-        res.json(proposals);
+        // For ENGENHARIA proposals, include engineering item counts (stored in separate table)
+        const enriched = await Promise.all(proposals.map(async (p: any) => {
+            if (p.objectType === 'ENGENHARIA') {
+                const engCount = await prisma.engineeringProposalItem.count({ where: { proposalId: p.id } });
+                return { ...p, _engineeringItemCount: engCount };
+            }
+            return p;
+        }));
+        res.json(enriched);
     } catch (error: any) {
         logger.error('[Proposals] GET error:', error.message);
         res.status(500).json({ error: 'Failed to fetch proposals' });

@@ -212,7 +212,9 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                             </div>
                                             {p.proposals.map((ver: any) => {
                                                 const isActive = ver.id === p.proposal?.id;
-                                                const verTotal = (ver.items || []).reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
+                                                const isEng = ver.objectType === 'ENGENHARIA';
+                                                const itemCount = isEng ? (ver._engineeringItemCount || 0) : (ver.items || []).length;
+                                                const verTotal = isEng ? (ver.totalValue || 0) : (ver.items || []).reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
                                                 return (
                                                     <button
                                                         key={ver.id}
@@ -230,7 +232,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                                 Versão {ver.version} {isActive && '(atual)'}
                                                             </div>
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                                                {(ver.items || []).length} itens · {ver.objectType === 'ENGENHARIA' ? '🏗️' : '📦'} {new Date(ver.createdAt).toLocaleDateString('pt-BR')}
+                                                                {itemCount} itens · {isEng ? '🏗️' : '📦'} {new Date(ver.createdAt).toLocaleDateString('pt-BR')}
                                                             </div>
                                                         </div>
                                                         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
