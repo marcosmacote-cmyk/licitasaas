@@ -400,10 +400,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         let shouldAutoClearMessage = true;
         try {
             const hasCachedFailure = extractionMeta?.status === 'empty_extraction' || extractionMeta?.status === 'quality_quarantine';
-            // FIX VERSION-CACHE: When items are empty (new version), ALWAYS force fresh extraction
-            // to avoid serving stale cached data from a previous version that may lack ETAPAs/SUBETAPAs
-            const isNewEmptyVersion = items.length === 0 && !isPolling;
-            const forceRefresh = forceRestart || isNewEmptyVersion || (!isPolling && (items.length > 0 || hasCachedFailure));
+            const forceRefresh = forceRestart || (!isPolling && (items.length > 0 || hasCachedFailure));
             const res = await fetch('/api/engineering/ai-populate', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig, forceRefresh })
             });
