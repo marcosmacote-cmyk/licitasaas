@@ -404,6 +404,178 @@ function deduplicateItemNumbers(items: Array<Record<string, any>>, repairs: stri
 }
 
 // ═══════════════════════════════════════════════════════════
+// HIERARCHY RECONSTRUCTION: Create missing ETAPA/SUBETAPA parents
+// When the AI only extracts leaf COMPOSICAO items (e.g., 1.3.2.1.1)
+// but omits the grouper parents (1, 1.3, 1.3.2, 1.3.2.1), this
+// function creates the missing parent nodes programmatically.
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Known ETAPA description patterns — maps common numbering to likely descriptions.
+ * Used to give reconstructed parents a meaningful label when possible.
+ */
+const COMMON_ETAPA_DESCRIPTIONS: Record<string, string> = {};
+
+function getAllParentPrefixes(itemNum: string): string[] {
+    const parts = itemNum.split('.');
+    const prefixes: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+        prefixes.push(parts.slice(0, i).join('.'));
+    }
+    return prefixes;
+}
+
+/**
+ * Try to infer a meaningful description for a reconstructed parent node
+ * by looking at its children's descriptions and common patterns.
+ */
+function inferParentDescription(
+    parentNum: string,
+    children: Array<Record<string, any>>
+): string {
+    // If all children share a common prefix in their descriptions, use it
+    if (children.length === 1) {
+        // Single child — use the parent item number as label
+        const childDesc = String(children[0].description || '').trim();
+        // For items like 1.1.1 → 1.1.1.0.1 "ADMINISTRAÇÃO DA OBRA",
+        // the parent is likely a grouper for that service
+        const words = childDesc.split(/\s+/).slice(0, 3).join(' ');
+        if (words.length > 3) return words.toUpperCase();
+    }
+
+    if (children.length > 1) {
+        // Multiple children — try to find common prefix words
+        const descs = children.map(c => String(c.description || '').trim().toUpperCase());
+        const firstWords = descs.map(d => d.split(/\s+/)[0]).filter(Boolean);
+        const uniqueFirst = new Set(firstWords);
+        if (uniqueFirst.size === 1 && firstWords[0].length > 3) {
+            return firstWords[0];
+        }
+    }
+
+    // Fallback: use the item number as description
+    const depth = parentNum.split('.').length;
+    if (depth === 1) return `ETAPA ${parentNum}`;
+    return `SUBETAPA ${parentNum}`;
+}
+
+function reconstructMissingHierarchy(items: Array<Record<string, any>>, repairs: string[]): void {
+    if (items.length === 0) return;
+
+    // Collect existing item numbers
+    const existingNums = new Set(items.map(it => String(it.item || '').trim()));
+
+    // Check if hierarchy already has ETAPAs/SUBETAPAs
+    const hasGroupers = items.some(it => it.type === 'ETAPA' || it.type === 'SUBETAPA');
+    const compositionCount = items.filter(it => it.type === 'COMPOSICAO' || it.type === 'INSUMO').length;
+
+    // If we already have groupers or too few items, skip
+    if (hasGroupers || compositionCount < 5) return;
+
+    // Collect all parent prefixes that are MISSING
+    const missingParents = new Map<string, { children: Array<Record<string, any>> }>();
+
+    for (const item of items) {
+        const itemNum = String(item.item || '').trim();
+        if (!itemNum || !itemNum.includes('.')) continue;
+
+        const parents = getAllParentPrefixes(itemNum);
+        for (const parent of parents) {
+            if (existingNums.has(parent)) continue;
+
+            if (!missingParents.has(parent)) {
+                missingParents.set(parent, { children: [] });
+            }
+            missingParents.get(parent)!.children.push(item);
+        }
+    }
+
+    if (missingParents.size === 0) return;
+
+    // Create the missing parent items
+    const newParents: Array<Record<string, any>> = [];
+    for (const [parentNum, data] of missingParents) {
+        const depth = parentNum.split('.').length;
+        const type = depth === 1 ? 'ETAPA' : 'SUBETAPA';
+        const description = inferParentDescription(parentNum, data.children);
+
+        // Calculate totalPrice as sum of direct children's totalPrices
+        const directChildren = items.filter(it => {
+            const num = String(it.item || '').trim();
+            const prefix = parentNum + '.';
+            if (!num.startsWith(prefix)) return false;
+            // Only direct children: the remaining part after the prefix should be a single level
+            const remainder = num.substring(prefix.length);
+            // Check if the next level matches (allow for items like 1.3.1.0.1 being child of 1.3.1)
+            return !remainder.includes('.') || remainder.split('.').length <= (5 - depth);
+        });
+
+        const totalPrice = directChildren.reduce((sum, child) => {
+            return sum + (Number(child.totalPrice) || 0);
+        }, 0);
+
+        newParents.push({
+            item: parentNum,
+            type,
+            sourceName: '',
+            code: '',
+            description,
+            unit: '',
+            quantity: 0,
+            unitCost: 0,
+            unitPrice: 0,
+            totalPrice: totalPrice > 0 ? totalPrice : 0,
+        });
+    }
+
+    // Sort new parents by their item number for correct insertion order
+    newParents.sort((a, b) => {
+        const pa = String(a.item).split('.').map(Number);
+        const pb = String(b.item).split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+            const diff = (pa[i] || 0) - (pb[i] || 0);
+            if (diff !== 0) return diff;
+        }
+        return 0;
+    });
+
+    // Insert parents at the correct positions in the items array
+    for (const parent of newParents) {
+        const parentNum = String(parent.item);
+        const parentParts = parentNum.split('.').map(Number);
+
+        // Find the insertion point: before the first item that starts with this prefix
+        let insertIdx = items.length; // default: end
+        for (let i = 0; i < items.length; i++) {
+            const itemNum = String(items[i].item || '').trim();
+            const itemParts = itemNum.split('.').map(Number);
+
+            // Compare numerically
+            let isAfter = false;
+            for (let j = 0; j < Math.max(parentParts.length, itemParts.length); j++) {
+                const pv = parentParts[j] ?? -1;
+                const iv = itemParts[j] ?? -1;
+                if (pv < iv) { insertIdx = i; isAfter = true; break; }
+                if (pv > iv) break;
+                // Equal at this level, continue
+                if (j === parentParts.length - 1 && itemParts.length > parentParts.length) {
+                    // Parent comes before its children
+                    insertIdx = i;
+                    isAfter = true;
+                    break;
+                }
+            }
+            if (isAfter) break;
+        }
+
+        items.splice(insertIdx, 0, parent);
+        existingNums.add(parentNum);
+    }
+
+    repairs.push(`hierarchy_reconstructed:${newParents.length}_parents_created`);
+}
+
+// ═══════════════════════════════════════════════════════════
 
 export function normalizeEngineeringItems(items: Array<Record<string, unknown>>): NormalizedEngineeringExtraction {
     const repairs: string[] = [];
@@ -476,6 +648,9 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
 
     // ── Deduplication: fix repeated item numbers (e.g., all items as "1.3") ──
     deduplicateItemNumbers(engineeringItems, repairs);
+
+    // ── Hierarchy reconstruction: create missing ETAPA/SUBETAPA parents ──
+    reconstructMissingHierarchy(engineeringItems, repairs);
 
     return {
         engineeringItems,
