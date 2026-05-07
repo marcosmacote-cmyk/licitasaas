@@ -171,6 +171,32 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         loadProposals();
     }, [selectedBiddingId]);
 
+    const applyProposalData = (p: any) => {
+        setProposal(p);
+        setItems(p.items || []);
+        setBdi(p.bdiPercentage || 0);
+        setDiscount(p.taxPercentage || 0);
+        setRoundingMode(p.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
+        setValidityDays(p.validityDays || 60);
+        setObjectType(p.objectType || 'ENGENHARIA');
+        if (p.companyProfileId) setSelectedCompanyId(p.companyProfileId);
+        setLetterContent(p.letterContent || '');
+        setHeaderImage(p.headerImage || '');
+        setFooterImage(p.footerImage || '');
+        setSignatureMode(p.signatureMode || 'LEGAL');
+        setHeaderImageHeight(p.headerImageHeight || 150);
+        setFooterImageHeight(p.footerImageHeight || 100);
+        // Cenário Ajustada
+        if (p.adjustedBdi != null || p.adjustedDiscount != null) {
+            setAdjustedEnabled(true);
+            setAdjustedBdi(p.adjustedBdi ?? p.bdiPercentage ?? 0);
+            setAdjustedDiscount(p.adjustedDiscount ?? 0);
+            setAdjustedLetterContent(p.adjustedLetterContent || '');
+        } else {
+            setAdjustedEnabled(false);
+        }
+    };
+
     const loadProposals = async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
@@ -178,33 +204,20 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 const data = await res.json();
                 setProposals(data);
                 if (data.length > 0) {
-                    const latest = data[0];
-                    setProposal(latest);
-                    setItems(latest.items || []);
-                    setBdi(latest.bdiPercentage || 0);
-                    setDiscount(latest.taxPercentage || 0);
-                    setRoundingMode(latest.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
-                    setValidityDays(latest.validityDays || 60);
-                    setObjectType(latest.objectType || 'ENGENHARIA');
-                    if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
-                    setLetterContent(latest.letterContent || '');
-                    setHeaderImage(latest.headerImage || '');
-                    setFooterImage(latest.footerImage || '');
-                    setSignatureMode(latest.signatureMode || 'LEGAL');
-                    setHeaderImageHeight(latest.headerImageHeight || 150);
-                    setFooterImageHeight(latest.footerImageHeight || 100);
-                    // Cenário Ajustada
-                    if (latest.adjustedBdi != null || latest.adjustedDiscount != null) {
-                        setAdjustedEnabled(true);
-                        setAdjustedBdi(latest.adjustedBdi ?? latest.bdiPercentage ?? 0);
-                        setAdjustedDiscount(latest.adjustedDiscount ?? 0);
-                        setAdjustedLetterContent(latest.adjustedLetterContent || '');
-                    }
+                    // If we already have a proposal loaded, refresh its data from the list
+                    const currentId = proposal?.id;
+                    const match = currentId ? data.find((d: any) => d.id === currentId) : null;
+                    applyProposalData(match || data[0]);
                 }
             }
         } catch (e) {
             console.error('Failed to load proposals', e);
         }
+    };
+
+    const selectVersion = (proposalId: string) => {
+        const found = proposals.find(p => p.id === proposalId);
+        if (found) applyProposalData(found);
     };
 
     const handleCreateProposal = async () => {
@@ -771,7 +784,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         selectedCompanyId, setSelectedCompanyId,
         availableBiddings, selectedBidding, selectedCompany,
         // Proposal
-        proposal, proposals, items, setItems,
+        proposal, proposals, items, setItems, selectVersion,
         bdi, setBdi, discount, setDiscount,
         roundingMode, setRoundingMode,
         validityDays, setValidityDays,

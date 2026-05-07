@@ -29,6 +29,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
     const p = useProposal({ biddings, companies, initialBiddingId });
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showVersionMenu, setShowVersionMenu] = useState(false);
 
     return (
         <>
@@ -185,9 +186,63 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginLeft: 8 }}>{p.proposal.status} · {p.items.length} item(ns) · Total: <strong style={{ color: 'var(--color-text-primary)' }}>{fmt(p.total)}</strong></span>
                         </div>
                         {p.proposals.length > 1 && (
-                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', padding: '2px 8px', borderRadius: 'var(--radius-full)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)' }}>
-                                {p.proposals.length} versões
-                            </span>
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    onClick={() => setShowVersionMenu(!showVersionMenu)}
+                                    style={{
+                                        fontSize: 'var(--text-xs)', color: 'var(--color-primary)', padding: '2px 10px',
+                                        borderRadius: 'var(--radius-full)', border: '1px solid rgba(37,99,235,0.25)',
+                                        background: 'rgba(37,99,235,0.06)', cursor: 'pointer', fontWeight: 600,
+                                        display: 'flex', alignItems: 'center', gap: 4,
+                                    }}
+                                >
+                                    {p.proposals.length} versões <ChevronDown size={10} />
+                                </button>
+                                {showVersionMenu && (
+                                    <>
+                                        <div onClick={() => setShowVersionMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, marginTop: 4,
+                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                            borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                                            zIndex: 999, minWidth: 280, overflow: 'hidden', maxHeight: 320, overflowY: 'auto',
+                                        }}>
+                                            <div style={{ padding: '8px 12px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-tertiary)', borderBottom: '1px solid var(--color-border)' }}>
+                                                Histórico de Versões
+                                            </div>
+                                            {p.proposals.map((ver: any) => {
+                                                const isActive = ver.id === p.proposal?.id;
+                                                const verTotal = (ver.items || []).reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
+                                                return (
+                                                    <button
+                                                        key={ver.id}
+                                                        onClick={() => { p.selectVersion(ver.id); setShowVersionMenu(false); }}
+                                                        style={{
+                                                            width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
+                                                            textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                            background: isActive ? 'rgba(37,99,235,0.08)' : 'transparent',
+                                                            borderBottom: '1px solid var(--color-border)',
+                                                            borderLeft: isActive ? '3px solid var(--color-primary)' : '3px solid transparent',
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--color-primary)' : 'var(--color-text-primary)' }}>
+                                                                Versão {ver.version} {isActive && '(atual)'}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                                                                {(ver.items || []).length} itens · {ver.objectType === 'ENGENHARIA' ? '🏗️' : '📦'} {new Date(ver.createdAt).toLocaleDateString('pt-BR')}
+                                                            </div>
+                                                        </div>
+                                                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                                                            {fmt(verTotal)}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
