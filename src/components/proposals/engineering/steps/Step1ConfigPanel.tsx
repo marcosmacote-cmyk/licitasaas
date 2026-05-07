@@ -2,8 +2,8 @@
  * Step1ConfigPanel.tsx — Configuração do Orçamento (Step 1 do Wizard)
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
-import { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2 } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
 import type { EngineeringConfig } from '../types';
 
@@ -38,12 +38,19 @@ interface Props {
     onSyncBases: () => void;
     onSave: () => void;
     onNext: () => void;
+    setHasUnsavedChanges?: (v: boolean) => void;
+    saveMsg?: React.ReactNode;
+    setSaveMsg?: (v: React.ReactNode) => void;
 }
 
 export function Step1ConfigPanel({
     engineeringConfig, bdiConfig, isExtractingBdi, isExtractingConfig, isExtractingEncargos, isAuditing, isSaving,
     onConfigChange, onBdiChange, onExtractBdi, onExtractBdiFornecimento, onExtractConfig, onExtractEncargos, onSyncBases, onSave, onNext,
+    setHasUnsavedChanges: parentSetHasUnsavedChanges, setSaveMsg: parentSetSaveMsg,
 }: Props) {
+    const [localSaveMsg, setLocalSaveMsg] = useState<React.ReactNode>(null);
+    const setSaveMsg = parentSetSaveMsg || setLocalSaveMsg;
+    const setHasUnsavedChanges = parentSetHasUnsavedChanges || (() => {});
     const [showEncargosDetail, setShowEncargosDetail] = useState(false);
     const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
     const effectiveBdi = bdiConfig.bdiGlobal;
@@ -509,46 +516,145 @@ export function Step1ConfigPanel({
                             })()}
                         </div>
 
-                        {/* 2º Encargo Social */}
+                        {/* Planilhas Adicionais de Encargos */}
                         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', userSelect: 'none', color: showEncargos2 ? '#6d28d9' : 'var(--color-text-primary)' }}>
-                                <input type="checkbox" checked={showEncargos2}
-                                    onChange={e => { setShowEncargos2(e.target.checked); if (!e.target.checked) { const { encargos2, ...rest } = engineeringConfig.encargosSociais as any; onConfigChange({ ...engineeringConfig, encargosSociais: { ...rest, encargoAtivo: 1 } }); } }}
-                                    style={{ accentColor: '#6d28d9' }} />
-                                2º Encargo Social (comparativo)
-                            </label>
-                            {showEncargos2 && (
-                                <div style={{ marginTop: 12, padding: 16, background: 'linear-gradient(to right, rgba(109,40,217,0.03), rgba(139,92,246,0.03))', border: '1px solid rgba(109,40,217,0.15)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    <input type="text" className="form-input" placeholder="Ex: Encargos Onerado"
-                                        value={engineeringConfig.encargosSociais?.encargos2?.label || ''}
-                                        onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, label: e.target.value } } })}
-                                        style={{ fontSize: '0.85rem', fontWeight: 600, padding: '8px 12px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(109,40,217,0.2)' }} />
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                        <div style={{ background: 'white', padding: 10, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...labelStyle, marginBottom: 6, fontSize: '0.68rem', color: '#6d28d9' }}>Horista 2 (%)</label>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                                    📋 Planilhas Adicionais de Encargos
+                                </span>
+                                <button onClick={() => {
+                                    const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                    sheets.push({ label: `Base ${sheets.length + 2}`, horista: 0, mensalista: 0 });
+                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 700, padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(109,40,217,0.4)', background: 'rgba(109,40,217,0.04)', color: '#6d28d9', cursor: 'pointer' }}>
+                                    <Plus size={13} /> Adicionar Planilha
+                                </button>
+                            </div>
+                            <p style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', margin: '0 0 8px', lineHeight: 1.4 }}>
+                                Para editais com múltiplas tabelas oficiais (SINAPI, SEINFRA, etc.), adicione uma planilha por base.
+                                Você pode extrair via IA colando uma imagem (Ctrl+V) ou preenchendo manualmente.
+                            </p>
+
+                            {(engineeringConfig.encargosSociais?.encargosAdicionais || []).map((sheet: any, idx: number) => (
+                                <div key={idx} style={{ marginBottom: 12, padding: 14, background: 'linear-gradient(to right, rgba(109,40,217,0.03), rgba(139,92,246,0.03))', border: '1px solid rgba(109,40,217,0.15)', borderRadius: 'var(--radius-lg)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                        <input type="text" className="form-input" placeholder={`Base ${idx + 2}`}
+                                            value={sheet.label || ''}
+                                            onChange={e => {
+                                                const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                sheets[idx] = { ...sheets[idx], label: e.target.value };
+                                                onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                            }}
+                                            style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, padding: '6px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(109,40,217,0.2)' }} />
+                                        {/* Image paste button */}
+                                        <button onClick={async () => {
+                                            try {
+                                                const clipItems = await navigator.clipboard.read();
+                                                let imageBlob: Blob | null = null;
+                                                for (const item of clipItems) {
+                                                    for (const type of item.types) {
+                                                        if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                                    }
+                                                    if (imageBlob) break;
+                                                }
+                                                if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
+                                                const reader = new FileReader();
+                                                reader.onload = async () => {
+                                                    const base64 = (reader.result as string).split(',')[1];
+                                                    const mimeType = imageBlob!.type;
+                                                    try {
+                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
+                                                        const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                            body: JSON.stringify({ imageBase64: base64, mimeType, label: sheet.label || `Base ${idx + 2}` })
+                                                        });
+                                                        const result = await resp.json();
+                                                        if (result.found) {
+                                                            const d = result.data || result;
+                                                            const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                            sheets[idx] = { ...sheets[idx], ...d, label: sheet.label || d.basePrincipal || `Base ${idx + 2}` };
+                                                            onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                                            setHasUnsavedChanges(true);
+                                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos! H={d.totalHorista}% M={d.totalMensalista}%</span>);
+                                                        } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
+                                                        setTimeout(() => setSaveMsg(null), 4000);
+                                                    } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                                };
+                                                reader.readAsDataURL(imageBlob);
+                                            } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                        }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 700, padding: '5px 10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                            <FileImage size={13} /> Colar Imagem
+                                        </button>
+                                        <button onClick={() => {
+                                            const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                            sheets.splice(idx, 1);
+                                            onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                        }} style={{ padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.7rem' }}>
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                    {/* Totals */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                        <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
+                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.65rem', color: '#6d28d9' }}>Horista (%)</label>
                                             <input type="number" step="0.01" className="form-input"
-                                                value={engineeringConfig.encargosSociais?.encargos2?.horista || 0}
-                                                onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, horista: parseLocaleNumber(e.target.value) } } })}
-                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '6px', border: 'none', outline: 'none' }} />
+                                                value={sheet.horista || 0}
+                                                onChange={e => {
+                                                    const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                    sheets[idx] = { ...sheets[idx], horista: parseLocaleNumber(e.target.value) };
+                                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                                }}
+                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1rem', fontWeight: 700, padding: '4px', border: 'none' }} />
                                         </div>
-                                        <div style={{ background: 'white', padding: 10, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...labelStyle, marginBottom: 6, fontSize: '0.68rem', color: '#6d28d9' }}>Mensalista 2 (%)</label>
+                                        <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
+                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.65rem', color: '#6d28d9' }}>Mensalista (%)</label>
                                             <input type="number" step="0.01" className="form-input"
-                                                value={engineeringConfig.encargosSociais?.encargos2?.mensalista || 0}
-                                                onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargos2: { ...engineeringConfig.encargosSociais?.encargos2 || { horista: 0, mensalista: 0 }, mensalista: parseLocaleNumber(e.target.value) } } })}
-                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '6px', border: 'none', outline: 'none' }} />
+                                                value={sheet.mensalista || 0}
+                                                onChange={e => {
+                                                    const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                    sheets[idx] = { ...sheets[idx], mensalista: parseLocaleNumber(e.target.value) };
+                                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                                }}
+                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1rem', fontWeight: 700, padding: '4px', border: 'none' }} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                        {[1, 2].map(n => (
-                                            <label key={n} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? 'rgba(109,40,217,0.08)' : 'white', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '#6d28d9' : 'var(--color-text-secondary)', transition: 'all 0.2s', boxShadow: (engineeringConfig.encargosSociais?.encargoAtivo || 1) === n ? '0 2px 4px rgba(109,40,217,0.1)' : 'none' }}>
-                                                <input type="radio" name="encargoAtivo" checked={(engineeringConfig.encargosSociais?.encargoAtivo || 1) === n}
-                                                    onChange={() => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargoAtivo: n as 1|2 } })}
-                                                    style={{ accentColor: '#6d28d9', width: 16, height: 16 }} />
-                                                {n === 1 ? 'Aplicar Encargo Principal' : `Aplicar ${engineeringConfig.encargosSociais?.encargos2?.label || 'Encargo 2'}`}
-                                            </label>
-                                        ))}
-                                    </div>
+                                    {/* Groups summary (if extracted) */}
+                                    {(sheet.grupoA_horista || sheet.a1_h) && (
+                                        <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', display: 'grid', gridTemplateColumns: '1fr 60px 60px', gap: 2, padding: '4px 0', borderTop: '1px solid var(--color-border)' }}>
+                                            {[
+                                                { label: 'Grupo A', h: sheet.grupoA_horista, m: sheet.grupoA_mensalista },
+                                                { label: 'Grupo B', h: sheet.grupoB_horista, m: sheet.grupoB_mensalista },
+                                                { label: 'Grupo C', h: sheet.grupoC_horista, m: sheet.grupoC_mensalista },
+                                                { label: 'Grupo D', h: sheet.grupoD_horista, m: sheet.grupoD_mensalista },
+                                            ].map(g => (
+                                                <React.Fragment key={g.label}>
+                                                    <span>{g.label}</span>
+                                                    <span style={{ textAlign: 'right' }}>{(g.h || 0).toFixed(2)}</span>
+                                                    <span style={{ textAlign: 'right' }}>{(g.m || 0).toFixed(2)}</span>
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {/* Encargo ativo selector */}
+                            {((engineeringConfig.encargosSociais?.encargosAdicionais || []).length > 0) && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                    <label style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 10px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 0) === 0 ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 0) === 0 ? 'rgba(109,40,217,0.08)' : 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: (engineeringConfig.encargosSociais?.encargoAtivo || 0) === 0 ? '#6d28d9' : 'var(--color-text-secondary)' }}>
+                                        <input type="radio" name="encargoAtivo" checked={(engineeringConfig.encargosSociais?.encargoAtivo || 0) === 0}
+                                            onChange={() => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargoAtivo: 0 } })}
+                                            style={{ accentColor: '#6d28d9', width: 14, height: 14 }} />
+                                        Principal
+                                    </label>
+                                    {(engineeringConfig.encargosSociais?.encargosAdicionais || []).map((_: any, i: number) => (
+                                        <label key={i} style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 10px', borderRadius: 'var(--radius-md)', border: `1px solid ${(engineeringConfig.encargosSociais?.encargoAtivo || 0) === i + 1 ? '#6d28d9' : 'var(--color-border)'}`, background: (engineeringConfig.encargosSociais?.encargoAtivo || 0) === i + 1 ? 'rgba(109,40,217,0.08)' : 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: (engineeringConfig.encargosSociais?.encargoAtivo || 0) === i + 1 ? '#6d28d9' : 'var(--color-text-secondary)' }}>
+                                            <input type="radio" name="encargoAtivo" checked={(engineeringConfig.encargosSociais?.encargoAtivo || 0) === i + 1}
+                                                onChange={() => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargoAtivo: i + 1 } })}
+                                                style={{ accentColor: '#6d28d9', width: 14, height: 14 }} />
+                                            {_.label || `Base ${i + 2}`}
+                                        </label>
+                                    ))}
                                 </div>
                             )}
                         </div>

@@ -149,8 +149,10 @@ export interface EncargosSociaisConfig {
     grupoMensalista?: Partial<EncargosSociaisGrupo>;
     /** Segundo encargo social (para comparação) */
     encargos2?: { horista: number; mensalista: number; label?: string };
-    /** Qual encargo está ativo nas composições: 1 (principal) ou 2 (alternativo) */
-    encargoAtivo?: 1 | 2;
+    /** Qual encargo está ativo nas composições (0=principal, 1,2,3...=adicionais) */
+    encargoAtivo?: number;
+    /** N planilhas analíticas adicionais (por base de referência) */
+    encargosAdicionais?: EncargosSheet[];
     /** Encargos por base de referência (SINAPI, SEINFRA, etc.)
      *  Cada base pode ter seu próprio conjunto de horista/mensalista/grupoAnalítico */
     encargosPorBase?: Record<string, {
@@ -158,6 +160,31 @@ export interface EncargosSociaisConfig {
         mensalista: number;
         grupoHorista?: Partial<EncargosSociaisGrupo>;
     }>;
+}
+
+/** Encargos sheet — uma planilha analítica completa de encargos sociais */
+export interface EncargosSheet {
+    label: string; // "SINAPI", "SEINFRA-CE", "SETOP-MG"
+    horista: number;
+    mensalista: number;
+    grupoA_horista?: number; grupoA_mensalista?: number;
+    grupoB_horista?: number; grupoB_mensalista?: number;
+    grupoC_horista?: number; grupoC_mensalista?: number;
+    grupoD_horista?: number; grupoD_mensalista?: number;
+    a1_h?: number; a1_m?: number; a2_h?: number; a2_m?: number;
+    a3_h?: number; a3_m?: number; a4_h?: number; a4_m?: number;
+    a5_h?: number; a5_m?: number; a6_h?: number; a6_m?: number;
+    a7_h?: number; a7_m?: number; a8_h?: number; a8_m?: number;
+    a9_h?: number; a9_m?: number;
+    b1_h?: number; b1_m?: number; b2_h?: number; b2_m?: number;
+    b3_h?: number; b3_m?: number; b4_h?: number; b4_m?: number;
+    b5_h?: number; b5_m?: number; b6_h?: number; b6_m?: number;
+    b7_h?: number; b7_m?: number; b8_h?: number; b8_m?: number;
+    b9_h?: number; b9_m?: number; b10_h?: number; b10_m?: number;
+    c1_h?: number; c1_m?: number; c2_h?: number; c2_m?: number;
+    c3_h?: number; c3_m?: number; c4_h?: number; c4_m?: number;
+    c5_h?: number; c5_m?: number;
+    d1_h?: number; d1_m?: number; d2_h?: number; d2_m?: number;
 }
 
 export interface PrecisionConfig {

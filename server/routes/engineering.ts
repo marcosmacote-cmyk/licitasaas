@@ -1338,6 +1338,24 @@ router.post('/ai-extract-encargos', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-encargos-image
+// Extrai encargos sociais a partir de imagem (clipboard/upload)
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-encargos-image', async (req: any, res: any) => {
+    try {
+        const { imageBase64, mimeType, label } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 é obrigatório' });
+        const { extractEncargosFromImage } = await import('../services/engineering/configAiExtractor');
+        const data = await extractEncargosFromImage(imageBase64, mimeType || 'image/png', label);
+        if (!data || !data.found) return res.json({ found: false, message: 'Não foi possível extrair encargos da imagem.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI Encargos-Image] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair encargos da imagem', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
 // Pipeline: V2 itens_licitados → AI extraction (fallback)

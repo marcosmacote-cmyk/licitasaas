@@ -829,13 +829,14 @@ router.get('/agents/sessions', authenticateToken, async (req: any, res) => {
 router.post('/agents/heartbeat', authenticateToken, async (req: any, res) => {
     try {
         const tenantId = req.user.tenantId;
-        const { machineName, activeSessions, agentVersion, status } = req.body;
+        const { machineName, activeSessions, agentVersion, status, metadata } = req.body;
         
         agentHeartbeats.set(tenantId, {
             machineName: machineName || 'Local Agent',
             activeSessions: activeSessions || 0,
             agentVersion: agentVersion || '1.0.0',
             status: status || 'online',
+            metadata: metadata || {},
             lastHeartbeatAt: new Date(),
         });
 
@@ -885,14 +886,15 @@ function authenticateWorker(req: any, res: any, next: any) {
 // Internal Worker Heartbeat (updates agentHeartbeats per-tenant)
 router.post('/internal/heartbeat', authenticateWorker, async (req: any, res) => {
     try {
-        const { activeSessions, tenantIds, machineName } = req.body;
+        const { activeSessions, tenantIds, machineName, agentVersion, status, metadata } = req.body;
         const tenants: string[] = tenantIds || [];
         for (const tid of tenants) {
             agentHeartbeats.set(tid, {
                 machineName: machineName || 'Server Worker v4.0',
                 activeSessions: activeSessions || 0,
-                agentVersion: '4.0.0',
-                status: 'online',
+                agentVersion: agentVersion || '4.0.0',
+                status: status || 'online',
+                metadata: metadata || {},
                 lastHeartbeatAt: new Date(),
             });
         }

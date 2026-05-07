@@ -402,6 +402,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     onSyncBases={syncBases}
                     onSave={handleSave}
                     onNext={() => setCurrentStep(2)}
+                    setHasUnsavedChanges={setHasUnsavedChanges}
+                    saveMsg={saveMsg}
+                    setSaveMsg={setSaveMsg}
                 />
             )}
 
