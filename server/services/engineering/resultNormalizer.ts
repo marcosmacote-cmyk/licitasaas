@@ -426,37 +426,15 @@ function getAllParentPrefixes(itemNum: string): string[] {
 }
 
 /**
- * Try to infer a meaningful description for a reconstructed parent node
- * by looking at its children's descriptions and common patterns.
+ * Returns an empty description for reconstructed parent nodes.
+ * In licitações públicas, descriptions MUST come from the instrumento
+ * convocatório — we cannot invent them. The user will fill these in manually.
  */
 function inferParentDescription(
-    parentNum: string,
-    children: Array<Record<string, any>>
+    _parentNum: string,
+    _children: Array<Record<string, any>>
 ): string {
-    // If all children share a common prefix in their descriptions, use it
-    if (children.length === 1) {
-        // Single child — use the parent item number as label
-        const childDesc = String(children[0].description || '').trim();
-        // For items like 1.1.1 → 1.1.1.0.1 "ADMINISTRAÇÃO DA OBRA",
-        // the parent is likely a grouper for that service
-        const words = childDesc.split(/\s+/).slice(0, 3).join(' ');
-        if (words.length > 3) return words.toUpperCase();
-    }
-
-    if (children.length > 1) {
-        // Multiple children — try to find common prefix words
-        const descs = children.map(c => String(c.description || '').trim().toUpperCase());
-        const firstWords = descs.map(d => d.split(/\s+/)[0]).filter(Boolean);
-        const uniqueFirst = new Set(firstWords);
-        if (uniqueFirst.size === 1 && firstWords[0].length > 3) {
-            return firstWords[0];
-        }
-    }
-
-    // Fallback: use the item number as description
-    const depth = parentNum.split('.').length;
-    if (depth === 1) return `ETAPA ${parentNum}`;
-    return `SUBETAPA ${parentNum}`;
+    return '';
 }
 
 function reconstructMissingHierarchy(items: Array<Record<string, any>>, repairs: string[]): void {
