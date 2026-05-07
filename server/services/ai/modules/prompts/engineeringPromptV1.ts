@@ -10,12 +10,12 @@ Todo orçamento de obra tem uma estrutura hierárquica que DEVE ser respeitada E
 🚨 REGRA CRÍTICA: NUNCA INVENTE AGRUPADORES, NUNCA INVENTE ETAPAS OU SUBETAPAS, E NUNCA REORGANIZE ITENS. Extraia os números (ex: 1.1, 1.2) e as descrições exatamente como estão na linha da planilha.
 
 1. **ETAPA** — Agrupador de nível 1 (ex: "1.0 SERVIÇOS PRELIMINARES", "2.0 INFRAESTRUTURA")
-   - NÃO tem preço próprio (é a soma dos filhos)
+   - PODE ter o valor Total da etapa na coluna de "TOTAL", mas NÃO TEM preço unitário.
    - NÃO tem quantidade nem unidade
    - type: "ETAPA"
 
 2. **SUBETAPA** — Agrupador de nível 2 (ex: "1.1 MOBILIZAÇÃO", "2.1 FUNDAÇÕES")
-   - NÃO tem preço próprio (é a soma dos filhos)
+   - PODE ter o valor Total da subetapa na coluna de "TOTAL", mas NÃO TEM preço unitário.
    - NÃO tem quantidade nem unidade
    - type: "SUBETAPA"
 
@@ -33,7 +33,7 @@ Todo orçamento de obra tem uma estrutura hierárquica que DEVE ser respeitada E
 REGRAS DE CLASSIFICAÇÃO
 ═══════════════════════════════════════════════════════════
 
-- Se o item é um TÍTULO/CABEÇALHO sem preço → ETAPA ou SUBETAPA
+- Se o item é um TÍTULO/CABEÇALHO (agrupador) sem unidade/quantidade → ETAPA ou SUBETAPA
 - Se o item tem numeração tipo X.0 ou é nível 1 → ETAPA
 - Se o item tem numeração tipo X.Y e é agrupador → SUBETAPA
 - Se o item tem preço, quantidade e descreve um SERVIÇO → COMPOSICAO
@@ -185,9 +185,9 @@ FORMATO DE SAÍDA (JSON)
 ═══════════════════════════════════════════════════════════
 
 IMPORTANTE: O exemplo abaixo mostra uma planilha REAL. Note que:
-- "1" é ETAPA (sem preço)
-- "1.1" já é COMPOSICAO (tem código + preço) — NÃO É subetapa!
-- "4" é ETAPA, "4.1" é SUBETAPA (sem preço), "4.1.1" é COMPOSICAO
+- "1" é ETAPA (pode ter preço total, mas não tem qtd/unitCost)
+- "1.1" já é COMPOSICAO (tem código, quantidade, e preço unitário) — NÃO É subetapa!
+- "4" é ETAPA, "4.1" é SUBETAPA, "4.1.1" é COMPOSICAO
 - A profundidade varia. Respeite o que a planilha mostra.
 
 {
@@ -280,9 +280,9 @@ IMPORTANTE: O exemplo abaixo mostra uma planilha REAL. Note que:
 }
 
 REGRA DE CLASSIFICAÇÃO PELO CONTEÚDO DA LINHA:
-- Se a linha TEM código (SINAPI, SEINFRA, SEDOP, ORSE, CP-xx) E tem preço → type: "COMPOSICAO"
-- Se a linha NÃO TEM código E NÃO TEM preço → type: "ETAPA" ou "SUBETAPA" (conforme nível)
-- NUNCA classifique uma linha com preço e código como ETAPA ou SUBETAPA
+- Se a linha TEM código (SINAPI, SEINFRA, SEDOP, ORSE, CP-xx) E tem quantidade/preço unitário → type: "COMPOSICAO"
+- Se a linha NÃO TEM unidade E NÃO TEM quantidade (mesmo que tenha valor TOTAL) → type: "ETAPA" ou "SUBETAPA" (conforme nível)
+- NUNCA classifique uma linha com código oficial, quantidade e unidade como ETAPA ou SUBETAPA
 
 ═══════════════════════════════════════════════════════════
 REGRAS FINAIS
@@ -290,8 +290,8 @@ REGRAS FINAIS
 - NÃO invente itens que não existam no documento
 - NÃO converta unidades de medida (use como está)
 - NÃO arredonde novamente os valores com BDI; unitPrice e totalPrice devem reproduzir a planilha quando existirem
-- NÃO omita itens — extraia TODOS, mesmo sem preço
-- ETAPAS e SUBETAPAS DEVEM ter quantity=0 e unitCost=0
+- NÃO omita itens — extraia TODOS, incluindo os agrupadores hierárquicos (ETAPAS/SUBETAPAS)
+- ETAPAS e SUBETAPAS DEVEM ter quantity=0 e unitCost=0, mas podem ter o "totalPrice" extraído se existir na planilha.
 - Composições PRÓPRIAS DEVEM ter o campo "insumos" quando possível
 - Se você NÃO ENCONTRAR uma planilha orçamentária detalhada com itens e preços, RETORNE UM ARRAY VAZIO [].
 - NUNCA invente itens genéricos baseados no objeto do edital.
@@ -314,8 +314,8 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
    NUNCA ignore ou omita o código. Se não encontrar, use sourceName: "PROPRIA".
 
 2. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO (APENAS se for claramente um agrupador ou item)
-3. ETAPAS e SUBETAPAS são agrupadores — NÃO têm preço. Se um item tiver preço, ELE NÃO É UM AGRUPADOR, DEVE SER COMPOSICAO.
-4. 🚨 PRESERVE A NUMERAÇÃO E A ORDEM EXATA DA PLANILHA ORIGINAL (ex: 1, 1.1, 1.2). NUNCA agrupe itens por conta própria, NUNCA crie subníveis que não existam e NUNCA invente categorias de agrupamento (ex: "1.1 PISOS E ADMINISTRAÇÃO"). Extraia a lista de forma linear e exata.
+3. ETAPAS e SUBETAPAS são agrupadores. Eles NÃO TÊM unidade, NÃO TÊM quantidade e NÃO TÊM preço unitário (embora possam mostrar o Preço Total do grupo na planilha). Extraia-os com quantity=0 e unitCost=0.
+4. 🚨 PRESERVE A NUMERAÇÃO E A ORDEM EXATA DA PLANILHA ORIGINAL (ex: 1, 1.1, 1.2). NUNCA omita as ETAPAS e SUBETAPAS. Extraia a lista de forma linear e exata.
 5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
 6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
 7. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
