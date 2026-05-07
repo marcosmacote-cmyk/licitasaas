@@ -1203,11 +1203,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
                 {/* Table */}
                 <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 1100 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 1400 }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? '35%' : i === 0 ? 46 : i === 1 ? 60 : i === 2 ? 50 : i === 3 ? 82 : i === 5 ? 44 : i === 6 ? 66 : i === 7 ? 96 : i === 8 ? 96 : i === 9 ? 100 : i === 10 ? 76 : 36 }}>{h}</th>
+                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 80 : i === 1 ? 65 : i === 2 ? 55 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -1308,7 +1308,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                 {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                                             </button>
                                                         )}
-                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '48px' : '60px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '65px' : '75px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
                                                     </div>
                                                 </td>
                                         <td style={{ padding: '6px 8px' }}>
@@ -1337,7 +1337,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('82px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
+                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('86px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
                                                 {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && (
                                                     <button title="Editar composição" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5, flexShrink: 0 }}
                                                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
@@ -1352,10 +1352,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('44px'), textAlign: 'center', padding: '4px' }} />
+                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center', padding: '4px' }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('66px'), textAlign: 'right' }} step="0.01" />
+                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('80px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
@@ -1363,10 +1363,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     <span title={it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' ? "Composição vazia. Preencha no Módulo Livre." : "Item sem preço unitário."} style={{ display: 'flex' }}>
                                                         <AlertCircle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('80px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
-                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('96px'), textAlign: 'right' }} step="0.01" />
+                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01" />
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
