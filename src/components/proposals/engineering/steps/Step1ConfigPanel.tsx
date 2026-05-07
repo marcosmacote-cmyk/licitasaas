@@ -639,6 +639,8 @@ export function Step1ConfigPanel({
                                                             sheets[idx] = { ...sheets[idx], ...d, label: sheet.label || d.basePrincipal || `Base ${idx + 2}` };
                                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                                             setHasUnsavedChanges(true);
+                                                            // We don't have a specific state for each sheet's detail, but we can open the main one
+                                                            setShowEncargosDetail(true);
                                                             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos! H={d.totalHorista}% M={d.totalMensalista}%</span>);
                                                         } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
                                                         setTimeout(() => setSaveMsg(null), 4000);
