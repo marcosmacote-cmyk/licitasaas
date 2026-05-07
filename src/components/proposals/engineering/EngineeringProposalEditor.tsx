@@ -979,8 +979,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     };
 
     const inputStyle = (w: string = '100%'): React.CSSProperties => ({
-        width: w, padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30,
+        width: w, minWidth: w !== '100%' ? w : 'auto', padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap'
     });
 
     return (
@@ -1207,7 +1207,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? '28%' : i === 0 ? 50 : i === 1 ? 70 : i === 2 ? 56 : i === 3 ? 82 : i === 5 ? 44 : i === 6 ? 56 : i === 7 ? 86 : i === 8 ? 86 : i === 9 ? 90 : i === 10 ? 80 : 36 }}>{h}</th>
+                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? '35%' : i === 0 ? 46 : i === 1 ? 60 : i === 2 ? 50 : i === 3 ? 82 : i === 5 ? 44 : i === 6 ? 66 : i === 7 ? 96 : i === 8 ? 96 : i === 9 ? 100 : i === 10 ? 76 : 36 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -1312,8 +1312,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     </div>
                                                 </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                                <IconComp size={10} /> {meta.label}
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '60px' }} title={meta.label}>
+                                                <IconComp size={10} style={{ flexShrink: 0 }} /> <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{meta.label === 'COMPOSICAO' ? 'COMP' : meta.label}</span>
                                             </span>
                                             {engineeringConfig.bdiDiferenciado && !isGrouper(it.type) && (
                                                 <select
@@ -1352,10 +1352,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center' }} />
+                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('44px'), textAlign: 'center', padding: '4px' }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
+                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('66px'), textAlign: 'right' }} step="0.01" />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
@@ -1363,10 +1363,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     <span title={it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' ? "Composição vazia. Preencha no Módulo Livre." : "Item sem preço unitário."} style={{ display: 'flex' }}>
                                                         <AlertCircle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('70px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('80px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
-                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('96px'), textAlign: 'right' }} step="0.01" />
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>

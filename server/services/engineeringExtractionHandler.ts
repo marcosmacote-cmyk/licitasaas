@@ -215,8 +215,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         try {
             const targeting = await targetBudgetPages(buffer, {
                 minScore: 8,
-                maxPages: 40,
-                contextPages: 1,
+                maxPages: 60,
+                contextPages: 2,
                 minPagesForTargeting: 15,
             });
 

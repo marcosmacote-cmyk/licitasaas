@@ -492,15 +492,20 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
     const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
     const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
     const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
-    const status: EngineeringPriceAuditStatus = matchMethod === 'description_similarity'
-        ? 'BASE_INCOMPATIVEL'
-        : regimeMismatch
-        ? 'BASE_INCOMPATIVEL'
-        : hasRelevantDelta
-        ? 'DIVERGENT'
-        : best.warnings.length > 0 && !best.warnings.some((w: string) => w.includes('similaridade'))
-            ? 'BASE_INCOMPATIVEL'
-            : 'OK';
+    let status: EngineeringPriceAuditStatus;
+    if (matchMethod === 'description_similarity') {
+        status = 'BASE_INCOMPATIVEL';
+    } else if (regimeMismatch) {
+        status = 'BASE_INCOMPATIVEL';
+    } else if (matchMethod === 'code_exact' && deltaPercent !== null && Math.abs(deltaPercent) < 5) {
+        status = 'OK';
+    } else if (hasRelevantDelta) {
+        status = 'DIVERGENT';
+    } else if (best.warnings.length > 0 && !best.warnings.some((w: string) => w.includes('similaridade'))) {
+        status = 'BASE_INCOMPATIVEL';
+    } else {
+        status = 'OK';
+    }
 
     // Mantém o preço extraído do edital. Só completa metadados seguros.
     if (matchMethod === 'code_exact') {
