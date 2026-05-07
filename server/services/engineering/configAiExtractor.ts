@@ -304,56 +304,121 @@ export async function extractEncargosFromBidding(biddingId: string): Promise<any
     const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais SINAPI.
 Analise o documento e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
 
-A estrutura padrão SINAPI organiza os encargos em 4 GRUPOS:
+A tabela segue a estrutura SINAPI com 4 GRUPOS e ITENS INDIVIDUAIS.
+Extraia CADA ITEM com valores para HORISTA e MENSALISTA:
 
-GRUPO A — Encargos Sociais Básicos (incidência sobre folha):
-  INSS, SESI, SENAI, INCRA, SEBRAE, Salário Educação, Seguro Acidente (RAT×FAP), FGTS
+GRUPO A — Encargos Sociais Básicos:
+  A1: INSS (20% se onerado, 0% se desonerado)
+  A2: SESI (1.50%)
+  A3: SENAI (1.00%)
+  A4: INCRA (0.20%)
+  A5: SEBRAE (0.60%)
+  A6: Salário Educação (2.50%)
+  A7: Seguro Contra Acidentes de Trabalho / RAT (3.00%)
+  A8: FGTS (8.00%)
+  A9: SECONCI (0.00% quando não aplicável)
 
-GRUPO B — Encargos Trabalhistas (pagos ao trabalhador):
-  Repouso Semanal Remunerado, Feriados, 13º Salário, Férias + 1/3 Constitucional,
-  Auxílio Enfermidade, Licença Paternidade, Faltas Justificadas, Dias de Chuva
+GRUPO B — Encargos Trabalhistas:
+  B1:  Repouso Semanal Remunerado
+  B2:  Feriados
+  B3:  Auxílio Enfermidade
+  B4:  13º Salário
+  B5:  Licença Paternidade
+  B6:  Faltas Justificadas
+  B7:  Dias de Chuvas
+  B8:  Auxílio Acidente de Trabalho
+  B9:  Férias Gozadas
+  B10: Salário Maternidade
 
 GRUPO C — Encargos Rescisórios:
-  Aviso Prévio Indenizado, Aviso Prévio Trabalhado, Férias Indenizadas,
-  Depósito Rescisão s/ Justa Causa, Indenização Adicional
+  C1: Aviso Prévio Indenizado
+  C2: Aviso Prévio Trabalhado
+  C3: Férias Indenizadas
+  C4: Depósito Rescisão Sem Justa Causa
+  C5: Indenização Adicional
 
 GRUPO D — Reincidências:
-  Incidência do Grupo A sobre o Grupo B, Incidência do Grupo A sobre Aviso Prévio Trabalhado
+  D1: Reincidência de Grupo A sobre Grupo B
+  D2: Reincidência de Grupo A sobre Aviso Prévio Trabalhado e Reincidência do FGTS sobre Aviso Prévio Indenizado
 
-INSTRUÇÕES:
-1. Extraia o SUBTOTAL de cada grupo (A, B, C, D) para HORISTA e MENSALISTA
-2. Extraia o TOTAL GERAL (A+B+C+D) para horista e mensalista
-3. Se houver tabelas separadas por BASE (SINAPI, SEINFRA, etc.), extraia a primeira/principal
-4. Se não encontrar composição analítica, retorne apenas os totais
-5. Valores são percentuais (sem símbolo %). Ex: 114.31 (não "114,31%")
-6. Se não encontrar nenhum quadro de encargos, retorne found=false`;
+INSTRUÇÕES OBRIGATÓRIAS:
+1. Preencha CADA ITEM individual (a1_h, a1_m, a2_h, a2_m, ..., d2_h, d2_m)
+2. _h = valor HORISTA, _m = valor MENSALISTA
+3. Valores são percentuais SEM símbolo % (ex: 20.00, não "20,00%")
+4. Se um item não existir ou for 0, coloque 0
+5. Se houver MÚLTIPLAS tabelas (por base), extraia a PRIMEIRA/PRINCIPAL
+6. totalHorista e totalMensalista = soma de TODOS os grupos (A+B+C+D)
+7. Se não encontrar tabela de encargos, retorne found=false`;
 
-    // Schema SIMPLIFICADO — flat structure, sem nesting excessivo
-    // Gemini rejeita schemas com >100 states
+    // Schema with individual items — all non-nullable to minimize states
     const responseSchema = {
         type: Type.OBJECT,
         properties: {
             found: { type: Type.BOOLEAN },
-            totalHorista: { type: Type.NUMBER, nullable: true },
-            totalMensalista: { type: Type.NUMBER, nullable: true },
-            grupoA_horista: { type: Type.NUMBER, nullable: true },
-            grupoA_mensalista: { type: Type.NUMBER, nullable: true },
-            grupoB_horista: { type: Type.NUMBER, nullable: true },
-            grupoB_mensalista: { type: Type.NUMBER, nullable: true },
-            grupoC_horista: { type: Type.NUMBER, nullable: true },
-            grupoC_mensalista: { type: Type.NUMBER, nullable: true },
-            grupoD_horista: { type: Type.NUMBER, nullable: true },
-            grupoD_mensalista: { type: Type.NUMBER, nullable: true },
+            totalHorista: { type: Type.NUMBER, description: 'Total A+B+C+D horista' },
+            totalMensalista: { type: Type.NUMBER, description: 'Total A+B+C+D mensalista' },
             basePrincipal: { type: Type.STRING, nullable: true },
+            // Group A items
+            a1_h: { type: Type.NUMBER }, a1_m: { type: Type.NUMBER },
+            a2_h: { type: Type.NUMBER }, a2_m: { type: Type.NUMBER },
+            a3_h: { type: Type.NUMBER }, a3_m: { type: Type.NUMBER },
+            a4_h: { type: Type.NUMBER }, a4_m: { type: Type.NUMBER },
+            a5_h: { type: Type.NUMBER }, a5_m: { type: Type.NUMBER },
+            a6_h: { type: Type.NUMBER }, a6_m: { type: Type.NUMBER },
+            a7_h: { type: Type.NUMBER }, a7_m: { type: Type.NUMBER },
+            a8_h: { type: Type.NUMBER }, a8_m: { type: Type.NUMBER },
+            a9_h: { type: Type.NUMBER }, a9_m: { type: Type.NUMBER },
+            // Group B items
+            b1_h: { type: Type.NUMBER }, b1_m: { type: Type.NUMBER },
+            b2_h: { type: Type.NUMBER }, b2_m: { type: Type.NUMBER },
+            b3_h: { type: Type.NUMBER }, b3_m: { type: Type.NUMBER },
+            b4_h: { type: Type.NUMBER }, b4_m: { type: Type.NUMBER },
+            b5_h: { type: Type.NUMBER }, b5_m: { type: Type.NUMBER },
+            b6_h: { type: Type.NUMBER }, b6_m: { type: Type.NUMBER },
+            b7_h: { type: Type.NUMBER }, b7_m: { type: Type.NUMBER },
+            b8_h: { type: Type.NUMBER }, b8_m: { type: Type.NUMBER },
+            b9_h: { type: Type.NUMBER }, b9_m: { type: Type.NUMBER },
+            b10_h: { type: Type.NUMBER }, b10_m: { type: Type.NUMBER },
+            // Group C items
+            c1_h: { type: Type.NUMBER }, c1_m: { type: Type.NUMBER },
+            c2_h: { type: Type.NUMBER }, c2_m: { type: Type.NUMBER },
+            c3_h: { type: Type.NUMBER }, c3_m: { type: Type.NUMBER },
+            c4_h: { type: Type.NUMBER }, c4_m: { type: Type.NUMBER },
+            c5_h: { type: Type.NUMBER }, c5_m: { type: Type.NUMBER },
+            // Group D items
+            d1_h: { type: Type.NUMBER }, d1_m: { type: Type.NUMBER },
+            d2_h: { type: Type.NUMBER }, d2_m: { type: Type.NUMBER },
         },
         required: ['found'] as string[]
     };
 
+    // Post-processor: calculate group subtotals from individual items
+    const enrichResult = (parsed: any) => {
+        if (!parsed?.found) return parsed;
+        // Calculate group subtotals from items
+        const sum = (...keys: string[]) => keys.reduce((s, k) => s + (parsed[k] || 0), 0);
+        parsed.grupoA_horista = Math.round(sum('a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h') * 100) / 100;
+        parsed.grupoA_mensalista = Math.round(sum('a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m') * 100) / 100;
+        parsed.grupoB_horista = Math.round(sum('b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h') * 100) / 100;
+        parsed.grupoB_mensalista = Math.round(sum('b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m') * 100) / 100;
+        parsed.grupoC_horista = Math.round(sum('c1_h','c2_h','c3_h','c4_h','c5_h') * 100) / 100;
+        parsed.grupoC_mensalista = Math.round(sum('c1_m','c2_m','c3_m','c4_m','c5_m') * 100) / 100;
+        parsed.grupoD_horista = Math.round(sum('d1_h','d2_h') * 100) / 100;
+        parsed.grupoD_mensalista = Math.round(sum('d1_m','d2_m') * 100) / 100;
+        // Recalculate totals from groups if individual items were present
+        const calcTotal_h = parsed.grupoA_horista + parsed.grupoB_horista + parsed.grupoC_horista + parsed.grupoD_horista;
+        const calcTotal_m = parsed.grupoA_mensalista + parsed.grupoB_mensalista + parsed.grupoC_mensalista + parsed.grupoD_mensalista;
+        if (calcTotal_h > 0) parsed.totalHorista = Math.round(calcTotal_h * 100) / 100;
+        if (calcTotal_m > 0) parsed.totalMensalista = Math.round(calcTotal_m * 100) / 100;
+        console.log(`[Encargos-AI] 📊 Enriquecido: A_h=${parsed.grupoA_horista} B_h=${parsed.grupoB_horista} C_h=${parsed.grupoC_horista} D_h=${parsed.grupoD_horista} → Total_h=${parsed.totalHorista}`);
+        return parsed;
+    };
+
     const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
     if (pdfParts.length > 0) {
-        // Attempt 1: Structured schema with Gemini 2.5 Flash
+        // Attempt 1: Full schema with individual items
         try {
-            console.log(`[Encargos-AI] 📄 Tentativa 1: ${pdfParts.length} PDF(s) com schema SINAPI`);
+            console.log(`[Encargos-AI] 📄 Tentativa 1: ${pdfParts.length} PDF(s) com schema SINAPI completo (itens individuais)`);
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
@@ -361,25 +426,26 @@ INSTRUÇÕES:
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
-                console.log(`[Encargos-AI] 📋 Resultado: found=${parsed.found}, totalH=${parsed.totalHorista}, totalM=${parsed.totalMensalista}, A=${parsed.grupoA_horista}, B=${parsed.grupoB_horista}, C=${parsed.grupoC_horista}, D=${parsed.grupoD_horista}, base=${parsed.basePrincipal}`);
-                if (parsed.found) return parsed;
+                console.log(`[Encargos-AI] 📋 Resultado T1: found=${parsed.found}, a1_h=${parsed.a1_h}, a8_h=${parsed.a8_h}, totalH=${parsed.totalHorista}`);
+                if (parsed.found) return enrichResult(parsed);
             }
         } catch (e: any) {
             console.warn(`[Encargos-AI] ⚠️ Tentativa 1 falhou: ${e.message}`);
         }
 
-        // Attempt 2: Without responseSchema (free JSON) — catches cases where schema is still rejected
+        // Attempt 2: Free JSON — no schema constraint
         try {
-            console.log(`[Encargos-AI] 📄 Tentativa 2: ${pdfParts.length} PDF(s) sem schema (JSON livre)`);
+            console.log(`[Encargos-AI] 📄 Tentativa 2: ${pdfParts.length} PDF(s) sem schema (JSON livre com itens)`);
+            const freePrompt = encargosPrompt + '\n\nRetorne JSON com os campos exatos: found (boolean), totalHorista, totalMensalista, basePrincipal (string), e TODOS os itens individuais: a1_h, a1_m, a2_h, a2_m, ..., a9_h, a9_m, b1_h, b1_m, ..., b10_h, b10_m, c1_h, c1_m, ..., c5_h, c5_m, d1_h, d1_m, d2_h, d2_m (todos numbers).';
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt + '\n\nRetorne JSON com os campos: found (boolean), totalHorista (number), totalMensalista (number), grupoA_horista, grupoA_mensalista, grupoB_horista, grupoB_mensalista, grupoC_horista, grupoC_mensalista, grupoD_horista, grupoD_mensalista (numbers), basePrincipal (string).' }] }],
+                contents: [{ role: 'user', parts: [...pdfParts, { text: freePrompt }] }],
                 config: { responseMimeType: 'application/json', temperature: 0.1 }
             });
             if (result?.text) {
                 const parsed = JSON.parse(result.text);
-                console.log(`[Encargos-AI] 📋 Tentativa 2 resultado: found=${parsed.found}`);
-                if (parsed.found) return parsed;
+                console.log(`[Encargos-AI] 📋 Resultado T2: found=${parsed.found}, a1_h=${parsed.a1_h}, totalH=${parsed.totalHorista}`);
+                if (parsed.found) return enrichResult(parsed);
             }
         } catch (e: any) {
             console.warn(`[Encargos-AI] ⚠️ Tentativa 2 falhou: ${e.message}`);
@@ -396,5 +462,5 @@ INSTRUÇÕES:
         config: { responseMimeType: 'application/json', responseSchema, temperature: 0.1 }
     });
     if (!response.text) return null;
-    try { return JSON.parse(response.text); } catch { return null; }
+    try { return enrichResult(JSON.parse(response.text)); } catch { return null; }
 }

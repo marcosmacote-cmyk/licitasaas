@@ -111,6 +111,36 @@ export interface EncargosSociaisConfig {
     grupoC_mensalista?: number;
     grupoD_horista?: number;
     grupoD_mensalista?: number;
+    /** Individual items — Group A (Encargos Sociais Básicos) */
+    a1_h?: number; a1_m?: number; // INSS
+    a2_h?: number; a2_m?: number; // SESI
+    a3_h?: number; a3_m?: number; // SENAI
+    a4_h?: number; a4_m?: number; // INCRA
+    a5_h?: number; a5_m?: number; // SEBRAE
+    a6_h?: number; a6_m?: number; // Salário Educação
+    a7_h?: number; a7_m?: number; // Seguro Contra Acidentes de Trabalho (RAT)
+    a8_h?: number; a8_m?: number; // FGTS
+    a9_h?: number; a9_m?: number; // SECONCI
+    /** Individual items — Group B (Encargos Trabalhistas) */
+    b1_h?: number; b1_m?: number;  // Repouso Semanal Remunerado
+    b2_h?: number; b2_m?: number;  // Feriados
+    b3_h?: number; b3_m?: number;  // Auxílio Enfermidade
+    b4_h?: number; b4_m?: number;  // 13º Salário
+    b5_h?: number; b5_m?: number;  // Licença Paternidade
+    b6_h?: number; b6_m?: number;  // Faltas Justificadas
+    b7_h?: number; b7_m?: number;  // Dias de Chuvas
+    b8_h?: number; b8_m?: number;  // Auxílio Acidente de Trabalho
+    b9_h?: number; b9_m?: number;  // Férias Gozadas
+    b10_h?: number; b10_m?: number; // Salário Maternidade
+    /** Individual items — Group C (Encargos Rescisórios) */
+    c1_h?: number; c1_m?: number; // Aviso Prévio Indenizado
+    c2_h?: number; c2_m?: number; // Aviso Prévio Trabalhado
+    c3_h?: number; c3_m?: number; // Férias Indenizadas
+    c4_h?: number; c4_m?: number; // Depósito Rescisão Sem Justa Causa
+    c5_h?: number; c5_m?: number; // Indenização Adicional
+    /** Individual items — Group D (Reincidências) */
+    d1_h?: number; d1_m?: number; // Reincidência de Grupo A sobre Grupo B
+    d2_h?: number; d2_m?: number; // Reincidência de Grupo A sobre Aviso Prévio Trabalhado
     /** Base principal identificada pela IA */
     basePrincipal?: string | null;
     /** Composição analítica — Horista (legacy) */

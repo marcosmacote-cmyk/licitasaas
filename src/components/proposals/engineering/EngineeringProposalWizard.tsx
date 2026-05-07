@@ -260,7 +260,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     horista: d.totalHorista || engineeringConfig.encargosSociais.horista,
                     mensalista: d.totalMensalista || engineeringConfig.encargosSociais.mensalista,
                     basePrincipal: d.basePrincipal || null,
-                    // SINAPI-aligned groups (A, B, C, D)
+                    // SINAPI-aligned groups (A, B, C, D) — calculated by server
                     grupoA_horista: d.grupoA_horista || 0,
                     grupoA_mensalista: d.grupoA_mensalista || 0,
                     grupoB_horista: d.grupoB_horista || 0,
@@ -269,6 +269,36 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     grupoC_mensalista: d.grupoC_mensalista || 0,
                     grupoD_horista: d.grupoD_horista || 0,
                     grupoD_mensalista: d.grupoD_mensalista || 0,
+                    // Individual items — Group A
+                    a1_h: d.a1_h || 0, a1_m: d.a1_m || 0,
+                    a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
+                    a3_h: d.a3_h || 0, a3_m: d.a3_m || 0,
+                    a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
+                    a5_h: d.a5_h || 0, a5_m: d.a5_m || 0,
+                    a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
+                    a7_h: d.a7_h || 0, a7_m: d.a7_m || 0,
+                    a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
+                    a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
+                    // Individual items — Group B
+                    b1_h: d.b1_h || 0, b1_m: d.b1_m || 0,
+                    b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
+                    b3_h: d.b3_h || 0, b3_m: d.b3_m || 0,
+                    b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
+                    b5_h: d.b5_h || 0, b5_m: d.b5_m || 0,
+                    b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
+                    b7_h: d.b7_h || 0, b7_m: d.b7_m || 0,
+                    b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
+                    b9_h: d.b9_h || 0, b9_m: d.b9_m || 0,
+                    b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
+                    // Individual items — Group C
+                    c1_h: d.c1_h || 0, c1_m: d.c1_m || 0,
+                    c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
+                    c3_h: d.c3_h || 0, c3_m: d.c3_m || 0,
+                    c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
+                    c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
+                    // Individual items — Group D
+                    d1_h: d.d1_h || 0, d1_m: d.d1_m || 0,
+                    d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
                 };
                 setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate }));
                 setHasUnsavedChanges(true);

@@ -245,8 +245,8 @@ export function Step1ConfigPanel({
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37,99,235,0.12)', paddingTop: 8, marginTop: 4 }}>
-                                <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (PIS + COFINS + ISS) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0)).toFixed(2)}%</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                                <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0)).toFixed(2)}%</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                                     <div>
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>PIS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.pis}
@@ -263,6 +263,12 @@ export function Step1ConfigPanel({
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>ISS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.iss}
                                             onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                    </div>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>CSLL (%)</label>
+                                        <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
+                                            onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
                                             style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
                                     </div>
                                 </div>
@@ -319,8 +325,8 @@ export function Step1ConfigPanel({
                                         </div>
                                     </div>
                                     <div style={{ borderTop: '1px solid rgba(180,83,9,0.15)', paddingTop: 8, marginTop: 4 }}>
-                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.68rem', fontWeight: 700, color: '#92400e' }}>Tributos (PIS + COFINS + ISS) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0)).toFixed(2)}%</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.68rem', fontWeight: 700, color: '#92400e' }}>Tributos (I) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0) + (tcuF.csll || 0)).toFixed(2)}%</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
                                             <div>
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>PIS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.pis}
@@ -337,6 +343,12 @@ export function Step1ConfigPanel({
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>ISS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.iss}
                                                     onChange={e => updateTcuFornecimento('iss', parseLocaleNumber(e.target.value))}
+                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                            </div>
+                                            <div>
+                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>CSLL (%)</label>
+                                                <input type="number" className="form-input" value={tcuF.csll || 0}
+                                                    onChange={e => updateTcuFornecimento('csll', parseLocaleNumber(e.target.value))}
                                                     style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
                                             </div>
                                         </div>
@@ -388,54 +400,109 @@ export function Step1ConfigPanel({
                             </button>
                             {showEncargosDetail && (() => {
                                 const es = engineeringConfig.encargosSociais;
-                                const groups = [
-                                    { key: 'A', title: 'A — Encargos Sociais Básicos', desc: 'INSS, SESI, SENAI, INCRA, SEBRAE, Sal. Educação, FGTS, SAT/RAT', color: '#1e40af', horista: es?.grupoA_horista || 0, mensalista: es?.grupoA_mensalista || 0 },
-                                    { key: 'B', title: 'B — Encargos Trabalhistas', desc: 'Repouso, Feriados, 13º Sal., Férias + 1/3, Aux. Enfermidade, Lic. Paternidade', color: '#6d28d9', horista: es?.grupoB_horista || 0, mensalista: es?.grupoB_mensalista || 0 },
-                                    { key: 'C', title: 'C — Encargos Rescisórios', desc: 'Aviso Prévio, Férias Indenizadas, Dep. Rescisão, Indenização Adicional', color: '#0e7490', horista: es?.grupoC_horista || 0, mensalista: es?.grupoC_mensalista || 0 },
-                                    { key: 'D', title: 'D — Reincidências', desc: 'Incidência do Grupo A sobre B e sobre Aviso Prévio Trabalhado', color: '#92400e', horista: es?.grupoD_horista || 0, mensalista: es?.grupoD_mensalista || 0 },
+                                const ITEMS_DEF = [
+                                    { group: 'A', title: 'GRUPO A — Encargos Sociais Básicos', color: '#1e40af', items: [
+                                        { code: 'A1', name: 'INSS', hKey: 'a1_h', mKey: 'a1_m' },
+                                        { code: 'A2', name: 'SESI', hKey: 'a2_h', mKey: 'a2_m' },
+                                        { code: 'A3', name: 'SENAI', hKey: 'a3_h', mKey: 'a3_m' },
+                                        { code: 'A4', name: 'INCRA', hKey: 'a4_h', mKey: 'a4_m' },
+                                        { code: 'A5', name: 'SEBRAE', hKey: 'a5_h', mKey: 'a5_m' },
+                                        { code: 'A6', name: 'Salário Educação', hKey: 'a6_h', mKey: 'a6_m' },
+                                        { code: 'A7', name: 'Seguro Contra Acidentes de Trabalho', hKey: 'a7_h', mKey: 'a7_m' },
+                                        { code: 'A8', name: 'FGTS', hKey: 'a8_h', mKey: 'a8_m' },
+                                        { code: 'A9', name: 'SECONCI', hKey: 'a9_h', mKey: 'a9_m' },
+                                    ]},
+                                    { group: 'B', title: 'GRUPO B — Encargos Trabalhistas', color: '#6d28d9', items: [
+                                        { code: 'B1', name: 'Repouso Semanal Remunerado', hKey: 'b1_h', mKey: 'b1_m' },
+                                        { code: 'B2', name: 'Feriados', hKey: 'b2_h', mKey: 'b2_m' },
+                                        { code: 'B3', name: 'Auxílio Enfermidade', hKey: 'b3_h', mKey: 'b3_m' },
+                                        { code: 'B4', name: '13º Salário', hKey: 'b4_h', mKey: 'b4_m' },
+                                        { code: 'B5', name: 'Licença Paternidade', hKey: 'b5_h', mKey: 'b5_m' },
+                                        { code: 'B6', name: 'Faltas Justificadas', hKey: 'b6_h', mKey: 'b6_m' },
+                                        { code: 'B7', name: 'Dias de Chuvas', hKey: 'b7_h', mKey: 'b7_m' },
+                                        { code: 'B8', name: 'Auxílio Acidente de Trabalho', hKey: 'b8_h', mKey: 'b8_m' },
+                                        { code: 'B9', name: 'Férias Gozadas', hKey: 'b9_h', mKey: 'b9_m' },
+                                        { code: 'B10', name: 'Salário Maternidade', hKey: 'b10_h', mKey: 'b10_m' },
+                                    ]},
+                                    { group: 'C', title: 'GRUPO C — Encargos Rescisórios', color: '#0e7490', items: [
+                                        { code: 'C1', name: 'Aviso Prévio Indenizado', hKey: 'c1_h', mKey: 'c1_m' },
+                                        { code: 'C2', name: 'Aviso Prévio Trabalhado', hKey: 'c2_h', mKey: 'c2_m' },
+                                        { code: 'C3', name: 'Férias Indenizadas', hKey: 'c3_h', mKey: 'c3_m' },
+                                        { code: 'C4', name: 'Depósito Rescisão Sem Justa Causa', hKey: 'c4_h', mKey: 'c4_m' },
+                                        { code: 'C5', name: 'Indenização Adicional', hKey: 'c5_h', mKey: 'c5_m' },
+                                    ]},
+                                    { group: 'D', title: 'GRUPO D — Reincidências', color: '#92400e', items: [
+                                        { code: 'D1', name: 'Reincidência de Grupo A sobre Grupo B', hKey: 'd1_h', mKey: 'd1_m' },
+                                        { code: 'D2', name: 'Reinc. Grupo A s/ Aviso Prévio Trab. e FGTS s/ AP Ind.', hKey: 'd2_h', mKey: 'd2_m' },
+                                    ]},
                                 ];
-                                const updateGroup = (groupKey: string, field: 'horista' | 'mensalista', val: number) => {
-                                    const fieldName = `grupo${groupKey}_${field}`;
-                                    const nextEs = { ...es, [fieldName]: val };
-                                    // Recalculate totals
-                                    const totalH = (nextEs.grupoA_horista||0) + (nextEs.grupoB_horista||0) + (nextEs.grupoC_horista||0) + (nextEs.grupoD_horista||0);
-                                    const totalM = (nextEs.grupoA_mensalista||0) + (nextEs.grupoB_mensalista||0) + (nextEs.grupoC_mensalista||0) + (nextEs.grupoD_mensalista||0);
-                                    nextEs.horista = Math.round(totalH * 100) / 100;
-                                    nextEs.mensalista = Math.round(totalM * 100) / 100;
+                                const updateItem = (key: string, val: number) => {
+                                    const nextEs: any = { ...es, [key]: val };
+                                    // Recalculate group subtotals
+                                    const sumItems = (keys: string[]) => keys.reduce((s, k) => s + (nextEs[k] || 0), 0);
+                                    nextEs.grupoA_horista = Math.round(sumItems(['a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h']) * 100) / 100;
+                                    nextEs.grupoA_mensalista = Math.round(sumItems(['a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m']) * 100) / 100;
+                                    nextEs.grupoB_horista = Math.round(sumItems(['b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h']) * 100) / 100;
+                                    nextEs.grupoB_mensalista = Math.round(sumItems(['b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m']) * 100) / 100;
+                                    nextEs.grupoC_horista = Math.round(sumItems(['c1_h','c2_h','c3_h','c4_h','c5_h']) * 100) / 100;
+                                    nextEs.grupoC_mensalista = Math.round(sumItems(['c1_m','c2_m','c3_m','c4_m','c5_m']) * 100) / 100;
+                                    nextEs.grupoD_horista = Math.round(sumItems(['d1_h','d2_h']) * 100) / 100;
+                                    nextEs.grupoD_mensalista = Math.round(sumItems(['d1_m','d2_m']) * 100) / 100;
+                                    nextEs.horista = Math.round((nextEs.grupoA_horista + nextEs.grupoB_horista + nextEs.grupoC_horista + nextEs.grupoD_horista) * 100) / 100;
+                                    nextEs.mensalista = Math.round((nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista) * 100) / 100;
                                     onConfigChange({ ...engineeringConfig, encargosSociais: nextEs });
                                 };
+                                const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '3px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' };
                                 return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                                    <div style={{ marginTop: 8 }}>
                                         <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                                            Estrutura SINAPI — Subtotais por grupo {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
+                                            Estrutura SINAPI — Itens individuais {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
                                         </span>
                                         {/* Header */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, fontSize: '0.68rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            <span>Grupo</span>
-                                            <span style={{ textAlign: 'right' }}>Horista (%)</span>
-                                            <span style={{ textAlign: 'right' }}>Mensalista (%)</span>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 4px 4px', borderBottom: '2px solid var(--color-border)' }}>
+                                            <span>COD</span>
+                                            <span>DESCRIÇÃO</span>
+                                            <span style={{ textAlign: 'right' }}>HORISTA %</span>
+                                            <span style={{ textAlign: 'right' }}>MENSALISTA %</span>
                                         </div>
-                                        {groups.map(g => (
-                                            <div key={g.key} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, alignItems: 'center', background: 'var(--color-bg-base)', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                                <div>
-                                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: g.color }}>{g.title}</div>
-                                                    <div style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)', marginTop: 2, lineHeight: 1.2 }}>{g.desc}</div>
+                                        {ITEMS_DEF.map(grp => (
+                                            <div key={grp.group} style={{ marginBottom: 4 }}>
+                                                {/* Group header */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '6px 4px', background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.group}</span>
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.title}</span>
+                                                    <span></span><span></span>
                                                 </div>
-                                                <input type="number" step="0.01" className="form-input"
-                                                    value={g.horista}
-                                                    onChange={e => updateGroup(g.key, 'horista', parseLocaleNumber(e.target.value))}
-                                                    style={{ width: '100%', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 6px', borderRadius: 'var(--radius-sm)', borderColor: 'var(--color-border)' }} />
-                                                <input type="number" step="0.01" className="form-input"
-                                                    value={g.mensalista}
-                                                    onChange={e => updateGroup(g.key, 'mensalista', parseLocaleNumber(e.target.value))}
-                                                    style={{ width: '100%', fontSize: '0.8rem', fontWeight: 600, textAlign: 'right', padding: '4px 6px', borderRadius: 'var(--radius-sm)', borderColor: 'var(--color-border)' }} />
+                                                {/* Items */}
+                                                {grp.items.map(item => (
+                                                    <div key={item.code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, alignItems: 'center', padding: '3px 4px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{item.code}</span>
+                                                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-primary)' }}>{item.name}</span>
+                                                        <input type="number" step="0.01" className="form-input"
+                                                            value={(es as any)?.[item.hKey] || 0}
+                                                            onChange={e => updateItem(item.hKey, parseLocaleNumber(e.target.value))}
+                                                            style={inputSty} />
+                                                        <input type="number" step="0.01" className="form-input"
+                                                            value={(es as any)?.[item.mKey] || 0}
+                                                            onChange={e => updateItem(item.mKey, parseLocaleNumber(e.target.value))}
+                                                            style={inputSty} />
+                                                    </div>
+                                                ))}
+                                                {/* Group subtotal */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
+                                                    <span></span>
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color, textAlign: 'right', paddingRight: 6 }}>TOTAL</span>
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_horista` as keyof typeof es] as number || 0).toFixed(2)}</span>
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_mensalista` as keyof typeof es] as number || 0).toFixed(2)}</span>
+                                                </div>
                                             </div>
                                         ))}
-                                        {/* Totals row */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 6, alignItems: 'center', padding: '8px 10px', borderTop: '2px solid #6d28d9', fontWeight: 800, fontSize: '0.85rem' }}>
-                                            <span style={{ color: '#6d28d9' }}>TOTAL (A+B+C+D)</span>
-                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}%</span>
-                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}%</span>
+                                        {/* Grand total */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
+                                            <span></span>
+                                            <span style={{ color: '#6d28d9' }}>A + B + C + D =</span>
+                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}</span>
+                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}</span>
                                         </div>
                                     </div>
                                 );

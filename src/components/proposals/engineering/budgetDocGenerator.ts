@@ -290,7 +290,8 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
             ['PIS', tcu.pis],
             ['COFINS', tcu.cofins],
             ['ISS', tcu.iss],
-            ['Tributos (I = PIS+COFINS+ISS)', (tcu.pis || 0) + (tcu.cofins || 0) + (tcu.iss || 0)],
+            ['CSLL', tcu.csll || 0],
+            ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis || 0) + (tcu.cofins || 0) + (tcu.iss || 0) + (tcu.csll || 0)],
         ];
         bdiHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Fórmula TCU — Acórdão 2622/2013:<br>BDI = {(1+AC+S+G+R)×(1+DF)×(1+L) / (1−I) − 1} × 100</p>
 <table><thead><tr><th>Componente</th><th class="r">Valor (%)</th></tr></thead><tbody>`;

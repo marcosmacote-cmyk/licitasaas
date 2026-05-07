@@ -41,14 +41,15 @@ EXTRAIA OBRIGATORIAMENTE os seguintes percentuais individuais (NÃO o BDI total)
 - **pis**: PIS — tipicamente 0.65%
 - **cofins**: COFINS — tipicamente 3%
 - **iss**: ISS (Imposto Sobre Serviços) — tipicamente 2-5%, varia por município
+- **csll**: CSLL (Contribuição Social sobre o Lucro Líquido) — tipicamente 1% em regime ONERADO. Em regime DESONERADO o CSLL pode ser 0%. Se não mencionado, retorne 0.
 
-ATENÇÃO: Os tributos devem ser extraídos INDIVIDUALMENTE (PIS, COFINS, ISS).
-Se o edital mostra apenas "Tributos = 5,65%" sem detalhar, use os valores padrão:
-PIS = 0.65, COFINS = 3.00, ISS = (Tributos - 0.65 - 3.00).
+ATENÇÃO: Os tributos devem ser extraídos INDIVIDUALMENTE (PIS, COFINS, ISS, CSLL).
+Se o edital mostra apenas "Tributos = 5,65%" sem detalhar, use:
+PIS = 0.65, COFINS = 3.00, CSLL = 0, ISS = (Tributos - 0.65 - 3.00).
 
 REGRAS CRÍTICAS:
 1. Se você encontrar APENAS o BDI global (ex: "BDI = 20,35%") SEM detalhamento, retorne found=true, globalBdi=20.35, tcu=null.
-2. Se encontrar a COMPOSIÇÃO DETALHADA (cada componente individual), retorne found=true, globalBdi com o valor calculado, E tcu com TODOS os 9 componentes preenchidos.
+2. Se encontrar a COMPOSIÇÃO DETALHADA (cada componente individual), retorne found=true, globalBdi com o valor calculado, E tcu com TODOS os 10 componentes preenchidos.
 3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração.
 4. Se um componente é "0" ou não mencionado, coloque 0 — NÃO omita o campo.
 5. Os valores individuais são SEMPRE MUITO MENORES que o BDI total.
@@ -74,6 +75,7 @@ Retorne apenas os números (sem o símbolo de %).`;
             pis: { type: Type.NUMBER, description: 'PIS — tipicamente 0.65%' },
             cofins: { type: Type.NUMBER, description: 'COFINS — tipicamente 3%' },
             iss: { type: Type.NUMBER, description: 'ISS — tipicamente 2-5%' },
+            csll: { type: Type.NUMBER, description: 'CSLL — tipicamente 1% (onerado) ou 0% (desonerado)' },
         }
     };
 
