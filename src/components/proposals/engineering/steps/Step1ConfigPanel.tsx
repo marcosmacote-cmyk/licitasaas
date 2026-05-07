@@ -43,6 +43,100 @@ interface Props {
     setSaveMsg?: (v: React.ReactNode) => void;
 }
 
+const ITEMS_DEF = [
+    { group: 'A', title: 'GRUPO A — Encargos Sociais Básicos', color: '#1e40af', items: [
+        { code: 'A1', name: 'INSS', hKey: 'a1_h', mKey: 'a1_m' },
+        { code: 'A2', name: 'SESI', hKey: 'a2_h', mKey: 'a2_m' },
+        { code: 'A3', name: 'SENAI', hKey: 'a3_h', mKey: 'a3_m' },
+        { code: 'A4', name: 'INCRA', hKey: 'a4_h', mKey: 'a4_m' },
+        { code: 'A5', name: 'SEBRAE', hKey: 'a5_h', mKey: 'a5_m' },
+        { code: 'A6', name: 'Salário Educação', hKey: 'a6_h', mKey: 'a6_m' },
+        { code: 'A7', name: 'Seguro Contra Acidentes de Trabalho', hKey: 'a7_h', mKey: 'a7_m' },
+        { code: 'A8', name: 'FGTS', hKey: 'a8_h', mKey: 'a8_m' },
+        { code: 'A9', name: 'SECONCI', hKey: 'a9_h', mKey: 'a9_m' },
+    ]},
+    { group: 'B', title: 'GRUPO B — Encargos Trabalhistas', color: '#6d28d9', items: [
+        { code: 'B1', name: 'Repouso Semanal Remunerado', hKey: 'b1_h', mKey: 'b1_m' },
+        { code: 'B2', name: 'Feriados', hKey: 'b2_h', mKey: 'b2_m' },
+        { code: 'B3', name: 'Auxílio Enfermidade', hKey: 'b3_h', mKey: 'b3_m' },
+        { code: 'B4', name: '13º Salário', hKey: 'b4_h', mKey: 'b4_m' },
+        { code: 'B5', name: 'Licença Paternidade', hKey: 'b5_h', mKey: 'b5_m' },
+        { code: 'B6', name: 'Faltas Justificadas', hKey: 'b6_h', mKey: 'b6_m' },
+        { code: 'B7', name: 'Dias de Chuvas', hKey: 'b7_h', mKey: 'b7_m' },
+        { code: 'B8', name: 'Auxílio Acidente de Trabalho', hKey: 'b8_h', mKey: 'b8_m' },
+        { code: 'B9', name: 'Férias Gozadas', hKey: 'b9_h', mKey: 'b9_m' },
+        { code: 'B10', name: 'Salário Maternidade', hKey: 'b10_h', mKey: 'b10_m' },
+    ]},
+    { group: 'C', title: 'GRUPO C — Encargos Rescisórios', color: '#0e7490', items: [
+        { code: 'C1', name: 'Aviso Prévio Indenizado', hKey: 'c1_h', mKey: 'c1_m' },
+        { code: 'C2', name: 'Aviso Prévio Trabalhado', hKey: 'c2_h', mKey: 'c2_m' },
+        { code: 'C3', name: 'Férias Indenizadas', hKey: 'c3_h', mKey: 'c3_m' },
+        { code: 'C4', name: 'Depósito Rescisão Sem Justa Causa', hKey: 'c4_h', mKey: 'c4_m' },
+        { code: 'C5', name: 'Indenização Adicional', hKey: 'c5_h', mKey: 'c5_m' },
+    ]},
+    { group: 'D', title: 'GRUPO D — Reincidências', color: '#92400e', items: [
+        { code: 'D1', name: 'Reincidência de Grupo A sobre Grupo B', hKey: 'd1_h', mKey: 'd1_m' },
+        { code: 'D2', name: 'Reinc. Grupo A s/ Aviso Prévio Trab. e FGTS s/ AP Ind.', hKey: 'd2_h', mKey: 'd2_m' },
+    ]},
+];
+
+function EncargosDetailTable({ es, onChange }: { es: any, onChange: (newEs: any) => void }) {
+    const updateItem = (key: string, val: number) => {
+        const nextEs: any = { ...es, [key]: val };
+        const sumItems = (keys: string[]) => keys.reduce((s, k) => s + (nextEs[k] || 0), 0);
+        nextEs.grupoA_horista = Math.round(sumItems(['a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h']) * 100) / 100;
+        nextEs.grupoA_mensalista = Math.round(sumItems(['a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m']) * 100) / 100;
+        nextEs.grupoB_horista = Math.round(sumItems(['b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h']) * 100) / 100;
+        nextEs.grupoB_mensalista = Math.round(sumItems(['b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m']) * 100) / 100;
+        nextEs.grupoC_horista = Math.round(sumItems(['c1_h','c2_h','c3_h','c4_h','c5_h']) * 100) / 100;
+        nextEs.grupoC_mensalista = Math.round(sumItems(['c1_m','c2_m','c3_m','c4_m','c5_m']) * 100) / 100;
+        nextEs.grupoD_horista = Math.round(sumItems(['d1_h','d2_h']) * 100) / 100;
+        nextEs.grupoD_mensalista = Math.round(sumItems(['d1_m','d2_m']) * 100) / 100;
+        nextEs.horista = Math.round((nextEs.grupoA_horista + nextEs.grupoB_horista + nextEs.grupoC_horista + nextEs.grupoD_horista) * 100) / 100;
+        nextEs.mensalista = Math.round((nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista) * 100) / 100;
+        onChange(nextEs);
+    };
+    const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '3px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' };
+    return (
+        <div style={{ marginTop: 8 }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                Estrutura SINAPI — Itens individuais {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 4px 4px', borderBottom: '2px solid var(--color-border)' }}>
+                <span>COD</span><span>DESCRIÇÃO</span><span style={{ textAlign: 'right' }}>HORISTA %</span><span style={{ textAlign: 'right' }}>MENSALISTA %</span>
+            </div>
+            {ITEMS_DEF.map(grp => (
+                <div key={grp.group} style={{ marginBottom: 4 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '6px 4px', background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.group}</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.title}</span>
+                        <span></span><span></span>
+                    </div>
+                    {grp.items.map(item => (
+                        <div key={item.code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, alignItems: 'center', padding: '3px 4px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{item.code}</span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-primary)' }}>{item.name}</span>
+                            <input type="number" step="0.01" className="form-input" value={es?.[item.hKey] || 0} onChange={e => updateItem(item.hKey, parseLocaleNumber(e.target.value))} style={inputSty} />
+                            <input type="number" step="0.01" className="form-input" value={es?.[item.mKey] || 0} onChange={e => updateItem(item.mKey, parseLocaleNumber(e.target.value))} style={inputSty} />
+                        </div>
+                    ))}
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
+                        <span></span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color, textAlign: 'right', paddingRight: 6 }}>TOTAL</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_horista`] as number || 0).toFixed(2)}</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_mensalista`] as number || 0).toFixed(2)}</span>
+                    </div>
+                </div>
+            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
+                <span></span><span style={{ color: '#6d28d9' }}>A + B + C + D =</span>
+                <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}</span>
+                <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}</span>
+            </div>
+        </div>
+    );
+}
+
 export function Step1ConfigPanel({
     engineeringConfig, bdiConfig, isExtractingBdi, isExtractingConfig, isExtractingEncargos, isAuditing, isSaving,
     onConfigChange, onBdiChange, onExtractBdi, onExtractBdiFornecimento, onExtractConfig, onExtractEncargos, onSyncBases, onSave, onNext,
@@ -52,6 +146,7 @@ export function Step1ConfigPanel({
     const setSaveMsg = parentSetSaveMsg || setLocalSaveMsg;
     const setHasUnsavedChanges = parentSetHasUnsavedChanges || (() => {});
     const [showEncargosDetail, setShowEncargosDetail] = useState(false);
+    const [showAdicionalDetail, setShowAdicionalDetail] = useState<Record<number, boolean>>({});
     const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
     const effectiveBdi = bdiConfig.bdiGlobal;
 
@@ -469,115 +564,15 @@ export function Step1ConfigPanel({
                                 <span style={{ fontSize: '0.8rem', fontWeight: 700, color: showEncargosDetail ? '#6d28d9' : 'var(--color-text-primary)' }}>Composição Analítica</span>
                                 <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: showEncargosDetail ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                             </button>
-                            {showEncargosDetail && (() => {
-                                const es = engineeringConfig.encargosSociais;
-                                const ITEMS_DEF = [
-                                    { group: 'A', title: 'GRUPO A — Encargos Sociais Básicos', color: '#1e40af', items: [
-                                        { code: 'A1', name: 'INSS', hKey: 'a1_h', mKey: 'a1_m' },
-                                        { code: 'A2', name: 'SESI', hKey: 'a2_h', mKey: 'a2_m' },
-                                        { code: 'A3', name: 'SENAI', hKey: 'a3_h', mKey: 'a3_m' },
-                                        { code: 'A4', name: 'INCRA', hKey: 'a4_h', mKey: 'a4_m' },
-                                        { code: 'A5', name: 'SEBRAE', hKey: 'a5_h', mKey: 'a5_m' },
-                                        { code: 'A6', name: 'Salário Educação', hKey: 'a6_h', mKey: 'a6_m' },
-                                        { code: 'A7', name: 'Seguro Contra Acidentes de Trabalho', hKey: 'a7_h', mKey: 'a7_m' },
-                                        { code: 'A8', name: 'FGTS', hKey: 'a8_h', mKey: 'a8_m' },
-                                        { code: 'A9', name: 'SECONCI', hKey: 'a9_h', mKey: 'a9_m' },
-                                    ]},
-                                    { group: 'B', title: 'GRUPO B — Encargos Trabalhistas', color: '#6d28d9', items: [
-                                        { code: 'B1', name: 'Repouso Semanal Remunerado', hKey: 'b1_h', mKey: 'b1_m' },
-                                        { code: 'B2', name: 'Feriados', hKey: 'b2_h', mKey: 'b2_m' },
-                                        { code: 'B3', name: 'Auxílio Enfermidade', hKey: 'b3_h', mKey: 'b3_m' },
-                                        { code: 'B4', name: '13º Salário', hKey: 'b4_h', mKey: 'b4_m' },
-                                        { code: 'B5', name: 'Licença Paternidade', hKey: 'b5_h', mKey: 'b5_m' },
-                                        { code: 'B6', name: 'Faltas Justificadas', hKey: 'b6_h', mKey: 'b6_m' },
-                                        { code: 'B7', name: 'Dias de Chuvas', hKey: 'b7_h', mKey: 'b7_m' },
-                                        { code: 'B8', name: 'Auxílio Acidente de Trabalho', hKey: 'b8_h', mKey: 'b8_m' },
-                                        { code: 'B9', name: 'Férias Gozadas', hKey: 'b9_h', mKey: 'b9_m' },
-                                        { code: 'B10', name: 'Salário Maternidade', hKey: 'b10_h', mKey: 'b10_m' },
-                                    ]},
-                                    { group: 'C', title: 'GRUPO C — Encargos Rescisórios', color: '#0e7490', items: [
-                                        { code: 'C1', name: 'Aviso Prévio Indenizado', hKey: 'c1_h', mKey: 'c1_m' },
-                                        { code: 'C2', name: 'Aviso Prévio Trabalhado', hKey: 'c2_h', mKey: 'c2_m' },
-                                        { code: 'C3', name: 'Férias Indenizadas', hKey: 'c3_h', mKey: 'c3_m' },
-                                        { code: 'C4', name: 'Depósito Rescisão Sem Justa Causa', hKey: 'c4_h', mKey: 'c4_m' },
-                                        { code: 'C5', name: 'Indenização Adicional', hKey: 'c5_h', mKey: 'c5_m' },
-                                    ]},
-                                    { group: 'D', title: 'GRUPO D — Reincidências', color: '#92400e', items: [
-                                        { code: 'D1', name: 'Reincidência de Grupo A sobre Grupo B', hKey: 'd1_h', mKey: 'd1_m' },
-                                        { code: 'D2', name: 'Reinc. Grupo A s/ Aviso Prévio Trab. e FGTS s/ AP Ind.', hKey: 'd2_h', mKey: 'd2_m' },
-                                    ]},
-                                ];
-                                const updateItem = (key: string, val: number) => {
-                                    const nextEs: any = { ...es, [key]: val };
-                                    // Recalculate group subtotals
-                                    const sumItems = (keys: string[]) => keys.reduce((s, k) => s + (nextEs[k] || 0), 0);
-                                    nextEs.grupoA_horista = Math.round(sumItems(['a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h']) * 100) / 100;
-                                    nextEs.grupoA_mensalista = Math.round(sumItems(['a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m']) * 100) / 100;
-                                    nextEs.grupoB_horista = Math.round(sumItems(['b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h']) * 100) / 100;
-                                    nextEs.grupoB_mensalista = Math.round(sumItems(['b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m']) * 100) / 100;
-                                    nextEs.grupoC_horista = Math.round(sumItems(['c1_h','c2_h','c3_h','c4_h','c5_h']) * 100) / 100;
-                                    nextEs.grupoC_mensalista = Math.round(sumItems(['c1_m','c2_m','c3_m','c4_m','c5_m']) * 100) / 100;
-                                    nextEs.grupoD_horista = Math.round(sumItems(['d1_h','d2_h']) * 100) / 100;
-                                    nextEs.grupoD_mensalista = Math.round(sumItems(['d1_m','d2_m']) * 100) / 100;
-                                    nextEs.horista = Math.round((nextEs.grupoA_horista + nextEs.grupoB_horista + nextEs.grupoC_horista + nextEs.grupoD_horista) * 100) / 100;
-                                    nextEs.mensalista = Math.round((nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista) * 100) / 100;
-                                    onConfigChange({ ...engineeringConfig, encargosSociais: nextEs });
-                                };
-                                const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '3px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' };
-                                return (
-                                    <div style={{ marginTop: 8 }}>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                                            Estrutura SINAPI — Itens individuais {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
-                                        </span>
-                                        {/* Header */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 4px 4px', borderBottom: '2px solid var(--color-border)' }}>
-                                            <span>COD</span>
-                                            <span>DESCRIÇÃO</span>
-                                            <span style={{ textAlign: 'right' }}>HORISTA %</span>
-                                            <span style={{ textAlign: 'right' }}>MENSALISTA %</span>
-                                        </div>
-                                        {ITEMS_DEF.map(grp => (
-                                            <div key={grp.group} style={{ marginBottom: 4 }}>
-                                                {/* Group header */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '6px 4px', background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.group}</span>
-                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.title}</span>
-                                                    <span></span><span></span>
-                                                </div>
-                                                {/* Items */}
-                                                {grp.items.map(item => (
-                                                    <div key={item.code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, alignItems: 'center', padding: '3px 4px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{item.code}</span>
-                                                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-primary)' }}>{item.name}</span>
-                                                        <input type="number" step="0.01" className="form-input"
-                                                            value={(es as any)?.[item.hKey] || 0}
-                                                            onChange={e => updateItem(item.hKey, parseLocaleNumber(e.target.value))}
-                                                            style={inputSty} />
-                                                        <input type="number" step="0.01" className="form-input"
-                                                            value={(es as any)?.[item.mKey] || 0}
-                                                            onChange={e => updateItem(item.mKey, parseLocaleNumber(e.target.value))}
-                                                            style={inputSty} />
-                                                    </div>
-                                                ))}
-                                                {/* Group subtotal */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
-                                                    <span></span>
-                                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color, textAlign: 'right', paddingRight: 6 }}>TOTAL</span>
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_horista` as keyof typeof es] as number || 0).toFixed(2)}</span>
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_mensalista` as keyof typeof es] as number || 0).toFixed(2)}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {/* Grand total */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
-                                            <span></span>
-                                            <span style={{ color: '#6d28d9' }}>A + B + C + D =</span>
-                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}</span>
-                                            <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
+                            {showEncargosDetail && (
+                                <EncargosDetailTable 
+                                    es={engineeringConfig.encargosSociais || {}} 
+                                    onChange={newEs => {
+                                        onConfigChange({ ...engineeringConfig, encargosSociais: newEs });
+                                        setHasUnsavedChanges(true);
+                                    }} 
+                                />
+                            )}
                         </div>
 
                         {/* Planilhas Adicionais de Encargos */}
@@ -639,8 +634,8 @@ export function Step1ConfigPanel({
                                                             sheets[idx] = { ...sheets[idx], ...d, label: sheet.label || d.basePrincipal || `Base ${idx + 2}` };
                                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                                             setHasUnsavedChanges(true);
-                                                            // We don't have a specific state for each sheet's detail, but we can open the main one
-                                                            setShowEncargosDetail(true);
+                                                            // Auto-open detail for this sheet
+                                                            setShowAdicionalDetail(prev => ({ ...prev, [idx]: true }));
                                                             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos! H={d.totalHorista}% M={d.totalMensalista}%</span>);
                                                         } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
                                                         setTimeout(() => setSaveMsg(null), 4000);
@@ -684,23 +679,26 @@ export function Step1ConfigPanel({
                                                 style={{ ...inputStyle, textAlign: 'center', fontSize: '1rem', fontWeight: 700, padding: '4px', border: 'none' }} />
                                         </div>
                                     </div>
-                                    {/* Groups summary (if extracted) */}
-                                    {(sheet.grupoA_horista || sheet.a1_h) && (
-                                        <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', display: 'grid', gridTemplateColumns: '1fr 60px 60px', gap: 2, padding: '4px 0', borderTop: '1px solid var(--color-border)' }}>
-                                            {[
-                                                { label: 'Grupo A', h: sheet.grupoA_horista, m: sheet.grupoA_mensalista },
-                                                { label: 'Grupo B', h: sheet.grupoB_horista, m: sheet.grupoB_mensalista },
-                                                { label: 'Grupo C', h: sheet.grupoC_horista, m: sheet.grupoC_mensalista },
-                                                { label: 'Grupo D', h: sheet.grupoD_horista, m: sheet.grupoD_mensalista },
-                                            ].map(g => (
-                                                <React.Fragment key={g.label}>
-                                                    <span>{g.label}</span>
-                                                    <span style={{ textAlign: 'right' }}>{(g.h || 0).toFixed(2)}</span>
-                                                    <span style={{ textAlign: 'right' }}>{(g.m || 0).toFixed(2)}</span>
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-                                    )}
+                                    
+                                    {/* Analytical Breakdown Toggle */}
+                                    <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                                        <button onClick={() => setShowAdicionalDetail(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 0' }}>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: showAdicionalDetail[idx] ? '#6d28d9' : 'var(--color-text-primary)' }}>Composição Analítica</span>
+                                            <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: showAdicionalDetail[idx] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                        </button>
+                                        {showAdicionalDetail[idx] && (
+                                            <EncargosDetailTable 
+                                                es={sheet || {}} 
+                                                onChange={newEs => {
+                                                    const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                    sheets[idx] = newEs;
+                                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                                    setHasUnsavedChanges(true);
+                                                }} 
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                             ))}
 
