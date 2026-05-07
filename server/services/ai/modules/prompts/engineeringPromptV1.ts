@@ -184,11 +184,18 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 FORMATO DE SAÍDA (JSON)
 ═══════════════════════════════════════════════════════════
 
-IMPORTANTE: O exemplo abaixo mostra uma planilha REAL. Note que:
-- "1" é ETAPA (pode ter preço total, mas não tem qtd/unitCost)
-- "1.1" já é COMPOSICAO (tem código, quantidade, e preço unitário) — NÃO É subetapa!
-- "4" é ETAPA, "4.1" é SUBETAPA, "4.1.1" é COMPOSICAO
-- A profundidade varia. Respeite o que a planilha mostra.
+🚨🚨🚨 REGRA OBRIGATÓRIA — HIERARQUIA COMPLETA:
+Você DEVE extrair TODAS as linhas da planilha, incluindo:
+- Linhas de ETAPA (agrupador nível 1) — mesmo que tenham apenas uma descrição e um total
+- Linhas de SUBETAPA (agrupador nível 2+) — mesmo que tenham apenas uma descrição e um total
+- Linhas de COMPOSIÇÃO (serviço com código, unidade e preço)
+
+A planilha orçamentária de obras tem uma ÁRVORE HIERÁRQUICA. Se você omitir as ETAPAs e SUBETAPAs, a estrutura fica quebrada. O CRONOGRAMA da obra depende dessas etapas.
+
+EXEMPLO REAL — Planilha com hierarquia profunda (4 níveis):
+
+Observe: as linhas 1, 1.1, 1.2, 1.3, 1.3.1, 1.3.2 são agrupadores SEM código/unidade/qtd.
+As linhas 1.1.1.0.1, 1.2.1.0.1, 1.3.1.0.1 são composições COM código/unidade/qtd/preço.
 
 {
   "engineeringItems": [
@@ -197,91 +204,176 @@ IMPORTANTE: O exemplo abaixo mostra uma planilha REAL. Note que:
       "type": "ETAPA",
       "sourceName": "",
       "code": "",
-      "description": "SERVIÇOS INICIAIS",
+      "description": "CONSTRUÇÃO DE HABITAÇÃO DE INTERESSE SOCIAL",
       "unit": "",
       "quantity": 0,
       "unitCost": 0,
       "unitPrice": 0,
-      "totalPrice": 0
+      "totalPrice": 6502590.57
     },
     {
       "item": "1.1",
-      "type": "COMPOSICAO",
-      "sourceName": "SINAPI",
-      "code": "103689",
-      "description": "FORNECIMENTO E INSTALAÇÃO DE PLACA DE OBRA COM CHAPA GALVANIZADA",
-      "unit": "m²",
-      "quantity": 6,
-      "unitCost": 470.47,
-      "unitPrice": 597.97,
-      "totalPrice": 3587.82
-    },
-    {
-      "item": "1.2",
-      "type": "COMPOSICAO",
-      "sourceName": "PROPRIA",
-      "code": "1.14",
-      "description": "ADMINISTRAÇÃO LOCAL DA OBRA",
-      "unit": "MÊS",
-      "quantity": 6,
-      "unitCost": 24208.25,
-      "unitPrice": 30768.69,
-      "totalPrice": 184612.14
-    },
-    {
-      "item": "4",
-      "type": "ETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "RUA EURIPEDES JOAQUIM DE CARVALHO",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 0
-    },
-    {
-      "item": "4.1",
       "type": "SUBETAPA",
       "sourceName": "",
       "code": "",
-      "description": "SERVIÇOS DE TERRAPLENAGEM E SUBLEITO",
+      "description": "ADMINISTRAÇÃO LOCAL",
       "unit": "",
       "quantity": 0,
       "unitCost": 0,
       "unitPrice": 0,
-      "totalPrice": 0
+      "totalPrice": 233194.00
     },
     {
-      "item": "4.1.1",
+      "item": "1.1.1",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "ADMINISTRAÇÃO LOCAL",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 233194.00
+    },
+    {
+      "item": "1.1.1.0.1",
+      "type": "COMPOSICAO",
+      "sourceName": "Composição",
+      "code": "P23277-V2",
+      "description": "ADMINISTRAÇÃO DA OBRA",
+      "unit": "M2",
+      "quantity": 100,
+      "unitCost": 1937.63,
+      "unitPrice": 2331.94,
+      "totalPrice": 233194.00
+    },
+    {
+      "item": "1.2",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "PLACA DE OBRA",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 4503.44
+    },
+    {
+      "item": "1.2.1",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "PLACA DE OBRA",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 4503.44
+    },
+    {
+      "item": "1.2.1.0.1",
       "type": "COMPOSICAO",
       "sourceName": "SINAPI",
-      "code": "99064",
-      "description": "LOCAÇÃO DE PAVIMENTAÇÃO",
-      "unit": "M",
-      "quantity": 284.82,
-      "unitCost": 0.54,
-      "unitPrice": 0.69,
-      "totalPrice": 196.53
+      "code": "103689",
+      "description": "FORNECIMENTO E INSTALAÇÃO DE PLACA DE OBRA COM CHAPA GALVANIZADA E ESTRUTURA DE MADEIRA",
+      "unit": "M2",
+      "quantity": 8,
+      "unitCost": 467.74,
+      "unitPrice": 562.93,
+      "totalPrice": 4503.44
     },
     {
-      "item": "5.3.3",
+      "item": "1.3",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "EDIFICAÇÕES",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 5805801.20
+    },
+    {
+      "item": "1.3.1",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "SERVIÇOS PRELIMINARES",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 255940.00
+    },
+    {
+      "item": "1.3.1.0.1",
       "type": "COMPOSICAO",
-      "sourceName": "SEDOP",
-      "code": "030011",
-      "description": "Aterro incluindo carga, descarga, transporte e apiloamento",
-      "unit": "m³",
-      "quantity": 145.64,
-      "unitCost": 156.75,
-      "unitPrice": 199.23,
-      "totalPrice": 29015.86
+      "sourceName": "SINAPI",
+      "code": "105562",
+      "description": "EXECUÇÃO E COMPACTAÇÃO DE CAMADA FINAL DE ATERRO",
+      "unit": "M3",
+      "quantity": 4272,
+      "unitCost": 8.81,
+      "unitPrice": 10.81,
+      "totalPrice": 46180.32
+    },
+    {
+      "item": "1.3.2",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "FUNDAÇÕES",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 627644.00
+    },
+    {
+      "item": "1.3.2.1",
+      "type": "SUBETAPA",
+      "sourceName": "",
+      "code": "",
+      "description": "RADIER",
+      "unit": "",
+      "quantity": 0,
+      "unitCost": 0,
+      "unitPrice": 0,
+      "totalPrice": 574358.00
+    },
+    {
+      "item": "1.3.2.1.1",
+      "type": "COMPOSICAO",
+      "sourceName": "SINAPI",
+      "code": "96521",
+      "description": "ESCAVAÇÃO MECANIZADA PARA BLOCO DE COROAMENTO OU SAPATA",
+      "unit": "M3",
+      "quantity": 501.2,
+      "unitCost": 43.10,
+      "unitPrice": 51.87,
+      "totalPrice": 25997.20
     }
   ]
 }
 
+COMO IDENTIFICAR AS LINHAS DE ETAPA/SUBETAPA NA PLANILHA:
+- São linhas onde a coluna "Fonte/Base" está VAZIA
+- A coluna "Código" está VAZIA
+- A coluna "Unidade" está VAZIA
+- A coluna "Quantidade" está VAZIA
+- MAS a coluna "Preço Total" pode ter um valor (é a soma dos filhos)
+- A descrição é um TÍTULO curto como "FUNDAÇÕES", "SERVIÇOS PRELIMINARES", "EDIFICAÇÕES"
+- Essas linhas geralmente estão destacadas em AMARELO ou NEGRITO na planilha
+
+🚨 SE VOCÊ NÃO EXTRAIR AS ETAPAS E SUBETAPAS, A HIERARQUIA FICA QUEBRADA E O ORÇAMENTO FICA INUTILIZÁVEL.
+
 REGRA DE CLASSIFICAÇÃO PELO CONTEÚDO DA LINHA:
-- Se a linha TEM código (SINAPI, SEINFRA, SEDOP, ORSE, CP-xx) E tem quantidade/preço unitário → type: "COMPOSICAO"
-- Se a linha NÃO TEM unidade E NÃO TEM quantidade (mesmo que tenha valor TOTAL) → type: "ETAPA" ou "SUBETAPA" (conforme nível)
+- Se a linha TEM código oficial (SINAPI, SEINFRA, SEDOP, ORSE, CP-xx) E tem quantidade/unidade/preço unitário → type: "COMPOSICAO"
+- Se a linha NÃO TEM código, NÃO TEM unidade E NÃO TEM quantidade (mesmo que tenha valor na coluna TOTAL) → type: "ETAPA" ou "SUBETAPA" (conforme nível hierárquico)
+- Nível 1 da numeração (ex: "1", "2", "3") → ETAPA
+- Nível 2+ sem código/qtd (ex: "1.1", "1.2", "1.3.1", "1.3.2.1") → SUBETAPA
 - NUNCA classifique uma linha com código oficial, quantidade e unidade como ETAPA ou SUBETAPA
 
 ═══════════════════════════════════════════════════════════
@@ -290,8 +382,8 @@ REGRAS FINAIS
 - NÃO invente itens que não existam no documento
 - NÃO converta unidades de medida (use como está)
 - NÃO arredonde novamente os valores com BDI; unitPrice e totalPrice devem reproduzir a planilha quando existirem
-- NÃO omita itens — extraia TODOS, incluindo os agrupadores hierárquicos (ETAPAS/SUBETAPAS)
-- ETAPAS e SUBETAPAS DEVEM ter quantity=0 e unitCost=0, mas podem ter o "totalPrice" extraído se existir na planilha.
+- 🚨🚨🚨 NÃO omita as ETAPAS e SUBETAPAS — elas são OBRIGATÓRIAS. Extraia TODOS os agrupadores hierárquicos da planilha.
+- ETAPAS e SUBETAPAS DEVEM ter quantity=0, unitCost=0 e unitPrice=0. O campo totalPrice pode conter o valor total do grupo se a planilha o mostrar.
 - Composições PRÓPRIAS DEVEM ter o campo "insumos" quando possível
 - Se você NÃO ENCONTRAR uma planilha orçamentária detalhada com itens e preços, RETORNE UM ARRAY VAZIO [].
 - NUNCA invente itens genéricos baseados no objeto do edital.
@@ -301,6 +393,23 @@ REGRAS FINAIS
 
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
 Extraia a planilha orçamentária COMPLETA do documento de engenharia fornecido.
+
+🚨🚨🚨 AVISO CRÍTICO — HIERARQUIA OBRIGATÓRIA:
+A planilha orçamentária tem uma ESTRUTURA HIERÁRQUICA com ETAPAs e SUBETAPAs.
+Você DEVE extrair TODAS as linhas, incluindo os agrupadores (títulos/cabeçalhos de seção).
+
+Exemplo: Se a planilha mostra:
+  1.  CONSTRUÇÃO DE HABITAÇÃO ...  (linha amarela, sem código)  → EXTRAIR como ETAPA
+  1.1.  ADMINISTRAÇÃO LOCAL  (linha amarela, sem código)  → EXTRAIR como SUBETAPA
+  1.1.1.  ADMINISTRAÇÃO LOCAL  (linha amarela, sem código)  → EXTRAIR como SUBETAPA
+  1.1.1.0.1  Composição  P23277  ADMINISTRAÇÃO DA OBRA  M2  100  ...  → EXTRAIR como COMPOSICAO
+  1.2.  PLACA DE OBRA  (linha amarela, sem código)  → EXTRAIR como SUBETAPA
+  1.3.  EDIFICAÇÕES  (linha amarela, sem código)  → EXTRAIR como SUBETAPA
+  1.3.1.  SERVIÇOS PRELIMINARES  (linha amarela, sem código)  → EXTRAIR como SUBETAPA
+  1.3.1.0.1  SINAPI  105562  EXECUÇÃO E COMPACTAÇÃO ...  M3  4272  ...  → EXTRAIR como COMPOSICAO
+
+Se você pular as linhas 1, 1.1, 1.1.1, 1.2, 1.3, 1.3.1, a hierarquia fica QUEBRADA.
+Os agrupadores são as linhas DESTACADAS (amarelo/negrito) que NÃO possuem código, unidade ou quantidade.
 
 🚨🚨🚨 AVISO CRÍTICO: O documento pode conter dezenas de páginas de texto narrativo como "Memorial Descritivo" ou "Especificações Técnicas", que frequentemente possuem numeração própria (ex: 2.1, 2.2). IGNORE ISSO COMPLETAMENTE. Foque APENAS nas páginas que contêm a TABELA da Planilha Orçamentária. NUNCA misture a numeração das especificações com a da tabela.
 
@@ -313,19 +422,27 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
    - "CP-" seguido de dígitos (ex: CP-01) → sourceName: "PROPRIA"
    NUNCA ignore ou omita o código. Se não encontrar, use sourceName: "PROPRIA".
 
-2. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO (APENAS se for claramente um agrupador ou item)
-3. ETAPAS e SUBETAPAS são agrupadores. Eles NÃO TÊM unidade, NÃO TÊM quantidade e NÃO TÊM preço unitário (embora possam mostrar o Preço Total do grupo na planilha). Extraia-os com quantity=0 e unitCost=0.
-4. 🚨 PRESERVE A NUMERAÇÃO E A ORDEM EXATA DA PLANILHA ORIGINAL (ex: 1, 1.1, 1.2). NUNCA omita as ETAPAS e SUBETAPAS. Extraia a lista de forma linear e exata.
-5. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
-6. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
-7. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
-8. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de totalPrice de todos os itens bata com o Total Global. Se totalPrice não existir, use Qtd × unitPrice.
+2. **HIERARQUIA (PRIORIDADE #2):** Extraia TODAS as linhas de agrupamento (ETAPAs e SUBETAPAs). Estas são linhas sem código/unidade/quantidade. Elas são OBRIGATÓRIAS para a estrutura do orçamento.
 
-🚨🚨🚨 9. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
+3. Classifique cada linha como ETAPA, SUBETAPA, COMPOSICAO ou INSUMO
+4. ETAPAS e SUBETAPAS são agrupadores. Eles NÃO TÊM unidade, NÃO TÊM quantidade e NÃO TÊM preço unitário (embora possam mostrar o Preço Total do grupo na planilha). Extraia-os com quantity=0 e unitCost=0.
+5. 🚨 PRESERVE A NUMERAÇÃO E A ORDEM EXATA DA PLANILHA ORIGINAL (ex: 1, 1.1, 1.2). NUNCA omita as ETAPAS e SUBETAPAS. Extraia a lista de forma linear e exata.
+6. Para composições PRÓPRIAS (sem código oficial), extraia os insumos detalhados
+7. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
+8. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
+9. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de totalPrice de todos os itens bata com o Total Global. Se totalPrice não existir, use Qtd × unitPrice.
+
+🚨🚨🚨 10. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
    ANTES de emitir o JSON final, verifique:
    a) O unitCost NÃO pode ser igual à quantity. Se for, você está na coluna errada.
    b) Serviços de escavação, chapisco, reboco, limpeza: unitCost típico é R$ 5 a R$ 80/m².
    c) Barracões, subestações, portões: unitCost típico é R$ 1.000 a R$ 50.000/un.
    d) Se o Total Global da sua extração ultrapassar R$ 1 bilhão para uma escola ou pavimentação municipal → COLUMN SHIFT. Releia o cabeçalho das colunas e reextraia.
    e) Identifique PRIMEIRO o cabeçalho da tabela no PDF. Localize explicitamente as colunas: QUANTIDADE, PREÇO UNITÁRIO (S/BDI), PREÇO COM BDI, TOTAL. Só então extraia os valores.
+
+🚨🚨🚨 11. VERIFICAÇÃO FINAL DE HIERARQUIA (EXECUTE OBRIGATORIAMENTE):
+   Antes de emitir o JSON, conte quantos itens têm type="ETAPA" ou type="SUBETAPA".
+   Se o total for ZERO e a planilha tem mais de 10 composições, ALGO ESTÁ ERRADO.
+   Volte e procure as linhas de cabeçalho/título (geralmente em amarelo/negrito, sem código/unidade).
+   Orçamentos de obras SEMPRE têm pelo menos 3-5 etapas/subetapas.
 `;
