@@ -367,17 +367,81 @@ export function Step1ConfigPanel({
 
                     {/* Encargos Sociais */}
                     <div style={sectionStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Users size={18} color="#6d28d9" />
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
                             </div>
-                            {onExtractEncargos && (
-                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'all 0.2s', opacity: isExtractingEncargos ? 0.7 : 1 }}
-                                    onClick={onExtractEncargos} disabled={isExtractingEncargos}>
-                                    {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {/* Botão de Colar Imagem para o Encargo Principal */}
+                                <button onClick={async () => {
+                                    try {
+                                        const clipItems = await navigator.clipboard.read();
+                                        let imageBlob: Blob | null = null;
+                                        for (const item of clipItems) {
+                                            for (const type of item.types) {
+                                                if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                            }
+                                            if (imageBlob) break;
+                                        }
+                                        if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
+                                        const reader = new FileReader();
+                                        reader.onload = async () => {
+                                            const base64 = (reader.result as string).split(',')[1];
+                                            const mimeType = imageBlob!.type;
+                                            try {
+                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
+                                                const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
+                                                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                    body: JSON.stringify({ imageBase64: base64, mimeType, label: 'Principal' })
+                                                });
+                                                const result = await resp.json();
+                                                if (result.found) {
+                                                    const d = result.data || result;
+                                                    const encargosUpdate: any = {
+                                                        ...engineeringConfig.encargosSociais,
+                                                        horista: d.totalHorista || engineeringConfig.encargosSociais?.horista,
+                                                        mensalista: d.totalMensalista || engineeringConfig.encargosSociais?.mensalista,
+                                                        basePrincipal: d.basePrincipal || null,
+                                                        grupoA_horista: d.grupoA_horista || 0, grupoA_mensalista: d.grupoA_mensalista || 0,
+                                                        grupoB_horista: d.grupoB_horista || 0, grupoB_mensalista: d.grupoB_mensalista || 0,
+                                                        grupoC_horista: d.grupoC_horista || 0, grupoC_mensalista: d.grupoC_mensalista || 0,
+                                                        grupoD_horista: d.grupoD_horista || 0, grupoD_mensalista: d.grupoD_mensalista || 0,
+                                                        a1_h: d.a1_h || 0, a1_m: d.a1_m || 0, a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
+                                                        a3_h: d.a3_h || 0, a3_m: d.a3_m || 0, a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
+                                                        a5_h: d.a5_h || 0, a5_m: d.a5_m || 0, a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
+                                                        a7_h: d.a7_h || 0, a7_m: d.a7_m || 0, a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
+                                                        a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
+                                                        b1_h: d.b1_h || 0, b1_m: d.b1_m || 0, b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
+                                                        b3_h: d.b3_h || 0, b3_m: d.b3_m || 0, b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
+                                                        b5_h: d.b5_h || 0, b5_m: d.b5_m || 0, b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
+                                                        b7_h: d.b7_h || 0, b7_m: d.b7_m || 0, b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
+                                                        b9_h: d.b9_h || 0, b9_m: d.b9_m || 0, b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
+                                                        c1_h: d.c1_h || 0, c1_m: d.c1_m || 0, c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
+                                                        c3_h: d.c3_h || 0, c3_m: d.c3_m || 0, c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
+                                                        c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
+                                                        d1_h: d.d1_h || 0, d1_m: d.d1_m || 0, d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
+                                                    };
+                                                    onConfigChange({ ...engineeringConfig, encargosSociais: encargosUpdate });
+                                                    setHasUnsavedChanges(true);
+                                                    setShowEncargosDetail(true); // Auto-open detail
+                                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos da imagem! H={d.totalHorista}% M={d.totalMensalista}%</span>);
+                                                } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
+                                                setTimeout(() => setSaveMsg(null), 4000);
+                                            } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                        };
+                                        reader.readAsDataURL(imageBlob);
+                                    } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 700, padding: '7px 12px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                                    <FileImage size={14} /> Colar Imagem
                                 </button>
-                            )}
+                                {onExtractEncargos && (
+                                    <button style={{ padding: '7px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'all 0.2s', opacity: isExtractingEncargos ? 0.7 : 1 }}
+                                        onClick={onExtractEncargos} disabled={isExtractingEncargos}>
+                                        {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair do Edital
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Totals */}
