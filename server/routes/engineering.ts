@@ -1564,11 +1564,36 @@ router.post('/ai-populate', async (req: any, res: any) => {
             const freshAiAnalysis = await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } });
             const freshSchema = freshAiAnalysis?.schemaV2 as any;
             const freshBudgetItems = freshSchema?._engineeringBudgetItems;
+            const freshMeta = freshSchema?._engineeringExtractionMeta;
+            
             if (Array.isArray(freshBudgetItems) && freshBudgetItems.length > 0) {
                 postClassifyTypes(freshBudgetItems);
                 console.log(`[Engineering AI-Populate] 🔄 RE-READ: Encontrou ${freshBudgetItems.length} itens frescos (escritos por job concluído)`);
                 await enrichWithOfficialPrices(freshBudgetItems, engineeringConfig, { tenantId: req.user?.tenantId });
                 return res.json({ items: freshBudgetItems, source: 'v2_engineering_budget_fresh', count: freshBudgetItems.length });
+            }
+            
+            if (freshMeta?.status === 'quality_quarantine') {
+                console.log(`[Engineering AI-Populate] 🔄 RE-READ: Extração concluída, mas em quarentena. Bloqueando loop infinito.`);
+                return res.json({
+                    items: [],
+                    source: 'quality_quarantine',
+                    count: 0,
+                    validation: freshSchema?._engineeringValidation || null,
+                    diagnostic: freshSchema?._engineeringValidation?.issues || [],
+                    message: 'A extração foi colocada em quarentena por baixa qualidade. Revise os alertas antes de publicar itens na proposta.'
+                });
+            }
+            
+            if (freshMeta?.status === 'empty_extraction') {
+                console.log(`[Engineering AI-Populate] 🔄 RE-READ: Extração concluída sem itens. Repassando diagnóstico ao frontend.`);
+                return res.json({ 
+                    items: [], 
+                    source: 'empty_extraction', 
+                    count: 0, 
+                    diagnostic: freshMeta.possibleCauses || [],
+                    message: `A IA não encontrou a planilha. Possíveis causas: ${(freshMeta.possibleCauses || []).join('; ')}`
+                });
             }
 
             // ═══════════════════════════════════════════════════
