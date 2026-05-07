@@ -85,9 +85,9 @@ export function Step1ConfigPanel({
                             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Dados do Orçamento</h3>
                         </div>
                         {onExtractConfig && (
-                            <button style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.6 : 1 }}
+                            <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
                                 onClick={onExtractConfig} disabled={isExtractingConfig}>
-                                {isExtractingConfig ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair via IA
+                                {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                             </button>
                         )}
                     </div>
@@ -204,9 +204,9 @@ export function Step1ConfigPanel({
                                 <Calculator size={18} color="var(--color-primary)" />
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>BDI — Serviços</h3>
                             </div>
-                            <button style={{ padding: '5px 12px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(135deg, rgba(37,99,235,0.08), rgba(139,92,246,0.08))', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.15)', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                            <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s', opacity: isExtractingBdi ? 0.7 : 1 }}
                                 onClick={onExtractBdi} disabled={isExtractingBdi}>
-                                {isExtractingBdi ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} Extrair via IA
+                                {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                             </button>
                         </div>
 
@@ -244,11 +244,28 @@ export function Step1ConfigPanel({
                                         style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600, borderColor: 'rgba(37,99,235,0.25)' }} step="0.01" />
                                 </div>
                             </div>
-                            <div>
-                                <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Tributos — PIS + COFINS + ISS (%)</label>
-                                <input type="number" className="form-input" value={bdiConfig.tcu.tributos}
-                                    onChange={e => updateTcu('tributos', parseLocaleNumber(e.target.value))}
-                                    style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                            <div style={{ borderTop: '1px solid rgba(37,99,235,0.12)', paddingTop: 8, marginTop: 4 }}>
+                                <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (PIS + COFINS + ISS) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0)).toFixed(2)}%</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>PIS (%)</label>
+                                        <input type="number" className="form-input" value={bdiConfig.tcu.pis}
+                                            onChange={e => updateTcu('pis', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                    </div>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>COFINS (%)</label>
+                                        <input type="number" className="form-input" value={bdiConfig.tcu.cofins}
+                                            onChange={e => updateTcu('cofins', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                    </div>
+                                    <div>
+                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>ISS (%)</label>
+                                        <input type="number" className="form-input" value={bdiConfig.tcu.iss}
+                                            onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
+                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -263,9 +280,9 @@ export function Step1ConfigPanel({
                                 Ativar BDI Diferenciado — Fornecimento
                             </label>
                             {onExtractBdiFornecimento && (
-                                <button style={{ padding: '5px 12px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(135deg, rgba(180,83,9,0.08), rgba(217,119,6,0.08))', color: '#b45309', border: '1px solid rgba(180,83,9,0.15)', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 600, transition: 'all 0.2s', opacity: isExtractingBdi ? 0.6 : 1 }}
+                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #d97706, #b45309)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(180,83,9,0.25)', transition: 'all 0.2s', opacity: isExtractingBdi ? 0.7 : 1 }}
                                     onClick={onExtractBdiFornecimento} disabled={isExtractingBdi}>
-                                    {isExtractingBdi ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} Extrair via IA
+                                    {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                 </button>
                             )}
                             </div>
@@ -301,11 +318,28 @@ export function Step1ConfigPanel({
                                                 style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.25)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
                                         </div>
                                     </div>
-                                    <div>
-                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.68rem', color: '#92400e' }}>Tributos — PIS+COFINS+ISS (%)</label>
-                                        <input type="number" className="form-input" value={tcuF.tributos}
-                                            onChange={e => updateTcuFornecimento('tributos', parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                    <div style={{ borderTop: '1px solid rgba(180,83,9,0.15)', paddingTop: 8, marginTop: 4 }}>
+                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.68rem', fontWeight: 700, color: '#92400e' }}>Tributos (PIS + COFINS + ISS) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0)).toFixed(2)}%</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                                            <div>
+                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>PIS (%)</label>
+                                                <input type="number" className="form-input" value={tcuF.pis}
+                                                    onChange={e => updateTcuFornecimento('pis', parseLocaleNumber(e.target.value))}
+                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                            </div>
+                                            <div>
+                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>COFINS (%)</label>
+                                                <input type="number" className="form-input" value={tcuF.cofins}
+                                                    onChange={e => updateTcuFornecimento('cofins', parseLocaleNumber(e.target.value))}
+                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                            </div>
+                                            <div>
+                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>ISS (%)</label>
+                                                <input type="number" className="form-input" value={tcuF.iss}
+                                                    onChange={e => updateTcuFornecimento('iss', parseLocaleNumber(e.target.value))}
+                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -320,9 +354,9 @@ export function Step1ConfigPanel({
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
                             </div>
                             {onExtractEncargos && (
-                                <button style={{ padding: '5px 12px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 5, background: 'linear-gradient(135deg, rgba(109,40,217,0.08), rgba(139,92,246,0.08))', color: '#6d28d9', border: '1px solid rgba(109,40,217,0.15)', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.6 : 1, fontWeight: 600, transition: 'all 0.2s' }}
+                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'all 0.2s', opacity: isExtractingEncargos ? 0.7 : 1 }}
                                     onClick={onExtractEncargos} disabled={isExtractingEncargos}>
-                                    {isExtractingEncargos ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} Extrair via IA
+                                    {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                 </button>
                             )}
                         </div>

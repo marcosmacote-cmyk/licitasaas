@@ -38,19 +38,25 @@ EXTRAIA OBRIGATORIAMENTE os seguintes percentuais individuais (NÃO o BDI total)
 - **riscos**: Riscos (R) — típico: 0.5-1.5%
 - **despFinanceiras**: Despesas Financeiras (DF) — típico: 0.5-1.5%
 - **lucro**: Lucro / Remuneração (L) — típico: 4-8%
-- **tributos**: Tributos = PIS + COFINS + ISS (I) — típico: 5-7%
+- **pis**: PIS — tipicamente 0.65%
+- **cofins**: COFINS — tipicamente 3%
+- **iss**: ISS (Imposto Sobre Serviços) — tipicamente 2-5%, varia por município
+
+ATENÇÃO: Os tributos devem ser extraídos INDIVIDUALMENTE (PIS, COFINS, ISS).
+Se o edital mostra apenas "Tributos = 5,65%" sem detalhar, use os valores padrão:
+PIS = 0.65, COFINS = 3.00, ISS = (Tributos - 0.65 - 3.00).
 
 REGRAS CRÍTICAS:
 1. Se você encontrar APENAS o BDI global (ex: "BDI = 20,35%") SEM detalhamento, retorne found=true, globalBdi=20.35, tcu=null.
-2. Se encontrar a COMPOSIÇÃO DETALHADA (cada componente individual), retorne found=true, globalBdi com o valor calculado, E tcu com TODOS os 7 componentes preenchidos.
-3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração da empresa (tipicamente 4-8%).
+2. Se encontrar a COMPOSIÇÃO DETALHADA (cada componente individual), retorne found=true, globalBdi com o valor calculado, E tcu com TODOS os 9 componentes preenchidos.
+3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração.
 4. Se um componente é "0" ou não mencionado, coloque 0 — NÃO omita o campo.
 5. Os valores individuais são SEMPRE MUITO MENORES que o BDI total.
-6. Se houver BDI diferenciado para fornecimento/materiais/equipamentos, preencha globalBdiFornecimento e, se houver composição, tcuFornecimento.
-7. Se o ALVO for FORNECIMENTO, priorize o BDI de fornecimento. Se não existir BDI de fornecimento no edital, retorne found=false, exceto se o edital disser explicitamente que o BDI único também se aplica a fornecimento.
+6. Se houver BDI diferenciado para fornecimento/materiais/equipamentos, preencha globalBdiFornecimento e tcuFornecimento.
+7. Se o ALVO for FORNECIMENTO e não existir BDI de fornecimento, retorne found=false.
 
 EXEMPLO de composição válida:
-AC=4.00, S=0.80, G=0.80, R=0.97, DF=0.59, L=6.16, I=5.65 → BDI = 20.35%
+AC=4.00, S=0.80, G=0.80, R=0.97, DF=0.59, L=6.16, PIS=0.65, COFINS=3.00, ISS=2.00 → BDI ≈ 20.35%
 
 Retorne apenas os números (sem o símbolo de %).`;
 
@@ -65,7 +71,9 @@ Retorne apenas os números (sem o símbolo de %).`;
             riscos: { type: Type.NUMBER, description: 'Riscos (R) — tipicamente 0.5-1.5%' },
             despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — tipicamente 0.5-1.5%' },
             lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — tipicamente 4-8%. NUNCA o BDI total.' },
-            tributos: { type: Type.NUMBER, description: 'Tributos PIS+COFINS+ISS (I) — tipicamente 5-7%' },
+            pis: { type: Type.NUMBER, description: 'PIS — tipicamente 0.65%' },
+            cofins: { type: Type.NUMBER, description: 'COFINS — tipicamente 3%' },
+            iss: { type: Type.NUMBER, description: 'ISS — tipicamente 2-5%' },
         }
     };
 

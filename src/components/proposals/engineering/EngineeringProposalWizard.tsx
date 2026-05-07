@@ -150,7 +150,16 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const result = await res.json();
             if (result.data?.tcu) {
-                const tcu = { ...bdiConfig.tcu, ...result.data.tcu };
+                const rawTcu = result.data.tcu;
+                // Handle legacy 'tributos' field → split into pis/cofins/iss
+                if (rawTcu.tributos != null && rawTcu.pis == null) {
+                    const total = rawTcu.tributos;
+                    rawTcu.pis = 0.65;
+                    rawTcu.cofins = 3.00;
+                    rawTcu.iss = Math.max(0, total - 0.65 - 3.00);
+                    delete rawTcu.tributos;
+                }
+                const tcu = { ...bdiConfig.tcu, ...rawTcu };
                 setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu, bdiGlobal: calculateBdiTCU(tcu) }));
                 setHasUnsavedChanges(true);
             } else if (result.data?.globalBdi) {
@@ -282,8 +291,16 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const result = await res.json();
             if (result.data?.tcuFornecimento) {
-                handleBdiChange({ ...bdiConfig, tcuFornecimento: result.data.tcuFornecimento });
-                const calcBdi = calculateBdiTCU(result.data.tcuFornecimento);
+                const rawTcu = result.data.tcuFornecimento;
+                if (rawTcu.tributos != null && rawTcu.pis == null) {
+                    const total = rawTcu.tributos;
+                    rawTcu.pis = 0.65;
+                    rawTcu.cofins = 3.00;
+                    rawTcu.iss = Math.max(0, total - 0.65 - 3.00);
+                    delete rawTcu.tributos;
+                }
+                handleBdiChange({ ...bdiConfig, tcuFornecimento: rawTcu });
+                const calcBdi = calculateBdiTCU(rawTcu);
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: calcBdi, bdiDiferenciado: true });
             } else if (result.data?.globalBdiFornecimento) {
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: result.data.globalBdiFornecimento, bdiDiferenciado: true });

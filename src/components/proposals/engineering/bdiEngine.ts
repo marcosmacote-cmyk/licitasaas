@@ -24,7 +24,9 @@ export interface BdiTcuParams {
     riscos: number;         // R  — %
     despFinanceiras: number;// DF — %
     lucro: number;          // L  — %
-    tributos: number;       // I  — % (PIS + COFINS + ISS)
+    pis: number;            // PIS — tipicamente 0.65%
+    cofins: number;         // COFINS — tipicamente 3%
+    iss: number;            // ISS — tipicamente 2-5%
 }
 
 export interface BdiConfig {
@@ -43,7 +45,9 @@ export const DEFAULT_TCU_PARAMS: BdiTcuParams = {
     riscos: 0,
     despFinanceiras: 0,
     lucro: 0,
-    tributos: 0,
+    pis: 0,
+    cofins: 0,
+    iss: 0,
 };
 
 /** Default TCU params — Fornecimento (zerado) */
@@ -54,7 +58,9 @@ export const DEFAULT_TCU_FORNECIMENTO_PARAMS: BdiTcuParams = {
     riscos: 0,
     despFinanceiras: 0,
     lucro: 0,
-    tributos: 0,
+    pis: 0,
+    cofins: 0,
+    iss: 0,
 };
 
 export const DEFAULT_BDI_CONFIG: BdiConfig = {
@@ -75,7 +81,7 @@ export function calculateBdiTCU(params: BdiTcuParams): number {
     const r  = params.riscos / 100;
     const df = params.despFinanceiras / 100;
     const l  = params.lucro / 100;
-    const i  = params.tributos / 100;
+    const i  = (params.pis + params.cofins + params.iss) / 100;
 
     // Guard against division by zero
     if (i >= 1) return 0;
@@ -98,12 +104,14 @@ export function autoDistributeBdi(targetBdi: number): BdiTcuParams {
         riscos: 0.97,
         despFinanceiras: 0.59,
         lucro: 6.16,
-        tributos: 5.65
+        pis: 0.65,
+        cofins: 3.00,
+        iss: 2.00,
     };
     // K1 = (1 + AC + S + G + R) * (1 + DF)
     const ac_s_r_g = (tcu.adminCentral + tcu.seguros + tcu.riscos + tcu.garantias) / 100;
     const K1 = (1 + ac_s_r_g) * (1 + tcu.despFinanceiras / 100);
-    const K2 = 1 - (tcu.tributos / 100);
+    const K2 = 1 - ((tcu.pis + tcu.cofins + tcu.iss) / 100);
     
     // Formula inversa para o lucro (L):
     let solvedLucro = ( (targetBdi / 100 + 1) * K2 / K1 - 1 ) * 100;

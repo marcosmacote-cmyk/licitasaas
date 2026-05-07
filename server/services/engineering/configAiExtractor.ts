@@ -202,12 +202,23 @@ export async function extractConfigFromBidding(biddingId: string): Promise<any |
     const configPrompt = `Você é um engenheiro orçamentista SÊNIOR analisando um edital de licitação pública de obras de engenharia.
 Extraia TODAS as seguintes informações do edital. Leia o documento inteiro com extrema atenção.
 
-1. **objeto**: Descrição resumida do objeto da obra (máx 200 caracteres).
-2. **uf**: UF onde a obra será executada (sigla de 2 letras, ex: CE, PA, SP). Procure endereço, município, local da obra.
-3. **bases**: Quais bases/tabelas de referência de custos o edital exige. Procure por menções a SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC, SIPROCE, SETOP, EMOP, SUDECAP, DER, SEDOP. Retorne um array de strings com nomes padronizados (em MAIÚSCULAS).
-4. **dataBase**: Mês/ano de referência da base de preços. 
+1. **objeto**: Transcreva LITERALMENTE o objeto da obra conforme consta no edital.
+   NÃO resuma. NÃO sintetize. NÃO abrevie. NÃO reformule.
+   Copie o texto EXATO, palavra por palavra, como aparece no edital.
+   Se o objeto estiver em múltiplas linhas, junte tudo numa única string.
 
-REGRAS PARA DATA BASE — MUITO IMPORTANTE:
+2. **uf**: UF onde a obra será executada (sigla de 2 letras, ex: CE, PA, SP).
+
+3. **bases**: TODAS as bases/tabelas de referência de custos mencionadas no edital.
+   Procure em TODAS as páginas por: SINAPI, SEINFRA, SICRO, ORSE, SICOR, SBC,
+   SIPROCE, SETOP, EMOP, SUDECAP, DER, SEDOP, COMPOSIÇÕES PRÓPRIAS.
+   Se o edital menciona "composições próprias" ou "composições do autor", inclua "PROPRIA".
+   Retorne TODAS as bases encontradas, não apenas a principal.
+   Array de strings MAIÚSCULAS. Ex: ["SINAPI", "SEINFRA", "PROPRIA"]
+
+4. **dataBase**: Mês/ano de referência PRINCIPAL da base de preços.
+
+REGRAS PARA DATA BASE — EXTREMAMENTE IMPORTANTE:
 - A data-base NÃO é a data de publicação do edital nem a data da sessão/abertura.
 - A data-base é o mês de referência das tabelas de custos (SINAPI, SEINFRA, etc.)
 - Procure por expressões como:
@@ -217,25 +228,21 @@ REGRAS PARA DATA BASE — MUITO IMPORTANTE:
   * "SINAPI ref. outubro de 2024" → dataBase = "2024-10"
   * "preços do mês de setembro/2025" → dataBase = "2025-09"
   * "mês-base: SET/2025" → dataBase = "2025-09"
-  * "SINAPI 10/2025" → dataBase = "2025-10"
-  * "sistema de custos com data referência 09/2025" → dataBase = "2025-09"
 - **FORMATO OGU/TransfereGOV**: Em planilhas da OGU, a data-base aparece no cabeçalho como:
-  * "DATA BASE 09-25" → dataBase = "2025-09" (setembro de 2025)
-  * "DATA BASE 03-26" → dataBase = "2026-03" (março de 2026)
-  * "DATA BASE 12-24" → dataBase = "2024-12" (dezembro de 2024)
-  * O formato é MM-AA onde MM=mês e AA=ano (2 dígitos). CONVERTA para YYYY-MM.
+  * "DATA BASE 09-25" → dataBase = "2025-09" (formato MM-AA → YYYY-MM)
   * Frequentemente seguido de "(N DES.)" = não desonerado ou "(DES.)" = desonerado.
-- Formato obrigatório: YYYY-MM (ex: 2025-09, 2024-03)
-- Se houver várias datas para diferentes bases, retorne a mais recente como dataBase principal.
+- Formato obrigatório de saída: YYYY-MM (ex: 2025-09, 2024-03)
 
-5. **dataBasesPorFonte**: Caso o edital especifique datas-base DIFERENTES para cada tabela (ex: SINAPI março/2026, SEINFRA janeiro/2026), retorne um objeto. Exemplo: { "SINAPI": "2026-03", "SEINFRA": "2026-01" }.
-Se todas as bases usarem a mesma data, retorne objeto vazio {}.
+5. **dataBasesPorFonte**: Se o edital especifica datas-base DIFERENTES para cada tabela,
+   retorne um objeto com TODAS as datas encontradas.
+   Exemplo: { "SINAPI": "2025-09", "SEINFRA": "2025-09", "PROPRIA": "2025-09" }
+   Se todas usam a mesma data, retorne um objeto com cada base mapeada para a mesma data.
+   NUNCA retorne vazio — sempre mapeie cada base à sua data.
 
 6. **regime**: Procure explicitamente se o edital menciona:
-- "desonerado", "com desoneração", "desoneração da folha" → retorne "DESONERADO"
-- "onerado", "sem desoneração", "não desonerado", "(N DES.)" → retorne "ONERADO"
-- Se mencionar tabela SINAPI desonerada ou "(DES.)" → "DESONERADO"
-- Se nada for mencionado sobre desoneração → retorne "UNKNOWN". NÃO chute o regime.
+   - "desonerado", "com desoneração", "(DES.)" → "DESONERADO"
+   - "onerado", "sem desoneração", "não desonerado", "(N DES.)" → "ONERADO"
+   - Se nada for mencionado → "UNKNOWN". NÃO chute.
 
 Retorne JSON.`;
 
@@ -344,8 +351,9 @@ INSTRUÇÕES:
 
     const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
     if (pdfParts.length > 0) {
+        // Attempt 1: Structured schema with Gemini 2.5 Flash
         try {
-            console.log(`[Encargos-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com schema simplificado SINAPI`);
+            console.log(`[Encargos-AI] 📄 Tentativa 1: ${pdfParts.length} PDF(s) com schema SINAPI`);
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
@@ -357,7 +365,24 @@ INSTRUÇÕES:
                 if (parsed.found) return parsed;
             }
         } catch (e: any) {
-            console.warn(`[Encargos-AI] PDF mode failed: ${e.message}`);
+            console.warn(`[Encargos-AI] ⚠️ Tentativa 1 falhou: ${e.message}`);
+        }
+
+        // Attempt 2: Without responseSchema (free JSON) — catches cases where schema is still rejected
+        try {
+            console.log(`[Encargos-AI] 📄 Tentativa 2: ${pdfParts.length} PDF(s) sem schema (JSON livre)`);
+            const result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt + '\n\nRetorne JSON com os campos: found (boolean), totalHorista (number), totalMensalista (number), grupoA_horista, grupoA_mensalista, grupoB_horista, grupoB_mensalista, grupoC_horista, grupoC_mensalista, grupoD_horista, grupoD_mensalista (numbers), basePrincipal (string).' }] }],
+                config: { responseMimeType: 'application/json', temperature: 0.1 }
+            });
+            if (result?.text) {
+                const parsed = JSON.parse(result.text);
+                console.log(`[Encargos-AI] 📋 Tentativa 2 resultado: found=${parsed.found}`);
+                if (parsed.found) return parsed;
+            }
+        } catch (e: any) {
+            console.warn(`[Encargos-AI] ⚠️ Tentativa 2 falhou: ${e.message}`);
         }
     }
 
