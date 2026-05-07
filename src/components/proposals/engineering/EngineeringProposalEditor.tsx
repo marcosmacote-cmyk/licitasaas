@@ -980,7 +980,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     const inputStyle = (w: string = '100%'): React.CSSProperties => ({
         width: w, minWidth: w !== '100%' ? w : 'auto', padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap'
+        borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30
     });
 
     return (
@@ -1207,7 +1207,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
-                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 80 : i === 1 ? 65 : i === 2 ? 55 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
+                                    <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 110 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -1308,12 +1308,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                 {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                                             </button>
                                                         )}
-                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '65px' : '75px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
+                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '80px' : '90px'), fontWeight: 700, paddingLeft: Math.min(depth, 3) * 8 + 4 }} />
                                                     </div>
                                                 </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '60px' }} title={meta.label}>
-                                                <IconComp size={10} style={{ flexShrink: 0 }} /> <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{meta.label === 'COMPOSICAO' ? 'COMP' : meta.label}</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap' }} title={meta.label}>
+                                                <IconComp size={10} style={{ flexShrink: 0 }} /> <span>{meta.label}</span>
                                             </span>
                                             {engineeringConfig.bdiDiferenciado && !isGrouper(it.type) && (
                                                 <select
