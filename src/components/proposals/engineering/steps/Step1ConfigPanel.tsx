@@ -631,7 +631,13 @@ export function Step1ConfigPanel({
                                                         if (result.found) {
                                                             const d = result.data || result;
                                                             const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
-                                                            sheets[idx] = { ...sheets[idx], ...d, label: sheet.label || d.basePrincipal || `Base ${idx + 2}` };
+                                                            sheets[idx] = { 
+                                                                ...sheets[idx], 
+                                                                ...d, 
+                                                                horista: d.totalHorista || d.horista || sheets[idx].horista,
+                                                                mensalista: d.totalMensalista || d.mensalista || sheets[idx].mensalista,
+                                                                label: sheet.label || d.basePrincipal || `Base ${idx + 2}` 
+                                                            };
                                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                                             setHasUnsavedChanges(true);
                                                             // Auto-open detail for this sheet
