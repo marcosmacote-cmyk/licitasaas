@@ -238,6 +238,15 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     }
                 }
                 if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
+                // P1: Store AI-extracted snapshot for consistency badges
+                (updates as any)._aiExtractedRef = {
+                    objeto: d.objeto || undefined,
+                    ufReferencia: d.uf || undefined,
+                    regimeOneracao: d.regime || undefined,
+                    dataBase: d.dataBase || undefined,
+                    dataBases: d.dataBasesPorFonte || undefined,
+                    basesConsideradas: Array.isArray(d.bases) ? d.bases : undefined,
+                };
                 setEngineeringConfig(prev => ({ ...prev, ...updates }));
                 setHasUnsavedChanges(true);
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas com sucesso</span>);

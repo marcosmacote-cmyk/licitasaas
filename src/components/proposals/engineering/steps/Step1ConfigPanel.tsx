@@ -3,9 +3,71 @@
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
 import React, { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2 } from 'lucide-react';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
 import type { EngineeringConfig } from '../types';
+
+// ═══════════════════════════════════════════════════════════
+// P0: TCU 2622/2013 — Faixas de referência para BDI Match
+// Fonte: Acórdão TCU 2622/2013 — Tabela 1 (Construção de Edifícios)
+// ═══════════════════════════════════════════════════════════
+const TCU_RANGES: Record<string, { label: string; q1: number; median: number; q3: number }> = {
+    adminCentral:    { label: 'Adm. Central',      q1: 3.00,  median: 4.00,  q3: 5.50  },
+    seguros:         { label: 'Seguros',            q1: 0.50,  median: 0.80,  q3: 1.00  },
+    garantias:       { label: 'Garantias',          q1: 0.00,  median: 0.42,  q3: 0.88  },
+    riscos:          { label: 'Riscos',             q1: 0.50,  median: 0.97,  q3: 1.27  },
+    despFinanceiras: { label: 'Desp. Financeiras',  q1: 0.50,  median: 1.11,  q3: 1.39  },
+    lucro:           { label: 'Lucro',              q1: 5.00,  median: 6.16,  q3: 8.96  },
+};
+
+type MatchStatus = 'ok' | 'warn' | 'divergent' | 'info';
+
+const MATCH_STYLES: Record<MatchStatus, { color: string; bg: string }> = {
+    ok:        { color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
+    warn:      { color: '#d97706', bg: 'rgba(217,119,6,0.08)'  },
+    divergent: { color: '#dc2626', bg: 'rgba(220,38,38,0.08)'  },
+    info:      { color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' },
+};
+
+function MatchBadge({ status, label, title }: { status: MatchStatus; label: string; title: string }) {
+    const style = MATCH_STYLES[status];
+    const IconComp = status === 'ok' ? CheckCircle2 : status === 'info' ? Info : AlertTriangle;
+    return (
+        <span title={title} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '2px 7px', borderRadius: 4,
+            background: style.bg, color: style.color,
+            fontSize: '0.62rem', fontWeight: 800, whiteSpace: 'nowrap',
+            lineHeight: 1.3, cursor: 'help',
+        }}>
+            <IconComp size={10} />{label}
+        </span>
+    );
+}
+
+function bdiMatchBadge(field: string, value: number): React.ReactNode {
+    const range = TCU_RANGES[field];
+    if (!range || value === 0) return null;
+    if (value >= range.q1 && value <= range.q3) {
+        return <MatchBadge status="ok" label="Faixa TCU" title={`${range.label}: ${value.toFixed(2)}% está dentro da faixa TCU 2622 (${range.q1}% — ${range.q3}%)`} />;
+    }
+    if (value < range.q1) {
+        return <MatchBadge status="warn" label={`< Q1 (${range.q1}%)`} title={`${range.label}: ${value.toFixed(2)}% está ABAIXO do 1° quartil TCU 2622 (${range.q1}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
+    }
+    return <MatchBadge status="warn" label={`> Q3 (${range.q3}%)`} title={`${range.label}: ${value.toFixed(2)}% está ACIMA do 3° quartil TCU 2622 (${range.q3}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
+}
+
+function configConsistencyBadge(field: string, currentValue: string | undefined, ref: any): React.ReactNode {
+    if (!ref) return null;
+    const refValue = ref[field];
+    if (refValue == null || refValue === '') return null;
+    if (!currentValue || currentValue === '') return <MatchBadge status="info" label="IA extraiu" title={`IA extraiu: "${refValue}". Preencha o campo para validar.`} />;
+    const normalize = (v: string) => v.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalize(String(currentValue)) === normalize(String(refValue))) {
+        return <MatchBadge status="ok" label="Confere" title={`Valor confere com a extração da IA: "${refValue}"`} />;
+    }
+    return <MatchBadge status="divergent" label="Editado" title={`Valor diferente do extraído pela IA. Extraído: "${refValue}", Atual: "${currentValue}"`} />;
+}
 
 const BRAZILIAN_UFS = [
     'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -220,6 +282,15 @@ export function Step1ConfigPanel({
                                                     if (!d.dataBase) updates.dataBase = Object.values(d.dataBasesPorFonte)[0] as string;
                                                 }
                                                 if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
+                                                // P1: Store AI-extracted snapshot for consistency badges
+                                                updates._aiExtractedRef = {
+                                                    objeto: d.objeto || undefined,
+                                                    ufReferencia: d.uf || undefined,
+                                                    regimeOneracao: d.regime || undefined,
+                                                    dataBase: d.dataBase || undefined,
+                                                    dataBases: d.dataBasesPorFonte || undefined,
+                                                    basesConsideradas: Array.isArray(d.bases) ? d.bases : undefined,
+                                                };
                                                 onConfigChange({ ...engineeringConfig, ...updates });
                                                 setHasUnsavedChanges(true);
                                                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas!</span>);
@@ -243,7 +314,10 @@ export function Step1ConfigPanel({
 
                     {/* Objeto */}
                     <div>
-                        <label style={labelStyle}>Objeto da Obra</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label style={labelStyle}>Objeto da Obra</label>
+                            {configConsistencyBadge('objeto', engineeringConfig.objeto, engineeringConfig._aiExtractedRef)}
+                        </div>
                         <textarea className="form-input" rows={2} value={engineeringConfig.objeto}
                             onChange={e => onConfigChange({ ...engineeringConfig, objeto: e.target.value })}
                             placeholder="Ex: Construção de quadra poliesportiva..."
@@ -252,7 +326,10 @@ export function Step1ConfigPanel({
 
                     {/* UF */}
                     <div>
-                        <label style={labelStyle}>UF da Obra / Base Oficial</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label style={labelStyle}>UF da Obra / Base Oficial</label>
+                            {configConsistencyBadge('ufReferencia', engineeringConfig.ufReferencia, engineeringConfig._aiExtractedRef)}
+                        </div>
                         <select className="form-select" value={engineeringConfig.ufReferencia || ''}
                             onChange={e => onConfigChange({ ...engineeringConfig, ufReferencia: e.target.value })}
                             style={inputStyle}>
@@ -290,7 +367,10 @@ export function Step1ConfigPanel({
 
                     {/* Regime */}
                     <div>
-                        <label style={labelStyle}>Regime de Desoneração</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label style={labelStyle}>Regime de Desoneração</label>
+                            {configConsistencyBadge('regimeOneracao', engineeringConfig.regimeOneracao, engineeringConfig._aiExtractedRef)}
+                        </div>
                         <select className="form-select" value={engineeringConfig.regimeOneracao}
                             onChange={e => onConfigChange({ ...engineeringConfig, regimeOneracao: e.target.value as 'DESONERADO' | 'ONERADO' })}
                             style={inputStyle}>
@@ -421,7 +501,10 @@ export function Step1ConfigPanel({
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 {([['adminCentral', 'Adm. Central (%)'], ['seguros', 'Seguros (%)'], ['garantias', 'Garantias (%)'], ['riscos', 'Riscos (%)']] as const).map(([key, label]) => (
                                     <div key={key}>
-                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>{label}</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>{label}</label>
+                                            {bdiMatchBadge(key, bdiConfig.tcu[key])}
+                                        </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu[key]}
                                             onChange={e => updateTcu(key, parseLocaleNumber(e.target.value))}
                                             style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
@@ -431,13 +514,19 @@ export function Step1ConfigPanel({
                             <div style={{ borderTop: '1px dashed var(--color-border)', margin: '2px 0' }} />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 <div>
-                                    <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Desp. Financeiras (%)</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Desp. Financeiras (%)</label>
+                                        {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras)}
+                                    </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
                                         onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
                                         style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
                                 </div>
                                 <div>
-                                    <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Lucro / Remuneração (%)</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Lucro / Remuneração (%)</label>
+                                        {bdiMatchBadge('lucro', bdiConfig.tcu.lucro)}
+                                    </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
                                         onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
                                         style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600, borderColor: 'rgba(37,99,235,0.25)' }} step="0.01" />
@@ -630,7 +719,7 @@ export function Step1ConfigPanel({
                                 {onExtractEncargos && (
                                     <button style={{ padding: '7px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'all 0.2s', opacity: isExtractingEncargos ? 0.7 : 1 }}
                                         onClick={onExtractEncargos} disabled={isExtractingEncargos}>
-                                        {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair do Edital
+                                        {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                     </button>
                                 )}
                             </div>

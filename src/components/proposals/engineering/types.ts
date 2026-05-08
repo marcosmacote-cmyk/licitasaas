@@ -207,6 +207,15 @@ export interface EngineeringConfig {
     bdiDiferenciado?: boolean;
     /** BDI para itens de Fornecimento (%). Só aplicado se bdiDiferenciado=true */
     bdiFornecimento?: number;
+    /** Snapshot of AI-extracted config values — used for Config Consistency alerts */
+    _aiExtractedRef?: {
+        objeto?: string;
+        ufReferencia?: string;
+        regimeOneracao?: string;
+        dataBase?: string;
+        dataBases?: Record<string, string>;
+        basesConsideradas?: string[];
+    };
 }
 
 export const DEFAULT_ENGINEERING_CONFIG: EngineeringConfig = {
