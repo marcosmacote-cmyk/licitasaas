@@ -16,7 +16,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
 // ── Types ──
-export type EngineeringPriceAuditStatus = 'OK' | 'DIVERGENT' | 'SEM_MATCH' | 'BASE_INCOMPATIVEL';
+export type EngineeringPriceAuditStatus = 'OK' | 'DIVERGENT' | 'SEM_MATCH' | 'BASE_INCOMPATIVEL' | 'BASE_INDISPONIVEL';
 
 export interface EngineeringPriceAudit {
     status: EngineeringPriceAuditStatus;
@@ -492,8 +492,12 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
     const deltaValue = !regimeMismatch && extractedUnitCost > 0 && matchedUnitCost > 0 ? extractedUnitCost - matchedUnitCost : null;
     const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
     const hasRelevantDelta = !regimeMismatch && Math.abs(deltaValue || 0) > 0.01;
+    const dateMismatch = best.warnings.some((warning: string) => warning.includes('data-base'));
     let status: EngineeringPriceAuditStatus;
-    if (matchMethod === 'description_similarity') {
+    if (dateMismatch && matchMethod === 'code_exact') {
+        // Matched code but from WRONG data-base → can't compare reliably
+        status = 'BASE_INDISPONIVEL';
+    } else if (matchMethod === 'description_similarity') {
         status = 'BASE_INCOMPATIVEL';
     } else if (regimeMismatch) {
         status = 'BASE_INCOMPATIVEL';

@@ -219,6 +219,7 @@ const AUDIT_META = {
     OK: { label: 'OK', color: 'var(--color-success)', bg: 'rgba(16,185,129,0.08)' },
     DIVERGENT: { label: 'Base difere', color: '#dc2626', bg: 'rgba(220,38,38,0.08)' },
     BASE_INCOMPATIVEL: { label: 'Base incompat.', color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
+    BASE_INDISPONIVEL: { label: 'Data base N/D', color: '#9333ea', bg: 'rgba(147,51,234,0.08)' },
     SEM_MATCH: { label: 'Sem match', color: '#64748b', bg: 'rgba(100,116,139,0.10)' },
 } as const;
 
@@ -244,7 +245,10 @@ function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
     // 4. Code exact + prices match → OK (even with date/fonte warnings — prices confirmed)
     // 5. Code exact + date mismatch + no price comparison → BASE_INCOMPATIVEL
     let status: PriceAudit['status'];
-    if (hasRegimeMismatch || hasSimilarityMatch) {
+    if (hasDateMismatch && isCodeExact) {
+        // Code matched but from WRONG data-base → comparison is unreliable
+        status = 'BASE_INDISPONIVEL';
+    } else if (hasRegimeMismatch || hasSimilarityMatch) {
         status = 'BASE_INCOMPATIVEL';
     } else if (hasRelevantDelta) {
         status = 'DIVERGENT';
@@ -252,7 +256,7 @@ function refreshPriceAudit(item: EngItem): PriceAudit | undefined {
         // Code matched exactly and prices are within 5% — this is a confirmed match
         status = 'OK';
     } else if (hasDateMismatch && !isCodeExact) {
-        status = 'BASE_INCOMPATIVEL';
+        status = 'BASE_INDISPONIVEL';
     } else {
         status = 'OK';
     }
@@ -281,13 +285,14 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
         ...(audit.warnings || []),
     ].filter(Boolean).join('\n');
 
+    const isDataBaseUnavailable = audit.status === 'BASE_INDISPONIVEL';
     return (
         <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
                 {audit.status === 'OK' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
-                {meta.label}{delta}
+                {meta.label}{isDataBaseUnavailable ? '' : delta}
             </span>
-            {hasBasePrice && audit.status !== 'OK' && !hasRegimeMismatch && (
+            {hasBasePrice && audit.status !== 'OK' && !hasRegimeMismatch && !isDataBaseUnavailable && (
                 <button
                     type="button"
                     onClick={onApplyBase}
@@ -296,6 +301,11 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
                 >
                     usar base {fmt(audit.matchedUnitCost || 0)}
                 </button>
+            )}
+            {isDataBaseUnavailable && (
+                <span style={{ fontSize: '0.58rem', color: meta.color, fontWeight: 600, fontStyle: 'italic' }}>
+                    {audit.matchedReference || 'outra data'}
+                </span>
             )}
         </div>
     );

@@ -14,7 +14,7 @@ export type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
 /** Categorias de BDI conforme Acórdão TCU 2622/2013 */
 export type BdiCategoria = 'OBRA' | 'FORNECIMENTO';
 
-export type PriceAuditStatus = 'OK' | 'DIVERGENT' | 'BASE_INCOMPATIVEL' | 'SEM_MATCH';
+export type PriceAuditStatus = 'OK' | 'DIVERGENT' | 'BASE_INCOMPATIVEL' | 'BASE_INDISPONIVEL' | 'SEM_MATCH';
 
 export interface PriceAudit {
     status: PriceAuditStatus;

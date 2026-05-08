@@ -22,17 +22,29 @@ function refreshSubmittedPriceAudit(item: any) {
 
     const extractedUnitCost = Number(item.unitCost) || 0;
     const hasRegimeMismatch = Array.isArray(audit.warnings) && audit.warnings.some((warning: string) => String(warning).toLowerCase().includes('regime'));
+    const hasDateMismatch = Array.isArray(audit.warnings) && audit.warnings.some((warning: string) => String(warning).toLowerCase().includes('data-base'));
     const deltaValue = hasRegimeMismatch ? null : extractedUnitCost - matchedUnitCost;
     const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
     const hasPriceDelta = !hasRegimeMismatch && deltaValue !== null && Math.abs(deltaValue) > 0.01;
     const hasBaseWarnings = Array.isArray(audit.warnings) && audit.warnings.length > 0;
+
+    let status;
+    if (hasDateMismatch) {
+        status = 'BASE_INDISPONIVEL';
+    } else if (hasPriceDelta) {
+        status = 'DIVERGENT';
+    } else if (hasBaseWarnings) {
+        status = 'BASE_INCOMPATIVEL';
+    } else {
+        status = 'OK';
+    }
 
     return {
         ...audit,
         extractedUnitCost,
         deltaValue,
         deltaPercent,
-        status: hasPriceDelta ? 'DIVERGENT' : hasBaseWarnings ? 'BASE_INCOMPATIVEL' : 'OK',
+        status,
     };
 }
 
