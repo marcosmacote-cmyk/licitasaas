@@ -49,6 +49,8 @@ export async function pollBatchProcesses(prisma: PrismaClient, onSuccess?: OnCyc
 
         let totalNew = 0;
         let totalAlerts = 0;
+        let totalFetched = 0;
+        let totalErrors = 0;
 
         for (const proc of batchProcesses) {
             try {
@@ -59,6 +61,7 @@ export async function pollBatchProcesses(prisma: PrismaClient, onSuccess?: OnCyc
                 if (!param1) continue;
 
                 const messages = await BatchPlatformMonitor.fetchAllMessages(param1, platform);
+                totalFetched += messages.length;
                 if (messages.length === 0) continue;
 
                 const result = await IngestService.ingestMessages(prisma, {
@@ -84,13 +87,12 @@ export async function pollBatchProcesses(prisma: PrismaClient, onSuccess?: OnCyc
 
                 await new Promise(r => setTimeout(r, 1000));
             } catch (err: any) {
+                totalErrors++;
                 logger.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
 
-        if (totalNew > 0) {
-            logger.info(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
-        }
+        logger.info(`[Batch Poll] ✅ Ciclo: ${totalNew} novas, ${totalFetched} extraídas, ${totalAlerts} alertas, ${totalErrors} erro(s), ${batchProcesses.length} processo(s)`);
         onSuccess?.('BLL+BNC');
     } catch (error: any) {
         logger.error('[Batch Poll] Erro no ciclo:', error.message);
@@ -115,6 +117,8 @@ export async function pollPCPProcesses(prisma: PrismaClient, onSuccess?: OnCycle
 
         let totalNew = 0;
         let totalAlerts = 0;
+        let totalFetched = 0;
+        let totalErrors = 0;
 
         for (const proc of pcpProcesses) {
             try {
@@ -123,6 +127,7 @@ export async function pollPCPProcesses(prisma: PrismaClient, onSuccess?: OnCycle
                 if (!pcpUrl) continue;
 
                 const messages = await PCPMonitor.fetchMessages(pcpUrl);
+                totalFetched += messages.length;
                 if (messages.length === 0) continue;
 
                 const result = await IngestService.ingestMessages(prisma, {
@@ -148,13 +153,12 @@ export async function pollPCPProcesses(prisma: PrismaClient, onSuccess?: OnCycle
 
                 await new Promise(r => setTimeout(r, 2000));
             } catch (err: any) {
+                totalErrors++;
                 logger.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
 
-        if (totalNew > 0) {
-            logger.info(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
-        }
+        logger.info(`[PCP Poll] ✅ Ciclo: ${totalNew} novas, ${totalFetched} extraídas, ${totalAlerts} alertas, ${totalErrors} erro(s), ${pcpProcesses.length} processo(s)`);
         onSuccess?.('PCP');
     } catch (error: any) {
         logger.error('[PCP Poll] Erro no ciclo:', error.message);
@@ -179,6 +183,8 @@ export async function pollLicitanetProcesses(prisma: PrismaClient, onSuccess?: O
 
         let totalNew = 0;
         let totalAlerts = 0;
+        let totalFetched = 0;
+        let totalErrors = 0;
 
         for (const proc of licitanetProcesses) {
             try {
@@ -187,6 +193,7 @@ export async function pollLicitanetProcesses(prisma: PrismaClient, onSuccess?: O
                 if (!licitanetUrl) continue;
 
                 const messages = await LicitanetMonitor.fetchMessages(licitanetUrl);
+                totalFetched += messages.length;
                 if (messages.length === 0) continue;
 
                 const result = await IngestService.ingestMessages(prisma, {
@@ -212,13 +219,12 @@ export async function pollLicitanetProcesses(prisma: PrismaClient, onSuccess?: O
 
                 await new Promise(r => setTimeout(r, 1000));
             } catch (err: any) {
+                totalErrors++;
                 logger.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
 
-        if (totalNew > 0) {
-            logger.info(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
-        }
+        logger.info(`[Licitanet Poll] ✅ Ciclo: ${totalNew} novas, ${totalFetched} extraídas, ${totalAlerts} alertas, ${totalErrors} erro(s), ${licitanetProcesses.length} processo(s)`);
         onSuccess?.('Licitanet');
     } catch (error: any) {
         logger.error('[Licitanet Poll] Erro no ciclo:', error.message);
@@ -243,6 +249,8 @@ export async function pollLMBProcesses(prisma: PrismaClient, onSuccess?: OnCycle
 
         let totalNew = 0;
         let totalAlerts = 0;
+        let totalFetched = 0;
+        let totalErrors = 0;
 
         for (const proc of lmbProcesses) {
             try {
@@ -251,6 +259,7 @@ export async function pollLMBProcesses(prisma: PrismaClient, onSuccess?: OnCycle
                 if (!lmbUrl) continue;
 
                 const messages = await LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
+                totalFetched += messages.length;
                 if (messages.length === 0) continue;
 
                 const result = await IngestService.ingestMessages(prisma, {
@@ -276,13 +285,12 @@ export async function pollLMBProcesses(prisma: PrismaClient, onSuccess?: OnCycle
 
                 await new Promise(r => setTimeout(r, 1500));
             } catch (err: any) {
+                totalErrors++;
                 logger.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
 
-        if (totalNew > 0) {
-            logger.info(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
-        }
+        logger.info(`[LMB Poll] ✅ Ciclo: ${totalNew} novas, ${totalFetched} extraídas, ${totalAlerts} alertas, ${totalErrors} erro(s), ${lmbProcesses.length} processo(s)`);
         onSuccess?.('LMB');
     } catch (error: any) {
         logger.error('[LMB Poll] Erro no ciclo:', error.message);

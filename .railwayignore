@@ -1,0 +1,13 @@
+.git
+.env
+node_modules
+server/node_modules
+server/uploads
+dist
+.health-report.json
+*.log
+server/*.log
+local-watcher/.chromium-profile
+.docker
+**/.docker
+**/*.sock

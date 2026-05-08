@@ -48,7 +48,8 @@ function extractValidObjects(text: string, fromIndex: number): { objects: any[],
                     const objStr = text.slice(objStart, i + 1);
                     try {
                         const parsed = JSON.parse(objStr);
-                        if (parsed && typeof parsed === 'object' && parsed.itemNumber) {
+                        // Accept both compact schema ("n" key) and full schema ("itemNumber" key)
+                        if (parsed && typeof parsed === 'object' && (parsed.itemNumber || parsed.n)) {
                             objects.push(parsed);
                         }
                     } catch (e) { }
@@ -58,6 +59,37 @@ function extractValidObjects(text: string, fromIndex: number): { objects: any[],
         }
     }
     return { objects, nextIndex: fromIndex };
+}
+
+/**
+ * Normalize compact schema items (short keys: n, d, u, q, p, t) back to full API-compatible fields.
+ * Also normalizes already-full-schema items for backward compatibility.
+ */
+function normalizeCompactItems(items: any[]): any[] {
+    return items.map((it: any, idx: number) => {
+        // Already in full schema format
+        if (it.itemNumber && it.description) {
+            return {
+                ...it,
+                multiplier: it.multiplier || 1,
+                multiplierLabel: it.multiplierLabel || '',
+                referencePrice: it.referencePrice || 0,
+            };
+        }
+        // Compact schema → expand to full API fields
+        const type = (it.t || 'I').toUpperCase();
+        const isGrouper = type === 'E' || type === 'S';
+        return {
+            itemNumber: it.n || String(idx + 1),
+            description: it.d || '',
+            unit: isGrouper ? '' : (it.u || 'UN'),
+            quantity: isGrouper ? 0 : (it.q || 1),
+            multiplier: 1,
+            multiplierLabel: '',
+            referencePrice: isGrouper ? 0 : (it.p || 0),
+            itemType: type === 'E' ? 'ETAPA' : type === 'S' ? 'SUBETAPA' : 'COMPOSICAO',
+        };
+    });
 }
 
 // Price Proposal CRUD + AI Populate
@@ -692,32 +724,57 @@ Responda APENAS com um JSON array válido:
         }
 
         // Extract items from planilha PDFs using Gemini multimodal
-        const extractPrompt = `Você é um especialista em licitações brasileiras de obras e serviços de engenharia.
-Analise a(s) planilha(s) orçamentária(s) abaixo e extraia TODOS os itens/serviços com seus dados.
+        // V3.0 — Ultra-compact schema + ETAPA/SUBETAPA preservation + anti-truncation
+        const extractPrompt = `Você é um EXTRATOR DE PLANILHAS ORÇAMENTÁRIAS de licitações brasileiras de obras e serviços de engenharia.
 
-REGRAS:
-1. Extraia CADA serviço/item individualmente — NÃO agrupe
-2. Para cada item identifique: número, descrição técnica COMPLETA, unidade de medida, quantidade, preço unitário de referência
-3. Mantenha a hierarquia: Grupo/Subgrupo (se houver) como prefixo na descrição
-4. NÃO inclua subtotais, totais gerais, BDI ou encargos como itens — apenas serviços
-5. Se a quantidade ou unidade não estiver clara, use quantidade=1 e unidade="UN"
-6. Para valores monetários, use ponto como separador decimal (ex: 1234.56)
-7. Multiplier = 1 para itens de obra (não há recorrência mensal)
+═══ MISSÃO ═══
+Extrair ABSOLUTAMENTE TODOS os itens da planilha orçamentária, preservando a HIERARQUIA COMPLETA:
+- ETAPAS (agrupadores de nível 1)
+- SUBETAPAS (agrupadores de nível 2)
+- ITENS DE SERVIÇO/COMPOSIÇÃO (itens com unidade, quantidade e preço)
 
-ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
-8. O campo itemNumber DEVE seguir padrão hierárquico organizado:
-   - SEM lotes: "1", "2", "3" (numeração sequencial)
-   - COM lotes, múltiplos itens: "1.1", "1.2", "2.1", "2.2" (Lote.Item)
-   - COM subgrupos: "1.1.1", "1.1.2" (Grupo.Subgrupo.Item)
-9. Se a planilha usa numeração como "1.1", "1.2", "2.1", PRESERVE tal numeração
-10. Se a planilha usa "Lote 1 - Item 1" ou "Grupo A / Item 1", converta para "1.1", "1.2"
-11. Retorne os itens SEMPRE na ordem natural crescente
-12. NUNCA misture formatos no mesmo array
+═══ REGRAS OBRIGATÓRIAS ═══
 
-${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
+1. EXTRAIA CADA LINHA da planilha orçamentária — incluindo:
+   - Linhas de ETAPA (ex: "1. SERVIÇOS PRELIMINARES", "2. INFRAESTRUTURA")
+   - Linhas de SUBETAPA (ex: "1.1 LIMPEZA DO TERRENO", "2.1 FUNDAÇÕES")
+   - Linhas de SERVIÇO/COMPOSIÇÃO com unidade, quantidade e preço
+   NÃO PULE nenhuma linha. Cada linha da planilha = 1 objeto no array.
 
-Responda APENAS com um JSON array válido:
-[{"itemNumber":"1.1","description":"Descrição completa do serviço incluindo grupo","unit":"M²","quantity":100,"multiplier":1,"multiplierLabel":"","referencePrice":45.67}]`;
+2. CLASSIFIQUE cada item:
+   - "t":"E" → ETAPA (agrupador nível 1, sem unidade/quantidade/preço)
+   - "t":"S" → SUBETAPA (agrupador nível 2, sem unidade/quantidade/preço)
+   - "t":"I" → ITEM de serviço (tem unidade, quantidade, preço)
+
+3. PRESERVE a numeração EXATA da planilha no campo "n" (itemNumber).
+   Ex: "1", "1.1", "1.1.1", "2", "2.1", "2.1.1"
+   Se a planilha não tem numeração, crie numeração hierárquica.
+
+4. Para ETAPAS e SUBETAPAS: u="", q=0, p=0
+5. Para ITENS de serviço: extraia unidade, quantidade e preço unitário de referência
+6. Se quantidade ou unidade não está clara, use q=1 e u="UN"
+7. Valores monetários: use PONTO como decimal (ex: 1234.56)
+8. NÃO inclua linhas de TOTAL, SUBTOTAL, BDI ou ENCARGOS SOCIAIS
+
+═══ PROTOCOLO ANTI-TRUNCAMENTO ═══
+
+9. ANTES de começar, conte TODAS as linhas da planilha. Se há 150 linhas, o array deve ter ~150 objetos.
+10. Você DEVE retornar ABSOLUTAMENTE TODOS os itens. Se houver 300 itens, retorne 300.
+11. NUNCA pare antes de completar a lista inteira — o output pode ter até 65.536 tokens.
+12. Use o schema COMPACTO abaixo para maximizar a quantidade de itens no output.
+
+═══ SCHEMA COMPACTO (obrigatório) ═══
+Chaves curtas para máxima densidade de tokens:
+- n = itemNumber (string)
+- d = description (string, descrição COMPLETA)
+- u = unit (string, unidade de medida)
+- q = quantity (number)
+- p = referencePrice (number, preço unitário)
+- t = type ("E"=etapa, "S"=subetapa, "I"=item)
+
+${pricingInfo ? `INFO PREÇO:\n${pricingInfo}\n` : ''}
+Responda APENAS com JSON array compacto:
+[{"n":"1","d":"SERVIÇOS PRELIMINARES","u":"","q":0,"p":0,"t":"E"},{"n":"1.1","d":"Limpeza do terreno","u":"M²","q":500,"p":3.45,"t":"I"}]`;
 
         logger.info(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
         let responseText = '';
@@ -744,13 +801,16 @@ Responda APENAS com um JSON array válido:
                     if (objects.length > 0) {
                         items.push(...objects);
                         parseIndex = nextIndex;
+                        // Normalize for streaming progress (compact → full schema)
+                        const normalizedChunk = normalizeCompactItems(objects);
+                        const lastItem = normalizedChunk[normalizedChunk.length - 1];
                         pushEventToTenant(req.user.tenantId, {
                             type: 'job_progress',
                             jobId: req.body.__jobId,
                             jobType: 'proposal_populate',
                             progress: 80,
-                            progressMsg: `Lendo itens da planilha: ${objects[objects.length - 1].itemNumber}...`,
-                            metadata: { yieldedItems: objects },
+                            progressMsg: `Lendo itens da planilha: ${lastItem.itemNumber} — ${lastItem.description?.substring(0, 40)}...`,
+                            metadata: { yieldedItems: normalizedChunk },
                             timestamp: new Date().toISOString()
                         });
                     }
@@ -787,12 +847,21 @@ Responda APENAS com um JSON array válido:
             return res.status(500).json({ error: 'AI returned invalid format or stream failed for planilha', raw: responseText.substring(0, 300) });
         }
 
-        logger.info(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
+        // ── Normalize compact schema → full API-compatible fields ──
+        items = normalizeCompactItems(items);
+        
+        // Log extraction stats by type
+        const etapas = items.filter((it: any) => it.itemType === 'ETAPA').length;
+        const subetapas = items.filter((it: any) => it.itemType === 'SUBETAPA').length;
+        const composicoes = items.filter((it: any) => it.itemType === 'COMPOSICAO' || !it.itemType).length;
+        logger.info(`[AI Populate] ✅ Extracted ${items.length} items (${etapas} etapas, ${subetapas} subetapas, ${composicoes} composições) from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
+        
         res.json({ 
             items: naturalSortItems(items), 
             totalItems: items.length, 
             source: 'pncp_planilha',
-            planilhas: downloadedNames
+            planilhas: downloadedNames,
+            stats: { etapas, subetapas, composicoes }
         });
     } catch (error: any) {
         logger.error('[AI Populate] Error:', error.message);

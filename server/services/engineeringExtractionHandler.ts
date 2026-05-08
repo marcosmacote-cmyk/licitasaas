@@ -374,7 +374,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     config: {
                         systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
                         temperature: 0.1,
-                        maxOutputTokens: 8192,
+                        maxOutputTokens: 65536,
                         responseMimeType: 'application/json'
                     }
                 }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });

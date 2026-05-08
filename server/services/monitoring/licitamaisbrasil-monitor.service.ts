@@ -95,7 +95,7 @@ function classifyEventCategory(text: string): string | null {
     const t = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
     // Closure / Encerramento
-    if (/\b(encerrad[oa]|homologad[oa]|cancelad[oa]|anuladad[oa]|revogad[oa]|desert[oa]|fracassad[oa])\b/.test(t)) return 'encerramento';
+    if (/\b(encerrad[oa]|homologad[oa]|cancelad[oa]|anulad[oa]|revogad[oa]|desert[oa]|fracassad[oa])\b/.test(t)) return 'encerramento';
     // Convocação
     if (/\b(convoca|habilitacao|documentos?\s+de\s+habilitacao|prazo\s+para\s+(?:envio|apresentacao))\b/.test(t)) return 'convocacao';
     // Suspensão
@@ -121,9 +121,10 @@ export class LicitaMaisBrasilMonitor {
     private static readonly API_BASE = `https://${LICITA_MAIS_BRASIL_PLATFORM.apiDomain}`;
     private static readonly USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-    // Credentials from env vars (fallback to hardcoded for backwards compat)
-    private static readonly LOGIN_EMAIL = process.env.LMB_LOGIN_EMAIL || 'licitasaas@gmail.com';
-    private static readonly LOGIN_PASSWORD = process.env.LMB_LOGIN_PASSWORD || '100809LicitaSaas!';
+    // Credentials must come from environment variables.
+    private static readonly LOGIN_EMAIL = process.env.LMB_LOGIN_EMAIL || '';
+    private static readonly LOGIN_PASSWORD = process.env.LMB_LOGIN_PASSWORD || '';
+    private static missingCredentialsLogged = false;
 
     // Token cache
     private static cachedToken: string | null = null;
@@ -176,6 +177,14 @@ export class LicitaMaisBrasilMonitor {
      * Token expira em ~24h (campo expirationDateSession).
      */
     static async getToken(): Promise<string | null> {
+        if (!this.LOGIN_EMAIL || !this.LOGIN_PASSWORD) {
+            if (!this.missingCredentialsLogged) {
+                logger.error('[LMB Monitor] LMB_LOGIN_EMAIL/LMB_LOGIN_PASSWORD não configurados; monitor LMB desabilitado até configurar env vars.');
+                this.missingCredentialsLogged = true;
+            }
+            return null;
+        }
+
         // Check cache — renovar com 30min de margem
         if (this.cachedToken && this.tokenExpiry) {
             const margin = 30 * 60 * 1000; // 30 minutos
