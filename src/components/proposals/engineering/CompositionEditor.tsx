@@ -61,6 +61,39 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
 
 const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
+/**
+ * Filter bases according to Step 1 config (basesConsideradas + ufReferencia).
+ * Mirrors filterConfigBases from EngineeringProposalEditor.
+ */
+function filterBases(allBases: any[], config: any): any[] {
+    if (!allBases || allBases.length === 0) return [];
+    const allowed: string[] = config?.basesConsideradas || [];
+    const uf: string = (config?.ufReferencia || '').toUpperCase();
+
+    let filtered = allBases;
+
+    if (allowed.length > 0) {
+        filtered = filtered.filter((b: any) =>
+            allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase()))
+        );
+    }
+
+    if (uf && filtered.length > 0) {
+        const ufFiltered = filtered.filter((b: any) => {
+            if (!b.uf) return true;
+            return b.uf.toUpperCase() === uf;
+        });
+        if (ufFiltered.length > 0) filtered = ufFiltered;
+    }
+
+    return filtered.sort((a: any, b: any) => {
+        const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
+        const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
+        if (bHasData !== aHasData) return bHasData - aHasData;
+        return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
+    });
+}
+
 const getLineCoefficient = (ci: any) => asNumber(ci?.coefficient);
 
 const getLineUnitPrice = (ci: any) => {
@@ -143,15 +176,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     const [isSearching, setIsSearching] = useState(false);
 
-    // Load bases once when opening search
+    // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
         if (showSearch && bases.length === 0) {
             fetch('/api/engineering/bases', { headers: hdrs() })
                 .then(r => r.json()).then(data => {
-                    if (Array.isArray(data)) { setBases(data); if (data.length > 0) setSelectedBaseId(data[0].id); }
+                    if (Array.isArray(data)) {
+                        setBases(data);
+                        // Auto-select best matching base from config
+                        const filtered = filterBases(data, engineeringConfig);
+                        if (filtered.length > 0) setSelectedBaseId(filtered[0].id);
+                        else if (data.length > 0) setSelectedBaseId(data[0].id);
+                    }
                 }).catch(console.error);
         }
-    }, [showSearch, bases.length]);
+    }, [showSearch, bases.length, engineeringConfig]);
 
     const handleSearch = async () => {
         if (!selectedBaseId || !searchQuery) return;
@@ -1274,13 +1313,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <div style={{ display: 'flex', gap: 8 }}>
                             <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
                                 {(() => {
-                                    const allowed = engineeringConfig?.basesConsideradas || [];
-                                    const filtered = allowed.length > 0 
-                                        ? bases.filter(b => allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase())))
-                                        : bases;
+                                    const filtered = filterBases(bases, engineeringConfig);
                                     
-                                    if (filtered.length === 0) return <option value="">Nenhuma base permitida</option>;
-                                    return filtered.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>);
+                                    if (filtered.length === 0) return <option value="">Nenhuma base configurada</option>;
+                                    return filtered.map(b => {
+                                        const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                        return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref}</option>;
+                                    });
                                 })()}
                             </select>
                             <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />

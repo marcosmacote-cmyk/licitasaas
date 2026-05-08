@@ -95,6 +95,56 @@ function hasEditalPriceSnapshot(item: EngItem): boolean {
         && (hasPositiveNumber(item.officialUnitPrice) || hasPositiveNumber(item.officialTotalPrice));
 }
 
+/**
+ * Filter bases according to Step 1 config (basesConsideradas + ufReferencia).
+ * This is the SINGLE SOURCE OF TRUTH for which bases are available in the project.
+ * Applied in: Search Modal, CompositionEditor, and base auto-select.
+ */
+function filterConfigBases(allBases: any[], config: any): any[] {
+    if (!allBases || allBases.length === 0) return [];
+    const allowed: string[] = config?.basesConsideradas || [];
+    const uf: string = (config?.ufReferencia || '').toUpperCase();
+
+    let filtered = allBases;
+
+    // Filter by base name (SINAPI, SEINFRA, ORSE, etc.)
+    if (allowed.length > 0) {
+        filtered = filtered.filter(b =>
+            allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase()))
+        );
+    }
+
+    // Filter by UF when configured
+    if (uf && filtered.length > 0) {
+        const ufFiltered = filtered.filter(b => {
+            if (!b.uf) return true; // Bases without UF (like PROPRIA) are always included
+            return b.uf.toUpperCase() === uf;
+        });
+        // Only apply UF filter if it produces results (avoid empty list)
+        if (ufFiltered.length > 0) filtered = ufFiltered;
+    }
+
+    // Prioritize bases with data, then by recency
+    return filtered.sort((a: any, b: any) => {
+        const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
+        const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
+        if (bHasData !== aHasData) return bHasData - aHasData;
+        return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
+    });
+}
+
+/**
+ * Auto-select the best matching base from the filtered list.
+ */
+function autoSelectBestBase(allBases: any[], config: any, setSelectedBaseId: (id: string) => void) {
+    const filtered = filterConfigBases(allBases, config);
+    if (filtered.length > 0) {
+        setSelectedBaseId(filtered[0].id);
+    } else if (allBases.length > 0) {
+        setSelectedBaseId(allBases[0].id);
+    }
+}
+
 function preserveEditalPricing(item: EngItem, config: EngineeringConfig): EngItem {
     if (!hasEditalPriceSnapshot(item)) return item;
 
@@ -344,12 +394,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             .then(r => r.json()).then(data => {
                 if (Array.isArray(data)) {
                     setBases(data);
-                    if (data.length > 0) {
-                        const withData = [...data]
-                            .filter(b => ((b.itemCount || 0) + (b.compositionCount || 0)) > 0)
-                            .sort((a, b) => (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0))[0];
-                        setSelectedBaseId((withData || data[0]).id);
-                    }
+                    // Auto-select best matching base from Step 1 config
+                    autoSelectBestBase(data, dashConfig, setSelectedBaseId);
                 }
             }).catch(console.error);
     }, [proposalId]);
@@ -1707,12 +1753,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <div style={{ display: 'flex', gap: 8 }}>
                             <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
                                 {(() => {
-                                    const allowed = engineeringConfig?.basesConsideradas || [];
-                                    const filtered = allowed.length > 0 
-                                        ? bases.filter(b => allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase())))
-                                        : bases;
+                                    const filtered = filterConfigBases(bases, dashConfig);
                                     
-                                    if (filtered.length === 0) return <option value="">Nenhuma base permitida</option>;
+                                    if (filtered.length === 0) return <option value="">Nenhuma base configurada</option>;
                                     return filtered.map(b => {
                                         const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
                                         const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
