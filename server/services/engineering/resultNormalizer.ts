@@ -565,14 +565,15 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
         const isOrse = rawSourceName === 'ORSE' || /\/ORSE$/i.test(rawCode);
         const normalized = {
             ...item,
-            item: String(firstDefined(item, ['item', 'itemNumber', 'numero', 'n', 'ordem']) ?? `${index + 1}`),
-            type: normalizeType(firstDefined(item, ['type', 'tipo', 'classification'])),
+            item: String(firstDefined(item, ['i', 'item', 'itemNumber', 'numero', 'n', 'ordem']) ?? `${index + 1}`),
+            type: normalizeType(firstDefined(item, ['t', 'type', 'tipo', 'classification'])),
             sourceName: isOrse ? 'ORSE' : rawSourceName,
             code: isOrse && orseCodeMatch ? `${orseCodeMatch[1]}/ORSE` : rawCode,
-            description: String(firstDefined(item, ['description', 'descricao', 'descrição', 'servico', 'serviço', 'nome']) || ''),
-            unit: String(firstDefined(item, ['unit', 'unidade', 'unid', 'und']) || ''),
-            quantity: parseNumber(firstDefined(item, ['quantity', 'quantidade', 'qtd', 'qty'])),
+            description: String(firstDefined(item, ['d', 'description', 'descricao', 'descrição', 'servico', 'serviço', 'nome']) || ''),
+            unit: String(firstDefined(item, ['u', 'unit', 'unidade', 'unid', 'und']) || ''),
+            quantity: parseNumber(firstDefined(item, ['q', 'quantity', 'quantidade', 'qtd', 'qty'])),
             unitCost: parseNumber(firstDefined(item, [
+                'uc',
                 'unitCost',
                 'precoUnitario',
                 'preçoUnitario',
@@ -585,6 +586,7 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
                 'referencePrice',
             ])),
             unitPrice: parseNumber(firstDefined(item, [
+                'up',
                 'unitPrice',
                 'unitCostWithBdi',
                 'unitPriceWithBdi',
@@ -597,6 +599,7 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
                 'preco_unitario_com_bdi',
             ])),
             totalPrice: parseNumber(firstDefined(item, [
+                'tp',
                 'totalPrice',
                 'totalWithBdi',
                 'valorTotal',

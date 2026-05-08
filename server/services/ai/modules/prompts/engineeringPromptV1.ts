@@ -130,21 +130,21 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 5. UNIDADES DE MEDIDA: Use exatamente como estão no documento.
    Comuns: M2, M3, M, KG, UN, VB, CJ, L, H, MÊS, GL, etc.
 
-6. PREÇOS E CUSTOS (CRÍTICO — CAMPOS unitCost, unitPrice, totalPrice): 
+6. PREÇOS E CUSTOS (CRÍTICO — CAMPOS uc, up, tp): 
    PLANILHAS ORÇAMENTÁRIAS DE OBRAS TÊM DUAS COLUNAS DE PREÇO:
-   - "PREÇO UNITÁRIO S/ BDI" ← USE ESTA COLUNA para o campo unitCost
-   - "PREÇO UNITÁRIO C/ BDI" ou "Valor Unit com BDI" ← USE ESTA COLUNA para o campo unitPrice
-   - "TOTAL" ou "Valor Total" ← USE ESTA COLUNA para o campo totalPrice
+   - "PREÇO UNITÁRIO S/ BDI" ← USE ESTA COLUNA para o campo uc
+   - "PREÇO UNITÁRIO C/ BDI" ou "Valor Unit com BDI" ← USE ESTA COLUNA para o campo up
+   - "TOTAL" ou "Valor Total" ← USE ESTA COLUNA para o campo tp
    
    COMO IDENTIFICAR:
    - A coluna S/BDI tem valores MENORES (ex: 104,47)
-   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← extraia em unitPrice, NÃO coloque em unitCost
+   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← extraia em up, NÃO coloque em uc
    - O total geralmente é Quantidade × Preço com BDI, já arredondado pela planilha. PRESERVE exatamente.
    - O cabeçalho geralmente mostra o BDI (ex: "BDI: 29,31%")
    
    Se a planilha informar APENAS "Preço com BDI" e a taxa do BDI:
-   → Calcule: unitCost = Preço_com_BDI / (1 + BDI/100)
-   → Mantenha unitPrice = Preço_com_BDI original
+   → Calcule: uc = Preço_com_BDI / (1 + BDI/100)
+   → Mantenha up = Preço_com_BDI original
    → Exemplo: 135,09 / 1.2931 = 104,47
 
 🚨🚨🚨 7. ANTI-DESALINHAMENTO DE COLUNAS (REGRA CRÍTICA — COLUMN SHIFT):
@@ -152,12 +152,12 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    | ITEM | CÓDIGO | DESCRIÇÃO | UNID. | QUANTIDADE | PREÇO UNIT. S/BDI | PREÇO UNIT. C/BDI | TOTAL |
 
    ERROS COMUNS QUE VOCÊ NÃO PODE COMETER:
-   - NÃO copie o valor da coluna QUANTIDADE para o campo unitCost.
-   - NÃO copie o valor da coluna TOTAL GERAL para unitCost.
-   - O unitCost é o PREÇO DE UMA UNIDADE do serviço, não a quantidade total nem o valor global.
+   - NÃO copie o valor da coluna QUANTIDADE para o campo uc.
+   - NÃO copie o valor da coluna TOTAL GERAL para uc.
+   - O uc é o PREÇO DE UMA UNIDADE do serviço, não a quantidade total nem o valor global.
 
    COMO VERIFICAR SE VOCÊ ESTÁ NA COLUNA CERTA:
-   - Se unitCost == quantity → ERRADO! Você está lendo a coluna de quantidade como preço.
+   - Se uc == q → ERRADO! Você está lendo a coluna de quantidade como preço.
    - Se unitCost × quantity == um valor astronomicamente alto (ex: bilhões para uma escola) → ERRADO!
    - Se unitCost para ESCAVAÇÃO, CHAPISCO, REBOCO for > R$100/m² → SUSPEITO, verifique a coluna.
    - Se unitCost para BARRACÃO, SUBESTAÇÃO, PORTA for < R$10,00 → ERRADO! Estes itens custam milhares.
@@ -199,162 +199,19 @@ As linhas 1.1.1.0.1, 1.2.1.0.1, 1.3.1.0.1 são composições COM código/unidade
 
 {
   "engineeringItems": [
-    {
-      "item": "1",
-      "type": "ETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "CONSTRUÇÃO DE HABITAÇÃO DE INTERESSE SOCIAL",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 6502590.57
-    },
-    {
-      "item": "1.1",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "ADMINISTRAÇÃO LOCAL",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 233194.00
-    },
-    {
-      "item": "1.1.1",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "ADMINISTRAÇÃO LOCAL",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 233194.00
-    },
-    {
-      "item": "1.1.1.0.1",
-      "type": "COMPOSICAO",
-      "sourceName": "Composição",
-      "code": "P23277-V2",
-      "description": "ADMINISTRAÇÃO DA OBRA",
-      "unit": "M2",
-      "quantity": 100,
-      "unitCost": 1937.63,
-      "unitPrice": 2331.94,
-      "totalPrice": 233194.00
-    },
-    {
-      "item": "1.2",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "PLACA DE OBRA",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 4503.44
-    },
-    {
-      "item": "1.2.1",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "PLACA DE OBRA",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 4503.44
-    },
-    {
-      "item": "1.2.1.0.1",
-      "type": "COMPOSICAO",
-      "sourceName": "SINAPI",
-      "code": "103689",
-      "description": "FORNECIMENTO E INSTALAÇÃO DE PLACA DE OBRA COM CHAPA GALVANIZADA E ESTRUTURA DE MADEIRA",
-      "unit": "M2",
-      "quantity": 8,
-      "unitCost": 467.74,
-      "unitPrice": 562.93,
-      "totalPrice": 4503.44
-    },
-    {
-      "item": "1.3",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "EDIFICAÇÕES",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 5805801.20
-    },
-    {
-      "item": "1.3.1",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "SERVIÇOS PRELIMINARES",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 255940.00
-    },
-    {
-      "item": "1.3.1.0.1",
-      "type": "COMPOSICAO",
-      "sourceName": "SINAPI",
-      "code": "105562",
-      "description": "EXECUÇÃO E COMPACTAÇÃO DE CAMADA FINAL DE ATERRO",
-      "unit": "M3",
-      "quantity": 4272,
-      "unitCost": 8.81,
-      "unitPrice": 10.81,
-      "totalPrice": 46180.32
-    },
-    {
-      "item": "1.3.2",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "FUNDAÇÕES",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 627644.00
-    },
-    {
-      "item": "1.3.2.1",
-      "type": "SUBETAPA",
-      "sourceName": "",
-      "code": "",
-      "description": "RADIER",
-      "unit": "",
-      "quantity": 0,
-      "unitCost": 0,
-      "unitPrice": 0,
-      "totalPrice": 574358.00
-    },
-    {
-      "item": "1.3.2.1.1",
-      "type": "COMPOSICAO",
-      "sourceName": "SINAPI",
-      "code": "96521",
-      "description": "ESCAVAÇÃO MECANIZADA PARA BLOCO DE COROAMENTO OU SAPATA",
-      "unit": "M3",
-      "quantity": 501.2,
-      "unitCost": 43.10,
-      "unitPrice": 51.87,
-      "totalPrice": 25997.20
-    }
+    {"i":"1","t":"ETAPA","s":"","c":"","d":"CONSTRUÇÃO DE HABITAÇÃO DE INTERESSE SOCIAL","u":"","q":0,"uc":0,"up":0,"tp":6502590.57},
+    {"i":"1.1","t":"SUBETAPA","s":"","c":"","d":"ADMINISTRAÇÃO LOCAL","u":"","q":0,"uc":0,"up":0,"tp":233194.00},
+    {"i":"1.1.1","t":"SUBETAPA","s":"","c":"","d":"ADMINISTRAÇÃO LOCAL","u":"","q":0,"uc":0,"up":0,"tp":233194.00},
+    {"i":"1.1.1.0.1","t":"COMPOSICAO","s":"Composição","c":"P23277-V2","d":"ADMINISTRAÇÃO DA OBRA","u":"M2","q":100,"uc":1937.63,"up":2331.94,"tp":233194.00},
+    {"i":"1.2","t":"SUBETAPA","s":"","c":"","d":"PLACA DE OBRA","u":"","q":0,"uc":0,"up":0,"tp":4503.44},
+    {"i":"1.2.1","t":"SUBETAPA","s":"","c":"","d":"PLACA DE OBRA","u":"","q":0,"uc":0,"up":0,"tp":4503.44},
+    {"i":"1.2.1.0.1","t":"COMPOSICAO","s":"SINAPI","c":"103689","d":"FORNECIMENTO E INSTALAÇÃO DE PLACA DE OBRA COM CHAPA GALVANIZADA E ESTRUTURA DE MADEIRA","u":"M2","q":8,"uc":467.74,"up":562.93,"tp":4503.44},
+    {"i":"1.3","t":"SUBETAPA","s":"","c":"","d":"EDIFICAÇÕES","u":"","q":0,"uc":0,"up":0,"tp":5805801.20},
+    {"i":"1.3.1","t":"SUBETAPA","s":"","c":"","d":"SERVIÇOS PRELIMINARES","u":"","q":0,"uc":0,"up":0,"tp":255940.00},
+    {"i":"1.3.1.0.1","t":"COMPOSICAO","s":"SINAPI","c":"105562","d":"EXECUÇÃO E COMPACTAÇÃO DE CAMADA FINAL DE ATERRO","u":"M3","q":4272,"uc":8.81,"up":10.81,"tp":46180.32},
+    {"i":"1.3.2","t":"SUBETAPA","s":"","c":"","d":"FUNDAÇÕES","u":"","q":0,"uc":0,"up":0,"tp":627644.00},
+    {"i":"1.3.2.1","t":"SUBETAPA","s":"","c":"","d":"RADIER","u":"","q":0,"uc":0,"up":0,"tp":574358.00},
+    {"i":"1.3.2.1.1","t":"COMPOSICAO","s":"SINAPI","c":"96521","d":"ESCAVAÇÃO MECANIZADA PARA BLOCO DE COROAMENTO OU SAPATA","u":"M3","q":501.2,"uc":43.10,"up":51.87,"tp":25997.20}
   ]
 }
 
@@ -432,6 +289,19 @@ ATENÇÃO — PRIORIDADES ORDENADAS:
 7. Inclua quantitativos e extraia rigorosamente o CUSTO DIRETO sem BDI em unitCost.
 8. Extraia também o PREÇO UNITÁRIO COM BDI em unitPrice e o TOTAL COM BDI em totalPrice, exatamente como aparecem na planilha.
 9. VALIDAÇÃO MATEMÁTICA: Assegure-se de que a soma de totalPrice de todos os itens bata com o Total Global. Se totalPrice não existir, use Qtd × unitPrice.
+
+🚨 FORMATO JSON COMPACTO OBRIGATÓRIO (PARA ECONOMIZAR TOKENS):
+Você DEVE usar as chaves curtas abaixo para cada item, EXATAMENTE como no exemplo:
+"i"  = item number (ex: "1.1")
+"t"  = type ("ETAPA", "SUBETAPA", "COMPOSICAO", "INSUMO")
+"s"  = sourceName (ex: "SINAPI", "SEINFRA")
+"c"  = code (ex: "87640")
+"d"  = description
+"u"  = unit (ex: "M2")
+"q"  = quantity (número)
+"uc" = unitCost (Custo Unitário S/ BDI, número)
+"up" = unitPrice (Preço Unitário C/ BDI, número)
+"tp" = totalPrice (Preço Total C/ BDI, número)
 
 🚨🚨🚨 10. VERIFICAÇÃO ANTI-COLUMN-SHIFT (EXECUTE OBRIGATORIAMENTE):
    ANTES de emitir o JSON final, verifique:
