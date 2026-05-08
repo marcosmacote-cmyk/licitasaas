@@ -62,36 +62,72 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
 const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 /**
- * Filter bases according to Step 1 config (basesConsideradas + ufReferencia).
+ * STRICT base filter — enforces Step 1 config (name + UF + data-base).
  * Mirrors filterConfigBases from EngineeringProposalEditor.
  */
 function filterBases(allBases: any[], config: any): any[] {
-    if (!allBases || allBases.length === 0) return [];
+    return filterBasesWithWarnings(allBases, config).filtered;
+}
+
+interface BaseFilterResult { filtered: any[]; warnings: string[]; }
+
+function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult {
+    if (!allBases || allBases.length === 0) return { filtered: [], warnings: ['Nenhuma base cadastrada no sistema.'] };
+
     const allowed: string[] = config?.basesConsideradas || [];
     const uf: string = (config?.ufReferencia || '').toUpperCase();
+    const globalDate: string = config?.dataBase || '';
+    const perBaseDates: Record<string, string> = config?.dataBases || {};
 
-    let filtered = allBases;
+    if (allowed.length === 0) return { filtered: allBases, warnings: [] };
 
-    if (allowed.length > 0) {
-        filtered = filtered.filter((b: any) =>
-            allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase()))
-        );
-    }
+    const result: any[] = [];
+    const warnings: string[] = [];
 
-    if (uf && filtered.length > 0) {
-        const ufFiltered = filtered.filter((b: any) => {
-            if (!b.uf) return true;
-            return b.uf.toUpperCase() === uf;
+    for (const baseName of allowed) {
+        const upperName = baseName.toUpperCase();
+
+        if (upperName === 'PROPRIA' || upperName === 'PRÓPRIA') {
+            const propria = allBases.filter((b: any) =>
+                b.name.toUpperCase().includes('PROPRIA') || b.name.toUpperCase().includes('PRÓPRIA')
+            );
+            if (propria.length > 0) result.push(...propria);
+            else warnings.push(`Base "${baseName}" não encontrada no sistema.`);
+            continue;
+        }
+
+        const targetDate = perBaseDates[baseName] || globalDate;
+        let targetMonth = 0, targetYear = 0;
+        if (targetDate) {
+            const [y, m] = targetDate.split('-').map(Number);
+            if (y && m) { targetYear = y; targetMonth = m; }
+        }
+
+        const candidates = allBases.filter((b: any) => {
+            if (!b.name.toUpperCase().includes(upperName)) return false;
+            if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+            if (targetYear && targetMonth) {
+                if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+            }
+            return true;
         });
-        if (ufFiltered.length > 0) filtered = ufFiltered;
+
+        if (candidates.length > 0) result.push(...candidates);
+        else {
+            const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+            const ufPart = uf ? ` ${uf}` : '';
+            warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Verifique se a base foi importada.`);
+        }
     }
 
-    return filtered.sort((a: any, b: any) => {
+    result.sort((a: any, b: any) => {
         const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
         const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
         if (bHasData !== aHasData) return bHasData - aHasData;
         return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
     });
+
+    return { filtered: result, warnings };
 }
 
 const getLineCoefficient = (ci: any) => asNumber(ci?.coefficient);
@@ -1310,21 +1346,35 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             <h3 style={{ margin: 0 }}>{searchType === 'item' ? 'Buscar Insumo' : 'Buscar Composição Auxiliar'}</h3>
                             <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
-                                {(() => {
-                                    const filtered = filterBases(bases, engineeringConfig);
-                                    
-                                    if (filtered.length === 0) return <option value="">Nenhuma base configurada</option>;
-                                    return filtered.map(b => {
-                                        const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
-                                        return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref}</option>;
-                                    });
-                                })()}
-                            </select>
-                            <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
-                        </div>
+                        {(() => {
+                            const { filtered, warnings } = filterBasesWithWarnings(bases, engineeringConfig);
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                            {filtered.length === 0
+                                                ? <option value="">Nenhuma base configurada</option>
+                                                : filtered.map(b => {
+                                                    const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                                    const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
+                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                                })
+                                            }
+                                        </select>
+                                        <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+                                        <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
+                                    </div>
+                                    {warnings.length > 0 && (
+                                        <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                            <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                                            <div style={{ fontSize: '0.78rem', color: '#92400e' }}>
+                                                {warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>

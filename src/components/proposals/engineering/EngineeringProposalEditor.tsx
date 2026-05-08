@@ -96,41 +96,97 @@ function hasEditalPriceSnapshot(item: EngItem): boolean {
 }
 
 /**
- * Filter bases according to Step 1 config (basesConsideradas + ufReferencia).
- * This is the SINGLE SOURCE OF TRUTH for which bases are available in the project.
- * Applied in: Search Modal, CompositionEditor, and base auto-select.
+ * STRICT base filter — enforces Step 1 config as absolute rule.
+ * Bases are shown ONLY if they match ALL criteria:
+ *   1. Name matches basesConsideradas (SINAPI, SEINFRA, ORSE, PROPRIA)
+ *   2. UF matches ufReferencia (or base has no UF, like PROPRIA)
+ *   3. Data-base (month/year) matches the configured date for that base
+ *
+ * Returns { filtered, warnings } where warnings lists configured bases
+ * that were not found in the system.
  */
 function filterConfigBases(allBases: any[], config: any): any[] {
-    if (!allBases || allBases.length === 0) return [];
+    return filterConfigBasesWithWarnings(allBases, config).filtered;
+}
+
+interface BaseFilterResult {
+    filtered: any[];
+    warnings: string[];
+}
+
+function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilterResult {
+    if (!allBases || allBases.length === 0) return { filtered: [], warnings: ['Nenhuma base cadastrada no sistema.'] };
+
     const allowed: string[] = config?.basesConsideradas || [];
     const uf: string = (config?.ufReferencia || '').toUpperCase();
+    const globalDate: string = config?.dataBase || ''; // "2025-09"
+    const perBaseDates: Record<string, string> = config?.dataBases || {}; // { SINAPI: "2025-09", ORSE: "2025-09" }
 
-    let filtered = allBases;
-
-    // Filter by base name (SINAPI, SEINFRA, ORSE, etc.)
-    if (allowed.length > 0) {
-        filtered = filtered.filter(b =>
-            allowed.some((ab: string) => b.name.toUpperCase().includes(ab.toUpperCase()))
-        );
+    // If no bases configured, show nothing (strict mode)
+    if (allowed.length === 0) {
+        return { filtered: allBases, warnings: [] };
     }
 
-    // Filter by UF when configured
-    if (uf && filtered.length > 0) {
-        const ufFiltered = filtered.filter(b => {
-            if (!b.uf) return true; // Bases without UF (like PROPRIA) are always included
-            return b.uf.toUpperCase() === uf;
+    const result: any[] = [];
+    const warnings: string[] = [];
+
+    for (const baseName of allowed) {
+        const upperName = baseName.toUpperCase();
+
+        // PROPRIA is special — always include tenant's own base
+        if (upperName === 'PROPRIA' || upperName === 'PRÓPRIA') {
+            const propria = allBases.filter(b =>
+                b.name.toUpperCase().includes('PROPRIA') || b.name.toUpperCase().includes('PRÓPRIA')
+            );
+            if (propria.length > 0) {
+                result.push(...propria);
+            } else {
+                warnings.push(`Base "${baseName}" não encontrada no sistema.`);
+            }
+            continue;
+        }
+
+        // Get the target date for this base
+        const targetDate = perBaseDates[baseName] || globalDate; // "2025-09"
+        let targetMonth = 0;
+        let targetYear = 0;
+        if (targetDate) {
+            const [y, m] = targetDate.split('-').map(Number);
+            if (y && m) { targetYear = y; targetMonth = m; }
+        }
+
+        // Find matching bases: name + UF + date
+        const candidates = allBases.filter(b => {
+            // Must match base name
+            if (!b.name.toUpperCase().includes(upperName)) return false;
+            // Must match UF if configured
+            if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+            // Must match date if configured
+            if (targetYear && targetMonth) {
+                if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+            }
+            return true;
         });
-        // Only apply UF filter if it produces results (avoid empty list)
-        if (ufFiltered.length > 0) filtered = ufFiltered;
+
+        if (candidates.length > 0) {
+            result.push(...candidates);
+        } else {
+            // Generate specific warning
+            const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+            const ufPart = uf ? ` ${uf}` : '';
+            warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Verifique se a base foi importada.`);
+        }
     }
 
-    // Prioritize bases with data, then by recency
-    return filtered.sort((a: any, b: any) => {
+    // Sort: bases with data first, then by recency
+    result.sort((a: any, b: any) => {
         const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
         const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
         if (bHasData !== aHasData) return bHasData - aHasData;
         return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
     });
+
+    return { filtered: result, warnings };
 }
 
 /**
@@ -143,6 +199,7 @@ function autoSelectBestBase(allBases: any[], config: any, setSelectedBaseId: (id
     } else if (allBases.length > 0) {
         setSelectedBaseId(allBases[0].id);
     }
+
 }
 
 function preserveEditalPricing(item: EngItem, config: EngineeringConfig): EngItem {
@@ -1750,22 +1807,35 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             <h3 style={{ margin: 0 }}>Buscar Insumo/Serviço na Base Oficial</h3>
                             <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
-                                {(() => {
-                                    const filtered = filterConfigBases(bases, dashConfig);
-                                    
-                                    if (filtered.length === 0) return <option value="">Nenhuma base configurada</option>;
-                                    return filtered.map(b => {
-                                        const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
-                                        const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
-                                        return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
-                                    });
-                                })()}
-                            </select>
-                            <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
-                        </div>
+                        {(() => {
+                            const { filtered, warnings } = filterConfigBasesWithWarnings(bases, dashConfig);
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                            {filtered.length === 0
+                                                ? <option value="">Nenhuma base configurada</option>
+                                                : filtered.map(b => {
+                                                    const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                                    const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
+                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                                })
+                                            }
+                                        </select>
+                                        <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+                                        <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
+                                    </div>
+                                    {warnings.length > 0 && (
+                                        <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                            <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                                            <div style={{ fontSize: '0.78rem', color: '#92400e' }}>
+                                                {warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>
