@@ -559,8 +559,8 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
     const repairs: string[] = [];
 
     const engineeringItems = (items || []).map((item, index) => {
-        const rawCode = String(firstDefined(item, ['code', 'sourceCode', 'codigo', 'cod', 'codigoServico']) || '');
-        const rawSourceName = normalizeSourceName(firstDefined(item, ['sourceName', 'sourceBase', 'base', 'fonte', 'banco']));
+        const rawCode = String(firstDefined(item, ['c', 'code', 'sourceCode', 'codigo', 'cod', 'codigoServico']) || '');
+        const rawSourceName = normalizeSourceName(firstDefined(item, ['s', 'sourceName', 'sourceBase', 'base', 'fonte', 'banco']));
         const orseCodeMatch = rawCode.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
         const isOrse = rawSourceName === 'ORSE' || /\/ORSE$/i.test(rawCode);
         const normalized = {
