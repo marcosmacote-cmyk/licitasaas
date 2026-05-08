@@ -1601,29 +1601,72 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // O background job vai popular _engineeringBudgetItems quando concluir.
             // Re-extrair aqui duplica custo de IA e cria duas fontes de verdade.
             // ═══════════════════════════════════════════════════
-            const activeJob = await prisma.backgroundJob.findFirst({
-                where: {
-                    targetId: biddingId,
-                    type: 'engineering_extraction',
-                    status: { in: ['QUEUED', 'PROCESSING'] },
-                },
-                select: { id: true, status: true, progress: true, progressMsg: true },
-            });
-
-            if (activeJob) {
-                console.log(`[Engineering AI-Populate] ⏳ Job ativo detectado (${activeJob.id}, ${activeJob.status}, ${activeJob.progress}%). Aguardando conclusão...`);
-                return res.status(202).json({
-                    items: [],
-                    source: 'pending_background_job',
-                    count: 0,
-                    pendingJob: {
-                        jobId: activeJob.id,
-                        status: activeJob.status,
-                        progress: activeJob.progress,
-                        progressMsg: activeJob.progressMsg || 'Extração em andamento...',
+            
+            // Step 0: If forceRefresh, cancel ALL active jobs (we need a fresh start)
+            if (forceRefresh) {
+                const allActiveJobs = await prisma.backgroundJob.findMany({
+                    where: {
+                        targetId: biddingId,
+                        type: 'engineering_extraction',
+                        status: { in: ['QUEUED', 'PROCESSING'] },
                     },
-                    message: 'A planilha orçamentária está sendo extraída em background. Aguarde a conclusão e tente novamente.',
+                    select: { id: true },
                 });
+                if (allActiveJobs.length > 0) {
+                    await prisma.backgroundJob.updateMany({
+                        where: { id: { in: allActiveJobs.map(j => j.id) } },
+                        data: { status: 'FAILED', error: 'Cancelled: forceRefresh requested', progress: 0 },
+                    });
+                    console.log(`[Engineering AI-Populate] 🧹 forceRefresh: cancelled ${allActiveJobs.length} active jobs for ${biddingId}`);
+                }
+            } else {
+                // Step 1: Cancel stale jobs (> 15 minutes old) that are stuck in QUEUED/PROCESSING
+                const STALE_JOB_THRESHOLD = 15 * 60 * 1000; // 15 minutes
+                const staleThreshold = new Date(Date.now() - STALE_JOB_THRESHOLD);
+                const staleJobs = await prisma.backgroundJob.findMany({
+                    where: {
+                        targetId: biddingId,
+                        type: 'engineering_extraction',
+                        status: { in: ['QUEUED', 'PROCESSING'] },
+                        createdAt: { lt: staleThreshold },
+                    },
+                    select: { id: true },
+                });
+                if (staleJobs.length > 0) {
+                    await prisma.backgroundJob.updateMany({
+                        where: { id: { in: staleJobs.map(j => j.id) } },
+                        data: { status: 'FAILED', error: 'Auto-cancelled: stale job (>15 min)', progress: 0 },
+                    });
+                    console.log(`[Engineering AI-Populate] 🧹 Auto-cancelled ${staleJobs.length} stale jobs for ${biddingId}`);
+                }
+                
+                // Step 2: Check for RECENT active job (created within threshold)
+                const activeJob = await prisma.backgroundJob.findFirst({
+                    where: {
+                        targetId: biddingId,
+                        type: 'engineering_extraction',
+                        status: { in: ['QUEUED', 'PROCESSING'] },
+                        createdAt: { gte: staleThreshold },
+                    },
+                    select: { id: true, status: true, progress: true, progressMsg: true },
+                    orderBy: { createdAt: 'desc' },
+                });
+
+                if (activeJob) {
+                    console.log(`[Engineering AI-Populate] ⏳ Job ativo detectado (${activeJob.id}, ${activeJob.status}, ${activeJob.progress}%). Aguardando conclusão...`);
+                    return res.status(202).json({
+                        items: [],
+                        source: 'pending_background_job',
+                        count: 0,
+                        pendingJob: {
+                            jobId: activeJob.id,
+                            status: activeJob.status,
+                            progress: activeJob.progress,
+                            progressMsg: activeJob.progressMsg || 'Extração em andamento...',
+                        },
+                        message: 'A planilha orçamentária está sendo extraída em background. Aguarde a conclusão e tente novamente.',
+                    });
+                }
             }
 
             console.log(`[Engineering AI-Populate] ⚠️ Sem job ativo. Iniciando extração em background.`);
