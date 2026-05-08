@@ -1329,7 +1329,13 @@ router.post('/ai-extract-encargos', async (req: any, res: any) => {
         const { biddingId } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId é obrigatório' });
         const data = await extractEncargosFromBidding(biddingId);
-        if (!data || !data.found) return res.json({ found: false, message: 'Encargos sociais não encontrados no edital.' });
+        if (!data || !data.found) {
+            const details = data?.details || data?.error || '';
+            const message = details
+                ? `Encargos sociais não encontrados no edital. ${details}`
+                : 'Encargos sociais não encontrados no edital. Tente usar o botão "Colar Imagem" para extrair de uma captura da tabela de encargos.';
+            return res.json({ found: false, message });
+        }
         return res.json({ found: true, data });
     } catch (e: any) {
         console.error('[Engineering AI Encargos] Error:', e);

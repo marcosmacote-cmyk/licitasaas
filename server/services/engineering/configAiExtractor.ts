@@ -39,6 +39,9 @@ function scoreDocForIntent(doc: any, intent: ExtractionIntent): number {
         if (/encargo|leis.?sociais|m[aã]o.?de.?obra|horista|mensalista/.test(haystack)) score += 70;
         if (/bdi|composi[cç][aã]o|planilh|or[cç]ament/.test(haystack)) score += 22;
         if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 16;
+        // Encargos can also be inside generic "orçamento" or "anexo" files
+        if (/anexo|complement|detalhament/.test(haystack)) score += 12;
+        if (/custo|pre[cç]o|refer[eê]ncia/.test(haystack)) score += 8;
     }
     return score;
 }
@@ -297,15 +300,27 @@ Retorne JSON.`;
 // ═══════════════════════════════════════════════════════════
 // Extract Encargos Sociais — Aligned with SINAPI Methodology
 // Strategy: Free JSON only (no structured schema — avoids "too many states" error)
+// V2: Enhanced document selection + resilient prompt for varied table formats
 // ═══════════════════════════════════════════════════════════
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais SINAPI.
-Analise o documento e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
+Analise TODOS os documentos/páginas fornecidos e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
 
-A tabela segue a estrutura SINAPI com 4 GRUPOS e ITENS INDIVIDUAIS.
-Extraia CADA ITEM com valores para HORISTA e MENSALISTA:
+🚨 ATENÇÃO: A tabela de encargos pode estar em QUALQUER parte dos documentos — no edital principal,
+em anexos, na planilha orçamentária, no projeto básico, ou em documento específico de encargos.
+Procure em TODAS as páginas por tabelas com colunas HORISTA e MENSALISTA contendo percentuais (%).
+
+A tabela PODE seguir diferentes formatos:
+- Formato SINAPI completo (4 grupos: A, B, C, D com itens individuais)
+- Formato simplificado (apenas totais por grupo)
+- Formato condensado (apenas Total Horista e Total Mensalista)
+- Tabela integrada dentro da planilha de custos/BDI
+
+Se encontrar QUALQUER um desses formatos, extraia o máximo de detalhamento disponível.
+
+Estrutura SINAPI de referência (4 GRUPOS):
 
 GRUPO A — Encargos Sociais Básicos:
   A1: INSS (20% se onerado, 0% se desonerado)
@@ -343,7 +358,16 @@ RETORNE JSON com EXATAMENTE estes campos:
   "c4_h": N, "c4_m": N, "c5_h": N, "c5_m": N,
   "d1_h": N, "d1_m": N, "d2_h": N, "d2_m": N }
 Onde N = valor percentual sem símbolo % (ex: 17.86). Se item=0 ou não existe, retorne 0.
-Se não encontrar tabela de encargos, retorne {"found": false}.`;
+
+🚨 REGRA CRÍTICA: Se a tabela mostra apenas os TOTAIS por grupo (ex: "Grupo A: 36.80%") sem detalhar
+os itens individuais, use os totais SINAPI padrão para distribuir e retorne found=true.
+
+🚨 SE encontrar apenas o Total Geral de Encargos (ex: "Encargos Sociais: 113.09%") sem detalhamento,
+RETORNE found=true com totalHorista e totalMensalista iguais a esse valor, e distribua os itens usando
+os percentuais SINAPI padrão proporcionalmente.
+
+Somente retorne {"found": false} se NÃO houver NENHUMA menção a encargos sociais/leis sociais em
+NENHUM dos documentos analisados.`;
 
     const enrichResult = (parsed: any) => {
         if (!parsed?.found) return parsed;
@@ -365,10 +389,13 @@ Se não encontrar tabela de encargos, retorne {"found": false}.`;
     };
 
     try {
-        const pdfParts = await downloadPdfsForExtraction(biddingId, 3, 'encargos');
+        // ═══════════════════════════════════════════════════
+        // PASS 1: Download top-ranked encargos PDFs (up to 5)
+        // ═══════════════════════════════════════════════════
+        const pdfParts = await downloadPdfsForExtraction(biddingId, 5, 'encargos');
         if (pdfParts.length > 0) {
             try {
-                console.log(`[Encargos-AI] 📄 PDF: ${pdfParts.length} PDF(s) — JSON livre (sem schema)`);
+                console.log(`[Encargos-AI] 📄 PASS 1: ${pdfParts.length} PDF(s) ranked for encargos`);
                 const result = await callGeminiWithRetry(ai.models, {
                     model: 'gemini-2.5-flash',
                     contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
@@ -376,17 +403,49 @@ Se não encontrar tabela de encargos, retorne {"found": false}.`;
                 });
                 if (result?.text) {
                     const parsed = JSON.parse(result.text);
-                    console.log(`[Encargos-AI] 📋 PDF ok: found=${parsed.found} a1_h=${parsed.a1_h} a8_h=${parsed.a8_h}`);
+                    console.log(`[Encargos-AI] 📋 PASS 1 result: found=${parsed.found} totalH=${parsed.totalHorista} a1_h=${parsed.a1_h} a8_h=${parsed.a8_h}`);
+                    if (parsed.found) return enrichResult(parsed);
+                    console.log(`[Encargos-AI] ⚠️ PASS 1 returned found=false. Trying broader search...`);
+                }
+            } catch (e: any) {
+                console.warn(`[Encargos-AI] ⚠️ PASS 1 falhou: ${e.message}`);
+            }
+        } else {
+            console.log(`[Encargos-AI] ⚠️ PASS 1: Nenhum PDF disponível para extração`);
+        }
+
+        // ═══════════════════════════════════════════════════
+        // PASS 2: Try with ALL available PDFs (broader search)
+        // Sometimes encargos are embedded in unexpected documents
+        // ═══════════════════════════════════════════════════
+        const allPdfParts = await downloadPdfsForExtraction(biddingId, 6, 'config');
+        if (allPdfParts.length > pdfParts.length) {
+            try {
+                console.log(`[Encargos-AI] 📄 PASS 2: ${allPdfParts.length} PDF(s) broad search (config-ranked)`);
+                const result = await callGeminiWithRetry(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: [{ role: 'user', parts: [...allPdfParts, { text: encargosPrompt }] }],
+                    config: { responseMimeType: 'application/json', temperature: 0.1 }
+                });
+                if (result?.text) {
+                    const parsed = JSON.parse(result.text);
+                    console.log(`[Encargos-AI] 📋 PASS 2 result: found=${parsed.found} totalH=${parsed.totalHorista}`);
                     if (parsed.found) return enrichResult(parsed);
                 }
             } catch (e: any) {
-                console.warn(`[Encargos-AI] ⚠️ PDF falhou: ${e.message}`);
+                console.warn(`[Encargos-AI] ⚠️ PASS 2 falhou: ${e.message}`);
             }
         }
 
+        // ═══════════════════════════════════════════════════
+        // PASS 3: Text fallback from DocumentChunks
+        // ═══════════════════════════════════════════════════
         const text = await getEditalText(biddingId, INTENT_KEYWORDS.encargos);
-        if (text.length < 100) return { found: false };
-        console.log(`[Encargos-AI] 📝 Texto: ${text.length} chars`);
+        if (text.length < 100) {
+            console.log(`[Encargos-AI] ⚠️ Texto insuficiente (${text.length} chars). Sem mais opções.`);
+            return { found: false, details: 'Nenhum documento contém tabela de encargos sociais identificável.' };
+        }
+        console.log(`[Encargos-AI] 📝 PASS 3 Texto: ${text.length} chars`);
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: encargosPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
