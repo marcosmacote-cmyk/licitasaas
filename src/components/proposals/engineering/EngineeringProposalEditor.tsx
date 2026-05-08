@@ -414,7 +414,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const isNewEmptyProposal = !isPolling && !hasPersistedItemsRef.current && items.length === 0;
             const forceRefresh = forceRestart || isNewEmptyProposal || (!isPolling && (items.length > 0 || hasCachedFailure));
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig, forceRefresh })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig: dashConfig, forceRefresh })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -425,17 +425,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     const isGroup = isGrouper(aiType);
                     const cost = isGroup ? 0 : parseLocaleNumber(ai.unitCost);
                     const qty = isGroup ? 0 : parseLocaleNumber(ai.quantity, 1);
-                    const computedUnitPrice = isGroup ? 0 : applyBdi(cost, effectiveBdi, engineeringConfig.precision);
                     const extractedUnitPrice = parseLocaleNumber(ai.unitPrice || ai.officialUnitPrice);
                     const extractedTotalPrice = parseLocaleNumber(ai.totalPrice || ai.officialTotalPrice);
-                    const unitPrice = extractedUnitPrice > 0 ? extractedUnitPrice : computedUnitPrice;
-                    const totalPrice = extractedTotalPrice > 0 ? extractedTotalPrice : applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision });
                     
-                    const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (ai.sourceName || 'PROPRIA');
+                    // FIX #1: sourceName from backend enrichment (priceAudit) takes priority over PROPRIA default
+                    const enrichedSource = ai.priceAudit?.matchedSourceName;
+                    const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (enrichedSource || ai.sourceName || 'PROPRIA');
                     const finalSource = isGroup ? '' : extractedSource;
                     const normalizedCode = finalSource === 'ORSE' && ai.code
                         ? String(ai.code).toUpperCase().replace(/^0+(\d)/, '$1').replace(/\/?ORSE$/, '/ORSE')
                         : ai.code;
+
+                    // FIX #3: Always compute unitPrice from BDI — never freeze edital prices
+                    const computedUnitPrice = isGroup ? 0 : applyBdi(cost, effectiveBdi, dashConfig.precision);
+                    const unitPrice = computedUnitPrice;
+                    const totalPrice = isGroup ? 0 : applyPrecision(qty * unitPrice, { precision: dashConfig.precision });
 
                     return {
                         id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(i + 1),
@@ -575,12 +579,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setIsExtractingComps(true);
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições do projeto básico via IA...</span>);
         try {
-            // Send current items so the AI uses their exact codes (CP-01, CP-02...)
-            const proposalItems = items.filter(it => it.type === 'COMPOSICAO' || it.type === 'INSUMO').map(it => ({
+            // FIX #2: Only send PROPRIA items — compositions from official bases (SINAPI/SEINFRA) are already in the Hub
+            const proposalItems = items.filter(it => 
+                (it.type === 'COMPOSICAO' || it.type === 'INSUMO') &&
+                (!it.sourceName || it.sourceName === 'PROPRIA' || it.sourceName === 'N/A')
+            ).map(it => ({
                 code: it.code, description: it.description, unit: it.unit, quantity: it.quantity, type: it.type,
             }));
             const res = await fetch('/api/engineering/ai-extract-compositions', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig, proposalItems })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig: dashConfig, proposalItems })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
@@ -697,23 +704,31 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }));
     };
 
+    // FIX #4: Use dashConfig (Step 1 priority) instead of potentially stale internal engineeringConfig
     const refreshAllAudits = async () => {
         if (items.length === 0) return;
         setIsAuditing(true);
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Reauditando bases oficiais...</span>);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Reauditando bases oficiais ({dashConfig.basesConsideradas?.join(', ') || 'todas'})...</span>);
         try {
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST',
                 headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig }),
+                body: JSON.stringify({ items, engineeringConfig: dashConfig }),
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao reauditar');
             const data = await res.json();
-            setItems(recalcAll(Array.isArray(data.items) ? data.items : items, effectiveBdi, engineeringConfig));
+            // FIX #1: Update sourceName from enrichment results
+            const auditedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
+                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || it.sourceName === 'PROPRIA')) {
+                    return { ...it, sourceName: it.priceAudit.matchedSourceName };
+                }
+                return it;
+            });
+            setItems(recalcAll(auditedItems, effectiveBdi, dashConfig));
             setHasUnsavedChanges(true);
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Auditoria atualizada contra base, data e regime</span>);
         } catch (e: any) {
-            setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig));
+            setItems(prev => recalcAll(prev, effectiveBdi, dashConfig));
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
@@ -721,28 +736,36 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }
     };
 
+    // FIX #4: Use dashConfig (Step 1 priority) instead of potentially stale internal engineeringConfig
     const syncBases = async () => {
         if (items.length === 0) return;
         setIsAuditing(true);
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({Object.keys(engineeringConfig.dataBases || {}).length} datas bases)...</span>);
+        const dbCount = Object.keys(dashConfig.dataBases || {}).length;
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({dbCount} datas bases, UF: {dashConfig.ufReferencia || 'auto'}, Regime: {dashConfig.regimeOneracao})...</span>);
         try {
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST',
                 headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig }),
+                body: JSON.stringify({ items, engineeringConfig: dashConfig }),
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar preços');
             const data = await res.json();
             
-            // Auto-apply base prices
+            // Auto-apply base prices AND fix sourceName from enrichment
             const syncedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
+                const updated = { ...it };
                 if (it.priceAudit?.matchedUnitCost && it.priceAudit.matchedUnitCost > 0) {
-                    return { ...it, unitCost: it.priceAudit.matchedUnitCost, priceOrigin: 'BASE' as const };
+                    updated.unitCost = it.priceAudit.matchedUnitCost;
+                    updated.priceOrigin = 'BASE' as const;
                 }
-                return it;
+                // FIX #1: Update sourceName from enrichment
+                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || it.sourceName === 'PROPRIA')) {
+                    updated.sourceName = it.priceAudit.matchedSourceName;
+                }
+                return updated;
             });
             
-            setItems(recalcAll(syncedItems, effectiveBdi, engineeringConfig));
+            setItems(recalcAll(syncedItems, effectiveBdi, dashConfig));
             setHasUnsavedChanges(true);
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Tabela 100% atualizada com os custos do Hub (Nova Data Base).</span>);
         } catch (e: any) {
