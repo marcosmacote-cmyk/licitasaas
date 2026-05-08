@@ -104,12 +104,10 @@ const NEGATIVE_KEYWORDS = [
     'memorial descritivo',
     'especificação de serviços', 'especificacao de servicos',
     'caderno de encargos',
-    'projeto básico', 'projeto basico',
     'normas abnt', 'nbr ',
     'segurança do trabalho', 'seguranca do trabalho',
     'metodologia executiva',
     'deverão ser obedecidas',
-    'conforme projeto',
     'cronograma físico', 'cronograma fisico',
     '30 dias', '60 dias', '90 dias', '120 dias',
 ];

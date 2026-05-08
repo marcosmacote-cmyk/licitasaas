@@ -389,6 +389,7 @@ REGRAS FINAIS
 - NUNCA invente itens genéricos baseados no objeto do edital.
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 - 🚨 NÃO EXTRAIA O CRONOGRAMA FÍSICO-FINANCEIRO. Ele é uma tabela com colunas de meses (30 DIAS, 60 DIAS...) e percentuais. IGNORE-O.
+- 🚨🚨🚨 REGRA DE EXAUSTIVIDADE (MÁXIMA PRIORIDADE): EXTRAIA TODOS OS ITENS DA PLANILHA DO INÍCIO AO FIM. NUNCA pare no meio, NUNCA resuma, NUNCA use "etc" ou reticências. O trabalho só estará completo quando o ÚLTIMO item da última página da planilha orçamentária for extraído.
 `;
 
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `
