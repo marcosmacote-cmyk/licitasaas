@@ -360,23 +360,51 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let modelUsed = 'gemini-2.5-flash';
 
     try {
-        let text = '';
         const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}`;
+        let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
+        let loopCount = 0;
+        let totalRepairs: string[] = [];
 
         // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
         try {
-            const result = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }],
-                config: {
-                    systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                    temperature: 0.1,
-                    maxOutputTokens: 65536,
-                    responseMimeType: 'application/json'
+            while (loopCount < 5) {
+                const result = await callGeminiWithRetry(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: currentContents,
+                    config: {
+                        systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                        temperature: 0.1,
+                        maxOutputTokens: 8192,
+                        responseMimeType: 'application/json'
+                    }
+                }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
+                
+                const chunkText = result.text || '';
+                logger.info(`[Engineering-BG] ✅ Gemini respondeu (Chunk ${loopCount + 1}, ${chunkText.length} chars)`);
+
+                const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
+                if (normalizedChunk.engineeringItems.length > 0) {
+                    engItems.push(...normalizedChunk.engineeringItems);
                 }
-            }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
-            text = result.text || '';
-            logger.info(`[Engineering-BG] ✅ Gemini respondeu (${text.length} chars)`);
+                if (normalizedChunk.repaired) {
+                    totalRepairs.push(...normalizedChunk.repairs);
+                }
+
+                // @ts-ignore - access raw response from GenAI SDK
+                const finishReason = result.candidates?.[0]?.finishReason;
+                
+                if (finishReason === 'MAX_TOKENS') {
+                    logger.warn(`[Engineering-BG] ⚠️ Limite MAX_TOKENS atingido. Solicitando continuação (Loop ${loopCount + 1})...`);
+                    currentContents.push({ role: 'model', parts: [{ text: chunkText }] });
+                    currentContents.push({ 
+                        role: 'user', 
+                        parts: [{ text: "🚨 O limite de tamanho da resposta foi atingido e o JSON foi cortado. CONTINUE A EXTRAÇÃO EXATAMENTE a partir do item seguinte ao último que você extraiu (não repita o que já foi extraído). Retorne APENAS o JSON com os itens restantes." }] 
+                    });
+                    loopCount++;
+                } else {
+                    break;
+                }
+            }
         } catch (geminiErr: any) {
             // ── FALLBACK: DeepSeek V4 → gpt-4o-mini → gpt-4o ──
             logger.warn(`[Engineering-BG] ⚠️ Gemini falhou: ${geminiErr.message}. Tentando fallback DeepSeek/OpenAI...`);
@@ -390,23 +418,27 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 userPrompt: userInstruction,
                 pdfParts: ocrContext ? undefined : pdfParts,
                 temperature: 0.1,
-                maxTokens: 65536,
+                maxTokens: 16384,
                 stageName: 'Engineering BG Extraction'
             });
-            text = fallbackResult.text;
+            const chunkText = fallbackResult.text;
             modelUsed = fallbackResult.model;
-            logger.info(`[Engineering-BG] ✅ Fallback ${modelUsed} respondeu (${text.length} chars)`);
+            logger.info(`[Engineering-BG] ✅ Fallback ${modelUsed} respondeu (${chunkText.length} chars)`);
+            
+            const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
+            engItems.push(...normalizedChunk.engineeringItems);
+            if (normalizedChunk.repaired) {
+                totalRepairs.push(...normalizedChunk.repairs);
+            }
         }
 
         clearInterval(progressTimer);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-        const normalizedExtraction = parseAndNormalizeEngineeringExtraction(text);
-        engItems = normalizedExtraction.engineeringItems;
-        if (normalizedExtraction.repaired) {
+        if (totalRepairs.length > 0) {
             logger.info(
-                `[Engineering-BG] 🛠️ Normalização da resposta aplicou ${normalizedExtraction.repairs.length} reparo(s): ` +
-                normalizedExtraction.repairs.slice(0, 12).join(', ')
+                `[Engineering-BG] 🛠️ Normalização aplicou ${totalRepairs.length} reparo(s): ` +
+                totalRepairs.slice(0, 12).join(', ')
             );
         }
         const rawItemCount = engItems.length;
