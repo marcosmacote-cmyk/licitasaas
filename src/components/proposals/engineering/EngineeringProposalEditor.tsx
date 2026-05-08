@@ -1157,6 +1157,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30
     });
 
+    // ── SortableRow extracted outside map() to prevent React remount on every re-render ──
+    // useMemo ensures the component identity is stable across re-renders (setHoveredRowId is stable from useState)
+    const SortableRow = useMemo(() => {
+        const Row = ({ id, children }: { id: string; children: (listeners: any) => React.ReactNode }) => {
+            const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+            const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined, position: 'relative' as const };
+            return (
+                <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}
+                    onMouseEnter={() => setHoveredRowId(id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                >
+                    {children(listeners)}
+                </tr>
+            );
+        };
+        return Row;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
 
@@ -1180,9 +1199,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 ))}
             </div>
 
-            {/* Contextual Toolbar — only visible on Planilha tab */}
+            {/* Contextual Toolbar — sticky below tabs, always visible while scrolling */}
             {activeTab === 'planilha' && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                     {/* ── AI Group (dropdown) ── */}
                     <div style={{ position: 'relative' }}>
                         <button className="btn btn-outline" onClick={() => { setShowAIMenu(!showAIMenu); setShowToolsMenu(false); }}
@@ -1395,22 +1414,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 const IconComp = meta.icon;
 
                                 // ── ETAPA / SUBETAPA ROW (header style) ──
-                                const SortableRow = ({ id, isGroup, meta, hasInsumos, isExpanded, children }: any) => {
-                                    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-                                    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined, position: 'relative' as const };
-                                    return (
-                                        <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}
-                                            onMouseEnter={() => setHoveredRowId(id)}
-                                            onMouseLeave={() => setHoveredRowId(null)}
-                                        >
-                                            {children(listeners)}
-                                        </tr>
-                                    );
-                                };
 
                                 if (isGroup) {
                                     return (
-                                        <SortableRow key={it.id} id={it.id} isGroup={true} meta={meta} hasInsumos={false} isExpanded={false}>
+                                        <SortableRow key={it.id} id={it.id}>
                                             {(listeners: any) => (
                                                 <>
                                                     <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
@@ -1437,7 +1444,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                 <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
                                                                 {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
                                                                     const m = TYPE_META[t];
-                                                                    const handleClick = () => {
+                                                                    const handleClick = (e: React.MouseEvent) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
                                                                         if (t === 'COMPOSICAO' || t === 'INSUMO') {
                                                                             setInsertType(t);
                                                                             setInsertTargetId(it.id);
@@ -1471,7 +1480,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 const rows = [];
 
                                 rows.push(
-                                    <SortableRow key={it.id} id={it.id} isGroup={false} meta={meta} hasInsumos={hasInsumos} isExpanded={isExpanded}>
+                                    <SortableRow key={it.id} id={it.id}>
                                         {(listeners: any) => (
                                             <>
                                                 <td style={{ padding: '6px 12px' }}>
@@ -1552,7 +1561,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                             <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
                                                             {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
                                                                 const m = TYPE_META[t];
-                                                                const handleClick = () => {
+                                                                const handleClick = (e: React.MouseEvent) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
                                                                     if (t === 'COMPOSICAO' || t === 'INSUMO') {
                                                                         setInsertType(t);
                                                                         setInsertTargetId(it.id);
@@ -1668,12 +1679,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     </table>
 
                     {/* ── INSERTION TOOLBAR (OrcaFascio style) ── */}
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', position: 'sticky', bottom: 0, zIndex: 20 }}>
                         <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4 }}>Inserir:</span>
                         {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
                             const m = TYPE_META[type];
                             return (
-                                <button key={type} onClick={() => addTypedItem(type)}
+                                <button key={type} onClick={(e) => { e.preventDefault(); addTypedItem(type); }}
                                     style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${m.color}20`, background: m.bg, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: m.color, transition: 'all 0.15s' }}
                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}18`; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}
@@ -1684,11 +1695,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         })}
                         <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
                         <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={() => { setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
+                            onClick={(e) => { e.preventDefault(); setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
                             <Database size={13} /> Buscar Composição
                         </button>
                         <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={() => { setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
+                            onClick={(e) => { e.preventDefault(); setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
                             <Search size={13} /> Buscar Insumo
                         </button>
                     </div>
