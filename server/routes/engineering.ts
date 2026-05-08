@@ -1439,12 +1439,19 @@ router.post('/ai-populate', async (req: any, res: any) => {
             }
             
             // Priority 0: Quarantined extraction must never autopublish cached items.
+            // FIX VER-04: We still return the items from quarantine, but with source='quality_quarantine'
+            // so the frontend can display them to the user (with a warning) instead of leaving an empty table.
             if (canUseFailedExtractionCache && extractionMeta?.status === 'quality_quarantine') {
-                console.log(`[Engineering AI-Populate] ⚠️ Extração anterior em quarentena. Bloqueando autopreenchimento.`);
+                const quarantinedItems = schemaV2?._engineeringBudgetItemsQuarantine || [];
+                console.log(`[Engineering AI-Populate] ⚠️ Extração anterior em quarentena. Retornando ${quarantinedItems.length} itens para revisão.`);
+                if (quarantinedItems.length > 0) {
+                    postClassifyTypes(quarantinedItems);
+                    await enrichWithOfficialPrices(quarantinedItems, engineeringConfig, { tenantId: req.user?.tenantId });
+                }
                 return res.json({
-                    items: [],
+                    items: quarantinedItems,
                     source: 'quality_quarantine',
-                    count: 0,
+                    count: quarantinedItems.length,
                     validation: schemaV2?._engineeringValidation || null,
                     diagnostic: schemaV2?._engineeringValidation?.issues || [],
                     message: 'A extração foi colocada em quarentena por baixa qualidade. Revise os alertas antes de publicar itens na proposta.'
@@ -1574,11 +1581,16 @@ router.post('/ai-populate', async (req: any, res: any) => {
             }
             
             if (freshMeta?.status === 'quality_quarantine') {
-                console.log(`[Engineering AI-Populate] 🔄 RE-READ: Extração concluída, mas em quarentena. Bloqueando loop infinito.`);
+                const quarantinedFresh = freshSchema?._engineeringBudgetItemsQuarantine || [];
+                console.log(`[Engineering AI-Populate] 🔄 RE-READ: Extração concluída, mas em quarentena. Retornando ${quarantinedFresh.length} itens para revisão.`);
+                if (quarantinedFresh.length > 0) {
+                    postClassifyTypes(quarantinedFresh);
+                    await enrichWithOfficialPrices(quarantinedFresh, engineeringConfig, { tenantId: req.user?.tenantId });
+                }
                 return res.json({
-                    items: [],
+                    items: quarantinedFresh,
                     source: 'quality_quarantine',
-                    count: 0,
+                    count: quarantinedFresh.length,
                     validation: freshSchema?._engineeringValidation || null,
                     diagnostic: freshSchema?._engineeringValidation?.issues || [],
                     message: 'A extração foi colocada em quarentena por baixa qualidade. Revise os alertas antes de publicar itens na proposta.'

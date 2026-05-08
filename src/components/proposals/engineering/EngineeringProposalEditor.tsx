@@ -473,7 +473,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 const comps = mapped.filter((m: EngItem) => m.type === 'COMPOSICAO').length;
                 const insumos = mapped.filter((m: EngItem) => m.type === 'INSUMO').length;
                 const ownWithInsumos = mapped.filter((m: EngItem) => m.insumos && m.insumos.length > 0).length;
-                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens extraídos e salvos: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
+                if (data.source === 'quality_quarantine') {
+                    setExtractionMeta({ status: 'quality_quarantine', validation: data.validation, possibleCauses: data.diagnostic });
+                    shouldAutoClearMessage = false;
+                    setSaveMsg(
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
+                            <AlertTriangle size={14} /> Atenção: Extração concluída, mas com baixa qualidade. Revise os {mapped.length} itens com cuidado.
+                        </span>
+                    );
+                } else {
+                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {mapped.length} itens extraídos e salvos: {etapas} etapas, {subs} subetapas, {comps} composições, {insumos} insumos{ownWithInsumos > 0 ? ` (${ownWithInsumos} com detalhamento)` : ''}</span>);
+                }
             } else if (data.source === 'pending_background_job') {
                 keepExtracting = true;
                 shouldAutoClearMessage = false;
@@ -525,6 +535,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 }
             } else if (data.source === 'quality_quarantine') {
                 setExtractionMeta({ status: 'quality_quarantine', validation: data.validation, possibleCauses: data.diagnostic });
+                shouldAutoClearMessage = false;
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
                         <AlertTriangle size={14} /> Extração em quarentena: qualidade insuficiente para preencher a planilha automaticamente.
@@ -532,6 +543,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 );
             } else if (data.source === 'empty_extraction') {
                 setExtractionMeta({ status: 'empty_extraction', possibleCauses: data.diagnostic });
+                shouldAutoClearMessage = false;
                 setSaveMsg(
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
                         <AlertTriangle size={14} /> IA não encontrou itens. {data.message}
