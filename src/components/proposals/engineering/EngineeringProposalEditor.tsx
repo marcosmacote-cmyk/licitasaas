@@ -1299,8 +1299,23 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>Inserir:</span>
                     {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
                         const m = TYPE_META[type];
+                        const handleClick = (e: React.MouseEvent) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (type === 'COMPOSICAO' || type === 'INSUMO') {
+                                // Open search modal to let user pick from official bases
+                                setInsertType(type);
+                                setInsertTargetId(null);
+                                setSearchQuery('');
+                                setSearchResults([]);
+                                setShowSearch(true);
+                            } else {
+                                // Etapa/Subetapa are structural — add directly
+                                addTypedItem(type);
+                            }
+                        };
                         return (
-                            <button key={type} onClick={(e) => { e.preventDefault(); addTypedItem(type); }}
+                            <button key={type} onClick={handleClick}
                                 style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 'var(--radius-md)', border: `1px solid ${m.color}20`, background: m.bg, cursor: 'pointer', fontSize: '0.73rem', fontWeight: 600, color: m.color, transition: 'all 0.15s', whiteSpace: 'nowrap' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}18`; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}
@@ -1309,15 +1324,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             </button>
                         );
                     })}
-                    <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 2px', flexShrink: 0 }} />
-                    <button className="btn btn-outline" style={{ fontSize: '0.73rem', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}
-                        onClick={(e) => { e.preventDefault(); setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
-                        <Database size={12} /> Buscar Composição
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: '0.73rem', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}
-                        onClick={(e) => { e.preventDefault(); setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
-                        <Search size={12} /> Buscar Insumo
-                    </button>
                 </div>
             )}
 
@@ -1491,6 +1497,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                         if (t === 'COMPOSICAO' || t === 'INSUMO') {
                                                                             setInsertType(t);
                                                                             setInsertTargetId(it.id);
+                                                                            setSearchQuery('');
+                                                                            setSearchResults([]);
                                                                             setShowSearch(true);
                                                                         } else {
                                                                             addTypedItem(t, it.id);
@@ -1608,6 +1616,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                     if (t === 'COMPOSICAO' || t === 'INSUMO') {
                                                                         setInsertType(t);
                                                                         setInsertTargetId(it.id);
+                                                                        setSearchQuery('');
+                                                                        setSearchResults([]);
                                                                         setShowSearch(true);
                                                                     } else {
                                                                         addTypedItem(t, it.id);
