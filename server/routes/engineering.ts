@@ -2113,10 +2113,24 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
             return res.status(500).json({ error: 'IA retornou resposta inválida', details: parseErr.message });
         }
 
-        console.log(`[Engineering AI-Compositions] 📋 ${compositions.length} composições encontradas`);
+        console.log(`[Engineering AI-Compositions] 📋 ${compositions.length} composições encontradas (bruto)`);
+
+        // Filter: only keep compositions whose code matches a candidate from the budget
+        // This prevents the AI from creating compositions for ETAPAs/SUBETAPAs
+        if (budgetItemCodes.length > 0) {
+            const codeSet = new Set(budgetItemCodes.map(c => c.trim().toUpperCase()));
+            const beforeCount = compositions.length;
+            compositions = compositions.filter((c: any) => {
+                const code = String(c.code || '').trim().toUpperCase();
+                return codeSet.has(code);
+            });
+            if (compositions.length < beforeCount) {
+                console.log(`[Engineering AI-Compositions] 🔽 Filtro por código: ${beforeCount} → ${compositions.length} (descartadas ${beforeCount - compositions.length} composições não-candidatas)`);
+            }
+        }
 
         if (compositions.length === 0) {
-            return res.json({ compositions: [], saved: 0, message: 'Nenhuma composição encontrada no documento' });
+            return res.json({ compositions: [], saved: 0, message: 'Nenhuma composição encontrada no documento para os itens solicitados' });
         }
 
         // Store extracted compositions in the database as "PROPRIA"

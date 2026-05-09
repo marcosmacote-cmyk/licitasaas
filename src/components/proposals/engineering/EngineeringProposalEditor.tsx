@@ -62,6 +62,20 @@ const BRAZILIAN_UFS = [
     'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
 ];
 
+/** Computes the subtotal for a grouper (ETAPA/SUBETAPA) by summing
+ * totalPrice of all child items until the next grouper of same/higher depth. */
+function computeGrouperSubtotal(items: EngItem[], grouperIndex: number): number {
+    const grouper = items[grouperIndex];
+    const grouperDepth = getDepth(grouper.itemNumber);
+    let total = 0;
+    for (let i = grouperIndex + 1; i < items.length; i++) {
+        const it = items[i];
+        if (isGrouper(it.type) && getDepth(it.itemNumber) <= grouperDepth) break; // Next grouper of same/higher level
+        if (!isGrouper(it.type)) total += it.totalPrice || 0;
+    }
+    return total;
+}
+
 interface Props {
     proposalId: string;
     biddingId: string;
@@ -1513,13 +1527,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     <IconComp size={11} /> {meta.label}
                                                 </span>
                                             </td>
-                                                    <td colSpan={9} style={{ padding: '8px 12px' }}>
+                                                    <td colSpan={6} style={{ padding: '8px 12px' }}>
                                                         <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
                                                             style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
                                                             onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
                                                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
                                                         />
                                                     </td>
+                                                    {(() => {
+                                                        const grouperIdx = items.indexOf(it);
+                                                        const grouperTotal = computeGrouperSubtotal(items, grouperIdx);
+                                                        return (
+                                                            <>
+                                                                <td colSpan={2} style={{ padding: '6px 8px' }} />
+                                                                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, fontSize: '0.82rem', color: meta.color, whiteSpace: 'nowrap' }}>
+                                                                    {grouperTotal > 0 ? fmt(grouperTotal) : ''}
+                                                                </td>
+                                                            </>
+                                                        );
+                                                    })()}
                                                     <td style={{ padding: '6px 8px', textAlign: 'center', position: 'relative', width: 40 }}>
                                                         {hoveredRowId === it.id && (
                                                             <div style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
