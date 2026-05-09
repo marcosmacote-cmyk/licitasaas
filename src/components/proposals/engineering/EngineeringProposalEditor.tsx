@@ -123,7 +123,8 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
     const perBaseDates: Record<string, string> = config?.dataBases || {}; // { SINAPI: "2025-09", ORSE: "2025-09" }
 
     // Regime de encargos: ONERADO → payrollExemption=false, DESONERADO → payrollExemption=true
-    const regime: string = (config?.regimeOneracao || 'DESONERADO').toUpperCase();
+    // Default matches DEFAULT_ENGINEERING_CONFIG.regimeOneracao = 'ONERADO'
+    const regime: string = (config?.regimeOneracao || 'ONERADO').toUpperCase();
     const targetPayrollExemption = regime === 'DESONERADO'; // true=desonerado, false=onerado
 
     // If no bases configured, show nothing (strict mode)
@@ -943,9 +944,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const selectedBase = bases.find(b => b.id === selectedBaseId);
             const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
             if (effectiveDate) params.append('dataBase', effectiveDate);
+            // Filter by record kind: COMPOSICAO or INSUMO based on insertType
+            params.append('kind', insertType);
             const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`, { headers: hdrs() });
             const data = await res.json();
-            setSearchResults(data.items || []);
+            // Double-safety: client-side filter by recordKind
+            const filtered = (data.items || []).filter((r: any) => r.recordKind === insertType);
+            setSearchResults(filtered);
         } catch { } finally { setIsSearching(false); }
     };
 
@@ -1837,7 +1842,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0 }}>Buscar Insumo/Serviço na Base Oficial</h3>
+                            <h3 style={{ margin: 0 }}>Buscar {insertType === 'COMPOSICAO' ? 'Composição' : 'Insumo'} na Base Oficial</h3>
                             <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
                         {(() => {

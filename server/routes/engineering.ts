@@ -179,6 +179,7 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
         const query = req.query.q as string || '';
         const limit = parseInt(req.query.limit as string) || 50;
         const page = parseInt(req.query.page as string) || 1;
+        const kind = (req.query.kind as string || '').toUpperCase(); // 'COMPOSICAO' | 'INSUMO' | '' (all)
         const skip = (page - 1) * limit;
 
         const whereClause: any = { databaseId };
@@ -195,19 +196,23 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
             ];
         }
 
+        // Filter by kind: only query the relevant table(s)
+        const includeItems = kind !== 'COMPOSICAO'; // include insumos unless specifically asking for compositions
+        const includeComps = kind !== 'INSUMO';      // include compositions unless specifically asking for insumos
+
         const [items, compositions, itemTotal, compositionTotal] = await Promise.all([
-            prisma.engineeringItem.findMany({
+            includeItems ? prisma.engineeringItem.findMany({
                 where: whereClause,
                 take: skip + limit,
                 orderBy: { code: 'asc' }
-            }),
-            prisma.engineeringComposition.findMany({
+            }) : Promise.resolve([]),
+            includeComps ? prisma.engineeringComposition.findMany({
                 where: compWhereClause,
                 take: skip + limit,
                 orderBy: { code: 'asc' }
-            }),
-            prisma.engineeringItem.count({ where: whereClause }),
-            prisma.engineeringComposition.count({ where: compWhereClause })
+            }) : Promise.resolve([]),
+            includeItems ? prisma.engineeringItem.count({ where: whereClause }) : Promise.resolve(0),
+            includeComps ? prisma.engineeringComposition.count({ where: compWhereClause }) : Promise.resolve(0)
         ]);
 
         const combined = [
