@@ -1964,7 +1964,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-extract-compositions', async (req: any, res: any) => {
     try {
-        const { biddingId, engineeringConfig, proposalItems } = req.body;
+        const { biddingId, engineeringConfig, proposalItems, allContext } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId obrigatório' });
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -1986,18 +1986,25 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
 3. Se a base não estiver na lista, ou for uma composição "P" (Própria), categorize com código "N/A" e informe os insumos.`;
         }
 
-        // Build a list of items from the proposal so the AI uses their exact codes
+        // Build context: items that NEED composition extraction
         let itemsContext = '';
         const budgetItemCodes: string[] = [];
         if (Array.isArray(proposalItems) && proposalItems.length > 0) {
-            const compositionItems = proposalItems.filter((it: any) => it.type === 'COMPOSICAO' || it.type === 'INSUMO');
-            if (compositionItems.length > 0) {
-                itemsContext = '\n\n═══════════════════════════════════════════════════════\nITENS DA PLANILHA ORÇAMENTÁRIA (use ESTES códigos nas composições)\n═══════════════════════════════════════════════════════\n';
-                itemsContext += compositionItems.map((it: any) => {
-                    budgetItemCodes.push(it.code || '');
-                    return `- Código: ${it.code || 'N/A'} | Descrição: ${it.description} | Unidade: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}`;
-                }).join('\n');
-                itemsContext += '\n\nIMPORTANTE: Use os códigos EXATOS listados acima (ex: CP-01, CP-02) como "code" de cada composição no JSON de saída. Extraia a composição analítica de CADA item listado acima.';
+            itemsContext = '\n\n═══════════════════════════════════════════════════════\n🎯 ITENS QUE PRECISAM DE COMPOSIÇÃO ANALÍTICA (EXTRAIA PARA ESTES)\n═══════════════════════════════════════════════════════\n';
+            itemsContext += proposalItems.map((it: any) => {
+                budgetItemCodes.push(it.code || '');
+                return `- Código: ${it.code || 'N/A'} | Descrição: ${it.description} | Unidade: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1} | Base: ${it.sourceName || 'PROPRIA'}`;
+            }).join('\n');
+            itemsContext += `\n\nIMPORTANTE: Use os códigos EXATOS listados acima como "code" de cada composição no JSON de saída. Extraia a composição analítica (materiais, mão de obra, equipamentos, coeficientes) de CADA item listado acima.`;
+        }
+
+        // Add context of items that ALREADY have compositions (for the AI to avoid duplicating)
+        if (Array.isArray(allContext) && allContext.length > 0) {
+            const withComp = allContext.filter((it: any) => it.hasComposition);
+            if (withComp.length > 0) {
+                itemsContext += '\n\n═══════════════════════════════════════════════════════\n✅ ITENS QUE JÁ POSSUEM COMPOSIÇÃO (NÃO EXTRAIR)\n═══════════════════════════════════════════════════════\n';
+                itemsContext += withComp.map((it: any) => `- ${it.code}: ${it.description} (${it.sourceName})`).join('\n');
+                itemsContext += '\n\n⚠️ NÃO gere composições para estes itens acima. Foque APENAS nos itens marcados com 🎯.';
             }
         }
 

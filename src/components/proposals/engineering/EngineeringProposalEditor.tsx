@@ -699,22 +699,36 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // AI composition extraction
     const [isExtractingComps, setIsExtractingComps] = useState(false);
     const handleExtractCompositions = async () => {
+        // Identify compositions WITHOUT analytical drill-down (no insumos loaded)
+        const candidates = items.filter(it =>
+            it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0)
+        );
+        if (candidates.length === 0) {
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> Todas as composições já possuem insumos detalhados</span>);
+            setTimeout(() => setSaveMsg(null), 5000);
+            return;
+        }
         setIsExtractingComps(true);
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições do projeto básico via IA...</span>);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições próprias ({candidates.length} itens sem insumos) via IA...</span>);
         try {
-            // FIX #2: Only send PROPRIA items — compositions from official bases (SINAPI/SEINFRA) are already in the Hub
-            const proposalItems = items.filter(it => 
-                (it.type === 'COMPOSICAO' || it.type === 'INSUMO') &&
-                (!it.sourceName || it.sourceName === 'PROPRIA' || it.sourceName === 'N/A')
-            ).map(it => ({
-                code: it.code, description: it.description, unit: it.unit, quantity: it.quantity, type: it.type,
+            // Send candidates (items needing composition) AND all items as context
+            const proposalItems = candidates.map(it => ({
+                code: it.code, description: it.description, unit: it.unit,
+                quantity: it.quantity, type: it.type, sourceName: it.sourceName || 'PROPRIA',
+            }));
+            const allContext = items.filter(it => it.type === 'COMPOSICAO' || it.type === 'INSUMO').map(it => ({
+                code: it.code, description: it.description, unit: it.unit,
+                type: it.type, sourceName: it.sourceName || '',
+                hasComposition: !!(it.insumos && it.insumos.length > 0),
             }));
             const res = await fetch('/api/engineering/ai-extract-compositions', {
-                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId, engineeringConfig: dashConfig, proposalItems })
+                method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ biddingId, engineeringConfig: dashConfig, proposalItems, allContext })
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
-            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {data.saved || 0} composições extraídas e salvas na base PRÓPRIA</span>);
+            const savedCount = data.saved || 0;
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {savedCount} composições próprias extraídas e salvas</span>);
 
             // Reload bases list (PROPRIA may have been created)
             try {
@@ -725,18 +739,40 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 }
             } catch { /* ignore */ }
 
-            // Re-enrich items to pick up the newly saved PROPRIA compositions
-            if (items.length > 0 && data.saved > 0) {
-                try {
-                    const enrichRes = await fetch('/api/engineering/ai-populate', {
-                        method: 'POST', headers: hdrs(),
-                        body: JSON.stringify({ biddingId, engineeringConfig })
-                    });
-                    if (enrichRes.ok) {
-                        // Silently update priceAudit without replacing items
-                        // (user may have manual edits)
+            // Inject extracted compositions back into UI items
+            if (savedCount > 0 && Array.isArray(data.compositions)) {
+                const compMap = new Map<string, any[]>();
+                for (const comp of data.compositions) {
+                    if (comp.code && comp.groups) {
+                        const insumos: any[] = [];
+                        for (const [groupKey, groupItems] of Object.entries(comp.groups || {})) {
+                            if (!Array.isArray(groupItems)) continue;
+                            for (const gi of groupItems) {
+                                insumos.push({
+                                    code: gi.code || '',
+                                    description: gi.description || '',
+                                    unit: gi.unit || 'UN',
+                                    type: groupKey,
+                                    coefficient: gi.coefficient || 0,
+                                    unitPrice: gi.unitPrice || 0,
+                                    totalPrice: (gi.coefficient || 0) * (gi.unitPrice || 0),
+                                });
+                            }
+                        }
+                        compMap.set(String(comp.code).trim().toUpperCase(), insumos);
                     }
-                } catch { /* enrichment is best-effort */ }
+                }
+                // Update items in state to include the extracted insumos
+                setItems(prev => prev.map(it => {
+                    if (it.type !== 'COMPOSICAO' || (it.insumos && it.insumos.length > 0)) return it;
+                    const key = String(it.code || '').trim().toUpperCase();
+                    const extracted = compMap.get(key);
+                    if (extracted && extracted.length > 0) {
+                        return { ...it, insumos: extracted };
+                    }
+                    return it;
+                }));
+                setHasUnsavedChanges(true);
             }
         } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
         finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(null), 8000); }
@@ -1237,7 +1273,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     onMouseEnter={e => { if (!isExtractingComps) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
-                                    <div><div>Extrair Composições (CPU)</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Gera composições detalhadas na base própria</div></div>
+                                    <div><div>Extrair Composições (CPU)</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Gera composições analíticas para itens sem insumos</div></div>
                                 </button>
                             </div>
                         </>)}
