@@ -946,12 +946,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             if (effectiveDate) params.append('dataBase', effectiveDate);
             // Filter by record kind: COMPOSICAO or INSUMO based on insertType
             params.append('kind', insertType);
-            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`, { headers: hdrs() });
+            const url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
+            const res = await fetch(url, { headers: hdrs() });
             const data = await res.json();
-            // Double-safety: client-side filter by recordKind
-            const filtered = (data.items || []).filter((r: any) => r.recordKind === insertType);
-            setSearchResults(filtered);
-        } catch { } finally { setIsSearching(false); }
+            setSearchResults(data.items || []);
+        } catch (err) { console.error('[Search] Error:', err); } finally { setIsSearching(false); }
     };
 
     const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
@@ -1857,10 +1856,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         </div>
                         {(() => {
                             const { filtered, warnings } = filterConfigBasesWithWarnings(bases, dashConfig);
+                            // Auto-sync selectedBaseId to first filtered base if current selection is not in the list
+                            const isCurrentBaseInFiltered = filtered.some((b: any) => b.id === selectedBaseId);
+                            if (!isCurrentBaseInFiltered && filtered.length > 0) {
+                                // Schedule state update for next tick to avoid setState during render
+                                setTimeout(() => setSelectedBaseId(filtered[0].id), 0);
+                            }
                             return (
                                 <>
                                     <div style={{ display: 'flex', gap: 8 }}>
-                                        <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                        <select className="form-select" value={isCurrentBaseInFiltered ? selectedBaseId : (filtered[0]?.id || '')} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
                                             {filtered.length === 0
                                                 ? <option value="">Nenhuma base configurada</option>
                                                 : filtered.map(b => {
