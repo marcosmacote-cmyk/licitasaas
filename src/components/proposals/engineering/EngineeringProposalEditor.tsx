@@ -122,6 +122,10 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
     const globalDate: string = config?.dataBase || ''; // "2025-09"
     const perBaseDates: Record<string, string> = config?.dataBases || {}; // { SINAPI: "2025-09", ORSE: "2025-09" }
 
+    // Regime de encargos: ONERADO → payrollExemption=false, DESONERADO → payrollExemption=true
+    const regime: string = (config?.regimeOneracao || 'DESONERADO').toUpperCase();
+    const targetPayrollExemption = regime === 'DESONERADO'; // true=desonerado, false=onerado
+
     // If no bases configured, show nothing (strict mode)
     if (allowed.length === 0) {
         return { filtered: allBases, warnings: [] };
@@ -155,7 +159,7 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
-        // Find matching bases: name + UF + date
+        // Find matching bases: name + UF + date + REGIME (4-way compliance)
         const candidates = allBases.filter(b => {
             // Must match base name
             if (!b.name.toUpperCase().includes(upperName)) return false;
@@ -164,6 +168,11 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             // Must match date if configured
             if (targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+            }
+            // Must match regime de encargos (payrollExemption)
+            // Only filter if the base has the field defined (PROPRIA bases may not have it)
+            if (typeof b.payrollExemption === 'boolean') {
+                if (b.payrollExemption !== targetPayrollExemption) return false;
             }
             return true;
         });
@@ -1277,6 +1286,33 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             </div>
                         </>)}
                     </div>
+
+                    {/* ── Separator ── */}
+                    <div style={{ width: 1, height: 28, background: 'var(--color-border)', margin: '0 4px', flexShrink: 0 }} />
+
+                    {/* ── INSERTION TOOLBAR (merged into sticky bar) ── */}
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>Inserir:</span>
+                    {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
+                        const m = TYPE_META[type];
+                        return (
+                            <button key={type} onClick={(e) => { e.preventDefault(); addTypedItem(type); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 'var(--radius-md)', border: `1px solid ${m.color}20`, background: m.bg, cursor: 'pointer', fontSize: '0.73rem', fontWeight: 600, color: m.color, transition: 'all 0.15s', whiteSpace: 'nowrap' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}18`; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}
+                            >
+                                <Icon size={12} /> {m.label}
+                            </button>
+                        );
+                    })}
+                    <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 2px', flexShrink: 0 }} />
+                    <button className="btn btn-outline" style={{ fontSize: '0.73rem', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.preventDefault(); setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
+                        <Database size={12} /> Buscar Composição
+                    </button>
+                    <button className="btn btn-outline" style={{ fontSize: '0.73rem', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.preventDefault(); setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
+                        <Search size={12} /> Buscar Insumo
+                    </button>
                 </div>
             )}
 
@@ -1678,31 +1714,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         </DndContext>
                     </table>
 
-                    {/* ── INSERTION TOOLBAR (OrcaFascio style) ── */}
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', position: 'sticky', bottom: 0, zIndex: 20 }}>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4 }}>Inserir:</span>
-                        {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
-                            const m = TYPE_META[type];
-                            return (
-                                <button key={type} onClick={(e) => { e.preventDefault(); addTypedItem(type); }}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${m.color}20`, background: m.bg, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: m.color, transition: 'all 0.15s' }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}18`; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}
-                                >
-                                    <Icon size={13} /> {m.label}
-                                </button>
-                            );
-                        })}
-                        <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
-                        <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={(e) => { e.preventDefault(); setInsertType('COMPOSICAO'); setInsertTargetId(null); setShowSearch(true); }}>
-                            <Database size={13} /> Buscar Composição
-                        </button>
-                        <button className="btn btn-outline" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-                            onClick={(e) => { e.preventDefault(); setInsertType('INSUMO'); setInsertTargetId(null); setShowSearch(true); }}>
-                            <Search size={13} /> Buscar Insumo
-                        </button>
-                    </div>
+                    {/* Insertion toolbar moved to the sticky contextual toolbar above */}
                 </div>
 
                 {/* Sidebar: Config + BDI + Totals */}
