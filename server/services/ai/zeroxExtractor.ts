@@ -148,6 +148,8 @@ export interface ZeroxConfig {
     pagesToConvert?: number | number[];
     /** Temperature for the vision model (default: 0.1) */
     temperature?: number;
+    /** Timeout in ms (default: 30000, use 180000 for scanned PDFs) */
+    timeoutMs?: number;
 }
 
 /**
@@ -236,11 +238,9 @@ export async function extractMarkdownFromPdf(
         logger.info(`[ZeroxExtractor] ⚙️ Concurrency: ${effectiveConcurrency} (estimated ~${estimatedPages} pages)`);
 
         // 4. Call Zerox with Gemini Vision + TIMEOUT
-        // V5.2: Hard timeout of 30s. Production data proves inlineData is SUPERIOR when
-        // Gemini Vision is under load (59 items/100% score vs 29 items/70% with Zerox
-        // that lost pages to 503s). 30s lets Zerox work when API is healthy, but fails
-        // fast to inlineData when it's not — best of both worlds.
-        const ZEROX_TIMEOUT_MS = 30_000;
+        // V5.2: Configurable timeout. For scanned PDFs (primary OCR), caller should
+        // set timeoutMs=180000. For text PDFs (fallback OCR), default 30s is fine.
+        const ZEROX_TIMEOUT_MS = config?.timeoutMs || 30_000;
         const zeroxPromise = zeroxFn!({
             filePath: tempPath,
             modelProvider: 'GOOGLE',

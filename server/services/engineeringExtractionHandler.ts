@@ -298,6 +298,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         try {
             const available = await isZeroxAvailable();
             if (available) {
+                const hasScannedPdfs = zeroxFallbackCandidates.some(c => c.reason === 'scanned_pdf_no_text_layer');
                 const zeroxResult = await extractMarkdownFromMultiplePdfs(
                     zeroxFallbackCandidates.map(candidate => ({
                         buffer: candidate.buffer,
@@ -307,6 +308,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         concurrency: 2,
                         maintainFormat: true,
                         temperature: 0.1,
+                        timeoutMs: hasScannedPdfs ? 180_000 : 30_000, // 3min for scanned, 30s for text
                     }
                 );
 
@@ -372,7 +374,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // Progress ticker (update every 30s while Gemini works)
     let progressPercent = 30;
     const progressTimer = setInterval(async () => {
-        progressPercent = Math.min(progressPercent + 5, 85);
+        progressPercent = Math.min(progressPercent + 3, 85);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
         await updateJobProgress(job.id, tenantId, {
             progress: progressPercent,
@@ -386,130 +388,248 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
     try {
         const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}`;
-        let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
-        let loopCount = 0;
         let totalRepairs: string[] = [];
         // Track seen items across chunks to deduplicate
         const seenItemKeys = new Set<string>();
 
-        // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
-        try {
-            while (loopCount < 8) {
-                const result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
-                    contents: currentContents,
-                    config: {
-                        systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                        temperature: 0.1,
-                        maxOutputTokens: 65536,
-                        responseMimeType: 'application/json'
-                    }
-                }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
-                
-                const chunkText = result.text || '';
-                logger.info(`[Engineering-BG] ✅ Gemini respondeu (Chunk ${loopCount + 1}, ${chunkText.length} chars)`);
+        // ════════════════════════════════════════════════════════════════
+        // STRATEGY: Page-batch extraction for large/scanned PDFs
+        // Instead of sending ALL pages at once (overwhelming context),
+        // split into batches of PAGES_PER_BATCH pages and merge results.
+        // ════════════════════════════════════════════════════════════════
+        const PAGES_PER_BATCH = 8;
+        const totalPdfSizeKB = rawPdfBuffers.reduce((sum, p) => sum + p.buffer.length / 1024, 0);
+        const isLargeScannedPdf = zeroxFallbackCandidates.some(c => c.reason === 'scanned_pdf_no_text_layer');
+        const needsBatchExtraction = isLargeScannedPdf && rawPdfBuffers.length > 0 && totalPdfSizeKB > 3000;
 
-                const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
-                
-                // ── Inter-chunk deduplication ──
-                // When resuming extraction, the AI may repeat the last few items.
-                // We deduplicate by item number + description hash to avoid duplicates.
-                let newItemsInChunk = 0;
-                for (const item of normalizedChunk.engineeringItems) {
-                    const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
-                    if (!seenItemKeys.has(key)) {
-                        seenItemKeys.add(key);
-                        engItems.push(item);
-                        newItemsInChunk++;
+        if (needsBatchExtraction) {
+            // ── BATCH MODE: Split PDF into page batches ──
+            logger.info(
+                `[Engineering-BG] 📦 BATCH MODE: PDFs escaneados detectados (${(totalPdfSizeKB / 1024).toFixed(1)}MB). ` +
+                `Dividindo em lotes de ${PAGES_PER_BATCH} páginas para extração individual.`
+            );
+
+            const { PDFDocument } = require('pdf-lib');
+            let batchIndex = 0;
+            let totalBatches = 0;
+
+            // First, count total batches for progress tracking
+            for (const { buffer } of rawPdfBuffers) {
+                try {
+                    const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+                    totalBatches += Math.ceil(srcDoc.getPageCount() / PAGES_PER_BATCH);
+                } catch { totalBatches += 1; }
+            }
+
+            await updateJobProgress(job.id, tenantId, {
+                progress: 30,
+                progressMsg: `Extraindo planilha em ${totalBatches} lotes (PDF escaneado)...`
+            }).catch(() => {});
+
+            for (const { buffer, source } of rawPdfBuffers) {
+                let srcDoc: any;
+                try {
+                    srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+                } catch (loadErr: any) {
+                    logger.warn(`[Engineering-BG] ⚠️ Falha ao carregar PDF para batch: ${loadErr.message}`);
+                    continue;
+                }
+
+                const totalPages = srcDoc.getPageCount();
+                const batchCount = Math.ceil(totalPages / PAGES_PER_BATCH);
+
+                logger.info(`[Engineering-BG] 📄 "${source}": ${totalPages} páginas → ${batchCount} lotes de ${PAGES_PER_BATCH} pgs`);
+
+                for (let b = 0; b < batchCount; b++) {
+                    const startPage = b * PAGES_PER_BATCH;
+                    const endPage = Math.min(startPage + PAGES_PER_BATCH, totalPages);
+                    const pageIndices = Array.from({ length: endPage - startPage }, (_, i) => startPage + i);
+
+                    batchIndex++;
+                    const batchLabel = `Lote ${batchIndex}/${totalBatches} (pgs ${startPage + 1}-${endPage})`;
+
+                    try {
+                        // Extract batch pages into a small PDF
+                        const batchDoc = await PDFDocument.create();
+                        const copiedPages = await batchDoc.copyPages(srcDoc, pageIndices);
+                        for (const page of copiedPages) batchDoc.addPage(page);
+                        const batchPdfBytes = await batchDoc.save();
+                        const batchBuffer = Buffer.from(batchPdfBytes);
+
+                        logger.info(`[Engineering-BG] 📦 ${batchLabel}: ${(batchBuffer.length / 1024).toFixed(0)}KB`);
+
+                        await updateJobProgress(job.id, tenantId, {
+                            progress: Math.min(30 + Math.round((batchIndex / totalBatches) * 50), 80),
+                            progressMsg: `${batchLabel} — ${engItems.length} itens extraídos até agora...`
+                        }).catch(() => {});
+
+                        // Call Gemini with just this batch
+                        const batchPart = { inlineData: { data: batchBuffer.toString('base64'), mimeType: 'application/pdf' } };
+                        const batchInstruction = 
+                            `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}\n\n` +
+                            `🚨 CONTEXTO: Este é o lote ${batchIndex} de ${totalBatches} (páginas ${startPage + 1} a ${endPage} do documento "${source}"). ` +
+                            `Extraia TODOS os itens da planilha orçamentária presentes NESTAS páginas. ` +
+                            `Inclua ETAPAs, SUBETAPAs e todas as COMPOSIÇÕEs com seus códigos, quantidades e preços.` +
+                            (ocrContext ? `\n\n${ocrContext}` : '');
+
+                        const batchResult = await callGeminiWithRetry(ai.models, {
+                            model: 'gemini-2.5-flash',
+                            contents: [{ role: 'user', parts: [batchPart, { text: batchInstruction }] }],
+                            config: {
+                                systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                                temperature: 0.1,
+                                maxOutputTokens: 65536,
+                                responseMimeType: 'application/json'
+                            }
+                        }, 2, { tenantId, operation: 'analysis', metadata: { stage: `engineering_batch_${batchIndex}` } });
+
+                        const batchText = batchResult.text || '';
+                        const normalizedBatch = parseAndNormalizeEngineeringExtraction(batchText);
+
+                        // Deduplicate across batches
+                        let newItems = 0;
+                        for (const item of normalizedBatch.engineeringItems) {
+                            const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
+                            if (!seenItemKeys.has(key)) {
+                                seenItemKeys.add(key);
+                                engItems.push(item);
+                                newItems++;
+                            }
+                        }
+
+                        if (normalizedBatch.repaired) totalRepairs.push(...normalizedBatch.repairs);
+
+                        logger.info(
+                            `[Engineering-BG] ✅ ${batchLabel}: ${normalizedBatch.engineeringItems.length} itens (${newItems} novos). Total: ${engItems.length}`
+                        );
+
+                    } catch (batchErr: any) {
+                        logger.warn(`[Engineering-BG] ⚠️ ${batchLabel} falhou: ${batchErr.message}. Continuando próximo lote...`);
+                    }
+                }
+            }
+
+            logger.info(`[Engineering-BG] 📦 BATCH MODE completo: ${engItems.length} itens extraídos em ${totalBatches} lotes`);
+
+        } else {
+            // ── STANDARD MODE: Single call with all PDFs ──
+            let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
+            let loopCount = 0;
+
+            // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
+            try {
+                while (loopCount < 8) {
+                    const result = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: currentContents,
+                        config: {
+                            systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                            temperature: 0.1,
+                            maxOutputTokens: 65536,
+                            responseMimeType: 'application/json'
+                        }
+                    }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
+                    
+                    const chunkText = result.text || '';
+                    logger.info(`[Engineering-BG] ✅ Gemini respondeu (Chunk ${loopCount + 1}, ${chunkText.length} chars)`);
+
+                    const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
+                    
+                    // ── Inter-chunk deduplication ──
+                    let newItemsInChunk = 0;
+                    for (const item of normalizedChunk.engineeringItems) {
+                        const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
+                        if (!seenItemKeys.has(key)) {
+                            seenItemKeys.add(key);
+                            engItems.push(item);
+                            newItemsInChunk++;
+                        }
+                    }
+                    
+                    if (normalizedChunk.repaired) {
+                        totalRepairs.push(...normalizedChunk.repairs);
+                    }
+
+                    if (loopCount > 0) {
+                        logger.info(
+                            `[Engineering-BG] 📊 Chunk ${loopCount + 1}: ${normalizedChunk.engineeringItems.length} itens (${newItemsInChunk} novos). Total: ${engItems.length}`
+                        );
+                    }
+
+                    // @ts-ignore - access raw response from GenAI SDK
+                    const finishReason = result.candidates?.[0]?.finishReason;
+                    
+                    if (finishReason === 'MAX_TOKENS') {
+                        const lastItems = engItems.slice(-3);
+                        const lastItemsSummary = lastItems
+                            .map(it => `${it.item}: ${String(it.description || '').substring(0, 50)}`)
+                            .join(', ');
+                        
+                        logger.warn(
+                            `[Engineering-BG] ⚠️ MAX_TOKENS atingido (${engItems.length} itens até agora). ` +
+                            `Continuação a partir de "${lastItems[lastItems.length - 1]?.item || '?'}" (Loop ${loopCount + 1})...`
+                        );
+
+                        await updateJobProgress(job.id, tenantId, {
+                            progress: Math.min(30 + loopCount * 8, 75),
+                            progressMsg: `Extraindo planilha (${engItems.length} itens extraídos, continuando...)`,
+                        }).catch(() => {});
+
+                        currentContents.push({ role: 'model', parts: [{ text: chunkText }] });
+                        currentContents.push({ 
+                            role: 'user', 
+                            parts: [{ text: 
+                                `🚨 O limite de tokens da resposta foi atingido e o JSON foi cortado.\n\n` +
+                                `CONTEXTO: Você já extraiu ${engItems.length} itens até agora. ` +
+                                `Os ÚLTIMOS itens extraídos foram: [${lastItemsSummary}].\n\n` +
+                                `INSTRUÇÕES DE CONTINUAÇÃO:\n` +
+                                `1. CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItems[lastItems.length - 1]?.item || '?'}" na planilha.\n` +
+                                `2. NÃO repita itens que já foram extraídos.\n` +
+                                `3. Retorne APENAS um JSON {"engineeringItems": [...]} com os itens RESTANTES.\n` +
+                                `4. Continue usando as chaves curtas (i, t, s, c, d, u, q, uc, up, tp).\n` +
+                                `5. Extraia ATÉ O FINAL da planilha. Se ainda restar muita coisa, extraia o máximo possível.\n` +
+                                `6. IMPORTANTE: Continue respeitando a hierarquia (ETAPAs e SUBETAPAs).`
+                            }] 
+                        });
+                        loopCount++;
+                    } else {
+                        if (loopCount === 0 && engItems.length > 0) {
+                            logger.info(`[Engineering-BG] ✅ Extração completa em 1 chamada: ${engItems.length} itens`);
+                        }
+                        break;
                     }
                 }
                 
+                if (loopCount >= 8) {
+                    logger.warn(`[Engineering-BG] ⚠️ Loop de continuação atingiu o limite de 8 iterações com ${engItems.length} itens extraídos.`);
+                }
+            } catch (geminiErr: any) {
+                // ── FALLBACK: DeepSeek V4 → gpt-4o-mini → gpt-4o ──
+                logger.warn(`[Engineering-BG] ⚠️ Gemini falhou: ${geminiErr.message}. Tentando fallback DeepSeek/OpenAI...`);
+                await updateJobProgress(job.id, tenantId, {
+                    progress: progressPercent,
+                    progressMsg: 'Gemini indisponível — usando modelo alternativo...'
+                }).catch(() => {});
+
+                const fallbackResult = await fallbackToOpenAiV2({
+                    systemPrompt: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                    userPrompt: userInstruction,
+                    pdfParts: ocrContext ? undefined : pdfParts,
+                    temperature: 0.1,
+                    maxTokens: 16384,
+                    stageName: 'Engineering BG Extraction'
+                });
+                const chunkText = fallbackResult.text;
+                modelUsed = fallbackResult.model;
+                logger.info(`[Engineering-BG] ✅ Fallback ${modelUsed} respondeu (${chunkText.length} chars)`);
+                
+                const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
+                engItems.push(...normalizedChunk.engineeringItems);
                 if (normalizedChunk.repaired) {
                     totalRepairs.push(...normalizedChunk.repairs);
                 }
-
-                if (loopCount > 0) {
-                    logger.info(
-                        `[Engineering-BG] 📊 Chunk ${loopCount + 1}: ${normalizedChunk.engineeringItems.length} itens (${newItemsInChunk} novos, ${normalizedChunk.engineeringItems.length - newItemsInChunk} duplicados removidos). Total acumulado: ${engItems.length}`
-                    );
-                }
-
-                // @ts-ignore - access raw response from GenAI SDK
-                const finishReason = result.candidates?.[0]?.finishReason;
-                
-                if (finishReason === 'MAX_TOKENS') {
-                    // Build a smart continuation prompt with the last extracted items for context
-                    const lastItems = engItems.slice(-3);
-                    const lastItemsSummary = lastItems
-                        .map(it => `${it.item}: ${String(it.description || '').substring(0, 50)}`)
-                        .join(', ');
-                    
-                    logger.warn(
-                        `[Engineering-BG] ⚠️ MAX_TOKENS atingido (${engItems.length} itens até agora). ` +
-                        `Solicitando continuação a partir de "${lastItems[lastItems.length - 1]?.item || '?'}" (Loop ${loopCount + 1})...`
-                    );
-
-                    // Update progress with real item count
-                    await updateJobProgress(job.id, tenantId, {
-                        progress: Math.min(30 + loopCount * 8, 75),
-                        progressMsg: `Extraindo planilha (${engItems.length} itens extraídos, continuando...)`,
-                    }).catch(() => {});
-
-                    currentContents.push({ role: 'model', parts: [{ text: chunkText }] });
-                    currentContents.push({ 
-                        role: 'user', 
-                        parts: [{ text: 
-                            `🚨 O limite de tokens da resposta foi atingido e o JSON foi cortado.\n\n` +
-                            `CONTEXTO: Você já extraiu ${engItems.length} itens até agora. ` +
-                            `Os ÚLTIMOS itens extraídos foram: [${lastItemsSummary}].\n\n` +
-                            `INSTRUÇÕES DE CONTINUAÇÃO:\n` +
-                            `1. CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItems[lastItems.length - 1]?.item || '?'}" na planilha.\n` +
-                            `2. NÃO repita itens que já foram extraídos.\n` +
-                            `3. Retorne APENAS um JSON {"engineeringItems": [...]} com os itens RESTANTES.\n` +
-                            `4. Continue usando as chaves curtas (i, t, s, c, d, u, q, uc, up, tp).\n` +
-                            `5. Extraia ATÉ O FINAL da planilha. Se ainda restar muita coisa, extraia o máximo possível.\n` +
-                            `6. IMPORTANTE: Continue respeitando a hierarquia (ETAPAs e SUBETAPAs).`
-                        }] 
-                    });
-                    loopCount++;
-                } else {
-                    // Normal completion or STOP — check if we might be missing items
-                    if (loopCount === 0 && engItems.length > 0) {
-                        logger.info(`[Engineering-BG] ✅ Extração completa em 1 chamada: ${engItems.length} itens`);
-                    }
-                    break;
-                }
             }
-            
-            if (loopCount >= 8) {
-                logger.warn(`[Engineering-BG] ⚠️ Loop de continuação atingiu o limite de 8 iterações com ${engItems.length} itens extraídos.`);
-            }
-        } catch (geminiErr: any) {
-            // ── FALLBACK: DeepSeek V4 → gpt-4o-mini → gpt-4o ──
-            logger.warn(`[Engineering-BG] ⚠️ Gemini falhou: ${geminiErr.message}. Tentando fallback DeepSeek/OpenAI...`);
-            await updateJobProgress(job.id, tenantId, {
-                progress: progressPercent,
-                progressMsg: 'Gemini indisponível — usando modelo alternativo...'
-            }).catch(() => {});
-
-            const fallbackResult = await fallbackToOpenAiV2({
-                systemPrompt: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                userPrompt: userInstruction,
-                pdfParts: ocrContext ? undefined : pdfParts,
-                temperature: 0.1,
-                maxTokens: 16384,
-                stageName: 'Engineering BG Extraction'
-            });
-            const chunkText = fallbackResult.text;
-            modelUsed = fallbackResult.model;
-            logger.info(`[Engineering-BG] ✅ Fallback ${modelUsed} respondeu (${chunkText.length} chars)`);
-            
-            const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
-            engItems.push(...normalizedChunk.engineeringItems);
-            if (normalizedChunk.repaired) {
-                totalRepairs.push(...normalizedChunk.repairs);
-            }
-        }
+        } // end else (standard mode)
 
         clearInterval(progressTimer);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
