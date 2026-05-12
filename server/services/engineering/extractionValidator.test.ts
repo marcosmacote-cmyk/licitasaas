@@ -131,4 +131,61 @@ describe('screenEngineeringItems', () => {
         expect(report.rowCoverage?.coveragePercent).toBe(45);
         expect(report.issues.some(issue => issue.code === 'EV14' && issue.severity === 'error')).toBe(true);
     });
+
+    it('forces quarantine for visual-batch hallucination pattern', () => {
+        const repeatedBlock = Array.from({ length: 5 }).flatMap((_, blockIndex) => [
+            {
+                item: '1',
+                type: 'ETAPA',
+                description: blockIndex === 0 ? 'CONSTRUCAO E REVITALIZACAO DE PRACAS' : '',
+                quantity: 0,
+                unitCost: 0,
+            },
+            {
+                item: '1.1',
+                type: 'SUBETAPA',
+                description: blockIndex === 0 ? 'PLACA DA OBRA' : '',
+                quantity: 0,
+                unitCost: 0,
+            },
+            {
+                item: '1.1.1',
+                type: 'COMPOSICAO',
+                sourceName: 'SEINFRA',
+                code: 'C1937',
+                description: 'PLACAS PADRAO DE OBRA',
+                unit: 'M2',
+                quantity: 12,
+                unitCost: blockIndex === 0 ? 183.41 : 0,
+                totalPrice: blockIndex === 0 ? 2200.92 : 0,
+            },
+            {
+                item: '1.2',
+                type: 'SUBETAPA',
+                description: blockIndex === 0 ? 'ADMINISTRACAO LOCAL' : '',
+                quantity: 0,
+                unitCost: 0,
+            },
+            {
+                item: '1.2.1',
+                type: 'COMPOSICAO',
+                sourceName: 'PROPRIA',
+                code: 'ADM-PRAC',
+                description: 'ADMINISTRACAO LOCAL - PRACAS',
+                unit: '%',
+                quantity: 100,
+                unitCost: blockIndex === 0 ? 370.5 : 0,
+                totalPrice: blockIndex === 0 ? 37050 : 0,
+            },
+        ]);
+
+        const screening = screenEngineeringItems(repeatedBlock);
+        const report = validateEngineeringExtraction(screening.acceptedItems, null, screening);
+
+        expect(report.publishable).toBe(false);
+        expect(report.qualityScore).toBeLessThan(65);
+        expect(report.issues.some(issue => issue.code === 'EV05_ITEM_NUMBER' && issue.severity === 'error')).toBe(true);
+        expect(report.issues.some(issue => issue.code === 'EV06_BLANK_ROWS' && issue.severity === 'error')).toBe(true);
+        expect(report.issues.some(issue => issue.code === 'EV06_ZERO_VALUES' && issue.severity === 'error')).toBe(true);
+    });
 });

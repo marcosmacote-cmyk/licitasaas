@@ -324,6 +324,7 @@ export function validateEngineeringExtraction(
     const composicoes = items.filter(it => it.type === 'COMPOSICAO');
     const insumos = items.filter(it => it.type === 'INSUMO');
     const leafItems = [...composicoes, ...insumos]; // items with prices
+    const hasManyRows = items.length >= 15;
 
     // ── Check 1: Minimum items ──
     if (items.length < 5) {
@@ -350,6 +351,26 @@ export function validateEngineeringExtraction(
             affectedItems: screening.rejectedItems.map(it => it.item).filter(Boolean),
         });
         score -= Math.min(screening.rejectedItems.length, 8);
+    }
+
+    // ── Check 1.5: Catastrophic blank rows ──
+    // Real budget groupers and composition rows must carry descriptions. A high
+    // blank-row ratio is a strong signal that the model is echoing structure
+    // without actually reading the sheet.
+    const blankDescriptionItems = items.filter(it => String(it.description || '').trim().length < 3);
+    if (blankDescriptionItems.length > 0) {
+        const blankRatio = items.length > 0 ? blankDescriptionItems.length / items.length : 0;
+        const catastrophicBlankRows = hasManyRows && (blankDescriptionItems.length > 15 || blankRatio > 0.12);
+        if (catastrophicBlankRows) {
+            forceQuarantine = true;
+        }
+        issues.push({
+            code: 'EV06_BLANK_ROWS',
+            severity: catastrophicBlankRows ? 'error' : 'warning',
+            message: `${blankDescriptionItems.length} linha(s) sem descrição (${Math.round(blankRatio * 100)}% do resultado). ${catastrophicBlankRows ? 'Padrão incompatível com publicação automática.' : 'Revisar antes de publicar.'}`,
+            affectedItems: blankDescriptionItems.map(it => it.item).filter(Boolean).slice(0, 30),
+        });
+        score -= catastrophicBlankRows ? 35 : Math.min(blankDescriptionItems.length, 8);
     }
 
     // ── Check 2: Code coverage ──
@@ -464,13 +485,45 @@ export function validateEngineeringExtraction(
 
     if (duplicates.length > 0) {
         const dupCount = duplicates.reduce((s, [_, items]) => s + items.length - 1, 0);
+        const duplicateRatio = leafItems.length > 0 ? dupCount / leafItems.length : 0;
+        const catastrophicDuplicates = hasManyRows && (dupCount > 25 || duplicateRatio > 0.15);
+        if (catastrophicDuplicates) {
+            forceQuarantine = true;
+        }
         issues.push({
             code: 'EV05',
-            severity: duplicates.length > 5 ? 'error' : 'warning',
-            message: `${dupCount} itens duplicados detectados em ${duplicates.length} grupos.`,
+            severity: catastrophicDuplicates || duplicates.length > 5 ? 'error' : 'warning',
+            message: `${dupCount} itens duplicados detectados em ${duplicates.length} grupos (${Math.round(duplicateRatio * 100)}% das composições/insumos).`,
             affectedItems: duplicates.flatMap(([_, items]) => items),
         });
-        score -= Math.min(duplicates.length * 2, 15);
+        score -= catastrophicDuplicates ? 35 : Math.min(duplicates.length * 2, 15);
+    }
+
+    const itemTypeFingerprints = new Map<string, string[]>();
+    for (const it of items) {
+        const itemNumber = String(it.item || '').trim();
+        const type = String(it.type || '').trim().toUpperCase();
+        if (!itemNumber || !type) continue;
+        const fp = `${itemNumber}|${type}`;
+        if (!itemTypeFingerprints.has(fp)) itemTypeFingerprints.set(fp, []);
+        itemTypeFingerprints.get(fp)!.push(itemNumber);
+    }
+    const repeatedItemNumbers = Array.from(itemTypeFingerprints.entries())
+        .filter(([_, itemNumbers]) => itemNumbers.length > 1);
+    if (repeatedItemNumbers.length > 0) {
+        const repeatedCount = repeatedItemNumbers.reduce((sum, [_, itemNumbers]) => sum + itemNumbers.length - 1, 0);
+        const repeatedRatio = items.length > 0 ? repeatedCount / items.length : 0;
+        const catastrophicRepeatedNumbering = hasManyRows && (repeatedCount > 20 || repeatedRatio > 0.10);
+        if (catastrophicRepeatedNumbering) {
+            forceQuarantine = true;
+        }
+        issues.push({
+            code: 'EV05_ITEM_NUMBER',
+            severity: catastrophicRepeatedNumbering ? 'error' : 'warning',
+            message: `${repeatedCount} repetição(ões) de número+tipo de item em ${repeatedItemNumbers.length} grupo(s). ${catastrophicRepeatedNumbering ? 'Provável extração duplicada por lotes.' : 'Revisar duplicidade.'}`,
+            affectedItems: repeatedItemNumbers.flatMap(([_, itemNumbers]) => itemNumbers).slice(0, 40),
+        });
+        score -= catastrophicRepeatedNumbering ? 30 : Math.min(repeatedCount, 10);
     }
 
     // ── Check 6: Ghost items (no description or all-zero) ──
@@ -480,6 +533,9 @@ export function validateEngineeringExtraction(
     );
 
     if (ghostItems.length > 0) {
+        if (hasManyRows && ghostItems.length > 10) {
+            forceQuarantine = true;
+        }
         issues.push({
             code: 'EV06',
             severity: ghostItems.length > 10 ? 'error' : 'warning',
@@ -487,6 +543,28 @@ export function validateEngineeringExtraction(
             affectedItems: ghostItems.map(it => it.item).filter(Boolean),
         });
         score -= Math.min(ghostItems.length, 10);
+    }
+
+    const zeroValueCompositions = leafItems.filter(it => {
+        const type = String(it.type || '').toUpperCase();
+        const qty = Number(it.quantity) || 0;
+        const unitCost = Number(it.unitCost) || 0;
+        const totalPrice = Number(it.totalPrice) || 0;
+        return type === 'COMPOSICAO' && qty > 0 && unitCost <= 0 && totalPrice <= 0;
+    });
+    if (zeroValueCompositions.length > 0) {
+        const zeroRatio = leafItems.length > 0 ? zeroValueCompositions.length / leafItems.length : 0;
+        const catastrophicZeroValues = hasManyRows && (zeroValueCompositions.length > 10 || zeroRatio > 0.20);
+        if (catastrophicZeroValues) {
+            forceQuarantine = true;
+        }
+        issues.push({
+            code: 'EV06_ZERO_VALUES',
+            severity: catastrophicZeroValues ? 'error' : 'warning',
+            message: `${zeroValueCompositions.length} composição(ões) com quantidade mas custo/total zerados (${Math.round(zeroRatio * 100)}% dos itens de preço). ${catastrophicZeroValues ? 'Provável alucinação ou leitura incompleta.' : 'Revisar valores.'}`,
+            affectedItems: zeroValueCompositions.map(it => it.item).filter(Boolean).slice(0, 40),
+        });
+        score -= catastrophicZeroValues ? 35 : Math.min(zeroValueCompositions.length, 10);
     }
 
     // ── Check 7: Has at least 1 etapa (structural check) ──

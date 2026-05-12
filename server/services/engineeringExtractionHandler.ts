@@ -237,6 +237,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let zeroxFallbackUsed = false;
     let zeroxFallbackMeta: any = null;
     let scannedPdfVisualBatches: ScannedPdfVisualBatch[] = [];
+    let scannedPdfOcrFailureWithoutSafeFallback = false;
 
     for (const { buffer, source } of rawPdfBuffers) {
         totalOriginalKB += buffer.length / 1024;
@@ -376,22 +377,33 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // ── SCANNED PDF RECOVERY ──
     const hasOcrText = ocrContext.length > 500;
     const scannedPdfCandidates = zeroxFallbackCandidates.filter(candidate => candidate.reason === 'scanned_pdf_no_text_layer');
+    const scannedPdfVisualFallbackEnabled = process.env.ENGINEERING_SCANNED_VISUAL_FALLBACK === 'true';
 
     if (!hasOcrText && scannedPdfCandidates.length > 0) {
-        try {
-            scannedPdfVisualBatches = await buildScannedPdfVisualBatches(
-                scannedPdfCandidates.map(candidate => ({
-                    buffer: candidate.buffer,
-                    fileName: candidate.fileName,
-                })),
-                { pagesPerBatch: 6 }
-            );
+        if (scannedPdfVisualFallbackEnabled) {
+            try {
+                scannedPdfVisualBatches = await buildScannedPdfVisualBatches(
+                    scannedPdfCandidates.map(candidate => ({
+                        buffer: candidate.buffer,
+                        fileName: candidate.fileName,
+                    })),
+                    { pagesPerBatch: 6 }
+                );
+                logger.warn(
+                    `[Engineering-BG] 📸 OCR indisponível/insuficiente para ${scannedPdfCandidates.length} PDF(s) escaneado(s). ` +
+                    `Fallback visual preparado em ${scannedPdfVisualBatches.length} lote(s) de até 6 página(s).`
+                );
+            } catch (err: any) {
+                scannedPdfOcrFailureWithoutSafeFallback = true;
+                logger.warn(`[Engineering-BG] ⚠️ Falha ao preparar fallback visual de PDF escaneado: ${err.message}.`);
+            }
+        } else {
+            scannedPdfOcrFailureWithoutSafeFallback = true;
             logger.warn(
-                `[Engineering-BG] 📸 OCR indisponível/insuficiente para ${scannedPdfCandidates.length} PDF(s) escaneado(s). ` +
-                `Fallback visual preparado em ${scannedPdfVisualBatches.length} lote(s) de até 6 página(s).`
+                `[Engineering-BG] 🛑 OCR indisponível/insuficiente para ${scannedPdfCandidates.length} PDF(s) escaneado(s). ` +
+                `Fallback visual está desativado por segurança (ENGINEERING_SCANNED_VISUAL_FALLBACK!=true); ` +
+                `o resultado será bloqueado/quarentenado em vez de arriscar alucinação.`
             );
-        } catch (err: any) {
-            logger.warn(`[Engineering-BG] ⚠️ Falha ao preparar fallback visual de PDF escaneado: ${err.message}.`);
         }
     }
 
@@ -410,14 +422,9 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         } else {
             logger.warn(
                 `[Engineering-BG] 📸 Todos os PDFs são escaneados, MAS OCR FALHOU. ` +
-                `Enviando PDFs brutos ao Gemini como último recurso.`
+                `Extração visual bruta bloqueada por segurança; não enviaremos PDF escaneado inteiro ao Gemini.`
             );
-            for (const { buffer, source } of rawPdfBuffers) {
-                totalTrimmedKB += buffer.length / 1024;
-                pdfParts.push({
-                    inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
-                });
-            }
+            scannedPdfOcrFailureWithoutSafeFallback = true;
         }
     }
 
@@ -760,7 +767,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // ── RETRY WITHOUT PAGE TARGETING ──
     // If targeting was used but 0 items found, the targeting may have excluded budget pages.
     // Retry with the FULL PDF (no trimming) before giving up.
-    if (engItems.length === 0 && targetingUsed && rawPdfBuffers.length > 0) {
+    if (engItems.length === 0 && targetingUsed && rawPdfBuffers.length > 0 && !scannedPdfOcrFailureWithoutSafeFallback) {
         logger.info(`[Engineering-BG] 🔄 Page targeting produziu 0 itens — retentando com PDF COMPLETO (sem targeting)...`);
         
         await updateJobProgress(job.id, tenantId, {
@@ -955,6 +962,19 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
     const validationReport = validateEngineeringExtraction(engItems, estimatedValue, screening || undefined, ocrRowCoverageMeta);
 
+    if (scannedPdfOcrFailureWithoutSafeFallback) {
+        validationReport.publishable = false;
+        validationReport.qualityScore = Math.min(validationReport.qualityScore, 30);
+        validationReport.issues.push({
+            code: 'EV15',
+            severity: 'error',
+            message:
+                `${scannedPdfCandidates.length} PDF(s) escaneado(s) ficaram sem OCR confiável. ` +
+                `Publicação bloqueada para evitar extração parcial ou alucinada; envie planilha digital/Excel ou reative fallback visual apenas para teste controlado.`,
+            affectedItems: scannedPdfCandidates.map(candidate => candidate.fileName),
+        });
+    }
+
     await updateJobProgress(job.id, tenantId, {
         progress: 90,
         progressMsg: validationReport.publishable
@@ -978,6 +998,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     .reduce((sum, batch) => sum + batch.pageCount, 0),
             })),
         } : null,
+        scannedPdfOcrFailureWithoutSafeFallback,
+        scannedPdfVisualFallbackEnabled,
         originalSizeKB: Math.round(totalOriginalKB),
         submittedSizeKB: Math.round(totalTrimmedKB),
         ocrRowCoverage: ocrRowCoverageMeta,
