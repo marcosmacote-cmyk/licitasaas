@@ -338,9 +338,29 @@ export async function targetBudgetPages(
 
     const totalPages = pageTexts.length;
 
-    // Don't bother targeting small PDFs
+    // Don't bother targeting small PDFs — BUT still run scanned detection
     if (totalPages < minPagesForTargeting) {
-        logger.info(`[PageTargeting] PDF has only ${totalPages} pages (< ${minPagesForTargeting}). Using full PDF.`);
+        // Still check for scanned/garbage OCR even on small PDFs
+        const QUALITY_WORDS_SMALL = new Set([
+            'total', 'item', 'unidade', 'quantidade', 'sinapi', 'seinfra',
+            'valor', 'obra', 'planilha', 'orçamento', 'orcamento', 'bdi',
+        ]);
+        const garbagePagesSmall = pageTexts.filter(text => {
+            const trimmed = text.trim();
+            if (trimmed.length < 10) return true;
+            if (trimmed.length > 100) {
+                const words = trimmed.toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .split(/\s+/).filter(w => w.length >= 3);
+                const recognizable = words.filter(w => QUALITY_WORDS_SMALL.has(w)).length;
+                if (words.length >= 50 && recognizable === 0) return true;
+            }
+            return false;
+        }).length;
+        const scannedPercentSmall = Math.round((garbagePagesSmall / totalPages) * 100);
+        const isScannedSmall = scannedPercentSmall >= 70;
+
+        logger.info(`[PageTargeting] PDF has only ${totalPages} pages (< ${minPagesForTargeting}). Using full PDF.${isScannedSmall ? ` ⚠️ SCANNED detected (${garbagePagesSmall}/${totalPages} garbage pages)` : ''}`);
         return {
             totalPages,
             candidatePages: [],
@@ -348,17 +368,52 @@ export async function targetBudgetPages(
             reductionPercent: 0,
             trimmedPdfBuffer: null,
             strategy: 'full',
+            isScannedPdf: isScannedSmall,
+            scannedPagesPercent: scannedPercentSmall,
         };
     }
 
-    // Step 1.5: Detect scanned PDFs (no extractable text layer)
-    const emptyPages = pageTexts.filter(text => text.trim().length < 10).length;
-    const scannedPagesPercent = Math.round((emptyPages / totalPages) * 100);
-    const isScannedPdf = scannedPagesPercent >= 80;
+    // Step 1.5: Detect scanned PDFs (no extractable text layer OR garbage OCR)
+    // Some scanned PDFs have embedded garbage OCR text (thousands of chars of "eubea setelsi su")
+    // that passes a simple length check. We need to check TEXT QUALITY, not just length.
+    const QUALITY_WORDS = new Set([
+        'total', 'item', 'unidade', 'quantidade', 'preco', 'preço', 'servico', 'serviço',
+        'etapa', 'obra', 'material', 'sinapi', 'seinfra', 'composicao', 'composição',
+        'valor', 'unitario', 'unitário', 'preliminares', 'demolição', 'escavação',
+        'pintura', 'planilha', 'orçamento', 'orcamento', 'instalações', 'instalacoes',
+        'elétricas', 'eletricas', 'hidráulicas', 'hidraulicas', 'bdi', 'custo',
+        'cobertura', 'revestimento', 'alvenaria', 'fundações', 'fundacoes',
+        'esquadrias', 'drenagem', 'pavimentação', 'pavimentacao', 'terraplenagem',
+        'infraestrutura', 'superestrutura', 'administração', 'administracao',
+        'mobilização', 'mobilizacao', 'limpeza', 'descrição', 'descricao',
+    ]);
+
+    function isGarbagePage(text: string): boolean {
+        const trimmed = text.trim();
+        // Truly empty page
+        if (trimmed.length < 10) return true;
+        // Has lots of characters but no recognizable words → garbage OCR
+        if (trimmed.length > 100) {
+            const words = trimmed.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .split(/\s+/)
+                .filter(w => w.length >= 3);
+            const recognizable = words.filter(w => QUALITY_WORDS.has(w)).length;
+            // If we have 50+ words but 0 recognizable → garbage OCR text
+            if (words.length >= 50 && recognizable === 0) return true;
+            // If recognizable words are < 1% of total → likely garbage
+            if (words.length >= 20 && (recognizable / words.length) < 0.01) return true;
+        }
+        return false;
+    }
+
+    const garbagePages = pageTexts.filter(text => isGarbagePage(text)).length;
+    const scannedPagesPercent = Math.round((garbagePages / totalPages) * 100);
+    const isScannedPdf = scannedPagesPercent >= 70; // Lowered from 80 to 70 to catch mixed PDFs
 
     if (isScannedPdf) {
         logger.warn(
-            `[PageTargeting] ⚠️ PDF escaneado detectado: ${emptyPages}/${totalPages} páginas sem texto ` +
+            `[PageTargeting] ⚠️ PDF escaneado/garbage-OCR detectado: ${garbagePages}/${totalPages} páginas sem texto útil ` +
             `(${scannedPagesPercent}%). Targeting impossível — requer OCR.`
         );
         return {
