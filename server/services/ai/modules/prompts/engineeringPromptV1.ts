@@ -247,6 +247,22 @@ REGRAS FINAIS
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 - 🚨 NÃO EXTRAIA O CRONOGRAMA FÍSICO-FINANCEIRO. Ele é uma tabela com colunas de meses (30 DIAS, 60 DIAS...) e percentuais. IGNORE-O.
 - 🚨🚨🚨 REGRA DE EXAUSTIVIDADE (MÁXIMA PRIORIDADE): EXTRAIA TODOS OS ITENS DA PLANILHA DO INÍCIO AO FIM. NUNCA pare no meio, NUNCA resuma, NUNCA use "etc" ou reticências. O trabalho só estará completo quando o ÚLTIMO item da última página da planilha orçamentária for extraído.
+
+═══════════════════════════════════════════════════════════
+PROTOCOLO PARA PLANILHAS GRANDES (100+ itens)
+═══════════════════════════════════════════════════════════
+
+Muitas planilhas orçamentárias têm 100, 200 ou até 500+ itens. Siga estas regras:
+
+1. USE AS CHAVES CURTAS OBRIGATORIAMENTE (i, t, s, c, d, u, q, uc, up, tp) — isso MAXIMIZA a quantidade de itens por resposta.
+2. MINIMIZE descrições desnecessárias. Use o texto EXATO da planilha, sem paráfrase ou expansão.
+3. Se o limite de tokens for atingido durante a emissão do JSON, o sistema solicitará automaticamente uma CONTINUAÇÃO. Quando isso acontecer:
+   - Você receberá o último item extraído como referência.
+   - CONTINUE a partir do PRÓXIMO item na planilha.
+   - NÃO repita itens já extraídos.
+   - Retorne o JSON com os itens RESTANTES.
+4. NUNCA "resuma" os itens restantes com frases como "e mais X itens...". Cada item DEVE ser extraído individualmente.
+5. Se a planilha tiver seções em páginas diferentes do PDF, PROCURE TODAS AS PÁGINAS. Não pare na primeira tabela encontrada.
 `;
 
 export const ENGINEERING_PROPOSAL_USER_INSTRUCTION = `

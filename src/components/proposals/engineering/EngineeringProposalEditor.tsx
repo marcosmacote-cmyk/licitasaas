@@ -1299,13 +1299,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
                                     <div><div>Extrair Itens do Edital</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Popula a planilha com itens do edital</div></div>
                                 </button>
-                                <button onClick={() => { handleExtractCompositions(); setShowAIMenu(false); }} disabled={isExtractingComps}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isExtractingComps ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isExtractingComps ? 0.6 : 1 }}
-                                    onMouseEnter={e => { if (!isExtractingComps) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                                    {isExtractingComps ? <Loader2 size={14} className="spin" /> : <Layers size={14} color="var(--color-ai)" />}
-                                    <div><div>Extrair Composições (CPU)</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Gera composições analíticas para itens sem insumos</div></div>
-                                </button>
                             </div>
                         </>)}
                     </div>

@@ -364,10 +364,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
         let loopCount = 0;
         let totalRepairs: string[] = [];
+        // Track seen items across chunks to deduplicate
+        const seenItemKeys = new Set<string>();
 
         // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
         try {
-            while (loopCount < 5) {
+            while (loopCount < 8) {
                 const result = await callGeminiWithRetry(ai.models, {
                     model: 'gemini-2.5-flash',
                     contents: currentContents,
@@ -383,27 +385,79 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 logger.info(`[Engineering-BG] ✅ Gemini respondeu (Chunk ${loopCount + 1}, ${chunkText.length} chars)`);
 
                 const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
-                if (normalizedChunk.engineeringItems.length > 0) {
-                    engItems.push(...normalizedChunk.engineeringItems);
+                
+                // ── Inter-chunk deduplication ──
+                // When resuming extraction, the AI may repeat the last few items.
+                // We deduplicate by item number + description hash to avoid duplicates.
+                let newItemsInChunk = 0;
+                for (const item of normalizedChunk.engineeringItems) {
+                    const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
+                    if (!seenItemKeys.has(key)) {
+                        seenItemKeys.add(key);
+                        engItems.push(item);
+                        newItemsInChunk++;
+                    }
                 }
+                
                 if (normalizedChunk.repaired) {
                     totalRepairs.push(...normalizedChunk.repairs);
+                }
+
+                if (loopCount > 0) {
+                    logger.info(
+                        `[Engineering-BG] 📊 Chunk ${loopCount + 1}: ${normalizedChunk.engineeringItems.length} itens (${newItemsInChunk} novos, ${normalizedChunk.engineeringItems.length - newItemsInChunk} duplicados removidos). Total acumulado: ${engItems.length}`
+                    );
                 }
 
                 // @ts-ignore - access raw response from GenAI SDK
                 const finishReason = result.candidates?.[0]?.finishReason;
                 
                 if (finishReason === 'MAX_TOKENS') {
-                    logger.warn(`[Engineering-BG] ⚠️ Limite MAX_TOKENS atingido. Solicitando continuação (Loop ${loopCount + 1})...`);
+                    // Build a smart continuation prompt with the last extracted items for context
+                    const lastItems = engItems.slice(-3);
+                    const lastItemsSummary = lastItems
+                        .map(it => `${it.item}: ${String(it.description || '').substring(0, 50)}`)
+                        .join(', ');
+                    
+                    logger.warn(
+                        `[Engineering-BG] ⚠️ MAX_TOKENS atingido (${engItems.length} itens até agora). ` +
+                        `Solicitando continuação a partir de "${lastItems[lastItems.length - 1]?.item || '?'}" (Loop ${loopCount + 1})...`
+                    );
+
+                    // Update progress with real item count
+                    await updateJobProgress(job.id, tenantId, {
+                        progress: Math.min(30 + loopCount * 8, 75),
+                        progressMsg: `Extraindo planilha (${engItems.length} itens extraídos, continuando...)`,
+                    }).catch(() => {});
+
                     currentContents.push({ role: 'model', parts: [{ text: chunkText }] });
                     currentContents.push({ 
                         role: 'user', 
-                        parts: [{ text: "🚨 O limite de tamanho da resposta foi atingido e o JSON foi cortado. CONTINUE A EXTRAÇÃO EXATAMENTE a partir do item seguinte ao último que você extraiu (não repita o que já foi extraído). Retorne APENAS o JSON com os itens restantes." }] 
+                        parts: [{ text: 
+                            `🚨 O limite de tokens da resposta foi atingido e o JSON foi cortado.\n\n` +
+                            `CONTEXTO: Você já extraiu ${engItems.length} itens até agora. ` +
+                            `Os ÚLTIMOS itens extraídos foram: [${lastItemsSummary}].\n\n` +
+                            `INSTRUÇÕES DE CONTINUAÇÃO:\n` +
+                            `1. CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItems[lastItems.length - 1]?.item || '?'}" na planilha.\n` +
+                            `2. NÃO repita itens que já foram extraídos.\n` +
+                            `3. Retorne APENAS um JSON {"engineeringItems": [...]} com os itens RESTANTES.\n` +
+                            `4. Continue usando as chaves curtas (i, t, s, c, d, u, q, uc, up, tp).\n` +
+                            `5. Extraia ATÉ O FINAL da planilha. Se ainda restar muita coisa, extraia o máximo possível.\n` +
+                            `6. IMPORTANTE: Continue respeitando a hierarquia (ETAPAs e SUBETAPAs).`
+                        }] 
                     });
                     loopCount++;
                 } else {
+                    // Normal completion or STOP — check if we might be missing items
+                    if (loopCount === 0 && engItems.length > 0) {
+                        logger.info(`[Engineering-BG] ✅ Extração completa em 1 chamada: ${engItems.length} itens`);
+                    }
                     break;
                 }
+            }
+            
+            if (loopCount >= 8) {
+                logger.warn(`[Engineering-BG] ⚠️ Loop de continuação atingiu o limite de 8 iterações com ${engItems.length} itens extraídos.`);
             }
         } catch (geminiErr: any) {
             // ── FALLBACK: DeepSeek V4 → gpt-4o-mini → gpt-4o ──
