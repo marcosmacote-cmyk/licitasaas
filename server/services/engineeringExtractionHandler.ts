@@ -345,20 +345,28 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }
 
     // ── SCANNED PDF RECOVERY ──
-    // If all PDFs were scanned and pdfParts is empty, add them back as visual backup.
-    // Gemini CAN read scanned images, but with heavy PDFs it loses context.
-    // Strategy: send PDF + OCR text combined so Gemini uses both.
+    // If all PDFs were scanned and pdfParts is empty.
+    const hasOcrText = ocrContext.length > 500;
+    const isPureTextScannedPdf = pdfParts.length === 0 && hasOcrText;
+
     if (pdfParts.length === 0 && rawPdfBuffers.length > 0) {
-        const hasOcrText = ocrContext.length > 500;
-        logger.info(
-            `[Engineering-BG] 📸 Todos os PDFs são escaneados. ` +
-            `${hasOcrText ? `OCR disponível (${ocrContext.length} chars) — modo híbrido (PDF visual + OCR textual)` : 'OCR não disponível — enviando PDFs brutos ao Gemini'}`
-        );
-        for (const { buffer, source } of rawPdfBuffers) {
-            totalTrimmedKB += buffer.length / 1024;
-            pdfParts.push({
-                inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
-            });
+        if (hasOcrText) {
+            logger.info(
+                `[Engineering-BG] 📸 Todos os PDFs são escaneados. ` +
+                `OCR disponível (${ocrContext.length} chars) — MODO TEXTO PURO (PDFs visuais NÃO serão enviados para evitar sobrecarga).`
+            );
+            // We DO NOT add the raw PDFs to pdfParts. We rely purely on the OCR text.
+        } else {
+            logger.warn(
+                `[Engineering-BG] 📸 Todos os PDFs são escaneados, MAS OCR FALHOU. ` +
+                `Enviando PDFs brutos ao Gemini como último recurso.`
+            );
+            for (const { buffer, source } of rawPdfBuffers) {
+                totalTrimmedKB += buffer.length / 1024;
+                pdfParts.push({
+                    inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+                });
+            }
         }
     }
 
@@ -392,143 +400,26 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         // Track seen items across chunks to deduplicate
         const seenItemKeys = new Set<string>();
 
-        // ════════════════════════════════════════════════════════════════
-        // STRATEGY: Page-batch extraction for large/scanned PDFs
-        // Instead of sending ALL pages at once (overwhelming context),
-        // split into batches of PAGES_PER_BATCH pages and merge results.
-        // ════════════════════════════════════════════════════════════════
-        const PAGES_PER_BATCH = 8;
-        const totalPdfSizeKB = rawPdfBuffers.reduce((sum, p) => sum + p.buffer.length / 1024, 0);
-        const isLargeScannedPdf = zeroxFallbackCandidates.some(c => c.reason === 'scanned_pdf_no_text_layer');
-        const needsBatchExtraction = isLargeScannedPdf && rawPdfBuffers.length > 0 && totalPdfSizeKB > 3000;
+        const targetModel = isPureTextScannedPdf ? 'gemini-1.5-pro' : 'gemini-2.5-flash';
+        logger.info(`[Engineering-BG] 🤖 Modelo selecionado: ${targetModel} (isPureTextScannedPdf: ${isPureTextScannedPdf})`);
 
-        if (needsBatchExtraction) {
-            // ── BATCH MODE: Split PDF into page batches ──
-            logger.info(
-                `[Engineering-BG] 📦 BATCH MODE: PDFs escaneados detectados (${(totalPdfSizeKB / 1024).toFixed(1)}MB). ` +
-                `Dividindo em lotes de ${PAGES_PER_BATCH} páginas para extração individual.`
-            );
+        // ── STANDARD MODE: Single call with all PDFs (or pure text) ──
+        let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
+        let loopCount = 0;
 
-            const { PDFDocument } = require('pdf-lib');
-            let batchIndex = 0;
-            let totalBatches = 0;
-
-            // First, count total batches for progress tracking
-            for (const { buffer } of rawPdfBuffers) {
-                try {
-                    const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-                    totalBatches += Math.ceil(srcDoc.getPageCount() / PAGES_PER_BATCH);
-                } catch { totalBatches += 1; }
-            }
-
-            await updateJobProgress(job.id, tenantId, {
-                progress: 30,
-                progressMsg: `Extraindo planilha em ${totalBatches} lotes (PDF escaneado)...`
-            }).catch(() => {});
-
-            for (const { buffer, source } of rawPdfBuffers) {
-                let srcDoc: any;
-                try {
-                    srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-                } catch (loadErr: any) {
-                    logger.warn(`[Engineering-BG] ⚠️ Falha ao carregar PDF para batch: ${loadErr.message}`);
-                    continue;
-                }
-
-                const totalPages = srcDoc.getPageCount();
-                const batchCount = Math.ceil(totalPages / PAGES_PER_BATCH);
-
-                logger.info(`[Engineering-BG] 📄 "${source}": ${totalPages} páginas → ${batchCount} lotes de ${PAGES_PER_BATCH} pgs`);
-
-                for (let b = 0; b < batchCount; b++) {
-                    const startPage = b * PAGES_PER_BATCH;
-                    const endPage = Math.min(startPage + PAGES_PER_BATCH, totalPages);
-                    const pageIndices = Array.from({ length: endPage - startPage }, (_, i) => startPage + i);
-
-                    batchIndex++;
-                    const batchLabel = `Lote ${batchIndex}/${totalBatches} (pgs ${startPage + 1}-${endPage})`;
-
-                    try {
-                        // Extract batch pages into a small PDF
-                        const batchDoc = await PDFDocument.create();
-                        const copiedPages = await batchDoc.copyPages(srcDoc, pageIndices);
-                        for (const page of copiedPages) batchDoc.addPage(page);
-                        const batchPdfBytes = await batchDoc.save();
-                        const batchBuffer = Buffer.from(batchPdfBytes);
-
-                        logger.info(`[Engineering-BG] 📦 ${batchLabel}: ${(batchBuffer.length / 1024).toFixed(0)}KB`);
-
-                        await updateJobProgress(job.id, tenantId, {
-                            progress: Math.min(30 + Math.round((batchIndex / totalBatches) * 50), 80),
-                            progressMsg: `${batchLabel} — ${engItems.length} itens extraídos até agora...`
-                        }).catch(() => {});
-
-                        // Call Gemini with just this batch
-                        const batchPart = { inlineData: { data: batchBuffer.toString('base64'), mimeType: 'application/pdf' } };
-                        const batchInstruction = 
-                            `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}\n\n` +
-                            `🚨 CONTEXTO: Este é o lote ${batchIndex} de ${totalBatches} (páginas ${startPage + 1} a ${endPage} do documento "${source}"). ` +
-                            `Extraia TODOS os itens da planilha orçamentária presentes NESTAS páginas. ` +
-                            `Inclua ETAPAs, SUBETAPAs e todas as COMPOSIÇÕEs com seus códigos, quantidades e preços.` +
-                            (ocrContext ? `\n\n${ocrContext}` : '');
-
-                        const batchResult = await callGeminiWithRetry(ai.models, {
-                            model: 'gemini-2.5-flash',
-                            contents: [{ role: 'user', parts: [batchPart, { text: batchInstruction }] }],
-                            config: {
-                                systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                                temperature: 0.1,
-                                maxOutputTokens: 65536,
-                                responseMimeType: 'application/json'
-                            }
-                        }, 2, { tenantId, operation: 'analysis', metadata: { stage: `engineering_batch_${batchIndex}` } });
-
-                        const batchText = batchResult.text || '';
-                        const normalizedBatch = parseAndNormalizeEngineeringExtraction(batchText);
-
-                        // Deduplicate across batches
-                        let newItems = 0;
-                        for (const item of normalizedBatch.engineeringItems) {
-                            const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
-                            if (!seenItemKeys.has(key)) {
-                                seenItemKeys.add(key);
-                                engItems.push(item);
-                                newItems++;
-                            }
-                        }
-
-                        if (normalizedBatch.repaired) totalRepairs.push(...normalizedBatch.repairs);
-
-                        logger.info(
-                            `[Engineering-BG] ✅ ${batchLabel}: ${normalizedBatch.engineeringItems.length} itens (${newItems} novos). Total: ${engItems.length}`
-                        );
-
-                    } catch (batchErr: any) {
-                        logger.warn(`[Engineering-BG] ⚠️ ${batchLabel} falhou: ${batchErr.message}. Continuando próximo lote...`);
+        // ── PRIMARY: Gemini (reads PDF natively or pure OCR text) ──
+        try {
+            while (loopCount < 8) {
+                const result = await callGeminiWithRetry(ai.models, {
+                    model: targetModel,
+                    contents: currentContents,
+                    config: {
+                        systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
+                        temperature: 0.1,
+                        maxOutputTokens: 8192,
+                        responseMimeType: 'application/json'
                     }
-                }
-            }
-
-            logger.info(`[Engineering-BG] 📦 BATCH MODE completo: ${engItems.length} itens extraídos em ${totalBatches} lotes`);
-
-        } else {
-            // ── STANDARD MODE: Single call with all PDFs ──
-            let currentContents: any[] = [{ role: 'user', parts: [...pdfParts, { text: userInstruction }] }];
-            let loopCount = 0;
-
-            // ── PRIMARY: Gemini 2.5 Flash (multimodal, reads PDF natively) ──
-            try {
-                while (loopCount < 8) {
-                    const result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
-                        contents: currentContents,
-                        config: {
-                            systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
-                            temperature: 0.1,
-                            maxOutputTokens: 65536,
-                            responseMimeType: 'application/json'
-                        }
-                    }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
+                }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
                     
                     const chunkText = result.text || '';
                     logger.info(`[Engineering-BG] ✅ Gemini respondeu (Chunk ${loopCount + 1}, ${chunkText.length} chars)`);
