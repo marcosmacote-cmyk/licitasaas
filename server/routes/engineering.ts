@@ -1989,13 +1989,24 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         // Build context: items that NEED composition extraction
         let itemsContext = '';
         const budgetItemCodes: string[] = [];
+        const budgetItemDescriptions: string[] = [];
         if (Array.isArray(proposalItems) && proposalItems.length > 0) {
-            itemsContext = '\n\n═══════════════════════════════════════════════════════\n🎯 ITENS QUE PRECISAM DE COMPOSIÇÃO ANALÍTICA (EXTRAIA PARA ESTES)\n═══════════════════════════════════════════════════════\n';
-            itemsContext += proposalItems.map((it: any) => {
-                budgetItemCodes.push(it.code || '');
-                return `- Código: ${it.code || 'N/A'} | Descrição: ${it.description} | Unidade: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1} | Base: ${it.sourceName || 'PROPRIA'}`;
-            }).join('\n');
-            itemsContext += `\n\nIMPORTANTE: Use os códigos EXATOS listados acima como "code" de cada composição no JSON de saída. Extraia a composição analítica (materiais, mão de obra, equipamentos, coeficientes) de CADA item listado acima.`;
+            // Only include COMPOSICAO/INSUMO items — NEVER send ETAPAs/SUBETAPAs as candidates
+            const validCandidates = proposalItems.filter((it: any) => {
+                const type = String(it.type || '').toUpperCase();
+                return type !== 'ETAPA' && type !== 'SUBETAPA';
+            });
+            if (validCandidates.length > 0) {
+                itemsContext = '\n\n═══════════════════════════════════════════════════════\n🎯 ITENS QUE PRECISAM DE COMPOSIÇÃO ANALÍTICA (EXTRAIA PARA ESTES)\n═══════════════════════════════════════════════════════\n';
+                itemsContext += validCandidates.map((it: any, idx: number) => {
+                    const itemCode = it.code && it.code !== 'N/A' ? it.code : `CPU-${String(idx + 1).padStart(2, '0')}`;
+                    budgetItemCodes.push(itemCode);
+                    budgetItemDescriptions.push(String(it.description || '').trim().toUpperCase().substring(0, 80));
+                    return `- ID: ${itemCode} | Descrição: ${it.description} | Unidade: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1} | Base: ${it.sourceName || 'PROPRIA'}`;
+                }).join('\n');
+                itemsContext += `\n\nREGRA OBRIGATÓRIA:\n- Use como "code" no JSON o ID exato listado acima (ex: CPU-01, CPU-02, ou o código SINAPI/SEINFRA se existir)\n- Extraia composição analítica APENAS para os itens listados acima\n- NÃO crie composições para ETAPAs, SUBETAPAs ou títulos de seção\n- Se não encontrar dados de composição para um item, NÃO o inclua\n- Se nenhum item tiver composição encontrada no documento, retorne: {"compositions": []}`;
+            }
+            console.log(`[Engineering AI-Compositions] 🎯 ${validCandidates.length}/${proposalItems.length} candidatos válidos (excluídos ETAPA/SUBETAPA)`);
         }
 
         // Add context of items that ALREADY have compositions (for the AI to avoid duplicating)
@@ -2027,6 +2038,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
                         temperature: 0.15,
                         maxOutputTokens: 65536,
+                        responseMimeType: 'application/json',
                     }
                 });
             } else {
@@ -2074,6 +2086,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
                         temperature: 0.15,
                         maxOutputTokens: 65536,
+                        responseMimeType: 'application/json',
                     }
                 });
             }
@@ -2115,22 +2128,60 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
 
         console.log(`[Engineering AI-Compositions] 📋 ${compositions.length} composições encontradas (bruto)`);
 
-        // Filter: only keep compositions whose code matches a candidate from the budget
-        // This prevents the AI from creating compositions for ETAPAs/SUBETAPAs
+        // ═══ VALIDATION STEP 1: Filter by candidate matching ═══
+        // Only keep compositions that match a candidate from the budget
         if (budgetItemCodes.length > 0) {
             const codeSet = new Set(budgetItemCodes.map(c => c.trim().toUpperCase()));
+            const descSet = new Set(budgetItemDescriptions); // Already uppercased and trimmed
             const beforeCount = compositions.length;
             compositions = compositions.filter((c: any) => {
                 const code = String(c.code || '').trim().toUpperCase();
-                return codeSet.has(code);
+                // Match by code first
+                if (code && code !== 'N/A' && codeSet.has(code)) return true;
+                // Check if code starts with CPU- (our assigned IDs)
+                if (code.startsWith('CPU-') && codeSet.has(code)) return true;
+                // Fallback: match by description similarity (first 80 chars)
+                const desc = String(c.description || '').trim().toUpperCase().substring(0, 80);
+                if (desc && descSet.has(desc)) return true;
+                return false;
             });
             if (compositions.length < beforeCount) {
-                console.log(`[Engineering AI-Compositions] 🔽 Filtro por código: ${beforeCount} → ${compositions.length} (descartadas ${beforeCount - compositions.length} composições não-candidatas)`);
+                console.log(`[Engineering AI-Compositions] 🔽 Filtro código+descrição: ${beforeCount} → ${compositions.length} (descartadas ${beforeCount - compositions.length} não-candidatas)`);
+            }
+        }
+
+        // ═══ VALIDATION STEP 2: Reject hallucinated compositions ═══
+        // A real composition must have at least 1 insumo with coefficient > 0 AND unitPrice > 0
+        {
+            const beforeCount = compositions.length;
+            compositions = compositions.filter((c: any) => {
+                if (!c.groups || typeof c.groups !== 'object') {
+                    console.log(`[Engineering AI-Compositions] ❌ Rejeitada "${c.code}" — sem groups`);
+                    return false;
+                }
+                // Count valid insumos (with real coefficient AND price)
+                let validInsumoCount = 0;
+                for (const [groupKey, groupItems] of Object.entries(c.groups)) {
+                    if (!Array.isArray(groupItems)) continue;
+                    for (const gi of groupItems as any[]) {
+                        const coeff = Number(gi.coefficient || 0);
+                        const price = Number(gi.unitPrice || 0);
+                        if (coeff > 0 && price > 0) validInsumoCount++;
+                    }
+                }
+                if (validInsumoCount === 0) {
+                    console.log(`[Engineering AI-Compositions] ❌ Rejeitada "${c.code}: ${(c.description || '').substring(0, 60)}" — 0 insumos com coeficiente e preço > 0 (alucinação)`);
+                    return false;
+                }
+                return true;
+            });
+            if (compositions.length < beforeCount) {
+                console.log(`[Engineering AI-Compositions] 🔽 Validação anti-alucinação: ${beforeCount} → ${compositions.length} (rejeitadas ${beforeCount - compositions.length} composições sem dados reais)`);
             }
         }
 
         if (compositions.length === 0) {
-            return res.json({ compositions: [], saved: 0, message: 'Nenhuma composição encontrada no documento para os itens solicitados' });
+            return res.json({ compositions: [], saved: 0, message: 'Nenhuma composição válida encontrada no documento para os itens solicitados. Verifique se o edital contém tabelas de CPU (Composição de Preços Unitários).' });
         }
 
         // Store extracted compositions in the database as "PROPRIA"

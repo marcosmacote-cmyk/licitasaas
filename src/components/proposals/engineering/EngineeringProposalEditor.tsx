@@ -713,9 +713,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // AI composition extraction
     const [isExtractingComps, setIsExtractingComps] = useState(false);
     const handleExtractCompositions = async () => {
-        // Identify compositions WITHOUT analytical drill-down (no insumos loaded)
+        // Identify COMPOSICAO items WITHOUT analytical drill-down (no insumos loaded)
+        // NEVER include ETAPAs/SUBETAPAs — they are groupers, not compositions
         const candidates = items.filter(it =>
-            it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0)
+            (it.type === 'COMPOSICAO' || it.type === 'INSUMO') && (!it.insumos || it.insumos.length === 0)
         );
         if (candidates.length === 0) {
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> Todas as composições já possuem insumos detalhados</span>);
@@ -723,11 +724,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             return;
         }
         setIsExtractingComps(true);
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições próprias ({candidates.length} itens sem insumos) via IA...</span>);
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Extraindo composições ({candidates.length} itens sem insumos) via IA...</span>);
         try {
-            // Send candidates (items needing composition) AND all items as context
+            // Send ONLY COMPOSICAO/INSUMO candidates — backend also re-validates
             const proposalItems = candidates.map(it => ({
-                code: it.code, description: it.description, unit: it.unit,
+                id: it.id, code: it.code, description: it.description, unit: it.unit,
                 quantity: it.quantity, type: it.type, sourceName: it.sourceName || 'PROPRIA',
             }));
             const allContext = items.filter(it => it.type === 'COMPOSICAO' || it.type === 'INSUMO').map(it => ({
@@ -742,7 +743,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
             const savedCount = data.saved || 0;
-            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {savedCount} composições próprias extraídas e salvas</span>);
+            if (savedCount === 0) {
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> {data.message || 'Nenhuma composição válida encontrada no documento'}</span>);
+            } else {
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {savedCount} composições extraídas e vinculadas aos itens do orçamento</span>);
+            }
 
             // Reload bases list (PROPRIA may have been created)
             try {
@@ -755,9 +760,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
             // Inject extracted compositions back into UI items
             if (savedCount > 0 && Array.isArray(data.compositions)) {
-                const compMap = new Map<string, any[]>();
+                // Build maps for matching: by code AND by description
+                const compByCode = new Map<string, any[]>();
+                const compByDesc = new Map<string, any[]>();
                 for (const comp of data.compositions) {
-                    if (comp.code && comp.groups) {
+                    if (comp.groups) {
                         const insumos: any[] = [];
                         for (const [groupKey, groupItems] of Object.entries(comp.groups || {})) {
                             if (!Array.isArray(groupItems)) continue;
@@ -773,17 +780,27 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 });
                             }
                         }
-                        compMap.set(String(comp.code).trim().toUpperCase(), insumos);
+                        if (insumos.length > 0) {
+                            const code = String(comp.code || '').trim().toUpperCase();
+                            if (code && code !== 'N/A') compByCode.set(code, insumos);
+                            const desc = String(comp.description || '').trim().toUpperCase().substring(0, 80);
+                            if (desc) compByDesc.set(desc, insumos);
+                        }
                     }
                 }
                 // Update items in state to include the extracted insumos
                 setItems(prev => prev.map(it => {
                     if (it.type !== 'COMPOSICAO' || (it.insumos && it.insumos.length > 0)) return it;
-                    const key = String(it.code || '').trim().toUpperCase();
-                    const extracted = compMap.get(key);
-                    if (extracted && extracted.length > 0) {
-                        return { ...it, insumos: extracted };
+                    // Try code match first
+                    const code = String(it.code || '').trim().toUpperCase();
+                    if (code && code !== 'N/A') {
+                        const byCode = compByCode.get(code);
+                        if (byCode) return { ...it, insumos: byCode };
                     }
+                    // Fallback: match by description
+                    const desc = String(it.description || '').trim().toUpperCase().substring(0, 80);
+                    const byDesc = compByDesc.get(desc);
+                    if (byDesc) return { ...it, insumos: byDesc };
                     return it;
                 }));
                 setHasUnsavedChanges(true);
