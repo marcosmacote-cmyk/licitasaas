@@ -49,6 +49,17 @@ export interface EngineeringItemScreeningResult {
     itemQuality: EngineeringItemQuality[];
 }
 
+export interface EngineeringRowCoverageReport {
+    provider?: string;
+    candidateCount: number;
+    consumedRowCount: number;
+    missingRowCount: number;
+    coveragePercent: number;
+    missingRowIds?: string[];
+    missingRowIdsTruncated?: boolean;
+    retryBatchCount?: number;
+}
+
 export interface EngineeringValidationReport {
     /** Quality score 0-100 */
     qualityScore: number;
@@ -74,6 +85,8 @@ export interface EngineeringValidationReport {
     itemQuality?: EngineeringItemQuality[];
     /** Rejected non-budget/noise rows */
     rejectedItems?: any[];
+    /** OCR row-level coverage diagnostics, when extraction used row candidates */
+    rowCoverage?: EngineeringRowCoverageReport | null;
 }
 
 // ═══════════════════════════════════════════
@@ -292,10 +305,12 @@ export function screenEngineeringItems(items: any[]): EngineeringItemScreeningRe
 export function validateEngineeringExtraction(
     items: any[],
     expectedTotal?: number | null,
-    screening?: EngineeringItemScreeningResult
+    screening?: EngineeringItemScreeningResult,
+    rowCoverage?: EngineeringRowCoverageReport | null
 ): EngineeringValidationReport {
     const issues: ValidationIssue[] = [];
     let score = 100; // Start at 100, deduct for problems
+    let forceQuarantine = false;
 
     // ── Basic counts ──
     const typeCounts: Record<string, number> = {};
@@ -632,10 +647,45 @@ export function validateEngineeringExtraction(
         score -= 2;
     }
 
+    // ── Check 14: OCR row coverage ──
+    if (rowCoverage && rowCoverage.candidateCount >= 10) {
+        const coveragePercent = Number(rowCoverage.coveragePercent) || 0;
+        const missingRowCount = Number(rowCoverage.missingRowCount) || 0;
+        const candidateCount = Number(rowCoverage.candidateCount) || 0;
+        const missingRatio = candidateCount > 0 ? missingRowCount / candidateCount : 0;
+        const affectedRows = rowCoverage.missingRowIds?.slice(0, 20);
+
+        if (coveragePercent < 60 || missingRatio > 0.25) {
+            forceQuarantine = true;
+            issues.push({
+                code: 'EV14',
+                severity: 'error',
+                message: `Cobertura OCR baixa: ${coveragePercent}% (${rowCoverage.consumedRowCount}/${candidateCount} linhas candidatas consumidas; ${missingRowCount} pendentes). Extração mantida para revisão.`,
+                affectedItems: affectedRows,
+            });
+            score -= 35;
+        } else if (coveragePercent < 85 || missingRatio > 0.10) {
+            issues.push({
+                code: 'EV14',
+                severity: 'warning',
+                message: `Cobertura OCR moderada: ${coveragePercent}% (${rowCoverage.consumedRowCount}/${candidateCount} linhas candidatas consumidas; ${missingRowCount} pendentes). Recomenda-se revisar linhas pendentes.`,
+                affectedItems: affectedRows,
+            });
+            score -= 14;
+        } else if (missingRowCount > 0) {
+            issues.push({
+                code: 'EV14',
+                severity: 'info',
+                message: `Cobertura OCR alta: ${coveragePercent}% (${missingRowCount} linha(s) candidata(s) sem item publicado).`,
+                affectedItems: affectedRows,
+            });
+        }
+    }
+
     // Clamp score
     score = Math.max(0, Math.min(100, score));
 
-    const publishable = score >= 65; // FIX-06: Below 65 = too unreliable for publication
+    const publishable = score >= 65 && !forceQuarantine; // FIX-06: Below 65 or low OCR coverage = too unreliable
 
     // Add warning for moderate confidence publications
     if (score >= 65 && score < 80) {
@@ -659,6 +709,7 @@ export function validateEngineeringExtraction(
         typeCounts,
         itemQuality: screening?.itemQuality,
         rejectedItems: screening?.rejectedItems,
+        rowCoverage: rowCoverage || null,
     };
 
     const issuesSummary = issues

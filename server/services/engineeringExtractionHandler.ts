@@ -37,12 +37,39 @@ import {
 import { autoEvaluateIfBenchmarkCase } from './ai/benchmark/engineeringBenchmarkRunner';
 import { enrichWithOfficialPrices } from './engineering/priceEnricher';
 
+import {
+    buildBudgetRowCandidateBatches,
+    extractBudgetRowCandidatesFromMarkdown,
+    formatBudgetRowCandidatesForPrompt,
+} from './engineering/budgetRowCandidateExtractor';
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
 
 // Import shared utilities from the engineering routes
 // We import the callGeminiWithRetry from gemini service
 import { callGeminiWithRetry } from './ai/gemini.service';
+
+function collectSourceRowIdsFromItems(items: any[]): Set<string> {
+    const rowIds = new Set<string>();
+    const addValue = (value: unknown) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+            value.forEach(addValue);
+            return;
+        }
+        const raw = String(value);
+        const matches = raw.match(/ocr-p\d+-r\d+/g) || [];
+        matches.forEach(id => rowIds.add(id));
+    };
+
+    for (const item of items) {
+        addValue(item.sourceRowId);
+        addValue(item.sourceRowIds);
+        addValue(item.source_row_id);
+        addValue(item.source_row_ids);
+    }
+    return rowIds;
+}
 
 /**
  * Main handler — registered as 'engineering_extraction' in the job worker.
@@ -392,6 +419,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let engItems: any[] = [];
     let screening: EngineeringItemScreeningResult | null = null;
     let modelUsed = 'gemini-2.5-flash';
+    let ocrRowCoverageMeta: any = null;
 
     try {
         const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}`;
@@ -472,27 +500,115 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
         if (hasOcrText) {
             // ── TEXT-BATCH MODE: Split OCR context by pages ──
-            const pagesTokens = ocrContext.split('\n══ Página ');
-            const header = pagesTokens[0];
-            const actualPages = pagesTokens.slice(1).map(p => '══ Página ' + p);
-            
-            const PAGES_PER_BATCH = 8;
-            const totalBatches = Math.ceil(actualPages.length / PAGES_PER_BATCH);
+            const rowCandidateExtraction = extractBudgetRowCandidatesFromMarkdown(ocrContext);
+            const rowBatches = buildBudgetRowCandidateBatches(rowCandidateExtraction.candidates, 25);
 
-            logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-pro.`);
+            if (rowCandidateExtraction.candidates.length >= 10 && rowBatches.length > 0) {
+                const consumedRowIds = new Set<string>();
+                let retryBatchCount = 0;
 
-            for (let i = 0; i < totalBatches; i++) {
-                const batchPages = actualPages.slice(i * PAGES_PER_BATCH, (i + 1) * PAGES_PER_BATCH);
-                const batchOcr = header + '\n' + batchPages.join('\n');
-                const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
-                
-                await updateJobProgress(job.id, tenantId, {
-                    progress: Math.min(30 + Math.round(((i + 1) / totalBatches) * 50), 80),
-                    progressMsg: `Extraindo itens escaneados (${batchLabel}) — ${engItems.length} itens extraídos...`
-                }).catch(() => {});
+                logger.info(
+                    `[Engineering-BG] 📦 OCR ROW MODE: ${rowCandidateExtraction.candidates.length} row candidates ` +
+                    `across ${rowCandidateExtraction.pageCount} page(s), ${rowBatches.length} batch(es).`
+                );
 
-                const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
-                await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
+                for (const batch of rowBatches) {
+                    const batchLabel = `Lote OCR Linhas ${batch.index}/${batch.total}`;
+
+                    await updateJobProgress(job.id, tenantId, {
+                        progress: Math.min(30 + Math.round((batch.index / batch.total) * 50), 80),
+                        progressMsg: `Extraindo linhas OCR (${batchLabel}) — ${engItems.length} itens extraídos...`
+                    }).catch(() => {});
+
+                    const formattedRows = formatBudgetRowCandidatesForPrompt(batch.candidates);
+                    const batchInstruction = `${userInstruction}\n\n` +
+                        `CONTROLE DE COBERTURA POR LINHA OCR:\n` +
+                        `Abaixo ha linhas candidatas da planilha. Cada linha tem um rowId estavel (ex: ocr-p7-r12).\n` +
+                        `Avalie TODAS as linhas listadas neste lote. Para cada item/etapa/subetapa extraido, inclua "sourceRowId" ` +
+                        `com o rowId usado. Se uma linha nao for item orcamentario real, ignore-a.\n` +
+                        `Nao extraia conteudo fora das linhas listadas. Nao invente linhas faltantes.\n\n` +
+                        `${formattedRows}`;
+
+                    const beforeCount = engItems.length;
+                    await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
+                    for (const rowId of collectSourceRowIdsFromItems(engItems.slice(beforeCount))) {
+                        consumedRowIds.add(rowId);
+                    }
+
+                    const missingRows = batch.candidates.filter(candidate => !consumedRowIds.has(candidate.rowId));
+                    const missingRatio = missingRows.length / batch.candidates.length;
+                    if (missingRows.length > 0 && (missingRows.length > 3 || missingRatio > 0.10)) {
+                        retryBatchCount++;
+                        const retryLabel = `${batchLabel} - retry faltantes`;
+                        const retryInstruction = `${userInstruction}\n\n` +
+                            `REPROCESSAMENTO POR COBERTURA:\n` +
+                            `O lote anterior nao retornou sourceRowId para ${missingRows.length} linha(s). ` +
+                            `Reavalie APENAS as linhas abaixo. Inclua "sourceRowId" em cada item extraido. ` +
+                            `Se uma linha for subtotal/cabecalho de tabela/ruido, ignore-a.\n\n` +
+                            `${formatBudgetRowCandidatesForPrompt(missingRows)}`;
+                        const beforeRetryCount = engItems.length;
+                        logger.warn(
+                            `[Engineering-BG] ⚠️ OCR row coverage retry for ${batchLabel}: ` +
+                            `${missingRows.length}/${batch.candidates.length} row(s) missing sourceRowId.`
+                        );
+                        await extractChunk([{ role: 'user', parts: [{ text: retryInstruction }] }], retryLabel, retryInstruction, 'gemini-2.5-pro', true);
+                        for (const rowId of collectSourceRowIdsFromItems(engItems.slice(beforeRetryCount))) {
+                            consumedRowIds.add(rowId);
+                        }
+                    }
+                }
+
+                const missingRowIds = rowCandidateExtraction.candidates
+                    .map(candidate => candidate.rowId)
+                    .filter(rowId => !consumedRowIds.has(rowId));
+                const coveragePercent = rowCandidateExtraction.candidates.length > 0
+                    ? Math.round((consumedRowIds.size / rowCandidateExtraction.candidates.length) * 100)
+                    : 0;
+
+                ocrRowCoverageMeta = {
+                    provider: 'zerox_markdown_row_candidates',
+                    candidateCount: rowCandidateExtraction.candidates.length,
+                    pageCount: rowCandidateExtraction.pageCount,
+                    batchCount: rowBatches.length,
+                    retryBatchCount,
+                    consumedRowCount: consumedRowIds.size,
+                    missingRowCount: missingRowIds.length,
+                    coveragePercent,
+                    missingRowIds: missingRowIds.slice(0, 80),
+                    missingRowIdsTruncated: missingRowIds.length > 80,
+                };
+
+                const coverageMessage =
+                    `[Engineering-BG] OCR row coverage: ${coveragePercent}% ` +
+                    `(${consumedRowIds.size}/${rowCandidateExtraction.candidates.length} row candidates consumed, ` +
+                    `${missingRowIds.length} missing).`;
+
+                if (coveragePercent >= 80) {
+                    logger.info(coverageMessage);
+                } else {
+                    logger.warn(coverageMessage);
+                }
+            } else {
+                const pagesTokens = ocrContext.split('\n══ Página ');
+                const header = pagesTokens[0];
+                const actualPages = pagesTokens.slice(1).map(p => '══ Página ' + p);
+                const PAGES_PER_BATCH = 8;
+                const totalBatches = Math.ceil(actualPages.length / PAGES_PER_BATCH);
+
+                logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-pro.`);
+
+                for (let i = 0; i < totalBatches; i++) {
+                    const batchPages = actualPages.slice(i * PAGES_PER_BATCH, (i + 1) * PAGES_PER_BATCH);
+                    const batchOcr = header + '\n' + batchPages.join('\n');
+                    const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
+                    await updateJobProgress(job.id, tenantId, {
+                        progress: Math.min(30 + Math.round(((i + 1) / totalBatches) * 50), 80),
+                        progressMsg: `Extraindo itens escaneados (${batchLabel}) — ${engItems.length} itens extraídos...`
+                    }).catch(() => {});
+
+                    const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
+                    await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
+                }
             }
         }
 
@@ -767,7 +883,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         estimatedValue = biddingForValue?.estimatedValue || null;
     } catch { /* ignore */ }
 
-    const validationReport = validateEngineeringExtraction(engItems, estimatedValue, screening || undefined);
+    const validationReport = validateEngineeringExtraction(engItems, estimatedValue, screening || undefined, ocrRowCoverageMeta);
 
     await updateJobProgress(job.id, tenantId, {
         progress: 90,
@@ -783,6 +899,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         zeroxFallback: zeroxFallbackMeta,
         originalSizeKB: Math.round(totalOriginalKB),
         submittedSizeKB: Math.round(totalTrimmedKB),
+        ocrRowCoverage: ocrRowCoverageMeta,
         status: validationReport.publishable ? 'published' : 'quality_quarantine',
     });
 
@@ -826,6 +943,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             issueCount: validationReport.issues.length,
             rejectedItems: validationReport.rejectedItems?.length || 0,
         },
+        ocrRowCoverage: ocrRowCoverageMeta ? {
+            candidateCount: ocrRowCoverageMeta.candidateCount,
+            consumedRowCount: ocrRowCoverageMeta.consumedRowCount,
+            missingRowCount: ocrRowCoverageMeta.missingRowCount,
+            coveragePercent: ocrRowCoverageMeta.coveragePercent,
+            retryBatchCount: ocrRowCoverageMeta.retryBatchCount,
+        } : null,
         benchmark: benchmarkResult ? {
             caseId: benchmarkResult.caseId,
             score: benchmarkResult.totalScore,
@@ -877,6 +1001,7 @@ async function mergeEngineeringResults(
             issues: validationReport.issues,
             itemQuality: validationReport.itemQuality,
             rejectedItems: validationReport.rejectedItems,
+            rowCoverage: validationReport.rowCoverage || null,
             validatedAt: new Date().toISOString(),
         };
     }
