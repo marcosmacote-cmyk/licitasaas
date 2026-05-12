@@ -347,7 +347,6 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // ── SCANNED PDF RECOVERY ──
     // If all PDFs were scanned and pdfParts is empty.
     const hasOcrText = ocrContext.length > 500;
-    const isPureTextScannedPdf = pdfParts.length === 0 && hasOcrText;
 
     if (pdfParts.length === 0 && rawPdfBuffers.length > 0) {
         if (hasOcrText) {
@@ -395,18 +394,17 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let modelUsed = 'gemini-2.5-flash';
 
     try {
-        const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}`;
+        const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}`;
         let totalRepairs: string[] = [];
         const seenItemKeys = new Set<string>();
-        const targetModel = isPureTextScannedPdf ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
         // Helper function for the extraction loop (handles MAX_TOKENS continuation)
-        const extractChunk = async (contents: any[], batchLabel: string, batchInstruction: string) => {
+        const extractChunk = async (contents: any[], batchLabel: string, batchInstruction: string, modelToUse: string, isTextOnly: boolean) => {
             let loopCount = 0;
             try {
                 while (loopCount < 8) {
                     const result = await callGeminiWithRetry(ai.models, {
-                        model: targetModel,
+                        model: modelToUse,
                         contents,
                         config: {
                             systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
@@ -460,7 +458,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 const fallbackResult = await fallbackToOpenAiV2({
                     systemPrompt: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
                     userPrompt: batchInstruction,
-                    pdfParts: isPureTextScannedPdf ? undefined : pdfParts,
+                    pdfParts: isTextOnly ? undefined : pdfParts,
                     temperature: 0.1,
                     maxTokens: 16384,
                     stageName: 'Engineering BG Extraction'
@@ -472,7 +470,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             }
         };
 
-        if (isPureTextScannedPdf) {
+        if (hasOcrText) {
             // ── TEXT-BATCH MODE: Split OCR context by pages ──
             const pagesTokens = ocrContext.split('\n══ Página ');
             const header = pagesTokens[0];
@@ -481,26 +479,28 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             const PAGES_PER_BATCH = 8;
             const totalBatches = Math.ceil(actualPages.length / PAGES_PER_BATCH);
 
-            logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes.`);
+            logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-pro.`);
 
             for (let i = 0; i < totalBatches; i++) {
                 const batchPages = actualPages.slice(i * PAGES_PER_BATCH, (i + 1) * PAGES_PER_BATCH);
                 const batchOcr = header + '\n' + batchPages.join('\n');
-                const batchLabel = `Lote ${i + 1}/${totalBatches}`;
+                const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
                 
                 await updateJobProgress(job.id, tenantId, {
                     progress: Math.min(30 + Math.round(((i + 1) / totalBatches) * 50), 80),
-                    progressMsg: `Extraindo planilha (${batchLabel}) — ${engItems.length} itens extraídos...`
+                    progressMsg: `Extraindo itens escaneados (${batchLabel}) — ${engItems.length} itens extraídos...`
                 }).catch(() => {});
 
-                const batchInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
-                await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction);
+                const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
+                await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
             }
-        } else {
-            // ── STANDARD MODE: All at once ──
-            logger.info(`[Engineering-BG] 🤖 STANDARD MODE: Extração unificada (Flash).`);
-            const batchInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}`;
-            await extractChunk([{ role: 'user', parts: [...pdfParts, { text: batchInstruction }] }], 'Lote Único', batchInstruction);
+        }
+
+        if (pdfParts.length > 0) {
+            // ── STANDARD MODE: Native PDFs ──
+            logger.info(`[Engineering-BG] 🤖 STANDARD MODE: Extração unificada para PDFs não escaneados (gemini-2.5-flash).`);
+            const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens orçamentários das páginas visuais fornecidas.`;
+            await extractChunk([{ role: 'user', parts: [...pdfParts, { text: batchInstruction }] }], 'Lote PDF Nativo', batchInstruction, 'gemini-2.5-flash', false);
         }
 
         clearInterval(progressTimer);
