@@ -42,6 +42,7 @@ import {
     extractBudgetRowCandidatesFromMarkdown,
     formatBudgetRowCandidatesForPrompt,
 } from './engineering/budgetRowCandidateExtractor';
+import { buildScannedPdfVisualBatches, type ScannedPdfVisualBatch } from './engineering/scannedPdfVisualFallback';
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
 
@@ -235,6 +236,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let targetingUsed = false;
     let zeroxFallbackUsed = false;
     let zeroxFallbackMeta: any = null;
+    let scannedPdfVisualBatches: ScannedPdfVisualBatch[] = [];
 
     for (const { buffer, source } of rawPdfBuffers) {
         totalOriginalKB += buffer.length / 1024;
@@ -361,19 +363,37 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `${zeroxResult.totalPages} páginas, ${zeroxResult.markdown.length} chars`
                     );
                 } else {
-                    logger.info('[Engineering-BG] Zerox fallback não gerou markdown suficiente; mantendo apenas PDF inline.');
+                    logger.info('[Engineering-BG] Zerox fallback não gerou markdown suficiente; preparando fallback visual para PDFs escaneados.');
                 }
             } else {
-                logger.info('[Engineering-BG] Zerox fallback indisponível; mantendo apenas PDF inline.');
+                logger.info('[Engineering-BG] Zerox fallback indisponível; preparando fallback visual para PDFs escaneados.');
             }
         } catch (err: any) {
-            logger.warn(`[Engineering-BG] ⚠️ Zerox fallback falhou: ${err.message}. Mantendo PDF inline.`);
+            logger.warn(`[Engineering-BG] ⚠️ Zerox fallback falhou: ${err.message}. Preparando fallback visual para PDFs escaneados.`);
         }
     }
 
     // ── SCANNED PDF RECOVERY ──
-    // If all PDFs were scanned and pdfParts is empty.
     const hasOcrText = ocrContext.length > 500;
+    const scannedPdfCandidates = zeroxFallbackCandidates.filter(candidate => candidate.reason === 'scanned_pdf_no_text_layer');
+
+    if (!hasOcrText && scannedPdfCandidates.length > 0) {
+        try {
+            scannedPdfVisualBatches = await buildScannedPdfVisualBatches(
+                scannedPdfCandidates.map(candidate => ({
+                    buffer: candidate.buffer,
+                    fileName: candidate.fileName,
+                })),
+                { pagesPerBatch: 6 }
+            );
+            logger.warn(
+                `[Engineering-BG] 📸 OCR indisponível/insuficiente para ${scannedPdfCandidates.length} PDF(s) escaneado(s). ` +
+                `Fallback visual preparado em ${scannedPdfVisualBatches.length} lote(s) de até 6 página(s).`
+            );
+        } catch (err: any) {
+            logger.warn(`[Engineering-BG] ⚠️ Falha ao preparar fallback visual de PDF escaneado: ${err.message}.`);
+        }
+    }
 
     if (pdfParts.length === 0 && rawPdfBuffers.length > 0) {
         if (hasOcrText) {
@@ -382,6 +402,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 `OCR disponível (${ocrContext.length} chars) — MODO TEXTO PURO (PDFs visuais NÃO serão enviados para evitar sobrecarga).`
             );
             // We DO NOT add the raw PDFs to pdfParts. We rely purely on the OCR text.
+        } else if (scannedPdfVisualBatches.length > 0) {
+            logger.info(
+                `[Engineering-BG] 📸 Todos os PDFs são escaneados e OCR falhou. ` +
+                `Usando fallback visual em lotes pequenos (PDF bruto inteiro NÃO será enviado de uma vez).`
+            );
         } else {
             logger.warn(
                 `[Engineering-BG] 📸 Todos os PDFs são escaneados, MAS OCR FALHOU. ` +
@@ -398,7 +423,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
     await updateJobProgress(job.id, tenantId, {
         progress: 25,
-        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (com OCR de apoio)' : ''}${ocrContext.length > 500 && !zeroxFallbackUsed ? ' (OCR texto)' : ''}`
+        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (com OCR de apoio)' : ''}${ocrContext.length > 500 && !zeroxFallbackUsed ? ' (OCR texto)' : ''}${scannedPdfVisualBatches.length > 0 ? ' (fallback visual escaneado)' : ''}`
     });
 
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
@@ -609,6 +634,51 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
                     await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
                 }
+            }
+        }
+
+        if (scannedPdfVisualBatches.length > 0) {
+            logger.warn(
+                `[Engineering-BG] 📸 SCANNED VISUAL BATCH MODE: processando ` +
+                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-pro.`
+            );
+
+            for (const batch of scannedPdfVisualBatches) {
+                const batchLabel =
+                    `Lote Visual Escaneado ${batch.globalBatchIndex}/${batch.totalGlobalBatches} ` +
+                    `(${batch.fileName} p.${batch.startPage}-${batch.endPage})`;
+
+                await updateJobProgress(job.id, tenantId, {
+                    progress: Math.min(30 + Math.round((batch.globalBatchIndex / batch.totalGlobalBatches) * 45), 78),
+                    progressMsg: `Extraindo páginas escaneadas (${batchLabel}) — ${engItems.length} itens extraídos...`
+                }).catch(() => {});
+
+                const batchInstruction = `${userInstruction}\n\n` +
+                    `FALLBACK VISUAL PARA PDF ESCANEADO:\n` +
+                    `Você está recebendo APENAS as páginas ${batch.startPage}-${batch.endPage} do arquivo "${batch.fileName}". ` +
+                    `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n` +
+                    `Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições. ` +
+                    `Não pare na primeira tabela. Não use dados de outros lotes. ` +
+                    `Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
+
+                await extractChunk(
+                    [{
+                        role: 'user',
+                        parts: [
+                            {
+                                inlineData: {
+                                    data: batch.pdfBuffer.toString('base64'),
+                                    mimeType: 'application/pdf',
+                                },
+                            },
+                            { text: batchInstruction },
+                        ],
+                    }],
+                    batchLabel,
+                    batchInstruction,
+                    'gemini-2.5-pro',
+                    false
+                );
             }
         }
 
@@ -897,6 +967,17 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         pageTargetingUsed: targetingUsed,
         zeroxFallbackUsed,
         zeroxFallback: zeroxFallbackMeta,
+        scannedVisualFallback: scannedPdfVisualBatches.length > 0 ? {
+            batchCount: scannedPdfVisualBatches.length,
+            pagesProcessed: scannedPdfVisualBatches.reduce((sum, batch) => sum + batch.pageCount, 0),
+            files: Array.from(new Set(scannedPdfVisualBatches.map(batch => batch.fileName))).map(fileName => ({
+                fileName,
+                batchCount: scannedPdfVisualBatches.filter(batch => batch.fileName === fileName).length,
+                pagesProcessed: scannedPdfVisualBatches
+                    .filter(batch => batch.fileName === fileName)
+                    .reduce((sum, batch) => sum + batch.pageCount, 0),
+            })),
+        } : null,
         originalSizeKB: Math.round(totalOriginalKB),
         submittedSizeKB: Math.round(totalTrimmedKB),
         ocrRowCoverage: ocrRowCoverageMeta,
@@ -935,6 +1016,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         model: modelUsed,
         pageTargeting: targetingUsed,
         zeroxFallback: zeroxFallbackUsed ? zeroxFallbackMeta : null,
+        scannedVisualFallback: scannedPdfVisualBatches.length > 0 ? {
+            batchCount: scannedPdfVisualBatches.length,
+            pagesProcessed: scannedPdfVisualBatches.reduce((sum, batch) => sum + batch.pageCount, 0),
+        } : null,
         validation: {
             qualityScore: validationReport.qualityScore,
             publishable: validationReport.publishable,
