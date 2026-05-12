@@ -400,7 +400,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         // Track seen items across chunks to deduplicate
         const seenItemKeys = new Set<string>();
 
-        const targetModel = isPureTextScannedPdf ? 'gemini-1.5-pro' : 'gemini-2.5-flash';
+        const targetModel = isPureTextScannedPdf ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
         logger.info(`[Engineering-BG] 🤖 Modelo selecionado: ${targetModel} (isPureTextScannedPdf: ${isPureTextScannedPdf})`);
 
         // ── STANDARD MODE: Single call with all PDFs (or pure text) ──
@@ -520,7 +520,6 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     totalRepairs.push(...normalizedChunk.repairs);
                 }
             }
-        } // end else (standard mode)
 
         clearInterval(progressTimer);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
