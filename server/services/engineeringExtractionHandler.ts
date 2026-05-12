@@ -235,13 +235,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 );
             } else {
                 // Targeting not applicable or failed — use full PDF
-                totalTrimmedKB += buffer.length / 1024;
-                pdfParts.push({
-                    inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
-                });
 
                 // Detect scanned PDFs — these ALWAYS need OCR
                 if (targeting.isScannedPdf) {
+                    // For scanned PDFs, DON'T add the raw PDF to pdfParts yet.
+                    // Image-heavy PDFs (10MB+) overwhelm Gemini and cause it to skip items.
+                    // Instead, we'll rely on Zerox OCR as the PRIMARY source.
+                    // The raw PDF is added as visual backup ONLY if OCR fails.
                     zeroxFallbackCandidates.push({
                         buffer,
                         fileName: source,
@@ -250,16 +250,23 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     logger.warn(
                         `[Engineering-BG] 📸 PDF escaneado detectado: "${source}" ` +
                         `(${targeting.totalPages} pgs, ${targeting.scannedPagesPercent}% sem texto). ` +
-                        `Zerox OCR será acionado obrigatoriamente.`
+                        `OCR será fonte primária — PDF bruto NÃO enviado ao Gemini (${(buffer.length / 1024).toFixed(0)} KB muito pesado).`
                     );
-                } else if (targeting.totalPages >= 15 && targeting.strategy === 'full' && !targeting.trimmedPdfBuffer) {
-                    zeroxFallbackCandidates.push({
-                        buffer,
-                        fileName: source,
-                        reason: 'page_targeting_full_document',
+                    // Don't add to pdfParts — will be handled by OCR path below
+                } else {
+                    totalTrimmedKB += buffer.length / 1024;
+                    pdfParts.push({
+                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                     });
+                    if (targeting.totalPages >= 15 && targeting.strategy === 'full' && !targeting.trimmedPdfBuffer) {
+                        zeroxFallbackCandidates.push({
+                            buffer,
+                            fileName: source,
+                            reason: 'page_targeting_full_document',
+                        });
+                    }
                 }
-                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages${targeting.isScannedPdf ? ', SCANNED' : ''})`);
+                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages${targeting.isScannedPdf ? ', SCANNED — deferred to OCR' : ''})`);
             }
         } catch (err: any) {
             // Page targeting failed — fall back to full PDF
@@ -335,9 +342,27 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         }
     }
 
+    // ── SCANNED PDF RECOVERY ──
+    // If all PDFs were scanned and pdfParts is empty, add them back as visual backup.
+    // Gemini CAN read scanned images, but with heavy PDFs it loses context.
+    // Strategy: send PDF + OCR text combined so Gemini uses both.
+    if (pdfParts.length === 0 && rawPdfBuffers.length > 0) {
+        const hasOcrText = ocrContext.length > 500;
+        logger.info(
+            `[Engineering-BG] 📸 Todos os PDFs são escaneados. ` +
+            `${hasOcrText ? `OCR disponível (${ocrContext.length} chars) — modo híbrido (PDF visual + OCR textual)` : 'OCR não disponível — enviando PDFs brutos ao Gemini'}`
+        );
+        for (const { buffer, source } of rawPdfBuffers) {
+            totalTrimmedKB += buffer.length / 1024;
+            pdfParts.push({
+                inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+            });
+        }
+    }
+
     await updateJobProgress(job.id, tenantId, {
         progress: 25,
-        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (OCR de apoio)' : ''}`
+        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (com OCR de apoio)' : ''}${ocrContext.length > 500 && !zeroxFallbackUsed ? ' (OCR texto)' : ''}`
     });
 
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
