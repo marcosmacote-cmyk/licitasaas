@@ -158,7 +158,7 @@ function EncargosDetailTable({ es, onChange }: { es: any, onChange: (newEs: any)
         nextEs.mensalista = Math.round((nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista) * 100) / 100;
         onChange(nextEs);
     };
-    const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '3px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' };
+    const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '4px 6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none', transition: 'border-color 0.2s' };
     return (
         <div style={{ marginTop: 8 }}>
             <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
@@ -234,7 +234,9 @@ export function Step1ConfigPanel({
         display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6,
     };
     const inputStyle: React.CSSProperties = {
-        width: '100%', fontSize: '0.85rem', background: 'var(--color-bg-base)', padding: '6px 10px',
+        width: '100%', fontSize: '0.85rem', fontWeight: 600, background: 'var(--color-bg-base)', padding: '8px 12px',
+        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+        transition: 'border-color 0.2s', outline: 'none',
     };
 
     return (
@@ -321,7 +323,7 @@ export function Step1ConfigPanel({
                         <textarea className="form-input" rows={2} value={engineeringConfig.objeto}
                             onChange={e => onConfigChange({ ...engineeringConfig, objeto: e.target.value })}
                             placeholder="Ex: Construção de quadra poliesportiva..."
-                            style={{ ...inputStyle, resize: 'none', padding: '8px 12px', borderRadius: 'var(--radius-md)' }} />
+                            style={{ ...inputStyle, resize: 'none' }} />
                     </div>
 
                     {/* UF */}
@@ -507,7 +509,7 @@ export function Step1ConfigPanel({
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu[key]}
                                             onChange={e => updateTcu(key, parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                            style={inputStyle} step="0.01" />
                                     </div>
                                 ))}
                             </div>
@@ -520,7 +522,7 @@ export function Step1ConfigPanel({
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
                                         onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
-                                        style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                        style={inputStyle} step="0.01" />
                                 </div>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -529,7 +531,7 @@ export function Step1ConfigPanel({
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
                                         onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
-                                        style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600, borderColor: 'rgba(37,99,235,0.25)' }} step="0.01" />
+                                        style={inputStyle} step="0.01" />
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37,99,235,0.12)', paddingTop: 8, marginTop: 4 }}>
@@ -539,25 +541,25 @@ export function Step1ConfigPanel({
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>PIS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.pis}
                                             onChange={e => updateTcu('pis', parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                            style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>COFINS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.cofins}
                                             onChange={e => updateTcu('cofins', parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                            style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>ISS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.iss}
                                             onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                            style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
                                         <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>CSLL (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
                                             onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
-                                            style={{ ...inputStyle, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600 }} step="0.01" />
+                                            style={inputStyle} step="0.01" />
                                     </div>
                                 </div>
                             </div>
@@ -594,7 +596,7 @@ export function Step1ConfigPanel({
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.68rem', color: '#92400e' }}>{label} (%)</label>
                                                 <input type="number" className="form-input" value={tcuF[key]}
                                                     onChange={e => updateTcuFornecimento(key, parseLocaleNumber(e.target.value))}
-                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                    style={inputStyle} step="0.01" />
                                             </div>
                                         ))}
                                     </div>
@@ -603,13 +605,13 @@ export function Step1ConfigPanel({
                                             <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.68rem', color: '#92400e' }}>Desp. Financeiras (%)</label>
                                             <input type="number" className="form-input" value={tcuF.despFinanceiras}
                                                 onChange={e => updateTcuFornecimento('despFinanceiras', parseLocaleNumber(e.target.value))}
-                                                style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                style={inputStyle} step="0.01" />
                                         </div>
                                         <div>
                                             <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.68rem', color: '#92400e' }}>Lucro (%)</label>
                                             <input type="number" className="form-input" value={tcuF.lucro}
                                                 onChange={e => updateTcuFornecimento('lucro', parseLocaleNumber(e.target.value))}
-                                                style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.25)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                style={inputStyle} step="0.01" />
                                         </div>
                                     </div>
                                     <div style={{ borderTop: '1px solid rgba(180,83,9,0.15)', paddingTop: 8, marginTop: 4 }}>
@@ -619,25 +621,25 @@ export function Step1ConfigPanel({
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>PIS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.pis}
                                                     onChange={e => updateTcuFornecimento('pis', parseLocaleNumber(e.target.value))}
-                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                    style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>COFINS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.cofins}
                                                     onChange={e => updateTcuFornecimento('cofins', parseLocaleNumber(e.target.value))}
-                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                    style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>ISS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.iss}
                                                     onChange={e => updateTcuFornecimento('iss', parseLocaleNumber(e.target.value))}
-                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                    style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
                                                 <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>CSLL (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.csll || 0}
                                                     onChange={e => updateTcuFornecimento('csll', parseLocaleNumber(e.target.value))}
-                                                    style={{ ...inputStyle, padding: '7px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(180,83,9,0.2)', fontSize: '0.82rem', fontWeight: 600 }} step="0.01" />
+                                                    style={inputStyle} step="0.01" />
                                             </div>
                                         </div>
                                     </div>
@@ -732,14 +734,14 @@ export function Step1ConfigPanel({
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1e40af', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.horista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.horista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, horista: parseLocaleNumber(e.target.value) } })}
-                                    style={{ width: '100%', marginTop: 12, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(30,64,175,0.2)' }} />
+                                    style={{ ...inputStyle, marginTop: 12, textAlign: 'center', border: 'none', background: 'transparent' }} />
                             </div>
                             <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(109,40,217,0.04), rgba(139,92,246,0.06))', border: '1px solid rgba(109,40,217,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                                 <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Mensalista</div>
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6d28d9', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.mensalista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.mensalista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value) } })}
-                                    style={{ width: '100%', marginTop: 12, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(109,40,217,0.2)' }} />
+                                    style={{ ...inputStyle, marginTop: 12, textAlign: 'center', border: 'none', background: 'transparent' }} />
                             </div>
                         </div>
 
@@ -790,7 +792,7 @@ export function Step1ConfigPanel({
                                                 sheets[idx] = { ...sheets[idx], label: e.target.value };
                                                 onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                             }}
-                                            style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, padding: '6px 10px', borderRadius: 'var(--radius-md)', borderColor: 'rgba(109,40,217,0.2)' }} />
+                                            style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none' }} />
                                         {/* Image paste button */}
                                         <button onClick={async () => {
                                             try {
