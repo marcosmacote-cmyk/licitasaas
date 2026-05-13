@@ -825,6 +825,21 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             logger.info(`[Engineering-BG] ⏱️ Timing breakdown: ${phaseTimingLog}, total=${elapsed}s`);
         }
 
+        // FIX-ORDER-01: Sort items by hierarchical item number.
+        // Parallel batch extraction (PERF-06/07) causes items to arrive out-of-order
+        // (e.g., batch 3 finishes before batch 2, so item 1.8 appears after 2.0).
+        // Sort using numeric comparison of each segment: "1.8" < "2.0" < "2.1" < "10.1"
+        engItems.sort((a: any, b: any) => {
+            const pa = String(a.item || '0').split('.').map(Number);
+            const pb = String(b.item || '0').split('.').map(Number);
+            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                const diff = (pa[i] || 0) - (pb[i] || 0);
+                if (diff !== 0) return diff;
+            }
+            return 0;
+        });
+        logger.info(`[Engineering-BG] 🔄 Itens reordenados por numeração hierárquica (${engItems.length} itens).`);
+
         if (totalRepairs.length > 0) {
             logger.info(
                 `[Engineering-BG] 🛠️ Normalização aplicou ${totalRepairs.length} reparo(s): ` +
