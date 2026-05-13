@@ -338,7 +338,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         concurrency: 2,
                         maintainFormat: true,
                         temperature: 0.1,
-                        timeoutMs: hasScannedPdfs ? 180_000 : 30_000, // 3min for scanned, 30s for text
+                        // FIX OCR-01: Increased timeout for scanned PDFs from 180s to 300s.
+                        // Real-world 10MB scanned PDFs with 18-20 pages consistently exceed 180s
+                        // due to per-page vision OCR overhead (Gemini Vision ~8-15s/page × 20 pages).
+                        timeoutMs: hasScannedPdfs ? 300_000 : 30_000, // 5min for scanned, 30s for text
                     }
                 );
 
@@ -380,7 +383,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     const scannedPdfVisualFallbackEnabled = process.env.ENGINEERING_SCANNED_VISUAL_FALLBACK === 'true';
 
     if (!hasOcrText && scannedPdfCandidates.length > 0) {
-        if (scannedPdfVisualFallbackEnabled) {
+        // FIX OCR-02: Auto-enable visual fallback when OCR fails for scanned PDFs.
+        // Previously gated behind ENGINEERING_SCANNED_VISUAL_FALLBACK env var (never set in production),
+        // causing 100% failure on scanned-only extractions. The visual fallback sends small batches
+        // (6 pages at a time) to Gemini 2.5 Pro, which is safe and effective for budget tables.
+        const shouldUseVisualFallback = scannedPdfVisualFallbackEnabled || scannedPdfCandidates.length > 0;
+        if (shouldUseVisualFallback) {
             try {
                 scannedPdfVisualBatches = await buildScannedPdfVisualBatches(
                     scannedPdfCandidates.map(candidate => ({
@@ -391,7 +399,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 );
                 logger.warn(
                     `[Engineering-BG] 📸 OCR indisponível/insuficiente para ${scannedPdfCandidates.length} PDF(s) escaneado(s). ` +
-                    `Fallback visual preparado em ${scannedPdfVisualBatches.length} lote(s) de até 6 página(s).`
+                    `Fallback visual AUTO-ATIVADO — ${scannedPdfVisualBatches.length} lote(s) de até 6 página(s).`
                 );
             } catch (err: any) {
                 scannedPdfOcrFailureWithoutSafeFallback = true;
