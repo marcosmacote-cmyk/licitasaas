@@ -260,7 +260,12 @@ export function screenEngineeringItems(items: any[]): EngineeringItemScreeningRe
         const desc = String(item.description || '').toLowerCase().trim().substring(0, 80);
         const qty = Number(item.quantity) || 0;
         const cost = Number(item.unitCost) || 0;
-        const fp = `${desc}|${qty}|${cost}`;
+        // FIX-DEDUP-01: Include item number in fingerprint.
+        // Items with DIFFERENT numbers but identical descriptions are legitimate
+        // (same service in different locations, e.g., 2.3.2.3 vs 2.4.2.3).
+        // Only collapse true duplicates: same item number + same content.
+        const itemNum = String(item.item || '').trim();
+        const fp = `${itemNum}|${desc}|${qty}|${cost}`;
 
         const existing = fingerprints.get(fp);
         if (existing) {

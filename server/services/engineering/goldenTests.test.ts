@@ -172,15 +172,17 @@ describe('Golden Tests — Extração de Engenharia', () => {
             expect(rejectedItems).toContain('99'); // subtotal
         });
 
-        it('deduplication removes exact duplicate', () => {
+        it('deduplication preserves items with different numbers even if description matches', () => {
             const items = JSON.parse(JSON.stringify(FIXTURE_PROBLEMAS));
             postClassifyTypes(items);
             const screening = screenEngineeringItems(items);
-            // Items 1.2 and 1.3 are duplicates; only one should survive
+            // Items 1.2 and 1.3 have DIFFERENT item numbers but same description.
+            // FIX-DEDUP-01: Both should survive because in real budgets,
+            // identical services in different sections are legitimate.
             const tapumeItems = screening.acceptedItems.filter(
                 (it: any) => String(it.description).includes('TAPUME')
             );
-            expect(tapumeItems).toHaveLength(1);
+            expect(tapumeItems).toHaveLength(2);
         });
 
         it('validator detects issues', () => {

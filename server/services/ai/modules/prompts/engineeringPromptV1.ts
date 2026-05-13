@@ -68,12 +68,12 @@ REGRAS DE CLASSIFICAÇÃO
   - Se a mesma descrição se repete mais de 3 vezes → CPU (ERRADO)
 
 🚨🚨🚨 REGRA ANTI-DUPLICAÇÃO E NUMERAÇÃO (CRÍTICA):
-  - NUNCA emita o mesmo item (mesma descrição + mesmos valores) mais de 1 vez.
+  - NUNCA emita o mesmo item (mesma descrição + mesmos valores + MESMO NÚMERO DE ITEM) mais de 1 vez.
   - NUNCA repita o mesmo número de item (ex: "1.3") para múltiplos serviços diferentes.
   - Se a planilha original mostrar um agrupador "1.3 Movimento de Terra" e os itens abaixo dele não tiverem numeração explícita, VOCÊ DEVE CRIAR a numeração sequencial correta (ex: "1.3.1", "1.3.2", "1.3.3").
   - É ESTRITAMENTE PROIBIDO retornar 5 itens diferentes todos com o número "1.3". Cada linha DEVE ter um item number único.
-  - Se a planilha mostra o mesmo serviço aplicado em vários locais/pavimentos, extraia APENAS 1 linha com a SOMA das quantidades.
-  - Se você está gerando itens 3.1.1, 3.1.2, 3.1.3... com a MESMA descrição e MESMOS valores → PARE! Isso é alucinação.
+  - 🚨 ATENÇÃO — SERVIÇOS REPETIDOS EM LOCAIS DIFERENTES: É NORMAL em obras públicas que os MESMOS serviços (ex: C2090, C1196, C4966) apareçam em DIFERENTES ETAPAS/SUBETAPAS para locais distintos (ex: "2.3.2 Instalações Elétricas - Campo São José" e "2.4.2 Instalações Elétricas - Campo Caninana"). Estes itens TÊM NÚMEROS DIFERENTES (2.3.2.1 ≠ 2.4.2.1) e DEVEM ser extraídos INDIVIDUALMENTE. NÃO agrupe, NÃO some, NÃO omita. Extraia CADA UM com seu número de item único.
+  - Se você está gerando itens 3.1.1, 3.1.2, 3.1.3... com a MESMA descrição e MESMOS valores E MESMO NÚMERO → PARE! Isso é alucinação. Mas se os números são DIFERENTES (ex: 2.3.2.1, 2.4.2.1, 2.5.2.1) → são itens legítimos de locais diferentes.
 
 ═══════════════════════════════════════════════════════════
 REGRAS DE EXTRAÇÃO — CRÍTICAS
