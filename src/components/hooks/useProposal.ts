@@ -91,20 +91,12 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     useEffect(() => {
         if (!selectedCompanyId) return;
 
-        // Buscar dados frescos da empresa no servidor (evita usar cache desatualizado)
-        const loadSignatureDefaults = async () => {
-            let co = companies.find(c => c.id === selectedCompanyId);
-
-            // Tentar buscar dados frescos do servidor
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/companies`, { headers });
-                if (res.ok) {
-                    const freshCompanies = await res.json();
-                    const freshCo = freshCompanies.find((c: any) => c.id === selectedCompanyId);
-                    if (freshCo) co = freshCo;
-                }
-            } catch { /* usa dados em memória como fallback */ }
-
+        // PERF-05: Use companies prop directly instead of re-fetching all companies.
+        // The parent component already provides fresh company data. The previous
+        // GET /api/companies call added 500ms-2s of unnecessary latency on every
+        // company/bidding change, blocking the initial page render.
+        const loadSignatureDefaults = () => {
+            const co = companies.find(c => c.id === selectedCompanyId);
             if (!co) return;
 
             // ─── 1. Fonte primária: JSON dedicado (defaultSignatureConfig) ───

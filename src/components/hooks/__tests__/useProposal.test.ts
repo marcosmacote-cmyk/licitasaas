@@ -156,7 +156,8 @@ describe('useProposal', () => {
 
         it('deve criar proposta via API com dados corretos', async () => {
             const newProposal = createProposal({ id: 'prop-new' });
-            mockFetchSuccess(newProposal);
+            // First, mock the loadProposals response when bidding is selected
+            mockFetchSuccess([]);
 
             const { result } = renderUseProposal();
             act(() => {
@@ -164,7 +165,7 @@ describe('useProposal', () => {
                 result.current.setSelectedCompanyId('comp-1');
             });
 
-            // Need to clear the load proposals fetch
+            // Wait for loadProposals to complete
             await waitFor(() => {});
             (global.fetch as ReturnType<typeof vi.fn>).mockClear();
             mockFetchSuccess(newProposal);
