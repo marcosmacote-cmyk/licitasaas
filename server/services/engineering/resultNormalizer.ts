@@ -617,6 +617,36 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
             normalized.unit = '';
         }
 
+        // FIX-NORM-02: Auto-repair missing prices for COMPOSICAO items.
+        // Visual batch mode sometimes reads unitCost but misses totalPrice (or vice versa).
+        if (normalized.type === 'COMPOSICAO' || normalized.type === 'INSUMO') {
+            const q = normalized.quantity;
+            const uc = normalized.unitCost;
+            const up = normalized.unitPrice;
+            const tp = normalized.totalPrice;
+
+            // If unitPrice is missing but unitCost exists, estimate: up ≈ uc (no BDI info available)
+            if (up === 0 && uc > 0) {
+                normalized.unitPrice = uc;
+                repairs.push(`autoRepair_unitPrice:${normalized.item}`);
+            }
+
+            // If totalPrice is missing but quantity × unitPrice > 0, calculate it
+            if (tp === 0 && q > 0 && normalized.unitPrice > 0) {
+                normalized.totalPrice = Math.round(q * normalized.unitPrice * 100) / 100;
+                repairs.push(`autoRepair_totalPrice:${normalized.item}`);
+            }
+
+            // If totalPrice exists but unitPrice is 0 and quantity > 0, back-calculate
+            if (tp > 0 && normalized.unitPrice === 0 && q > 0) {
+                normalized.unitPrice = Math.round((tp / q) * 100) / 100;
+                if (normalized.unitCost === 0) {
+                    normalized.unitCost = normalized.unitPrice;
+                }
+                repairs.push(`autoRepair_backCalc:${normalized.item}`);
+            }
+        }
+
         if (normalized.item !== item.item) repairs.push(`item:${index}`);
         if (normalized.unitCost !== item.unitCost) repairs.push(`unitCost:${normalized.item}`);
         if (normalized.quantity !== item.quantity) repairs.push(`quantity:${normalized.item}`);

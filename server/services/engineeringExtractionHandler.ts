@@ -335,7 +335,9 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         fileName: candidate.fileName,
                     })),
                     {
-                        concurrency: 2,
+                        // PERF-08: Increased concurrency from 2 to 3 for scanned PDFs.
+                        // Flash handles 3 concurrent vision requests well without 503 cascades.
+                        concurrency: 3,
                         maintainFormat: true,
                         temperature: 0.1,
                         // FIX OCR-01: Increased timeout for scanned PDFs from 180s to 300s.
@@ -444,6 +446,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const t0 = Date.now();
+    // DIAG-01: Phase timing for detailed performance analysis
+    const phaseTiming: Record<string, number> = {};
 
     // Progress ticker (update every 30s while Gemini works)
     let progressPercent = 30;
@@ -568,7 +572,9 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             }
         };
 
+        let ocrPhaseStart = Date.now();
         if (hasOcrText) {
+            ocrPhaseStart = Date.now();
             // ── TEXT-BATCH MODE: Split OCR context by pages ──
             const rowCandidateExtraction = extractBudgetRowCandidatesFromMarkdown(ocrContext);
             // PERF-06: Increased batch size from 25→50 rows. Zerox produces clean structured
@@ -733,7 +739,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             }
         }
 
+        if (hasOcrText) {
+            phaseTiming['ocrExtraction'] = Date.now() - ocrPhaseStart;
+        }
+
         if (scannedPdfVisualBatches.length > 0) {
+            const visualPhaseStart = Date.now();
             logger.warn(
                 `[Engineering-BG] 📸 SCANNED VISUAL BATCH MODE: processando ` +
                 `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-pro (paralelo 2).`
@@ -761,10 +772,15 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     const batchInstruction = `${userInstruction}\n\n` +
                         `FALLBACK VISUAL PARA PDF ESCANEADO:\n` +
                         `Você está recebendo APENAS as páginas ${batch.startPage}-${batch.endPage} do arquivo "${batch.fileName}". ` +
-                        `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n` +
-                        `Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições. ` +
-                        `Não pare na primeira tabela. Não use dados de outros lotes. ` +
-                        `Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
+                        `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n\n` +
+                        `INSTRUÇÕES PARA LEITURA VISUAL DE TABELAS ESCANEADAS:\n` +
+                        `1. IDENTIFIQUE O CABEÇALHO: Localize as colunas ITEM | CÓDIGO | DESCRIÇÃO | UNID | QTD | P.UNIT S/BDI | P.UNIT C/BDI | TOTAL.\n` +
+                        `2. LEIA DA DIREITA PARA ESQUERDA: Em tabelas escaneadas, comece pela coluna TOTAL (última coluna numérica, valores maiores), depois PREÇO UNITÁRIO (coluna anterior), depois QUANTIDADE.\n` +
+                        `3. CADA COMPOSIÇÃO DEVE TER VALORES: Se um item tem código (ex: C1937, 87640) e unidade (ex: M2, M3, UN), ele OBRIGATORIAMENTE tem valores numéricos nas colunas de QTD, PREÇO e TOTAL. Se você não conseguir ler, faça o melhor esforço — NÃO retorne 0.\n` +
+                        `4. DESCRIÇÃO OBRIGATÓRIA: Cada item deve ter a descrição completa. NÃO deixe o campo "d" vazio.\n` +
+                        `5. Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições.\n` +
+                        `6. Não pare na primeira tabela. Não use dados de outros lotes.\n` +
+                        `7. Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
 
                     await extractChunk(
                         [{
@@ -788,6 +804,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
                 await Promise.allSettled(groupPromises);
             }
+            phaseTiming['visualBatch'] = Date.now() - visualPhaseStart;
         }
 
         if (pdfParts.length > 0) {
@@ -799,6 +816,14 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
         clearInterval(progressTimer);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+        // DIAG-01: Log phase timing breakdown
+        const phaseTimingLog = Object.entries(phaseTiming)
+            .map(([phase, ms]) => `${phase}=${(ms / 1000).toFixed(1)}s`)
+            .join(', ');
+        if (phaseTimingLog) {
+            logger.info(`[Engineering-BG] ⏱️ Timing breakdown: ${phaseTimingLog}, total=${elapsed}s`);
+        }
 
         if (totalRepairs.length > 0) {
             logger.info(
