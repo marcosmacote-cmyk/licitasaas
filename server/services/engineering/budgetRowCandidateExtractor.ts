@@ -34,6 +34,8 @@ export interface BudgetRowCandidateExtraction {
     candidates: BudgetRowCandidate[];
     pageCount: number;
     rejectedLineCount: number;
+    /** First table header line detected (e.g. "ITEM | CÓDIGO | DESCRIÇÃO | UNID | QTD | PREÇO UNIT...") */
+    tableHeader: string | null;
 }
 
 const UNIT_PATTERN = /\b(?:M2|M²|M3|M³|M|UN|UND|UNID|VB|CJ|GL|KG|G|T|TON|L|H|HR|HORA|MES|M[EÊ]S|DIA|KM|HA|PCT|PAR|JG|KWH)\b/i;
@@ -206,10 +208,16 @@ export function extractBudgetRowCandidatesFromMarkdown(markdown: string): Budget
     const pages = splitMarkdownPages(markdown);
     const candidates: BudgetRowCandidate[] = [];
     let rejectedLineCount = 0;
+    let tableHeader: string | null = null;
 
     for (const page of pages) {
         const lines = page.content.split(/\r?\n/);
         lines.forEach((line, index) => {
+            // Capture the first table header for column-order context
+            if (!tableHeader && TABLE_HEADER_PATTERNS.some(p => p.test(line))) {
+                tableHeader = line.trim();
+            }
+
             const scored = scoreCandidate(line);
             if (!scored) {
                 if (line.trim().length > 0) rejectedLineCount++;
@@ -229,6 +237,7 @@ export function extractBudgetRowCandidatesFromMarkdown(markdown: string): Budget
         candidates,
         pageCount: pages.length,
         rejectedLineCount,
+        tableHeader,
     };
 }
 

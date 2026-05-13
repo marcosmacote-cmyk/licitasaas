@@ -469,13 +469,18 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         config: {
                             systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,
                             temperature: 0.1,
-                            maxOutputTokens: 8192,
+                            maxOutputTokens: 65536,
                             responseMimeType: 'application/json'
                         }
                     }, 2, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_bg_extraction' } });
                         
                     const chunkText = result.text || '';
-                    logger.info(`[Engineering-BG] ✅ Gemini respondeu (${batchLabel} - Loop ${loopCount + 1}, ${chunkText.length} chars)`);
+                    // @ts-ignore — finishReason accessed early for enriched logging
+                    const finishReason = result.candidates?.[0]?.finishReason || 'UNKNOWN';
+                    logger.info(
+                        `[Engineering-BG] ✅ Gemini respondeu (${batchLabel} - Loop ${loopCount + 1}, ` +
+                        `${chunkText.length} chars, finishReason=${finishReason}, model=${modelToUse})`
+                    );
 
                     const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
                     
@@ -490,9 +495,6 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     }
                     
                     if (normalizedChunk.repaired) totalRepairs.push(...normalizedChunk.repairs);
-
-                    // @ts-ignore
-                    const finishReason = result.candidates?.[0]?.finishReason;
                     
                     if (finishReason === 'MAX_TOKENS') {
                         const lastItems = engItems.slice(-3);
@@ -510,6 +512,34 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         });
                         loopCount++;
                     } else {
+                        // ── LAZY STOP DETECTION ──
+                        // If the model stopped voluntarily (STOP) but extracted suspiciously
+                        // few items relative to the input size, it may have "given up" early.
+                        const inputCharCount = contents[0]?.parts
+                            ?.reduce((sum: number, p: any) => sum + (p.text?.length || 0), 0) || 0;
+                        const expectedMinItems = Math.max(5, Math.floor(inputCharCount / 800));
+                        
+                        if (loopCount === 0 && newItemsInChunk < expectedMinItems && newItemsInChunk < 20 && inputCharCount > 5000) {
+                            logger.warn(
+                                `[Engineering-BG] ⚠️ LAZY STOP detectado no ${batchLabel}: ` +
+                                `apenas ${newItemsInChunk} itens extraídos para ${inputCharCount} chars de input ` +
+                                `(esperado mínimo ~${expectedMinItems}). Re-enviando com instrução reforçada...`
+                            );
+                            
+                            contents.push({ role: 'model', parts: [{ text: chunkText }] });
+                            contents.push({
+                                role: 'user',
+                                parts: [{ text:
+                                    `🚨 ATENÇÃO: Você extraiu apenas ${newItemsInChunk} itens, mas o trecho fornecido ` +
+                                    `contém muito mais linhas orçamentárias. CONTINUE extraindo TODOS os itens restantes ` +
+                                    `deste mesmo trecho. NÃO repita os ${newItemsInChunk} já extraídos. ` +
+                                    `Retorne apenas os itens faltantes em JSON.`
+                                }]
+                            });
+                            loopCount++;
+                            continue;
+                        }
+                        
                         break;
                     }
                 }
@@ -553,7 +583,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     }).catch(() => {});
 
                     const formattedRows = formatBudgetRowCandidatesForPrompt(batch.candidates);
+                    const headerContext = rowCandidateExtraction.tableHeader
+                        ? `CABEÇALHO DA TABELA ORIGINAL (ordem das colunas):\n${rowCandidateExtraction.tableHeader}\n\n`
+                        : '';
                     const batchInstruction = `${userInstruction}\n\n` +
+                        `${headerContext}` +
                         `CONTROLE DE COBERTURA POR LINHA OCR:\n` +
                         `Abaixo ha linhas candidatas da planilha. Cada linha tem um rowId estavel (ex: ocr-p7-r12).\n` +
                         `Avalie TODAS as linhas listadas neste lote. Para cada item/etapa/subetapa extraido, inclua "sourceRowId" ` +
