@@ -231,12 +231,27 @@ export function Step1ConfigPanel({
         border: '1px solid var(--color-border)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16,
     };
     const labelStyle: React.CSSProperties = {
-        display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6,
+        display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4,
+    };
+    const smallLabelStyle: React.CSSProperties = {
+        ...labelStyle, fontSize: '0.7rem',
     };
     const inputStyle: React.CSSProperties = {
         width: '100%', fontSize: '0.85rem', fontWeight: 600, background: 'var(--color-bg-base)', padding: '8px 12px',
         border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
         transition: 'border-color 0.2s', outline: 'none',
+    };
+    const btnGreen: React.CSSProperties = {
+        padding: '7px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6,
+        background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none',
+        borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700,
+        boxShadow: '0 2px 6px rgba(16,185,129,0.2)', transition: 'all 0.2s', whiteSpace: 'nowrap',
+    };
+    const btnBlue: React.CSSProperties = {
+        padding: '7px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6,
+        background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none',
+        borderRadius: 'var(--radius-md)', fontWeight: 700,
+        boxShadow: '0 2px 6px rgba(99,102,241,0.2)', transition: 'all 0.2s', whiteSpace: 'nowrap',
     };
 
     return (
@@ -302,11 +317,11 @@ export function Step1ConfigPanel({
                                     };
                                     reader.readAsDataURL(imageBlob);
                                 } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                            }} style={{ padding: '7px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                            }} style={btnGreen}>
                                 <FileImage size={14} /> Colar Imagem
                             </button>
                             {onExtractConfig && (
-                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
+                                <button style={{ ...btnBlue, cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1 }}
                                     onClick={onExtractConfig} disabled={isExtractingConfig}>
                                     {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                 </button>
@@ -396,14 +411,14 @@ export function Step1ConfigPanel({
                                             dataBase: engineeringConfig.dataBase || e.target.value,
                                             dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
                                         })}
-                                        style={{ width: 140, fontSize: '0.8rem', padding: '4px 8px' }} />
+                                        style={{ ...inputStyle, width: 160 }} />
                                 </div>
                             ))}
                         </div>
                     </div>
 
                     {/* Arredondamento */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                         <div>
                             <label style={labelStyle}>Critério de Arredondamento</label>
                             <select className="form-select" value={engineeringConfig.precision.tipo}
@@ -479,11 +494,11 @@ export function Step1ConfigPanel({
                                         };
                                     reader.readAsDataURL(imageBlob);
                                 } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                            }} style={{ padding: '7px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700, boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                            }} style={btnGreen}>
                                 <FileImage size={14} /> Colar Imagem
                             </button>
                                 {onExtractBdi && (
-                                    <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1, fontWeight: 700, boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'all 0.2s' }}
+                                    <button style={{ ...btnBlue, cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1 }}
                                         onClick={onExtractBdi} disabled={isExtractingBdi}>
                                         {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                     </button>
@@ -504,7 +519,7 @@ export function Step1ConfigPanel({
                                 {([['adminCentral', 'Adm. Central (%)'], ['seguros', 'Seguros (%)'], ['garantias', 'Garantias (%)'], ['riscos', 'Riscos (%)']] as const).map(([key, label]) => (
                                     <div key={key}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>{label}</label>
+                                            <label style={smallLabelStyle}>{label}</label>
                                             {bdiMatchBadge(key, bdiConfig.tcu[key])}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu[key]}
@@ -517,7 +532,7 @@ export function Step1ConfigPanel({
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Desp. Financeiras (%)</label>
+                                        <label style={smallLabelStyle}>Desp. Financeiras (%)</label>
                                         {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
@@ -526,7 +541,7 @@ export function Step1ConfigPanel({
                                 </div>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem' }}>Lucro / Remuneração (%)</label>
+                                        <label style={smallLabelStyle}>Lucro / Remuneração (%)</label>
                                         {bdiMatchBadge('lucro', bdiConfig.tcu.lucro)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
@@ -535,28 +550,28 @@ export function Step1ConfigPanel({
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37,99,235,0.12)', paddingTop: 8, marginTop: 4 }}>
-                                <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0)).toFixed(2)}%</label>
+                                <label style={{ ...smallLabelStyle, fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0)).toFixed(2)}%</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                                     <div>
-                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>PIS (%)</label>
+                                        <label style={smallLabelStyle}>PIS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.pis}
                                             onChange={e => updateTcu('pis', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>COFINS (%)</label>
+                                        <label style={smallLabelStyle}>COFINS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.cofins}
                                             onChange={e => updateTcu('cofins', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>ISS (%)</label>
+                                        <label style={smallLabelStyle}>ISS (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.iss}
                                             onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.65rem' }}>CSLL (%)</label>
+                                        <label style={smallLabelStyle}>CSLL (%)</label>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
                                             onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
@@ -576,7 +591,7 @@ export function Step1ConfigPanel({
                                 Ativar BDI Diferenciado — Fornecimento
                             </label>
                             {onExtractBdiFornecimento && (
-                                <button style={{ padding: '8px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #d97706, #b45309)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingBdi ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(180,83,9,0.25)', transition: 'all 0.2s', opacity: isExtractingBdi ? 0.7 : 1 }}
+                                <button style={{ ...btnBlue, background: 'linear-gradient(135deg, #d97706, #b45309)', boxShadow: '0 2px 6px rgba(180,83,9,0.2)', cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1 }}
                                     onClick={onExtractBdiFornecimento} disabled={isExtractingBdi}>
                                     {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                 </button>
@@ -593,7 +608,7 @@ export function Step1ConfigPanel({
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                                         {([['adminCentral', 'Adm. Central'], ['seguros', 'Seguros'], ['garantias', 'Garantias'], ['riscos', 'Riscos']] as const).map(([key, label]) => (
                                             <div key={key}>
-                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.68rem', color: '#92400e' }}>{label} (%)</label>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>{label} (%)</label>
                                                 <input type="number" className="form-input" value={tcuF[key]}
                                                     onChange={e => updateTcuFornecimento(key, parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
@@ -615,28 +630,28 @@ export function Step1ConfigPanel({
                                         </div>
                                     </div>
                                     <div style={{ borderTop: '1px solid rgba(180,83,9,0.15)', paddingTop: 8, marginTop: 4 }}>
-                                        <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.68rem', fontWeight: 700, color: '#92400e' }}>Tributos (I) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0) + (tcuF.csll || 0)).toFixed(2)}%</label>
+                                        <label style={{ ...smallLabelStyle, fontWeight: 700, color: '#92400e' }}>Tributos (I) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0) + (tcuF.csll || 0)).toFixed(2)}%</label>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
                                             <div>
-                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>PIS (%)</label>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>PIS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.pis}
                                                     onChange={e => updateTcuFornecimento('pis', parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
-                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>COFINS (%)</label>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>COFINS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.cofins}
                                                     onChange={e => updateTcuFornecimento('cofins', parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
-                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>ISS (%)</label>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>ISS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.iss}
                                                     onChange={e => updateTcuFornecimento('iss', parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
                                             </div>
                                             <div>
-                                                <label style={{ ...labelStyle, marginBottom: 3, fontSize: '0.62rem', color: '#92400e' }}>CSLL (%)</label>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>CSLL (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.csll || 0}
                                                     onChange={e => updateTcuFornecimento('csll', parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
@@ -715,11 +730,11 @@ export function Step1ConfigPanel({
                                         };
                                         reader.readAsDataURL(imageBlob);
                                     } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                                }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 700, padding: '7px 12px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}>
+                                }} style={btnGreen}>
                                     <FileImage size={14} /> Colar Imagem
                                 </button>
                                 {onExtractEncargos && (
-                                    <button style={{ padding: '7px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: isExtractingEncargos ? 'wait' : 'pointer', fontWeight: 700, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'all 0.2s', opacity: isExtractingEncargos ? 0.7 : 1 }}
+                                    <button style={{ ...btnBlue, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.7 : 1 }}
                                         onClick={onExtractEncargos} disabled={isExtractingEncargos}>
                                         {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
                                     </button>
@@ -728,16 +743,16 @@ export function Step1ConfigPanel({
                         </div>
 
                         {/* Totals */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(30,64,175,0.04), rgba(59,130,246,0.06))', border: '1px solid rgba(30,64,175,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Horista</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Horista</div>
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1e40af', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.horista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.horista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, horista: parseLocaleNumber(e.target.value) } })}
                                     style={{ ...inputStyle, marginTop: 12, textAlign: 'center', border: 'none', background: 'transparent' }} />
                             </div>
                             <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(109,40,217,0.04), rgba(139,92,246,0.06))', border: '1px solid rgba(109,40,217,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Mensalista</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Mensalista</div>
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6d28d9', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.mensalista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.mensalista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value) } })}
@@ -773,11 +788,11 @@ export function Step1ConfigPanel({
                                     const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                     sheets.push({ label: `Base ${sheets.length + 2}`, horista: 0, mensalista: 0 });
                                     onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
-                                }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 700, padding: '5px 12px', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(109,40,217,0.4)', background: 'rgba(109,40,217,0.04)', color: '#6d28d9', cursor: 'pointer' }}>
+                                }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 700, padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(109,40,217,0.4)', background: 'rgba(109,40,217,0.04)', color: '#6d28d9', cursor: 'pointer' }}>
                                     <Plus size={13} /> Adicionar Planilha
                                 </button>
                             </div>
-                            <p style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', margin: '0 0 8px', lineHeight: 1.4 }}>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', margin: '0 0 8px', lineHeight: 1.4 }}>
                                 Para editais com múltiplas tabelas oficiais (SINAPI, SEINFRA, etc.), adicione uma planilha por base.
                                 Você pode extrair via IA colando uma imagem (Ctrl+V) ou preenchendo manualmente.
                             </p>
@@ -792,7 +807,7 @@ export function Step1ConfigPanel({
                                                 sheets[idx] = { ...sheets[idx], label: e.target.value };
                                                 onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                             }}
-                                            style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none' }} />
+                                            style={{ ...inputStyle, flex: 1 }} />
                                         {/* Image paste button */}
                                         <button onClick={async () => {
                                             try {
@@ -837,21 +852,21 @@ export function Step1ConfigPanel({
                                                 };
                                                 reader.readAsDataURL(imageBlob);
                                             } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                                        }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 700, padding: '5px 10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                        }} style={{ ...btnGreen, background: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)' }}>
                                             <FileImage size={13} /> Colar Imagem
                                         </button>
                                         <button onClick={() => {
                                             const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                             sheets.splice(idx, 1);
                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
-                                        }} style={{ padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.7rem' }}>
+                                        }} style={{ padding: '7px 8px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}>
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
                                     {/* Totals */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
                                         <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.65rem', color: '#6d28d9' }}>Horista (%)</label>
+                                            <label style={{ ...smallLabelStyle, color: '#6d28d9' }}>Horista (%)</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={sheet.horista || 0}
                                                 onChange={e => {
@@ -859,10 +874,10 @@ export function Step1ConfigPanel({
                                                     sheets[idx] = { ...sheets[idx], horista: parseLocaleNumber(e.target.value) };
                                                     onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                                 }}
-                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1rem', fontWeight: 700, padding: '4px', border: 'none' }} />
+                                                style={{ ...inputStyle, textAlign: 'center', border: 'none', background: 'transparent' }} />
                                         </div>
                                         <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...labelStyle, marginBottom: 4, fontSize: '0.65rem', color: '#6d28d9' }}>Mensalista (%)</label>
+                                            <label style={{ ...smallLabelStyle, color: '#6d28d9' }}>Mensalista (%)</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={sheet.mensalista || 0}
                                                 onChange={e => {
@@ -870,7 +885,7 @@ export function Step1ConfigPanel({
                                                     sheets[idx] = { ...sheets[idx], mensalista: parseLocaleNumber(e.target.value) };
                                                     onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
                                                 }}
-                                                style={{ ...inputStyle, textAlign: 'center', fontSize: '1rem', fontWeight: 700, padding: '4px', border: 'none' }} />
+                                                style={{ ...inputStyle, textAlign: 'center', border: 'none', background: 'transparent' }} />
                                         </div>
                                     </div>
                                     
