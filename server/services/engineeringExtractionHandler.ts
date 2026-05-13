@@ -711,19 +711,24 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 const PAGES_PER_BATCH = 8;
                 const totalBatches = Math.ceil(actualPages.length / PAGES_PER_BATCH);
 
-                logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-pro.`);
+                // PERF-07: Use Flash + parallel groups for text batch mode too
+                logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-flash (paralelo 3).`);
 
-                for (let i = 0; i < totalBatches; i++) {
-                    const batchPages = actualPages.slice(i * PAGES_PER_BATCH, (i + 1) * PAGES_PER_BATCH);
-                    const batchOcr = header + '\n' + batchPages.join('\n');
-                    const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
+                const TEXT_PARALLEL = 3;
+                for (let g = 0; g < totalBatches; g += TEXT_PARALLEL) {
+                    const group = [];
+                    for (let i = g; i < Math.min(g + TEXT_PARALLEL, totalBatches); i++) {
+                        const batchPages = actualPages.slice(i * PAGES_PER_BATCH, (i + 1) * PAGES_PER_BATCH);
+                        const batchOcr = header + '\n' + batchPages.join('\n');
+                        const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
+                        const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
+                        group.push(extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-flash', true));
+                    }
                     await updateJobProgress(job.id, tenantId, {
-                        progress: Math.min(30 + Math.round(((i + 1) / totalBatches) * 50), 80),
-                        progressMsg: `Extraindo itens escaneados (${batchLabel}) — ${engItems.length} itens extraídos...`
+                        progress: Math.min(30 + Math.round(((g + group.length) / totalBatches) * 50), 80),
+                        progressMsg: `Extraindo itens escaneados (lotes ${g + 1}-${g + group.length}/${totalBatches}) — ${engItems.length} itens extraídos...`
                     }).catch(() => {});
-
-                    const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
-                    await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
+                    await Promise.allSettled(group);
                 }
             }
         }
@@ -731,45 +736,57 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         if (scannedPdfVisualBatches.length > 0) {
             logger.warn(
                 `[Engineering-BG] 📸 SCANNED VISUAL BATCH MODE: processando ` +
-                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-pro.`
+                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-pro (paralelo 2).`
             );
 
-            for (const batch of scannedPdfVisualBatches) {
-                const batchLabel =
-                    `Lote Visual Escaneado ${batch.globalBatchIndex}/${batch.totalGlobalBatches} ` +
-                    `(${batch.fileName} p.${batch.startPage}-${batch.endPage})`;
+            // PERF-07: Process visual batches in parallel groups of 2.
+            // Previously sequential — each 6-page batch (~3min) waited for the previous one.
+            // For 10 batches: 30min sequential → ~15min with parallelism of 2.
+            // Using 2 (not 3) because visual batches send large base64 PDFs that are heavier
+            // on the API than text-only requests.
+            const VISUAL_PARALLEL = 2;
+            for (let groupStart = 0; groupStart < scannedPdfVisualBatches.length; groupStart += VISUAL_PARALLEL) {
+                const groupBatches = scannedPdfVisualBatches.slice(groupStart, groupStart + VISUAL_PARALLEL);
 
                 await updateJobProgress(job.id, tenantId, {
-                    progress: Math.min(30 + Math.round((batch.globalBatchIndex / batch.totalGlobalBatches) * 45), 78),
-                    progressMsg: `Extraindo páginas escaneadas (${batchLabel}) — ${engItems.length} itens extraídos...`
+                    progress: Math.min(30 + Math.round(((groupStart + groupBatches.length) / scannedPdfVisualBatches.length) * 45), 78),
+                    progressMsg: `Extraindo páginas escaneadas (lotes ${groupStart + 1}-${groupStart + groupBatches.length}/${scannedPdfVisualBatches.length}) — ${engItems.length} itens extraídos...`
                 }).catch(() => {});
 
-                const batchInstruction = `${userInstruction}\n\n` +
-                    `FALLBACK VISUAL PARA PDF ESCANEADO:\n` +
-                    `Você está recebendo APENAS as páginas ${batch.startPage}-${batch.endPage} do arquivo "${batch.fileName}". ` +
-                    `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n` +
-                    `Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições. ` +
-                    `Não pare na primeira tabela. Não use dados de outros lotes. ` +
-                    `Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
+                const groupPromises = groupBatches.map(async (batch) => {
+                    const batchLabel =
+                        `Lote Visual Escaneado ${batch.globalBatchIndex}/${batch.totalGlobalBatches} ` +
+                        `(${batch.fileName} p.${batch.startPage}-${batch.endPage})`;
 
-                await extractChunk(
-                    [{
-                        role: 'user',
-                        parts: [
-                            {
-                                inlineData: {
-                                    data: batch.pdfBuffer.toString('base64'),
-                                    mimeType: 'application/pdf',
+                    const batchInstruction = `${userInstruction}\n\n` +
+                        `FALLBACK VISUAL PARA PDF ESCANEADO:\n` +
+                        `Você está recebendo APENAS as páginas ${batch.startPage}-${batch.endPage} do arquivo "${batch.fileName}". ` +
+                        `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n` +
+                        `Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições. ` +
+                        `Não pare na primeira tabela. Não use dados de outros lotes. ` +
+                        `Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
+
+                    await extractChunk(
+                        [{
+                            role: 'user',
+                            parts: [
+                                {
+                                    inlineData: {
+                                        data: batch.pdfBuffer.toString('base64'),
+                                        mimeType: 'application/pdf',
+                                    },
                                 },
-                            },
-                            { text: batchInstruction },
-                        ],
-                    }],
-                    batchLabel,
-                    batchInstruction,
-                    'gemini-2.5-pro',
-                    false
-                );
+                                { text: batchInstruction },
+                            ],
+                        }],
+                        batchLabel,
+                        batchInstruction,
+                        'gemini-2.5-pro',
+                        false
+                    );
+                });
+
+                await Promise.allSettled(groupPromises);
             }
         }
 
