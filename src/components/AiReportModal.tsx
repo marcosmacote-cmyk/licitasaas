@@ -5,6 +5,7 @@ import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
 import { exportAiReportPdf } from './report/AiReportPdfExporter';
 import { EducationalPopover } from './ui';
+import { AiDisclaimerBanner } from './shared/AiDisclaimerBanner';
 import type { ReportPdfData } from './report/AiReportPdfExporter';
 import { AiReportTabAnalytics } from './report/AiReportTabAnalytics';
 import { AiReportTabChat } from './report/AiReportTabChat';
@@ -218,7 +219,9 @@ export function AiReportModal({ analysis: initialAnalysis, process, onClose, onU
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: 'var(--space-5) var(--space-10)', background: 'var(--color-bg-surface)', boxShadow: '0 -1px 0 var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: 'var(--space-5) var(--space-10)', background: 'var(--color-bg-surface)', boxShadow: '0 -1px 0 var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                    <AiDisclaimerBanner variant="analysis" compact />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                         <span style={{ fontWeight: 'var(--font-semibold)' }}>ID: {analysis?.id.slice(0, 8)}</span>
                         <span>•</span>
@@ -258,6 +261,7 @@ export function AiReportModal({ analysis: initialAnalysis, process, onClose, onU
                             </button>
                         )}
                         <button className="btn btn-outline" onClick={onClose} style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3) var(--space-6)' }}>Fechar Painel</button>
+                    </div>
                     </div>
                 </div>
             </div>

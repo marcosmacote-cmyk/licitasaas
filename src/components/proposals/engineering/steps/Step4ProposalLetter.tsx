@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FileText, Loader2, AlertTriangle, Building2, Briefcase } from 'lucide-react';
 import { ProposalLetterWizard } from '../../letter/ProposalLetterWizard';
+import { AiDisclaimerBanner } from '../../shared/AiDisclaimerBanner';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../../types';
 import type { EngItem, EngineeringConfig } from '../types';
 import { isGrouper } from '../types';
@@ -212,6 +213,9 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                 <span style={{ width: 1, height: 14, background: 'var(--color-border)' }} />
                 <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{items.filter(it => !isGrouper(it.type)).length} itens</span>
             </div>
+
+            {/* AI Disclaimer */}
+            <AiDisclaimerBanner variant="proposal" compact />
 
             {/* Embedded ProposalLetterWizard */}
             <ProposalLetterWizard

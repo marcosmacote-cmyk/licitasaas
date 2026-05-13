@@ -9,6 +9,7 @@
  * reflita a configuração atual do Step 1 em tempo real.
  */
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
+import { AiDisclaimerBanner } from '../../shared/AiDisclaimerBanner';
 import type { EngineeringConfig, EngItem } from '../types';
 import type { BdiConfig } from '../bdiEngine';
 
@@ -25,6 +26,9 @@ interface Props {
 export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onItemsChange, onPrev, onNext }: Props) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {/* AI Disclaimer — visible whenever user views the extracted budget */}
+            <AiDisclaimerBanner variant="extraction" />
+
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
             <EngineeringProposalEditor
                 proposalId={proposalId}

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ConfirmDialog } from '../ui';
 import { usePetition, PETITION_TYPES } from '../hooks/usePetition';
+import { AiDisclaimerBanner } from '../shared/AiDisclaimerBanner';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 
 interface Props {
@@ -96,6 +97,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
             {/* Right: Draft Preview */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                 <EditorHeader p={p} />
+                {p.generatedDraft && <AiDisclaimerBanner variant="petition" compact style={{ margin: '12px 16px 0' }} />}
 
                 <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: 'var(--color-bg-base)', display: 'flex', justifyContent: 'center' }}>
                     {!p.generatedDraft && !p.isGenerating ? (
