@@ -9,7 +9,7 @@
  * reflita a configuração atual do Step 1 em tempo real.
  */
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
-import { AiDisclaimerBanner } from '../../shared/AiDisclaimerBanner';
+import { AiDisclaimerBanner } from '../../../shared/AiDisclaimerBanner';
 import type { EngineeringConfig, EngItem } from '../types';
 import type { BdiConfig } from '../bdiEngine';
 

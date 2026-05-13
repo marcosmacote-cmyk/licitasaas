@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FileText, Loader2, AlertTriangle, Building2, Briefcase } from 'lucide-react';
 import { ProposalLetterWizard } from '../../letter/ProposalLetterWizard';
-import { AiDisclaimerBanner } from '../../shared/AiDisclaimerBanner';
+import { AiDisclaimerBanner } from '../../../shared/AiDisclaimerBanner';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../../types';
 import type { EngItem, EngineeringConfig } from '../types';
 import { isGrouper } from '../types';
