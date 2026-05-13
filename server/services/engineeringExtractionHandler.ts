@@ -571,7 +571,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         if (hasOcrText) {
             // ── TEXT-BATCH MODE: Split OCR context by pages ──
             const rowCandidateExtraction = extractBudgetRowCandidatesFromMarkdown(ocrContext);
-            const rowBatches = buildBudgetRowCandidateBatches(rowCandidateExtraction.candidates, 25);
+            // PERF-06: Increased batch size from 25→50 rows. Zerox produces clean structured
+            // text that fits well within Flash's context window, and larger batches mean fewer
+            // API calls (halves total calls from ~30 to ~15 for a 758-item document).
+            const rowBatches = buildBudgetRowCandidateBatches(rowCandidateExtraction.candidates, 50);
 
             if (rowCandidateExtraction.candidates.length >= 10 && rowBatches.length > 0) {
                 const consumedRowIds = new Set<string>();
@@ -582,52 +585,91 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     `across ${rowCandidateExtraction.pageCount} page(s), ${rowBatches.length} batch(es).`
                 );
 
-                for (const batch of rowBatches) {
-                    const batchLabel = `Lote OCR Linhas ${batch.index}/${batch.total}`;
+                // PERF-06: Use Flash for OCR row mode — text is already pre-structured by Zerox.
+                // Pro is 2-3x slower and unnecessary for clean text input. Pro is reserved for
+                // visual batch mode where the model must read images directly.
+                const ocrRowModel = 'gemini-2.5-flash';
 
+                // PERF-06: Process batches in parallel groups of 3 for ~3x throughput.
+                // Sequential processing took ~30min for 30 batches. Parallel groups of 3
+                // reduce to ~10min while staying within API rate limits.
+                const PARALLEL_GROUP_SIZE = 3;
+                for (let groupStart = 0; groupStart < rowBatches.length; groupStart += PARALLEL_GROUP_SIZE) {
+                    const groupBatches = rowBatches.slice(groupStart, groupStart + PARALLEL_GROUP_SIZE);
+                    
                     await updateJobProgress(job.id, tenantId, {
-                        progress: Math.min(30 + Math.round((batch.index / batch.total) * 50), 80),
-                        progressMsg: `Extraindo linhas OCR (${batchLabel}) — ${engItems.length} itens extraídos...`
+                        progress: Math.min(30 + Math.round(((groupStart + groupBatches.length) / rowBatches.length) * 50), 80),
+                        progressMsg: `Extraindo linhas OCR (lotes ${groupStart + 1}-${groupStart + groupBatches.length}/${rowBatches.length}) — ${engItems.length} itens extraídos...`
                     }).catch(() => {});
 
-                    const formattedRows = formatBudgetRowCandidatesForPrompt(batch.candidates);
-                    const headerContext = rowCandidateExtraction.tableHeader
-                        ? `CABEÇALHO DA TABELA ORIGINAL (ordem das colunas):\n${rowCandidateExtraction.tableHeader}\n\n`
-                        : '';
-                    const batchInstruction = `${userInstruction}\n\n` +
-                        `${headerContext}` +
-                        `CONTROLE DE COBERTURA POR LINHA OCR:\n` +
-                        `Abaixo ha linhas candidatas da planilha. Cada linha tem um rowId estavel (ex: ocr-p7-r12).\n` +
-                        `Avalie TODAS as linhas listadas neste lote. Para cada item/etapa/subetapa extraido, inclua "sourceRowId" ` +
-                        `com o rowId usado. Se uma linha nao for item orcamentario real, ignore-a.\n` +
-                        `Nao extraia conteudo fora das linhas listadas. Nao invente linhas faltantes.\n\n` +
-                        `${formattedRows}`;
+                    // Build extraction promises for the parallel group
+                    const groupPromises = groupBatches.map(async (batch) => {
+                        const batchLabel = `Lote OCR Linhas ${batch.index}/${batch.total}`;
+                        const formattedRows = formatBudgetRowCandidatesForPrompt(batch.candidates);
+                        const headerContext = rowCandidateExtraction.tableHeader
+                            ? `CABEÇALHO DA TABELA ORIGINAL (ordem das colunas):\n${rowCandidateExtraction.tableHeader}\n\n`
+                            : '';
+                        const batchInstruction = `${userInstruction}\n\n` +
+                            `${headerContext}` +
+                            `CONTROLE DE COBERTURA POR LINHA OCR:\n` +
+                            `Abaixo ha linhas candidatas da planilha. Cada linha tem um rowId estavel (ex: ocr-p7-r12).\n` +
+                            `Avalie TODAS as linhas listadas neste lote. Para cada item/etapa/subetapa extraido, inclua "sourceRowId" ` +
+                            `com o rowId usado. Se uma linha nao for item orcamentario real, ignore-a.\n` +
+                            `Nao extraia conteudo fora das linhas listadas. Nao invente linhas faltantes.\n\n` +
+                            `${formattedRows}`;
 
-                    const beforeCount = engItems.length;
-                    await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-pro', true);
-                    for (const rowId of collectSourceRowIdsFromItems(engItems.slice(beforeCount))) {
-                        consumedRowIds.add(rowId);
+                        const beforeCount = engItems.length;
+                        await extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, ocrRowModel, true);
+                        return { batch, beforeCount };
+                    });
+
+                    // Execute group in parallel
+                    const results = await Promise.allSettled(groupPromises);
+                    
+                    // Collect sourceRowIds from all group results
+                    for (const result of results) {
+                        if (result.status === 'fulfilled') {
+                            const { batch, beforeCount } = result.value;
+                            for (const rowId of collectSourceRowIdsFromItems(engItems.slice(beforeCount))) {
+                                consumedRowIds.add(rowId);
+                            }
+                        }
                     }
+                }
 
-                    const missingRows = batch.candidates.filter(candidate => !consumedRowIds.has(candidate.rowId));
-                    const missingRatio = missingRows.length / batch.candidates.length;
-                    if (missingRows.length > 0 && (missingRows.length > 3 || missingRatio > 0.10)) {
-                        retryBatchCount++;
-                        const retryLabel = `${batchLabel} - retry faltantes`;
+                // Single retry pass for any missing rows (after all batches complete)
+                const missingRowsForRetry = rowCandidateExtraction.candidates
+                    .filter(candidate => !consumedRowIds.has(candidate.rowId));
+                const missingRatio = missingRowsForRetry.length / rowCandidateExtraction.candidates.length;
+                
+                if (missingRowsForRetry.length > 3 && missingRatio > 0.05) {
+                    retryBatchCount = 1;
+                    const retryLabel = `Retry cobertura global (${missingRowsForRetry.length} linhas)`;
+                    logger.warn(
+                        `[Engineering-BG] ⚠️ OCR row coverage retry: ` +
+                        `${missingRowsForRetry.length}/${rowCandidateExtraction.candidates.length} row(s) missing sourceRowId.`
+                    );
+                    
+                    // Retry in batches of 50 as well, but parallel
+                    const retryBatches = buildBudgetRowCandidateBatches(missingRowsForRetry, 50);
+                    const retryPromises = retryBatches.map(async (batch) => {
                         const retryInstruction = `${userInstruction}\n\n` +
                             `REPROCESSAMENTO POR COBERTURA:\n` +
-                            `O lote anterior nao retornou sourceRowId para ${missingRows.length} linha(s). ` +
+                            `O lote anterior nao retornou sourceRowId para ${batch.candidates.length} linha(s). ` +
                             `Reavalie APENAS as linhas abaixo. Inclua "sourceRowId" em cada item extraido. ` +
                             `Se uma linha for subtotal/cabecalho de tabela/ruido, ignore-a.\n\n` +
-                            `${formatBudgetRowCandidatesForPrompt(missingRows)}`;
+                            `${formatBudgetRowCandidatesForPrompt(batch.candidates)}`;
                         const beforeRetryCount = engItems.length;
-                        logger.warn(
-                            `[Engineering-BG] ⚠️ OCR row coverage retry for ${batchLabel}: ` +
-                            `${missingRows.length}/${batch.candidates.length} row(s) missing sourceRowId.`
-                        );
-                        await extractChunk([{ role: 'user', parts: [{ text: retryInstruction }] }], retryLabel, retryInstruction, 'gemini-2.5-pro', true);
-                        for (const rowId of collectSourceRowIdsFromItems(engItems.slice(beforeRetryCount))) {
-                            consumedRowIds.add(rowId);
+                        await extractChunk([{ role: 'user', parts: [{ text: retryInstruction }] }], retryLabel, retryInstruction, ocrRowModel, true);
+                        return { beforeRetryCount };
+                    });
+
+                    const retryResults = await Promise.allSettled(retryPromises);
+                    for (const result of retryResults) {
+                        if (result.status === 'fulfilled') {
+                            for (const rowId of collectSourceRowIdsFromItems(engItems.slice(result.value.beforeRetryCount))) {
+                                consumedRowIds.add(rowId);
+                            }
                         }
                     }
                 }
