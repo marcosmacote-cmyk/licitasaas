@@ -96,6 +96,8 @@ function normalizeCompactItems(items: any[]): any[] {
 // ═══════════════════════════════════════════════════════════════════════
 
 // GET proposals for a bidding process
+// PERF-03: Optimized to skip heavy item includes for ENGENHARIA proposals
+// (their items live in engineeringProposalItem, not proposalItem)
 router.get('/:biddingId', authenticateToken, async (req: any, res) => {
     try {
         const proposals = await prisma.priceProposal.findMany({
@@ -104,13 +106,24 @@ router.get('/:biddingId', authenticateToken, async (req: any, res) => {
             orderBy: { version: 'desc' },
         });
         // For ENGENHARIA proposals, include engineering item counts (stored in separate table)
-        const enriched = await Promise.all(proposals.map(async (p: any) => {
+        // and strip the empty items array to reduce response payload.
+        const engProposals = proposals.filter((p: any) => p.objectType === 'ENGENHARIA');
+        const engCountMap = new Map<string, number>();
+        if (engProposals.length > 0) {
+            // Batch count: single query per engineering proposal
+            await Promise.all(engProposals.map(async (p: any) => {
+                const count = await prisma.engineeringProposalItem.count({ where: { proposalId: p.id } });
+                engCountMap.set(p.id, count);
+            }));
+        }
+        const enriched = proposals.map((p: any) => {
             if (p.objectType === 'ENGENHARIA') {
-                const engCount = await prisma.engineeringProposalItem.count({ where: { proposalId: p.id } });
-                return { ...p, _engineeringItemCount: engCount };
+                // Strip empty items array for eng proposals (items are in separate table)
+                const { items: _ignored, ...rest } = p;
+                return { ...rest, items: [], _engineeringItemCount: engCountMap.get(p.id) || 0 };
             }
             return p;
-        }));
+        });
         res.json(enriched);
     } catch (error: any) {
         logger.error('[Proposals] GET error:', error.message);

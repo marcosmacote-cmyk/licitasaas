@@ -445,47 +445,59 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const hasPersistedItemsRef = useRef(false);
 
     // Load items on mount
+    // PERF-01: When running inside the Wizard (wizardConfig provided), the Wizard
+    // already fetches /proposals/:id/items and /bases. Skip the duplicate fetch
+    // and only load extractionMeta lazily to avoid 2x redundant API calls.
+    const isInsideWizard = !!wizardConfig;
     useEffect(() => {
         if (extractionPollRef.current) {
             clearInterval(extractionPollRef.current);
             extractionPollRef.current = null;
         }
-        setItems([]);
         setExtractionMeta(null);
         setActiveExtractionJobId(null);
         setIsExtracting(false);
         setSaveMsg(null);
         setHasUnsavedChanges(false);
-        setCronogramaData(null);
 
-        hasPersistedItemsRef.current = false;
-        fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
-            .then(r => r.json()).then(data => {
-                if (Array.isArray(data)) {
-                    // Fallback for old data structure
-                    setItems(data);
-                    hasPersistedItemsRef.current = data.length > 0;
-                } else if (data && data.items) {
-                    const loadedItems = Array.isArray(data.items) ? data.items : [];
-                    setItems(loadedItems);
-                    hasPersistedItemsRef.current = loadedItems.length > 0;
-                    // Only load DB config when NOT inside the Wizard (wizard provides its own)
-                    if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
-                    if (!wizardConfig && data.engineeringConfig) {
-                        // FIX ARQ-04: Restore cronograma data from saved config
-                        const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
-                        setEngineeringConfig(engConfig);
-                        if (savedCronograma) setCronogramaData(savedCronograma);
+        if (isInsideWizard) {
+            // Wizard already loaded items/config — only fetch extractionMeta
+            hasPersistedItemsRef.current = false; // Will be set by onItemsChange sync
+            fetch(`/api/engineering/proposals/${proposalId}/items?metaOnly=1`, { headers: hdrs() })
+                .then(r => r.json()).then(data => {
+                    if (data?.extractionMeta) setExtractionMeta(data.extractionMeta);
+                    // Track persisted items flag from meta response
+                    if (data?.itemCount > 0) hasPersistedItemsRef.current = true;
+                }).catch(console.error);
+        } else {
+            // Standalone mode — full load
+            setItems([]);
+            setCronogramaData(null);
+            hasPersistedItemsRef.current = false;
+            fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
+                .then(r => r.json()).then(data => {
+                    if (Array.isArray(data)) {
+                        setItems(data);
+                        hasPersistedItemsRef.current = data.length > 0;
+                    } else if (data && data.items) {
+                        const loadedItems = Array.isArray(data.items) ? data.items : [];
+                        setItems(loadedItems);
+                        hasPersistedItemsRef.current = loadedItems.length > 0;
+                        if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
+                        if (data.engineeringConfig) {
+                            const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
+                            setEngineeringConfig(engConfig);
+                            if (savedCronograma) setCronogramaData(savedCronograma);
+                        }
+                        setExtractionMeta(data.extractionMeta || null);
                     }
-                    setExtractionMeta(data.extractionMeta || null);
-                }
-            }).catch(console.error);
+                }).catch(console.error);
+        }
 
         fetch('/api/engineering/bases', { headers: hdrs() })
             .then(r => r.json()).then(data => {
                 if (Array.isArray(data)) {
                     setBases(data);
-                    // Auto-select best matching base from Step 1 config
                     autoSelectBestBase(data, dashConfig, setSelectedBaseId);
                 }
             }).catch(console.error);

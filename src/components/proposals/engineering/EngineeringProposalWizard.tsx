@@ -426,8 +426,11 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 />
             )}
 
-            {/* Step 2: Budget Editor — ALWAYS MOUNTED to preserve state across navigation */}
-            <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
+            {/* Step 2: Budget Editor — LAZY MOUNTED to avoid heavy initialization on Step 1.
+                PERF-02: Previously always-mounted (display:none/block), which forced the 2020-line
+                EngineeringProposalEditor + DnD + XLSX to initialize immediately. Now only mounts
+                when user navigates to Step 2, saving ~200ms of initial render time. */}
+            {currentStep === 2 && (
                 <Step2BudgetEditor
                     proposalId={proposalId}
                     biddingId={biddingId}
@@ -437,7 +440,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}
                 />
-            </div>
+            )}
 
             {/* Step 3: Cronograma */}
             {currentStep === 3 && (

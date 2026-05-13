@@ -1143,6 +1143,32 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 router.get('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const metaOnly = req.query.metaOnly === '1';
+
+        // PERF-01: metaOnly mode — skip heavy item fetch, only return extractionMeta + itemCount.
+        // Used by EngineeringProposalEditor when running inside the Wizard (items already loaded).
+        if (metaOnly) {
+            const [itemCount, proposal] = await Promise.all([
+                prisma.engineeringProposalItem.count({ where: { proposalId } }),
+                prisma.priceProposal.findUnique({
+                    where: { id: proposalId },
+                    select: {
+                        biddingProcess: {
+                            select: {
+                                aiAnalysis: { select: { schemaV2: true } }
+                            }
+                        }
+                    }
+                })
+            ]);
+            let extractionMeta = null;
+            if (proposal?.biddingProcess?.aiAnalysis?.schemaV2) {
+                const schemaV2 = proposal.biddingProcess.aiAnalysis.schemaV2 as any;
+                extractionMeta = schemaV2?._engineeringExtractionMeta || null;
+            }
+            return res.json({ itemCount, extractionMeta });
+        }
+
         const [items, proposal] = await Promise.all([
             prisma.engineeringProposalItem.findMany({
                 where: { proposalId },
@@ -1244,14 +1270,10 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
             return { count: created.count, totalValue };
         });
 
-        // Fetch and return the saved items
-        const savedItems = await prisma.engineeringProposalItem.findMany({
-            where: { proposalId },
-            orderBy: { sortOrder: 'asc' }
-        });
-
+        // PERF-04: Skip redundant findMany after save.
+        // The frontend already has the items in memory and only needs the count/message.
         res.json({
-            items: savedItems,
+            count: result.count,
             totalValue: result.totalValue,
             message: `${result.count} itens salvos com sucesso`
         });
