@@ -640,25 +640,37 @@ export function Step1ConfigPanel({
                                 <label style={{ ...smallLabelStyle, fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0)).toFixed(2)}%</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                                     <div>
-                                        <label style={smallLabelStyle}>PIS (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={smallLabelStyle}>PIS (%)</label>
+                                            {bdiMatchBadge('pis', bdiConfig.tcu.pis, (engineeringConfig as any)._aiExtractedBdi)}
+                                        </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.pis}
                                             onChange={e => updateTcu('pis', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={smallLabelStyle}>COFINS (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={smallLabelStyle}>COFINS (%)</label>
+                                            {bdiMatchBadge('cofins', bdiConfig.tcu.cofins, (engineeringConfig as any)._aiExtractedBdi)}
+                                        </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.cofins}
                                             onChange={e => updateTcu('cofins', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={smallLabelStyle}>ISS (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={smallLabelStyle}>ISS (%)</label>
+                                            {bdiMatchBadge('iss', bdiConfig.tcu.iss, (engineeringConfig as any)._aiExtractedBdi)}
+                                        </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.iss}
                                             onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                     <div>
-                                        <label style={smallLabelStyle}>CSLL (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={smallLabelStyle}>CSLL (%)</label>
+                                            {bdiMatchBadge('csll', bdiConfig.tcu.csll || 0, (engineeringConfig as any)._aiExtractedBdi)}
+                                        </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
                                             onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
