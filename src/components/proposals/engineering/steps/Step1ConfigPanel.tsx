@@ -417,10 +417,21 @@ export function Step1ConfigPanel({
 
                     {/* Bases */}
                     <div>
-                        <label style={labelStyle}>Bases de Referência</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label style={labelStyle}>Bases de Referência</label>
+                            {engineeringConfig._aiExtractedRef?.basesConsideradas && (() => {
+                                const aiB = engineeringConfig._aiExtractedRef.basesConsideradas || [];
+                                const curB = engineeringConfig.basesConsideradas || [];
+                                const match = aiB.length === curB.length && aiB.every((b: string) => curB.includes(b));
+                                return match
+                                    ? <MatchBadge status="ok" label="✓ Edital" title={`Bases conferem com o edital: ${aiB.join(', ')}`} />
+                                    : <MatchBadge status="divergent" label={`Edital: ${aiB.join(', ')}`} title={`IA extraiu: ${aiB.join(', ')}. Selecionadas: ${curB.join(', ')}`} />;
+                            })()}
+                        </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'].map(base => {
                                 const isChecked = engineeringConfig.basesConsideradas.includes(base);
+                                const aiDetected = engineeringConfig._aiExtractedRef?.basesConsideradas?.includes(base);
                                 return (
                                     <label key={base} style={{
                                         display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600,
@@ -429,6 +440,7 @@ export function Step1ConfigPanel({
                                         padding: '4px 10px', borderRadius: 'var(--radius-full)',
                                         border: `1px solid ${isChecked ? 'var(--color-primary)' : 'var(--color-border)'}`,
                                         cursor: 'pointer', transition: 'all 0.2s', userSelect: 'none',
+                                        boxShadow: aiDetected && !isChecked ? '0 0 0 2px rgba(239,68,68,0.3)' : undefined,
                                     }}>
                                         <input type="checkbox" checked={isChecked} style={{ display: 'none' }}
                                             onChange={e => {
@@ -456,24 +468,39 @@ export function Step1ConfigPanel({
                         </select>
                     </div>
 
-                    {/* Data Base por Fonte */}
                     <div>
                         <label style={labelStyle}>Data Base (Referência Temporal)</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--color-bg-base)', padding: 10, borderRadius: 'var(--radius-md)' }}>
                             {engineeringConfig.basesConsideradas.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Nenhuma base selecionada</span>}
-                            {engineeringConfig.basesConsideradas.map(base => (
-                                <div key={base} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
-                                    <input type="month" className="form-input"
-                                        value={engineeringConfig.dataBases?.[base] || engineeringConfig.dataBase || ''}
-                                        onChange={e => onConfigChange({
-                                            ...engineeringConfig,
-                                            dataBase: engineeringConfig.dataBase || e.target.value,
-                                            dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
-                                        })}
-                                        style={{ ...inputStyle, width: 160 }} />
-                                </div>
-                            ))}
+                            {engineeringConfig.basesConsideradas.map(base => {
+                                const curVal = engineeringConfig.dataBases?.[base] || engineeringConfig.dataBase || '';
+                                const aiDbs = engineeringConfig._aiExtractedRef?.dataBases;
+                                const aiVal = aiDbs?.[base] || engineeringConfig._aiExtractedRef?.dataBase;
+                                let dateBadge: React.ReactNode = null;
+                                if (aiVal && curVal) {
+                                    dateBadge = curVal === aiVal
+                                        ? <MatchBadge status="ok" label="✓ Edital" title={`Data base confere com o edital: ${aiVal}`} />
+                                        : <MatchBadge status="divergent" label={`Edital: ${aiVal}`} title={`IA extraiu: ${aiVal}. Atual: ${curVal}`} />;
+                                } else if (aiVal && !curVal) {
+                                    dateBadge = <MatchBadge status="info" label={`IA: ${aiVal}`} title={`IA extraiu: ${aiVal}. Preencha o campo.`} />;
+                                }
+                                return (
+                                    <div key={base} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {dateBadge}
+                                            <input type="month" className="form-input"
+                                                value={curVal}
+                                                onChange={e => onConfigChange({
+                                                    ...engineeringConfig,
+                                                    dataBase: engineeringConfig.dataBase || e.target.value,
+                                                    dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
+                                                })}
+                                                style={{ ...inputStyle, width: 160 }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
