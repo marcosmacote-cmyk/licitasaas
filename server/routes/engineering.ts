@@ -1385,6 +1385,10 @@ router.post('/ai-extract-encargos', async (req: any, res: any) => {
                 : 'Encargos sociais não encontrados no edital. Tente usar o botão "Colar Imagem" para extrair de uma captura da tabela de encargos.';
             return res.json({ found: false, message });
         }
+        // P4: Check for additional encargos tables (e.g., SINAPI + SEINFRA)
+        if (data.additionalTables && Array.isArray(data.additionalTables) && data.additionalTables.length > 0) {
+            return res.json({ found: true, data, additional: data.additionalTables });
+        }
         return res.json({ found: true, data });
     } catch (e: any) {
         console.error('[Engineering AI Encargos] Error:', e);

@@ -236,6 +236,93 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
     }
 });
 
+// POST clone proposal (create new version from existing)
+router.post('/:id/clone', authenticateToken, async (req: any, res) => {
+    try {
+        const source = await prisma.priceProposal.findFirst({
+            where: { id: req.params.id, tenantId: req.user.tenantId },
+            include: { items: true },
+        });
+        if (!source) return res.status(404).json({ error: 'Proposal not found' });
+
+        // Count existing versions for this bidding
+        const versionCount = await prisma.priceProposal.count({
+            where: { biddingProcessId: source.biddingProcessId, tenantId: req.user.tenantId },
+        });
+
+        // Clone: PriceProposal header + configs
+        const cloned = await prisma.priceProposal.create({
+            data: {
+                tenantId: source.tenantId,
+                biddingProcessId: source.biddingProcessId,
+                companyProfileId: source.companyProfileId,
+                version: versionCount + 1,
+                objectType: source.objectType,
+                bdiPercentage: source.bdiPercentage,
+                taxPercentage: source.taxPercentage,
+                socialCharges: source.socialCharges,
+                totalValue: source.totalValue,
+                validityDays: source.validityDays,
+                notes: source.notes,
+                letterContent: source.letterContent,
+                signatureMode: source.signatureMode,
+                signatureCity: source.signatureCity,
+                // Clone configs (JSON fields)
+                bdiConfig: source.bdiConfig ?? undefined,
+                engineeringConfig: source.engineeringConfig ?? undefined,
+                // Clone visual settings
+                headerImage: source.headerImage,
+                footerImage: source.footerImage,
+                headerImageHeight: source.headerImageHeight,
+                footerImageHeight: source.footerImageHeight,
+                // Clone adjusted scenario
+                adjustedBdi: source.adjustedBdi,
+                adjustedDiscount: source.adjustedDiscount,
+                adjustedTotalValue: source.adjustedTotalValue,
+                adjustedLetterContent: source.adjustedLetterContent,
+            },
+        });
+
+        // Clone items based on objectType
+        if (source.objectType === 'ENGENHARIA') {
+            const engItems = await prisma.engineeringProposalItem.findMany({
+                where: { proposalId: source.id },
+            });
+            if (engItems.length > 0) {
+                await prisma.engineeringProposalItem.createMany({
+                    data: engItems.map(({ id, proposalId, createdAt, updatedAt, ...rest }: any) => ({
+                        ...rest,
+                        proposalId: cloned.id,
+                    })),
+                });
+            }
+            logger.info(`[Proposals] Cloned ENGENHARIA proposal ${source.id} → ${cloned.id} v${cloned.version} (${engItems.length} eng items)`);
+        } else {
+            // Clone ProposalItems (AQUISICAO)
+            if (source.items.length > 0) {
+                await prisma.proposalItem.createMany({
+                    data: source.items.map(({ id, proposalId, ...rest }: any) => ({
+                        ...rest,
+                        proposalId: cloned.id,
+                    })),
+                });
+            }
+            logger.info(`[Proposals] Cloned AQUISICAO proposal ${source.id} → ${cloned.id} v${cloned.version} (${source.items.length} items)`);
+        }
+
+        // Re-fetch with includes
+        const result = await prisma.priceProposal.findUnique({
+            where: { id: cloned.id },
+            include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
+        });
+
+        res.status(201).json(result);
+    } catch (error: any) {
+        logger.error('[Proposals] CLONE error:', error.message);
+        res.status(500).json({ error: 'Failed to clone proposal' });
+    }
+});
+
 // DELETE proposal
 router.delete('/:id', authenticateToken, async (req: any, res) => {
     try {

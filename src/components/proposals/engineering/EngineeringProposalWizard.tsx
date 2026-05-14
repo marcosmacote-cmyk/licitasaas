@@ -277,54 +277,63 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
             const result = await res.json();
             if (result.found) {
                 const d = result.data || result;
+                // P2: Apply user's precision config to all individual values.
+                // Raw AI values are preserved in _aiExtractedEncargos for faithful badge comparison.
+                const pr = (v: number) => applyPrecision(v, { precision: engineeringConfig.precision });
+                const rawEncargos: any = {
+                    horista: d.totalHorista || 0,
+                    mensalista: d.totalMensalista || 0,
+                    basePrincipal: d.basePrincipal || null,
+                    grupoA_horista: d.grupoA_horista || 0, grupoA_mensalista: d.grupoA_mensalista || 0,
+                    grupoB_horista: d.grupoB_horista || 0, grupoB_mensalista: d.grupoB_mensalista || 0,
+                    grupoC_horista: d.grupoC_horista || 0, grupoC_mensalista: d.grupoC_mensalista || 0,
+                    grupoD_horista: d.grupoD_horista || 0, grupoD_mensalista: d.grupoD_mensalista || 0,
+                    a1_h: d.a1_h || 0, a1_m: d.a1_m || 0, a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
+                    a3_h: d.a3_h || 0, a3_m: d.a3_m || 0, a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
+                    a5_h: d.a5_h || 0, a5_m: d.a5_m || 0, a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
+                    a7_h: d.a7_h || 0, a7_m: d.a7_m || 0, a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
+                    a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
+                    b1_h: d.b1_h || 0, b1_m: d.b1_m || 0, b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
+                    b3_h: d.b3_h || 0, b3_m: d.b3_m || 0, b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
+                    b5_h: d.b5_h || 0, b5_m: d.b5_m || 0, b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
+                    b7_h: d.b7_h || 0, b7_m: d.b7_m || 0, b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
+                    b9_h: d.b9_h || 0, b9_m: d.b9_m || 0, b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
+                    c1_h: d.c1_h || 0, c1_m: d.c1_m || 0, c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
+                    c3_h: d.c3_h || 0, c3_m: d.c3_m || 0, c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
+                    c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
+                    d1_h: d.d1_h || 0, d1_m: d.d1_m || 0, d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
+                };
+                // Working copy: apply precision to all numeric fields
                 const encargosUpdate: any = {
                     ...engineeringConfig.encargosSociais,
-                    horista: d.totalHorista || engineeringConfig.encargosSociais.horista,
-                    mensalista: d.totalMensalista || engineeringConfig.encargosSociais.mensalista,
-                    basePrincipal: d.basePrincipal || null,
-                    // SINAPI-aligned groups (A, B, C, D) — calculated by server
-                    grupoA_horista: d.grupoA_horista || 0,
-                    grupoA_mensalista: d.grupoA_mensalista || 0,
-                    grupoB_horista: d.grupoB_horista || 0,
-                    grupoB_mensalista: d.grupoB_mensalista || 0,
-                    grupoC_horista: d.grupoC_horista || 0,
-                    grupoC_mensalista: d.grupoC_mensalista || 0,
-                    grupoD_horista: d.grupoD_horista || 0,
-                    grupoD_mensalista: d.grupoD_mensalista || 0,
-                    // Individual items — Group A
-                    a1_h: d.a1_h || 0, a1_m: d.a1_m || 0,
-                    a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
-                    a3_h: d.a3_h || 0, a3_m: d.a3_m || 0,
-                    a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
-                    a5_h: d.a5_h || 0, a5_m: d.a5_m || 0,
-                    a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
-                    a7_h: d.a7_h || 0, a7_m: d.a7_m || 0,
-                    a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
-                    a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
-                    // Individual items — Group B
-                    b1_h: d.b1_h || 0, b1_m: d.b1_m || 0,
-                    b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
-                    b3_h: d.b3_h || 0, b3_m: d.b3_m || 0,
-                    b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
-                    b5_h: d.b5_h || 0, b5_m: d.b5_m || 0,
-                    b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
-                    b7_h: d.b7_h || 0, b7_m: d.b7_m || 0,
-                    b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
-                    b9_h: d.b9_h || 0, b9_m: d.b9_m || 0,
-                    b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
-                    // Individual items — Group C
-                    c1_h: d.c1_h || 0, c1_m: d.c1_m || 0,
-                    c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
-                    c3_h: d.c3_h || 0, c3_m: d.c3_m || 0,
-                    c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
-                    c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
-                    // Individual items — Group D
-                    d1_h: d.d1_h || 0, d1_m: d.d1_m || 0,
-                    d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
+                    basePrincipal: rawEncargos.basePrincipal,
                 };
-                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate, _aiExtractedEncargos: { ...encargosUpdate } }));
+                for (const [k, v] of Object.entries(rawEncargos)) {
+                    if (typeof v === 'number') encargosUpdate[k] = pr(v);
+                    else encargosUpdate[k] = v;
+                }
+                // Use AI totals if they differ from sum (AI may have its own rounding)
+                encargosUpdate.horista = pr(d.totalHorista || encargosUpdate.horista || engineeringConfig.encargosSociais.horista);
+                encargosUpdate.mensalista = pr(d.totalMensalista || encargosUpdate.mensalista || engineeringConfig.encargosSociais.mensalista);
+                // P4: Auto-populate additional encargos tables if backend detected multiple
+                if (result.additional && Array.isArray(result.additional) && result.additional.length > 0) {
+                    const adicionalSheets = result.additional.map((extra: any) => {
+                        const sheet: any = { label: extra.basePrincipal || 'Base Adicional', horista: pr(extra.totalHorista || 0), mensalista: pr(extra.totalMensalista || 0) };
+                        // Copy all 52 individual fields with precision
+                        for (const [k, v] of Object.entries(extra)) {
+                            if (typeof v === 'number' && k !== 'totalHorista' && k !== 'totalMensalista') sheet[k] = pr(v as number);
+                            else if (typeof v === 'string') sheet[k] = v;
+                        }
+                        return sheet;
+                    });
+                    encargosUpdate.encargosAdicionais = [...(engineeringConfig.encargosSociais?.encargosAdicionais || []), ...adicionalSheets];
+                }
+                // _aiExtractedEncargos: raw values (no precision) for faithful badge comparison
+                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate, _aiExtractedEncargos: { ...rawEncargos } }));
                 setHasUnsavedChanges(true);
-                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso ({d.basePrincipal || 'geral'})</span>);
+                const extraCount = result.additional?.length || 0;
+                const extraMsg = extraCount > 0 ? ` + ${extraCount} planilha(s) adicional(is)` : '';
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso ({d.basePrincipal || 'geral'}){extraMsg}</span>);
                 setTimeout(() => setSaveMsg(null), 4000);
             } else {
                 alert(result.message || 'Encargos sociais não encontrados no edital.');

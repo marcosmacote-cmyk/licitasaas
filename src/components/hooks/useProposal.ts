@@ -219,6 +219,23 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
         setIsLoading(true);
         try {
+            // If a proposal already exists, CLONE it (preserving items + configs)
+            if (proposal) {
+                const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/clone`, {
+                    method: 'POST', headers,
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    applyProposalData(data);
+                    setProposals(prev => [data, ...prev]);
+                    showSaveMsg(`Versão ${data.version} criada (cópia da v${proposal.version})`);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    toast.error(err.error || 'Erro ao clonar proposta.');
+                }
+                return;
+            }
+            // No proposal yet — create a brand new one
             const res = await fetch(`${API_BASE_URL}/api/proposals`, {
                 method: 'POST', headers,
                 body: JSON.stringify({

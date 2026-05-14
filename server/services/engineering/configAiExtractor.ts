@@ -425,7 +425,37 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
                 if (result?.text) {
                     const parsed = JSON.parse(result.text);
                     console.log(`[Encargos-AI] 📋 PASS 1 result: found=${parsed.found} totalH=${parsed.totalHorista} a1_h=${parsed.a1_h} a8_h=${parsed.a8_h} b1_h=${parsed.b1_h} b4_h=${parsed.b4_h}`);
-                    if (parsed.found) return enrichResult(parsed);
+                    if (parsed.found) {
+                        const primary = enrichResult(parsed);
+                        // P4: Multi-table detection — check if document has additional encargos tables
+                        try {
+                            const multiPrompt = `Analise os documentos e responda: quantas tabelas DISTINTAS de Encargos Sociais existem?
+Exemplos: um edital pode ter uma tabela SINAPI e outra SEINFRA, ou uma para obras e outra para serviços.
+Se há APENAS UMA tabela, retorne: {"count":1}
+Se há DUAS ou MAIS tabelas distintas, retorne a SEGUNDA tabela completa no mesmo formato:
+{"count":2,"secondTable":{"basePrincipal":"SEINFRA","totalHorista":114.15,"totalMensalista":68.50,...todos os 52 campos...}}
+IGNORE a tabela "${primary.basePrincipal || 'principal'}" (já extraída). Extraia APENAS tabelas DIFERENTES.
+Se a segunda tabela pertence a uma base diferente (ex: SEINFRA vs SINAPI), extraia seus valores completos.`;
+                            const multiResult = await ai.models.generateContent({
+                                model: 'gemini-2.5-flash',
+                                contents: [{ role: 'user', parts: [...pdfParts, { text: multiPrompt }] }],
+                                config: { responseMimeType: 'application/json', temperature: 0.1 }
+                            });
+                            if (multiResult?.text) {
+                                const multiParsed = JSON.parse(multiResult.text);
+                                if (multiParsed.count > 1 && multiParsed.secondTable) {
+                                    const secondary = enrichResult({ ...multiParsed.secondTable, found: true });
+                                    primary.additionalTables = [secondary];
+                                    console.log(`[Encargos-AI] 📋 Multi-table: Found ${multiParsed.count} tables. Secondary: ${secondary.basePrincipal} H=${secondary.totalHorista}%`);
+                                } else {
+                                    console.log(`[Encargos-AI] ℹ️ Multi-table: Only 1 table found in document`);
+                                }
+                            }
+                        } catch (multiErr: any) {
+                            console.warn(`[Encargos-AI] ⚠️ Multi-table detection failed (non-critical): ${multiErr.message}`);
+                        }
+                        return primary;
+                    }
                     console.log(`[Encargos-AI] ⚠️ PASS 1 returned found=false. Trying broader search...`);
                 }
             } catch (e: any) {

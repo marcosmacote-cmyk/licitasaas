@@ -183,7 +183,7 @@ const ITEMS_DEF = [
     ]},
 ];
 
-function EncargosDetailTable({ es, onChange, precision }: { es: any, onChange: (newEs: any) => void, precision?: PrecisionConfig }) {
+function EncargosDetailTable({ es, onChange, precision, aiRef }: { es: any, onChange: (newEs: any) => void, precision?: PrecisionConfig, aiRef?: any }) {
     const p = (v: number) => applyPrecision(v, { precision });
     const updateItem = (key: string, val: number) => {
         const nextEs: any = { ...es, [key]: val };
@@ -206,36 +206,42 @@ function EncargosDetailTable({ es, onChange, precision }: { es: any, onChange: (
             <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
                 Estrutura SINAPI — Itens individuais {es?.basePrincipal ? `(${es.basePrincipal})` : ''}
             </span>
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 4px 4px', borderBottom: '2px solid var(--color-border)' }}>
-                <span>COD</span><span>DESCRIÇÃO</span><span style={{ textAlign: 'right' }}>HORISTA %</span><span style={{ textAlign: 'right' }}>MENSALISTA %</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 16px 72px 16px', gap: 4, fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 4px 4px', borderBottom: '2px solid var(--color-border)' }}>
+                <span>COD</span><span>DESCRIÇÃO</span><span style={{ textAlign: 'right' }}>HORISTA %</span><span></span><span style={{ textAlign: 'right' }}>MENSALISTA %</span><span></span>
             </div>
             {ITEMS_DEF.map(grp => (
                 <div key={grp.group} style={{ marginBottom: 4 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '6px 4px', background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 16px 72px 16px', gap: 4, padding: '6px 4px', background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.group}</span>
                         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color }}>{grp.title}</span>
-                        <span></span><span></span>
+                        <span></span><span></span><span></span><span></span>
                     </div>
                     {grp.items.map(item => (
-                        <div key={item.code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, alignItems: 'center', padding: '3px 4px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                        <div key={item.code} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 16px 72px 16px', gap: 4, alignItems: 'center', padding: '3px 4px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{item.code}</span>
                             <span style={{ fontSize: '0.72rem', color: 'var(--color-text-primary)' }}>{item.name}</span>
                             <input type="number" step="0.01" className="form-input" value={es?.[item.hKey] || 0} onChange={e => updateItem(item.hKey, parseLocaleNumber(e.target.value))} style={inputSty} />
+                            <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(item.hKey, es?.[item.hKey] || 0, aiRef)}</span>
                             <input type="number" step="0.01" className="form-input" value={es?.[item.mKey] || 0} onChange={e => updateItem(item.mKey, parseLocaleNumber(e.target.value))} style={inputSty} />
+                            <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(item.mKey, es?.[item.mKey] || 0, aiRef)}</span>
                         </div>
                     ))}
-                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 16px 72px 16px', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
                         <span></span>
                         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color, textAlign: 'right', paddingRight: 6 }}>TOTAL</span>
                         <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_horista`] as number || 0).toFixed(2)}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_horista`, es?.[`grupo${grp.group}_horista`] || 0, aiRef)}</span>
                         <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_mensalista`] as number || 0).toFixed(2)}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_mensalista`, es?.[`grupo${grp.group}_mensalista`] || 0, aiRef)}</span>
                     </div>
                 </div>
             ))}
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 72px', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px 16px 72px 16px', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
                 <span></span><span style={{ color: '#6d28d9' }}>A + B + C + D =</span>
                 <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('horista', es?.horista || 0, aiRef)}</span>
                 <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('mensalista', es?.mensalista || 0, aiRef)}</span>
             </div>
         </div>
     );
@@ -819,6 +825,7 @@ export function Step1ConfigPanel({
                                 <EncargosDetailTable 
                                     es={engineeringConfig.encargosSociais || {}} 
                                     precision={engineeringConfig.precision}
+                                    aiRef={(engineeringConfig as any)._aiExtractedEncargos}
                                     onChange={newEs => {
                                         onConfigChange({ ...engineeringConfig, encargosSociais: newEs });
                                         setHasUnsavedChanges(true);
