@@ -51,7 +51,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     const [isExtractingEncargos, setIsExtractingEncargos] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
 
-    const effectiveBdi = resolveEffectiveBdi(bdiConfig);
+    const effectiveBdi = resolveEffectiveBdi(bdiConfig, engineeringConfig.precision);
     const billableItems = items.filter(it => !isGrouper(it.type));
     const subtotal = billableItems.reduce((s, it) => s + it.quantity * it.unitCost, 0);
     const total = billableItems.reduce((s, it) => s + it.totalPrice, 0);
@@ -169,7 +169,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     delete rawTcu.tributos;
                 }
                 const tcu = { ...bdiConfig.tcu, ...rawTcu };
-                setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu, bdiGlobal: calculateBdiTCU(tcu) }));
+                setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu, bdiGlobal: calculateBdiTCU(tcu, engineeringConfig.precision) }));
                 setHasUnsavedChanges(true);
             } else if (result.data?.globalBdi) {
                 setBdiConfig(prev => ({ ...prev, mode: 'SIMPLIFICADO', bdiGlobal: result.data.globalBdi, tcu: autoDistributeBdi(result.data.globalBdi) }));
@@ -348,7 +348,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     delete rawTcu.tributos;
                 }
                 handleBdiChange({ ...bdiConfig, tcuFornecimento: rawTcu });
-                const calcBdi = calculateBdiTCU(rawTcu);
+                const calcBdi = calculateBdiTCU(rawTcu, engineeringConfig.precision);
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: calcBdi, bdiDiferenciado: true });
             } else if (result.data?.globalBdiFornecimento) {
                 handleConfigChange({ ...engineeringConfig, bdiFornecimento: result.data.globalBdiFornecimento, bdiDiferenciado: true });

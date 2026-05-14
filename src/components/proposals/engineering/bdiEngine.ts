@@ -75,9 +75,11 @@ export const DEFAULT_BDI_CONFIG: BdiConfig = {
 
 /**
  * Calcula o BDI pela fórmula do Acórdão TCU 2622/2013
+ * @param params - Parâmetros TCU individuais
+ * @param precision - Configuração de arredondamento (ROUND/TRUNCATE, casas decimais)
  * @returns BDI como percentual (ex: 25.34)
  */
-export function calculateBdiTCU(params: BdiTcuParams): number {
+export function calculateBdiTCU(params: BdiTcuParams, precision?: PrecisionConfig): number {
     const ac = params.adminCentral / 100;
     const s  = params.seguros / 100;
     const g  = params.garantias / 100;
@@ -90,7 +92,7 @@ export function calculateBdiTCU(params: BdiTcuParams): number {
     if (i >= 1) return 0;
 
     const bdi = ((1 + ac + s + g + r) * (1 + df) * (1 + l) / (1 - i) - 1) * 100;
-    return Math.round(bdi * 100) / 100; // 2 decimal places
+    return applyPrecision(bdi, { precision: precision || { tipo: 'ROUND', casasDecimais: 2 } });
 }
 
 /**
@@ -130,9 +132,9 @@ export function autoDistributeBdi(targetBdi: number): BdiTcuParams {
 /**
  * Resolve o BDI efetivo baseado na configuração
  */
-export function resolveEffectiveBdi(config: BdiConfig): number {
+export function resolveEffectiveBdi(config: BdiConfig, precision?: PrecisionConfig): number {
     if (config.mode === 'TCU') {
-        return calculateBdiTCU(config.tcu);
+        return calculateBdiTCU(config.tcu, precision);
     }
     return config.bdiGlobal;
 }

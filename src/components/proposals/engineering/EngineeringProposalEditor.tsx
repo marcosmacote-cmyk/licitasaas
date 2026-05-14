@@ -1070,7 +1070,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setHasUnsavedChanges(true);
         setBdiConfig(prev => {
             const nextTcu = { ...prev.tcu, [field]: val };
-            const calculatedBdi = calculateBdiTCU(nextTcu);
+            const calculatedBdi = calculateBdiTCU(nextTcu, engineeringConfig?.precision);
             return { ...prev, tcu: nextTcu, bdiGlobal: calculatedBdi };
         });
     };

@@ -5,7 +5,8 @@
 import React, { useState } from 'react';
 import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
-import type { EngineeringConfig } from '../types';
+import { applyPrecision } from '../precisionEngine';
+import type { EngineeringConfig, PrecisionConfig } from '../types';
 
 // ═══════════════════════════════════════════════════════════
 // P0: TCU 2622/2013 — Faixas de referência para BDI Match
@@ -142,20 +143,21 @@ const ITEMS_DEF = [
     ]},
 ];
 
-function EncargosDetailTable({ es, onChange }: { es: any, onChange: (newEs: any) => void }) {
+function EncargosDetailTable({ es, onChange, precision }: { es: any, onChange: (newEs: any) => void, precision?: PrecisionConfig }) {
+    const p = (v: number) => applyPrecision(v, { precision });
     const updateItem = (key: string, val: number) => {
         const nextEs: any = { ...es, [key]: val };
         const sumItems = (keys: string[]) => keys.reduce((s, k) => s + (nextEs[k] || 0), 0);
-        nextEs.grupoA_horista = Math.round(sumItems(['a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h']) * 100) / 100;
-        nextEs.grupoA_mensalista = Math.round(sumItems(['a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m']) * 100) / 100;
-        nextEs.grupoB_horista = Math.round(sumItems(['b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h']) * 100) / 100;
-        nextEs.grupoB_mensalista = Math.round(sumItems(['b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m']) * 100) / 100;
-        nextEs.grupoC_horista = Math.round(sumItems(['c1_h','c2_h','c3_h','c4_h','c5_h']) * 100) / 100;
-        nextEs.grupoC_mensalista = Math.round(sumItems(['c1_m','c2_m','c3_m','c4_m','c5_m']) * 100) / 100;
-        nextEs.grupoD_horista = Math.round(sumItems(['d1_h','d2_h']) * 100) / 100;
-        nextEs.grupoD_mensalista = Math.round(sumItems(['d1_m','d2_m']) * 100) / 100;
-        nextEs.horista = Math.round((nextEs.grupoA_horista + nextEs.grupoB_horista + nextEs.grupoC_horista + nextEs.grupoD_horista) * 100) / 100;
-        nextEs.mensalista = Math.round((nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista) * 100) / 100;
+        nextEs.grupoA_horista = p(sumItems(['a1_h','a2_h','a3_h','a4_h','a5_h','a6_h','a7_h','a8_h','a9_h']));
+        nextEs.grupoA_mensalista = p(sumItems(['a1_m','a2_m','a3_m','a4_m','a5_m','a6_m','a7_m','a8_m','a9_m']));
+        nextEs.grupoB_horista = p(sumItems(['b1_h','b2_h','b3_h','b4_h','b5_h','b6_h','b7_h','b8_h','b9_h','b10_h']));
+        nextEs.grupoB_mensalista = p(sumItems(['b1_m','b2_m','b3_m','b4_m','b5_m','b6_m','b7_m','b8_m','b9_m','b10_m']));
+        nextEs.grupoC_horista = p(sumItems(['c1_h','c2_h','c3_h','c4_h','c5_h']));
+        nextEs.grupoC_mensalista = p(sumItems(['c1_m','c2_m','c3_m','c4_m','c5_m']));
+        nextEs.grupoD_horista = p(sumItems(['d1_h','d2_h']));
+        nextEs.grupoD_mensalista = p(sumItems(['d1_m','d2_m']));
+        nextEs.horista = p(nextEs.grupoA_horista + nextEs.grupoB_horista + nextEs.grupoC_horista + nextEs.grupoD_horista);
+        nextEs.mensalista = p(nextEs.grupoA_mensalista + nextEs.grupoB_mensalista + nextEs.grupoC_mensalista + nextEs.grupoD_mensalista);
         onChange(nextEs);
     };
     const inputSty = { width: 68, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' as const, padding: '4px 6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none', transition: 'border-color 0.2s' };
@@ -214,13 +216,13 @@ export function Step1ConfigPanel({
 
     const updateTcu = (field: keyof BdiTcuParams, val: number) => {
         const nextTcu = { ...bdiConfig.tcu, [field]: val };
-        const calculatedBdi = calculateBdiTCU(nextTcu);
+        const calculatedBdi = calculateBdiTCU(nextTcu, engineeringConfig.precision);
         onBdiChange({ ...bdiConfig, mode: 'TCU', tcu: nextTcu, bdiGlobal: calculatedBdi });
     };
 
     const updateTcuFornecimento = (field: keyof BdiTcuParams, val: number) => {
         const nextTcu = { ...(bdiConfig.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS), [field]: val };
-        const calculatedBdi = calculateBdiTCU(nextTcu);
+        const calculatedBdi = calculateBdiTCU(nextTcu, engineeringConfig.precision);
         onConfigChange({ ...engineeringConfig, bdiFornecimento: calculatedBdi });
         onBdiChange({ ...bdiConfig, tcuFornecimento: nextTcu });
     };
@@ -509,7 +511,7 @@ export function Step1ConfigPanel({
                         {/* BDI Global — Read-Only Card */}
                         <div style={{ padding: 20, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(139,92,246,0.06))', border: '1px solid rgba(37,99,235,0.12)', textAlign: 'center' }}>
                             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>BDI Global — Serviços (TCU 2622)</div>
-                            <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>{calculateBdiTCU(bdiConfig.tcu).toFixed(2)}%</div>
+                            <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>{calculateBdiTCU(bdiConfig.tcu, engineeringConfig.precision).toFixed(engineeringConfig.precision?.casasDecimais || 2)}%</div>
                             <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>Calculado automaticamente a partir da composição abaixo</div>
                         </div>
 
@@ -602,7 +604,7 @@ export function Step1ConfigPanel({
                                     {/* BDI Fornecimento — Read-Only Card */}
                                     <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(180,83,9,0.06), rgba(217,119,6,0.06))', border: '1px solid rgba(180,83,9,0.12)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>BDI Diferenciado — Fornecimento (TCU 2622)</div>
-                                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#b45309', lineHeight: 1 }}>{calculateBdiTCU(tcuF).toFixed(2)}%</div>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#b45309', lineHeight: 1 }}>{calculateBdiTCU(tcuF, engineeringConfig.precision).toFixed(engineeringConfig.precision?.casasDecimais || 2)}%</div>
                                         <div style={{ fontSize: '0.6rem', color: '#92400e', marginTop: 6, fontStyle: 'italic' }}>Aplicado a itens de MATERIAL e EQUIPAMENTO</div>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -770,6 +772,7 @@ export function Step1ConfigPanel({
                             {showEncargosDetail && (
                                 <EncargosDetailTable 
                                     es={engineeringConfig.encargosSociais || {}} 
+                                    precision={engineeringConfig.precision}
                                     onChange={newEs => {
                                         onConfigChange({ ...engineeringConfig, encargosSociais: newEs });
                                         setHasUnsavedChanges(true);
@@ -899,6 +902,7 @@ export function Step1ConfigPanel({
                                         {showAdicionalDetail[idx] && (
                                             <EncargosDetailTable 
                                                 es={sheet || {}} 
+                                                precision={engineeringConfig.precision}
                                                 onChange={newEs => {
                                                     const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                                     sheets[idx] = newEs;
