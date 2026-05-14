@@ -1626,13 +1626,18 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // ═══════════════════════════════════════════════════
             // RE-READ: A BG job may have completed and written fresh items
             // since our initial schemaV2 read. Re-check before falling through.
+            // FIX CACHE-02: Skip RE-READ when forceRefresh=true — user explicitly
+            // requested a fresh extraction, so we must NOT serve stale cached items
+            // that may have been written by a concurrent/previous job.
             // ═══════════════════════════════════════════════════
-            const freshAiAnalysis = await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } });
+            const freshAiAnalysis = !forceRefresh
+                ? await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } })
+                : null;
             const freshSchema = freshAiAnalysis?.schemaV2 as any;
             const freshBudgetItems = freshSchema?._engineeringBudgetItems;
             const freshMeta = freshSchema?._engineeringExtractionMeta;
             
-            if (Array.isArray(freshBudgetItems) && freshBudgetItems.length > 0) {
+            if (!forceRefresh && Array.isArray(freshBudgetItems) && freshBudgetItems.length > 0) {
                 postClassifyTypes(freshBudgetItems);
                 console.log(`[Engineering AI-Populate] 🔄 RE-READ: Encontrou ${freshBudgetItems.length} itens frescos (escritos por job concluído)`);
                 await enrichWithOfficialPrices(freshBudgetItems, engineeringConfig, { tenantId: req.user?.tenantId });
