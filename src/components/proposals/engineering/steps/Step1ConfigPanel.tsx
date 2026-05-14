@@ -846,19 +846,11 @@ export function Step1ConfigPanel({
                             )}
                         </div>
 
-                        {/* Planilhas Adicionais de Encargos */}
                         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                                     📋 Planilhas Adicionais de Encargos
                                 </span>
-                                <button onClick={() => {
-                                    const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
-                                    sheets.push({ label: `Base ${sheets.length + 2}`, horista: 0, mensalista: 0 });
-                                    onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
-                                }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 700, padding: '7px 14px', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(109,40,217,0.4)', background: 'rgba(109,40,217,0.04)', color: '#6d28d9', cursor: 'pointer' }}>
-                                    <Plus size={13} /> Adicionar Planilha
-                                </button>
                             </div>
                             <p style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', margin: '0 0 8px', lineHeight: 1.4 }}>
                                 Para editais com múltiplas tabelas oficiais (SINAPI, SEINFRA, etc.), adicione uma planilha por base.
@@ -968,6 +960,7 @@ export function Step1ConfigPanel({
                                             <EncargosDetailTable 
                                                 es={sheet || {}} 
                                                 precision={engineeringConfig.precision}
+                                                aiRef={(engineeringConfig as any)._aiExtractedEncargosAdicionais?.[idx] || null}
                                                 onChange={newEs => {
                                                     const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                                     sheets[idx] = newEs;
@@ -999,6 +992,15 @@ export function Step1ConfigPanel({
                                     ))}
                                 </div>
                             )}
+
+                            {/* Adicionar Planilha — always at the bottom after all sheets */}
+                            <button onClick={() => {
+                                const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                sheets.push({ label: `Base ${sheets.length + 2}`, horista: 0, mensalista: 0 });
+                                onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                            }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', fontSize: '0.75rem', fontWeight: 700, padding: '10px 14px', marginTop: 8, borderRadius: 'var(--radius-md)', border: '1px dashed rgba(109,40,217,0.4)', background: 'rgba(109,40,217,0.04)', color: '#6d28d9', cursor: 'pointer' }}>
+                                <Plus size={13} /> Adicionar Planilha Manualmente
+                            </button>
                         </div>
                     </div>
                 </div>

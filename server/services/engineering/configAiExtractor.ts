@@ -429,25 +429,19 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
                         const primary = enrichResult(parsed);
                         // P4: Multi-table detection — check if document has additional encargos tables
                         try {
+                            const fieldsList = 'a1_h,a1_m,a2_h,a2_m,a3_h,a3_m,a4_h,a4_m,a5_h,a5_m,a6_h,a6_m,a7_h,a7_m,a8_h,a8_m,a9_h,a9_m,b1_h,b1_m,b2_h,b2_m,b3_h,b3_m,b4_h,b4_m,b5_h,b5_m,b6_h,b6_m,b7_h,b7_m,b8_h,b8_m,b9_h,b9_m,b10_h,b10_m,c1_h,c1_m,c2_h,c2_m,c3_h,c3_m,c4_h,c4_m,c5_h,c5_m,d1_h,d1_m,d2_h,d2_m';
                             const multiPrompt = `Analise os documentos. Quantas tabelas DISTINTAS de Encargos Sociais existem?
-Exemplos: SINAPI + SEINFRA, ou Obras + Serviços.
-Se há APENAS UMA tabela, retorne: {"count":1}
-Se há DUAS ou MAIS tabelas DIFERENTES, retorne a SEGUNDA tabela completa:
-{"count":2,"secondTable":{
-  "basePrincipal":"SEINFRA","totalHorista":114.15,"totalMensalista":68.50,
-  "a1_h":20,"a1_m":20,"a2_h":1.5,"a2_m":1.5,"a3_h":1,"a3_m":1,
-  "a4_h":0.2,"a4_m":0.2,"a5_h":0.6,"a5_m":0.6,"a6_h":2.5,"a6_m":2.5,
-  "a7_h":3,"a7_m":3,"a8_h":8,"a8_m":8,"a9_h":0,"a9_m":0,
-  "b1_h":17.86,"b1_m":0,"b2_h":4.72,"b2_m":3.98,"b3_h":1.39,"b3_m":0.86,
-  "b4_h":10.91,"b4_m":8.33,"b5_h":0.07,"b5_m":0.06,"b6_h":0.72,"b6_m":0.56,
-  "b7_h":2.07,"b7_m":0,"b8_h":0.08,"b8_m":0.05,"b9_h":14.14,"b9_m":11.11,"b10_h":0.03,"b10_m":0.02,
-  "c1_h":5.05,"c1_m":3.86,"c2_h":0.11,"c2_m":0.08,"c3_h":4.88,"c3_m":4.57,
-  "c4_h":4.44,"c4_m":3.55,"c5_h":0.50,"c5_m":0.38,
-  "d1_h":9.13,"d1_m":3.56,"d2_h":2.40,"d2_m":1.86
-}}
-IMPORTANTE: Os valores acima são EXEMPLO. Extraia os valores REAIS da SEGUNDA tabela do documento.
-IGNORE a tabela "${primary.basePrincipal || 'principal'}" (já extraída). Extraia APENAS a tabela DIFERENTE.
-Se NÃO existe segunda tabela, retorne {"count":1}.`;
+Um edital pode ter 1, 2, 3 ou mais tabelas (ex: SINAPI, SEINFRA, ORSE, Obras, Serviços).
+A tabela "${primary.basePrincipal || 'principal'}" já foi extraída. Extraia TODAS as outras tabelas restantes.
+
+Se há APENAS UMA tabela no total, retorne: {"count":1,"tables":[]}
+Se há MAIS tabelas, retorne CADA UMA com todos os 52 campos analíticos:
+{"count":3,"tables":[
+  {"basePrincipal":"SEINFRA","totalHorista":114.15,"totalMensalista":68.50,${fieldsList.split(',').map(f => `"${f}":0`).join(',')}},
+  {"basePrincipal":"ORSE","totalHorista":110.00,"totalMensalista":65.00,${fieldsList.split(',').map(f => `"${f}":0`).join(',')}}
+]}
+IMPORTANTE: Os valores acima são EXEMPLO. Extraia os valores REAIS de cada tabela adicional.
+Cada tabela DEVE ter basePrincipal, totalHorista, totalMensalista e todos os 52 campos (${fieldsList}).`;
                             const multiResult = await ai.models.generateContent({
                                 model: 'gemini-2.5-flash',
                                 contents: [{ role: 'user', parts: [...pdfParts, { text: multiPrompt }] }],
@@ -455,10 +449,9 @@ Se NÃO existe segunda tabela, retorne {"count":1}.`;
                             });
                             if (multiResult?.text) {
                                 const multiParsed = JSON.parse(multiResult.text);
-                                if (multiParsed.count > 1 && multiParsed.secondTable) {
-                                    const secondary = enrichResult({ ...multiParsed.secondTable, found: true });
-                                    primary.additionalTables = [secondary];
-                                    console.log(`[Encargos-AI] 📋 Multi-table: Found ${multiParsed.count} tables. Secondary: ${secondary.basePrincipal} H=${secondary.totalHorista}%`);
+                                if (multiParsed.count > 1 && Array.isArray(multiParsed.tables) && multiParsed.tables.length > 0) {
+                                    primary.additionalTables = multiParsed.tables.map((t: any) => enrichResult({ ...t, found: true }));
+                                    console.log(`[Encargos-AI] 📋 Multi-table: Found ${multiParsed.count} total. Additional: ${primary.additionalTables.map((t: any) => `${t.basePrincipal}(H=${t.totalHorista}%)`).join(', ')}`);
                                 } else {
                                     console.log(`[Encargos-AI] ℹ️ Multi-table: Only 1 table found in document`);
                                 }

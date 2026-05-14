@@ -316,20 +316,28 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 encargosUpdate.horista = pr(d.totalHorista || encargosUpdate.horista || engineeringConfig.encargosSociais.horista);
                 encargosUpdate.mensalista = pr(d.totalMensalista || encargosUpdate.mensalista || engineeringConfig.encargosSociais.mensalista);
                 // P4: Auto-populate additional encargos tables if backend detected multiple
+                let rawAdicionais: any[] = [];
                 if (result.additional && Array.isArray(result.additional) && result.additional.length > 0) {
                     const adicionalSheets = result.additional.map((extra: any) => {
                         const sheet: any = { label: extra.basePrincipal || 'Base Adicional', horista: pr(extra.totalHorista || 0), mensalista: pr(extra.totalMensalista || 0) };
+                        const rawSheet: any = { ...extra }; // raw for badge comparison
                         // Copy all 52 individual fields with precision
                         for (const [k, v] of Object.entries(extra)) {
                             if (typeof v === 'number' && k !== 'totalHorista' && k !== 'totalMensalista') sheet[k] = pr(v as number);
                             else if (typeof v === 'string') sheet[k] = v;
                         }
+                        rawAdicionais.push(rawSheet);
                         return sheet;
                     });
                     encargosUpdate.encargosAdicionais = [...(engineeringConfig.encargosSociais?.encargosAdicionais || []), ...adicionalSheets];
                 }
                 // _aiExtractedEncargos: raw values (no precision) for faithful badge comparison
-                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate, _aiExtractedEncargos: { ...rawEncargos } }));
+                setEngineeringConfig(prev => ({ 
+                    ...prev, 
+                    encargosSociais: encargosUpdate, 
+                    _aiExtractedEncargos: { ...rawEncargos },
+                    _aiExtractedEncargosAdicionais: rawAdicionais.length > 0 ? rawAdicionais : (prev as any)._aiExtractedEncargosAdicionais || [],
+                }));
                 setHasUnsavedChanges(true);
                 const extraCount = result.additional?.length || 0;
                 const extraMsg = extraCount > 0 ? ` + ${extraCount} planilha(s) adicional(is)` : '';
