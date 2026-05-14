@@ -236,36 +236,56 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 return;
             }
             // No proposal yet — create a brand new one
-            const res = await fetch(`${API_BASE_URL}/api/proposals`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                    biddingProcessId: selectedBiddingId,
-                    companyProfileId: selectedCompanyId,
-                    bdiPercentage: bdi,
-                    validityDays,
-                    headerImage: selectedCompany?.defaultProposalHeader || '',
-                    footerImage: selectedCompany?.defaultProposalFooter || '',
-                    headerImageHeight: selectedCompany?.defaultProposalHeaderHeight || 80,
-                    footerImageHeight: selectedCompany?.defaultProposalFooterHeight || 60,
-                    objectType,
-                }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setProposal(data);
-                setItems(data.items || []);
-                setProposals(prev => [data, ...prev]);
-                if (selectedCompany) {
-                    setHeaderImage(selectedCompany.defaultProposalHeader || '');
-                    setFooterImage(selectedCompany.defaultProposalFooter || '');
-                    setHeaderImageHeight(selectedCompany.defaultProposalHeaderHeight || 80);
-                    setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
-                    if (selectedCompany.defaultLetterContent) {
-                        setLetterContent(selectedCompany.defaultLetterContent);
-                    }
+            await createBlankProposal();
+        } catch (e) {
+            toast.error('Erro ao criar proposta.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Create a blank proposal from scratch (no clone)
+    const createBlankProposal = async () => {
+        const res = await fetch(`${API_BASE_URL}/api/proposals`, {
+            method: 'POST', headers,
+            body: JSON.stringify({
+                biddingProcessId: selectedBiddingId,
+                companyProfileId: selectedCompanyId,
+                bdiPercentage: bdi,
+                validityDays,
+                headerImage: selectedCompany?.defaultProposalHeader || '',
+                footerImage: selectedCompany?.defaultProposalFooter || '',
+                headerImageHeight: selectedCompany?.defaultProposalHeaderHeight || 80,
+                footerImageHeight: selectedCompany?.defaultProposalFooterHeight || 60,
+                objectType,
+            }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setProposal(data);
+            setItems(data.items || []);
+            setProposals(prev => [data, ...prev]);
+            if (selectedCompany) {
+                setHeaderImage(selectedCompany.defaultProposalHeader || '');
+                setFooterImage(selectedCompany.defaultProposalFooter || '');
+                setHeaderImageHeight(selectedCompany.defaultProposalHeaderHeight || 80);
+                setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
+                if (selectedCompany.defaultLetterContent) {
+                    setLetterContent(selectedCompany.defaultLetterContent);
                 }
-                showSaveMsg('Proposta criada com sucesso!');
             }
+            showSaveMsg('Proposta em branco criada!');
+        }
+    };
+
+    const handleCreateBlankProposal = async () => {
+        if (!selectedBiddingId || !selectedCompanyId) {
+            toast.warning('Selecione uma licitação e uma empresa.');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await createBlankProposal();
         } catch (e) {
             toast.error('Erro ao criar proposta.');
         } finally {
@@ -829,7 +849,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         adjustedLetterContent, setAdjustedLetterContent,
         updateAdjustedItem,
         // Handlers
-        handleCreateProposal, handleAiPopulate, populateProgressMsg,
+        handleCreateProposal, handleCreateBlankProposal, handleAiPopulate, populateProgressMsg,
         handleAddItem, updateItem,
         handleSaveAllItems, handleSaveCompanyTemplate,
         handleDeleteItem, executeDeleteItem,

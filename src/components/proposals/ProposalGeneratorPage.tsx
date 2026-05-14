@@ -131,18 +131,34 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                             </div>
 
                             {/* CTA Principal */}
-                            <button className="btn btn-primary" onClick={p.handleCreateProposal}
-                                disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
-                                style={{
-                                    height: 40, padding: '0 var(--space-5)', borderRadius: 'var(--radius-lg)',
-                                    fontWeight: 700, whiteSpace: 'nowrap',
-                                    background: 'linear-gradient(135deg, var(--color-primary), rgba(99,102,241,0.9))',
-                                    boxShadow: (!p.isLoading && p.selectedBiddingId && p.selectedCompanyId) ? '0 4px 14px rgba(37,99,235,0.3)' : undefined,
-                                    border: 'none', display: 'flex', alignItems: 'center', gap: 8,
-                                }}>
-                                {p.isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
-                                {p.proposal ? 'Nova Versão' : 'Iniciar Proposta'}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                                <button className="btn btn-primary" onClick={p.handleCreateProposal}
+                                    disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
+                                    style={{
+                                        height: 40, padding: '0 var(--space-5)', fontWeight: 700, whiteSpace: 'nowrap',
+                                        background: 'linear-gradient(135deg, var(--color-primary), rgba(99,102,241,0.9))',
+                                        boxShadow: (!p.isLoading && p.selectedBiddingId && p.selectedCompanyId) ? '0 4px 14px rgba(37,99,235,0.3)' : undefined,
+                                        border: 'none', display: 'flex', alignItems: 'center', gap: 8,
+                                        borderRadius: p.proposal ? 'var(--radius-lg) 0 0 var(--radius-lg)' : 'var(--radius-lg)',
+                                    }}>
+                                    {p.isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+                                    {p.proposal ? 'Copiar Versão' : 'Iniciar Proposta'}
+                                </button>
+                                {p.proposal && (
+                                    <button className="btn btn-primary" onClick={p.handleCreateBlankProposal}
+                                        disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
+                                        title="Criar versão em branco (do zero)"
+                                        style={{
+                                            height: 40, padding: '0 10px', fontWeight: 700, fontSize: '0.7rem',
+                                            background: 'linear-gradient(135deg, rgba(99,102,241,0.85), rgba(79,70,229,0.9))',
+                                            border: 'none', borderLeft: '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: '0 var(--radius-lg) var(--radius-lg) 0',
+                                            display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+                                        }}>
+                                        Em Branco
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                     </div>
