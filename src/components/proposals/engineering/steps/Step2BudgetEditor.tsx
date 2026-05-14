@@ -8,6 +8,7 @@
  * Recebe engineeringConfig e bdiConfig do Wizard para que o dashboard sidebar
  * reflita a configuração atual do Step 1 em tempo real.
  */
+import { useState, useCallback } from 'react';
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
 import { AiDisclaimerBanner } from '../../../shared/AiDisclaimerBanner';
 import type { EngineeringConfig, EngItem } from '../types';
@@ -24,10 +25,18 @@ interface Props {
 }
 
 export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onItemsChange, onPrev, onNext }: Props) {
+    // Track whether items have been loaded (from AI extraction or saved data)
+    const [hasLoadedItems, setHasLoadedItems] = useState(false);
+
+    const handleItemsChange = useCallback((items: EngItem[]) => {
+        if (items.length > 0) setHasLoadedItems(true);
+        onItemsChange?.(items);
+    }, [onItemsChange]);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {/* AI Disclaimer — visible whenever user views the extracted budget */}
-            <AiDisclaimerBanner variant="extraction" />
+            {/* AI Disclaimer — only visible AFTER items are loaded */}
+            {hasLoadedItems && <AiDisclaimerBanner variant="extraction" />}
 
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
             <EngineeringProposalEditor
@@ -35,7 +44,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 biddingId={biddingId}
                 wizardConfig={engineeringConfig}
                 wizardBdiConfig={bdiConfig}
-                onItemsChange={onItemsChange}
+                onItemsChange={handleItemsChange}
             />
 
             {/* Step navigation footer */}

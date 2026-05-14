@@ -810,8 +810,57 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         if (pdfParts.length > 0) {
             // ── STANDARD MODE: Native PDFs ──
             logger.info(`[Engineering-BG] 🤖 STANDARD MODE: Extração unificada para PDFs não escaneados (gemini-2.5-flash).`);
-            const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens orçamentários das páginas visuais fornecidas.`;
+            const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens orçamentários das páginas visuais fornecidas.\nCOMECE OBRIGATORIAMENTE do Item 1.0 (primeiro item/etapa) e vá sequencialmente até o final.\nNÃO pule o início do documento. NÃO comece do meio.`;
             await extractChunk([{ role: 'user', parts: [...pdfParts, { text: batchInstruction }] }], 'Lote PDF Nativo', batchInstruction, 'gemini-2.5-flash', false);
+
+            // ── GAP DETECTION: Check if early etapas were skipped ──
+            // When Gemini hits MAX_TOKENS on large PDFs, it may start mid-document
+            // (e.g., from Etapa 10) and continue forward, never covering Etapas 1-9.
+            const sortedForGap = [...engItems].sort((a: any, b: any) => {
+                const pa = String(a.item || '0').split('.').map(Number);
+                const pb = String(b.item || '0').split('.').map(Number);
+                for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                    const diff = (pa[i] || 0) - (pb[i] || 0);
+                    if (diff !== 0) return diff;
+                }
+                return 0;
+            });
+            const firstItemNum = sortedForGap.length > 0 ? String(sortedForGap[0]?.item || '1') : '1';
+            const firstTopLevel = parseInt(firstItemNum.split('.')[0]) || 1;
+            const lastItemNum = sortedForGap.length > 0 ? String(sortedForGap[sortedForGap.length - 1]?.item || '1') : '1';
+            const lastTopLevel = parseInt(lastItemNum.split('.')[0]) || 1;
+
+            if (firstTopLevel > 2 && engItems.length > 10) {
+                // Gap detected: extraction skipped Etapas 1 through (firstTopLevel - 1)
+                logger.warn(
+                    `[Engineering-BG] ⚠️ GAP DETECTED: Extraction starts at Etapa ${firstTopLevel} (item "${firstItemNum}"). ` +
+                    `Etapas 1-${firstTopLevel - 1} are MISSING. Launching recovery pass...`
+                );
+
+                await updateJobProgress(job.id, tenantId, {
+                    progress: 75,
+                    progressMsg: `Recuperando itens faltantes (Etapas 1-${firstTopLevel - 1})... ${engItems.length} itens extraídos`
+                }).catch(() => {});
+
+                const gapInstruction = `${userInstruction}\n\n` +
+                    `🚨 RECUPERAÇÃO DE ITENS FALTANTES:\n` +
+                    `Uma extração anterior cobriu apenas as Etapas ${firstTopLevel} até ${lastTopLevel} (${engItems.length} itens).\n` +
+                    `Agora, extraia APENAS os itens das Etapas 1 até ${firstTopLevel - 1} (inclusive todas as subetapas e composições).\n` +
+                    `NÃO repita itens das Etapas ${firstTopLevel}+. Comece do INÍCIO do documento.\n` +
+                    `Retorne em JSON com o mesmo schema.`;
+
+                await extractChunk(
+                    [{ role: 'user', parts: [...pdfParts, { text: gapInstruction }] }],
+                    `Gap Recovery (Etapas 1-${firstTopLevel - 1})`,
+                    gapInstruction,
+                    'gemini-2.5-flash',
+                    false
+                );
+
+                logger.info(
+                    `[Engineering-BG] ✅ Gap recovery complete. Total items now: ${engItems.length}`
+                );
+            }
         }
 
         clearInterval(progressTimer);
