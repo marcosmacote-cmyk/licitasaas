@@ -24,58 +24,68 @@ Seu objetivo é encontrar a COMPOSIÇÃO ANALÍTICA DO BDI (Benefícios e Despes
 
 ALVO DESTA EXTRAÇÃO: ${target}.
 
+🚨 REGRA DE OURO: Extraia os valores EXATOS que aparecem no documento. NUNCA invente valores.
+NUNCA use medianas do TCU. NUNCA use valores "típicos". Copie os NÚMEROS do edital.
+
 PROCURE POR:
 - Tabelas intituladas "COMPOSIÇÃO DO BDI", "COMPOSIÇÃO DE BDI", "BDI - SERVIÇOS", "BDI ADOTADO"
 - Tabelas separadas como "BDI - FORNECIMENTO", "BDI MATERIAIS", "BDI EQUIPAMENTOS", "BDI DIFERENCIADO", "BDI 2" ou "BDI 3"
 - Referências ao Acórdão TCU 2622/2013 ou TCU 2369/2011
 - Quadros com a fórmula: BDI = {(1+AC+S+G+R)×(1+DF)×(1+L)/(1-I) - 1} × 100
-- Em planilhas OGU do TransfereGOV, o BDI aparece no cabeçalho como "BDI 1", "BDI 2", "BDI 3" (só o percentual global). Normalmente BDI 1 é serviços/obra e BDI 2/3 podem ser fornecimento/material/equipamento — confirme pelo cabeçalho ou legenda antes de classificar.
+- Em planilhas OGU do TransfereGOV, o BDI aparece no cabeçalho como "BDI 1", "BDI 2", "BDI 3"
 
 EXTRAIA OBRIGATORIAMENTE os seguintes percentuais individuais (NÃO o BDI total):
-- **adminCentral**: Administração Central (AC) — típico: 3-5%
-- **seguros**: Seguros (S) — típico: 0.5-1%
-- **garantias**: Garantias (G) — típico: 0-1%
-- **riscos**: Riscos (R) — típico: 0.5-1.5%
-- **despFinanceiras**: Despesas Financeiras (DF) — típico: 0.5-1.5%
-- **lucro**: Lucro / Remuneração (L) — típico: 4-8%
-- **pis**: PIS — tipicamente 0.65%
-- **cofins**: COFINS — tipicamente 3%
-- **iss**: ISS (Imposto Sobre Serviços) — tipicamente 2-5%, varia por município
-- **csll**: CSLL (Contribuição Social sobre o Lucro Líquido) — tipicamente 1% em regime ONERADO. Em regime DESONERADO o CSLL pode ser 0%. Se não mencionado, retorne 0.
+- **adminCentral**: Administração Central (AC)
+- **seguros**: Seguros (S)
+- **garantias**: Garantias (G)
+- **riscos**: Riscos (R)
+- **despFinanceiras**: Despesas Financeiras (DF)
+- **lucro**: Lucro / Remuneração (L)
+- **pis**: PIS
+- **cofins**: COFINS
+- **iss**: ISS (Imposto Sobre Serviços)
+- **csll**: CSLL. Se não mencionado, retorne 0.
 
-ATENÇÃO: Os tributos devem ser extraídos INDIVIDUALMENTE (PIS, COFINS, ISS, CSLL).
-Se o edital mostra apenas "Tributos = 5,65%" sem detalhar, use:
-PIS = 0.65, COFINS = 3.00, CSLL = 0, ISS = (Tributos - 0.65 - 3.00).
+⚠️ CAMPOS COMBINADOS — MUITO IMPORTANTE:
+Muitos editais COMBINAM campos. Quando isso acontecer:
+- "S + G" ou "Garantia/Seguros" = valor combinado → divida igualmente entre seguros e garantias.
+  Ex: "S + G = 0,80%" → seguros=0.40, garantias=0.40
+- "Benefício" ou "S+G+L" (Seguros+Garantias+Lucro) → separe os componentes.
+  Geralmente o "Benefício TOTAL" é a soma de S+G+L. Use o Total menos L para obter S+G.
+- Se não houver divisão possível e o valor for claramente S+G combinado (valor < 2%),
+  divida meio a meio entre seguros e garantias.
+
+⚠️ TRIBUTOS: Extraia INDIVIDUALMENTE (PIS, COFINS, ISS, CSLL).
+Se o edital mostra apenas "Tributos (I) = X%" ou "Impostos = X%" sem detalhar:
+Verifique se há uma subtabela de Impostos com os itens individuais.
+Se não houver detalhamento: PIS = 0.65, COFINS = 3.00, CSLL = 0, ISS = (Total - 0.65 - 3.00).
 
 REGRAS CRÍTICAS:
-1. Se você encontrar APENAS o BDI global (ex: "BDI = 20,35%") SEM detalhamento, retorne found=true, globalBdi=20.35, tcu=null.
-2. Se encontrar a COMPOSIÇÃO DETALHADA (cada componente individual), retorne found=true, globalBdi com o valor calculado, E tcu com TODOS os 10 componentes preenchidos.
+1. Se encontrar a tabela com QUALQUER nível de detalhamento, SEMPRE retorne tcu preenchido. Mesmo que tenha apenas 3-4 campos visíveis, preencha o que encontrar e os demais = 0.
+2. Só retorne tcu=null se REALMENTE só houver o percentual global sem NENHUMA tabela.
 3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração.
-4. Se um componente é "0" ou não mencionado, coloque 0 — NÃO omita o campo.
+4. Se um componente é "0" ou não mencionado, coloque 0.
 5. Os valores individuais são SEMPRE MUITO MENORES que o BDI total.
-6. Se houver BDI diferenciado para fornecimento/materiais/equipamentos, preencha globalBdiFornecimento e tcuFornecimento.
+6. Se houver BDI diferenciado para fornecimento, preencha globalBdiFornecimento e tcuFornecimento.
 7. Se o ALVO for FORNECIMENTO e não existir BDI de fornecimento, retorne found=false.
-
-EXEMPLO de composição válida:
-AC=4.00, S=0.80, G=0.80, R=0.97, DF=0.59, L=6.16, PIS=0.65, COFINS=3.00, ISS=2.00 → BDI ≈ 20.35%
 
 Retorne apenas os números (sem o símbolo de %).`;
 
     const tcuSchema = {
         type: Type.OBJECT,
         nullable: true,
-        description: 'Os parâmetros INDIVIDUAIS do BDI conforme Acórdão TCU. Cada campo é um percentual pequeno (0-10%). NÃO colocar o BDI total em nenhum campo.',
+        description: 'Os parâmetros INDIVIDUAIS do BDI extraídos EXATAMENTE do edital. NUNCA use valores default — copie os números do documento.',
         properties: {
-            adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — tipicamente 3-5%' },
-            seguros: { type: Type.NUMBER, description: 'Seguros (S) — tipicamente 0.5-1%' },
-            garantias: { type: Type.NUMBER, description: 'Garantias (G) — tipicamente 0-1%' },
-            riscos: { type: Type.NUMBER, description: 'Riscos (R) — tipicamente 0.5-1.5%' },
-            despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — tipicamente 0.5-1.5%' },
-            lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — tipicamente 4-8%. NUNCA o BDI total.' },
-            pis: { type: Type.NUMBER, description: 'PIS — tipicamente 0.65%' },
-            cofins: { type: Type.NUMBER, description: 'COFINS — tipicamente 3%' },
-            iss: { type: Type.NUMBER, description: 'ISS — tipicamente 2-5%' },
-            csll: { type: Type.NUMBER, description: 'CSLL — tipicamente 1% (onerado) ou 0% (desonerado)' },
+            adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — EXTRAIA o valor EXATO do edital' },
+            seguros: { type: Type.NUMBER, description: 'Seguros (S) — se combinado com G, divida igualmente' },
+            garantias: { type: Type.NUMBER, description: 'Garantias (G) — se combinado com S, divida igualmente' },
+            riscos: { type: Type.NUMBER, description: 'Riscos (R) — EXTRAIA o valor EXATO do edital' },
+            despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — EXTRAIA o valor EXATO do edital' },
+            lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — EXTRAIA o valor EXATO do edital. NUNCA o BDI total.' },
+            pis: { type: Type.NUMBER, description: 'PIS — EXTRAIA o valor EXATO do edital' },
+            cofins: { type: Type.NUMBER, description: 'COFINS — EXTRAIA o valor EXATO do edital' },
+            iss: { type: Type.NUMBER, description: 'ISS — EXTRAIA o valor EXATO do edital' },
+            csll: { type: Type.NUMBER, description: 'CSLL — EXTRAIA o valor EXATO ou 0 se não mencionado' },
         }
     };
 
@@ -93,13 +103,19 @@ Retorne apenas os números (sem o símbolo de %).`;
 
     const sanitizeBdiResult = (parsed: any) => {
         if (!parsed?.found) return parsed;
+        // Fix: AI put BDI total in lucro field
         if (parsed.tcu && parsed.globalBdi && Math.abs(parsed.tcu.lucro - parsed.globalBdi) < 0.5) {
             console.warn(`[BDI-AI] ⚠️ AI colocou BDI total (${parsed.globalBdi}) no campo Lucro. Removendo tcu para usar apenas globalBdi.`);
             parsed.tcu = null;
         }
         if (parsed.tcuFornecimento && parsed.globalBdiFornecimento && Math.abs(parsed.tcuFornecimento.lucro - parsed.globalBdiFornecimento) < 0.5) {
-            console.warn(`[BDI-AI] ⚠️ AI colocou BDI fornecimento total (${parsed.globalBdiFornecimento}) no campo Lucro. Removendo tcuFornecimento para usar apenas globalBdiFornecimento.`);
+            console.warn(`[BDI-AI] ⚠️ AI colocou BDI fornecimento total (${parsed.globalBdiFornecimento}) no campo Lucro. Removendo tcuFornecimento.`);
             parsed.tcuFornecimento = null;
+        }
+        // Fix: If seguros and garantias are identical and small, they might be a combined S+G value duplicated
+        if (parsed.tcu && parsed.tcu.seguros === parsed.tcu.garantias && parsed.tcu.seguros > 0 && parsed.tcu.seguros <= 1.5) {
+            // Check if splitting makes more mathematical sense (total S+G should be the combined value)
+            console.log(`[BDI-AI] 📊 S=${parsed.tcu.seguros} G=${parsed.tcu.garantias} (iguais — pode ser S+G combinado)`);
         }
         return parsed;
     };

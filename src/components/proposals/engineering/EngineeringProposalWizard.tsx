@@ -170,9 +170,13 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 }
                 const tcu = { ...bdiConfig.tcu, ...rawTcu };
                 setBdiConfig(prev => ({ ...prev, mode: 'TCU', tcu, bdiGlobal: calculateBdiTCU(tcu, engineeringConfig.precision) }));
+                // Store AI-extracted reference for Match badges
+                setEngineeringConfig(prev => ({ ...prev, _aiExtractedBdi: { ...rawTcu, globalBdi: result.data.globalBdi || calculateBdiTCU(tcu, engineeringConfig.precision) } }));
                 setHasUnsavedChanges(true);
             } else if (result.data?.globalBdi) {
                 setBdiConfig(prev => ({ ...prev, mode: 'SIMPLIFICADO', bdiGlobal: result.data.globalBdi, tcu: autoDistributeBdi(result.data.globalBdi) }));
+                // Store only globalBdi reference (no composition detail)
+                setEngineeringConfig(prev => ({ ...prev, _aiExtractedBdi: { globalBdi: result.data.globalBdi } }));
                 setHasUnsavedChanges(true);
             }
         } catch (e) { console.error(e); }
@@ -318,7 +322,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     d1_h: d.d1_h || 0, d1_m: d.d1_m || 0,
                     d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
                 };
-                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate }));
+                setEngineeringConfig(prev => ({ ...prev, encargosSociais: encargosUpdate, _aiExtractedEncargos: { ...encargosUpdate } }));
                 setHasUnsavedChanges(true);
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos com sucesso ({d.basePrincipal || 'geral'})</span>);
                 setTimeout(() => setSaveMsg(null), 4000);

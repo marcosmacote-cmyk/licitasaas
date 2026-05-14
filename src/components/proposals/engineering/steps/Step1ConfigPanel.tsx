@@ -9,8 +9,9 @@ import { applyPrecision } from '../precisionEngine';
 import type { EngineeringConfig, PrecisionConfig } from '../types';
 
 // ═══════════════════════════════════════════════════════════
-// P0: TCU 2622/2013 — Faixas de referência para BDI Match
-// Fonte: Acórdão TCU 2622/2013 — Tabela 1 (Construção de Edifícios)
+// P0: Match System — compara valores atuais com o edital
+// Prioridade: 1) Valores extraídos pela IA do edital
+//             2) Fallback: Faixas TCU 2622/2013
 // ═══════════════════════════════════════════════════════════
 const TCU_RANGES: Record<string, { label: string; q1: number; median: number; q3: number }> = {
     adminCentral:    { label: 'Adm. Central',      q1: 3.00,  median: 4.00,  q3: 5.50  },
@@ -46,9 +47,30 @@ function MatchBadge({ status, label, title }: { status: MatchStatus; label: stri
     );
 }
 
-function bdiMatchBadge(field: string, value: number): React.ReactNode {
+/**
+ * Match Badge for BDI fields.
+ * Priority: Compare against AI-extracted edital values. Fallback to TCU ranges.
+ */
+function bdiMatchBadge(field: string, value: number, aiRef?: any): React.ReactNode {
+    if (value === 0) return null;
+
+    // P1: Compare against AI-extracted edital reference
+    if (aiRef && aiRef[field] != null && aiRef[field] !== undefined) {
+        const editalVal = Number(aiRef[field]);
+        if (editalVal === 0 && value === 0) return null;
+        const diff = Math.abs(value - editalVal);
+        if (diff < 0.005) {
+            return <MatchBadge status="ok" label="✓ Edital" title={`Confere com o edital: ${editalVal.toFixed(2)}%`} />;
+        }
+        if (diff <= 0.1) {
+            return <MatchBadge status="warn" label={`Edital: ${editalVal.toFixed(2)}%`} title={`Valor no edital: ${editalVal.toFixed(2)}%. Diferença de ${diff.toFixed(2)}%`} />;
+        }
+        return <MatchBadge status="divergent" label={`Edital: ${editalVal.toFixed(2)}%`} title={`⚠ DIVERGE do edital: ${editalVal.toFixed(2)}%. Valor atual: ${value.toFixed(2)}%`} />;
+    }
+
+    // Fallback: TCU range check
     const range = TCU_RANGES[field];
-    if (!range || value === 0) return null;
+    if (!range) return null;
     if (value >= range.q1 && value <= range.q3) {
         return <MatchBadge status="ok" label="Faixa TCU" title={`${range.label}: ${value.toFixed(2)}% está dentro da faixa TCU 2622 (${range.q1}% — ${range.q3}%)`} />;
     }
@@ -56,6 +78,24 @@ function bdiMatchBadge(field: string, value: number): React.ReactNode {
         return <MatchBadge status="warn" label={`< Q1 (${range.q1}%)`} title={`${range.label}: ${value.toFixed(2)}% está ABAIXO do 1° quartil TCU 2622 (${range.q1}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
     }
     return <MatchBadge status="warn" label={`> Q3 (${range.q3}%)`} title={`${range.label}: ${value.toFixed(2)}% está ACIMA do 3° quartil TCU 2622 (${range.q3}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
+}
+
+/**
+ * Match Badge for Encargos fields.
+ * Compares current value against AI-extracted edital reference.
+ */
+function encargosMatchBadge(field: string, value: number, aiRef?: any): React.ReactNode {
+    if (!aiRef || aiRef[field] == null) return null;
+    const editalVal = Number(aiRef[field]);
+    if (editalVal === 0 && value === 0) return null;
+    const diff = Math.abs(value - editalVal);
+    if (diff < 0.005) {
+        return <MatchBadge status="ok" label="✓ Edital" title={`Confere com o edital: ${editalVal.toFixed(2)}%`} />;
+    }
+    if (diff <= 0.5) {
+        return <MatchBadge status="warn" label={`Edital: ${editalVal.toFixed(2)}%`} title={`Valor no edital: ${editalVal.toFixed(2)}%. Diferença: ${diff.toFixed(2)}%`} />;
+    }
+    return <MatchBadge status="divergent" label={`Edital: ${editalVal.toFixed(2)}%`} title={`⚠ DIVERGE do edital: ${editalVal.toFixed(2)}%. Atual: ${value.toFixed(2)}%`} />;
 }
 
 function configConsistencyBadge(field: string, currentValue: string | undefined, ref: any): React.ReactNode {
@@ -522,7 +562,7 @@ export function Step1ConfigPanel({
                                     <div key={key}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>{label}</label>
-                                            {bdiMatchBadge(key, bdiConfig.tcu[key])}
+                                            {bdiMatchBadge(key, bdiConfig.tcu[key], (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu[key]}
                                             onChange={e => updateTcu(key, parseLocaleNumber(e.target.value))}
@@ -535,7 +575,7 @@ export function Step1ConfigPanel({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <label style={smallLabelStyle}>Desp. Financeiras (%)</label>
-                                        {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras)}
+                                        {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras, (engineeringConfig as any)._aiExtractedBdi)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
                                         onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
@@ -544,7 +584,7 @@ export function Step1ConfigPanel({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <label style={smallLabelStyle}>Lucro / Remuneração (%)</label>
-                                        {bdiMatchBadge('lucro', bdiConfig.tcu.lucro)}
+                                        {bdiMatchBadge('lucro', bdiConfig.tcu.lucro, (engineeringConfig as any)._aiExtractedBdi)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
                                         onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
@@ -747,14 +787,20 @@ export function Step1ConfigPanel({
                         {/* Totals */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(30,64,175,0.04), rgba(59,130,246,0.06))', border: '1px solid rgba(30,64,175,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Horista</div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Horista</span>
+                                    {encargosMatchBadge('horista', engineeringConfig.encargosSociais?.horista || 0, (engineeringConfig as any)._aiExtractedEncargos)}
+                                </div>
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1e40af', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.horista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.horista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, horista: parseLocaleNumber(e.target.value) } })}
                                     style={{ ...inputStyle, marginTop: 12, textAlign: 'center', border: 'none', background: 'transparent' }} />
                             </div>
                             <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(109,40,217,0.04), rgba(139,92,246,0.06))', border: '1px solid rgba(109,40,217,0.15)', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Mensalista</div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Mensalista</span>
+                                    {encargosMatchBadge('mensalista', engineeringConfig.encargosSociais?.mensalista || 0, (engineeringConfig as any)._aiExtractedEncargos)}
+                                </div>
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6d28d9', lineHeight: 1 }}>{(engineeringConfig.encargosSociais?.mensalista || 0).toFixed(2)}%</div>
                                 <input type="number" step="0.01" className="form-input" value={engineeringConfig.encargosSociais?.mensalista || 0}
                                     onChange={e => onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, mensalista: parseLocaleNumber(e.target.value) } })}
