@@ -320,7 +320,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 if (result.additional && Array.isArray(result.additional) && result.additional.length > 0) {
                     const adicionalSheets = result.additional.map((extra: any) => {
                         const sheet: any = { label: extra.basePrincipal || 'Base Adicional', horista: pr(extra.totalHorista || 0), mensalista: pr(extra.totalMensalista || 0) };
-                        const rawSheet: any = { ...extra }; // raw for badge comparison
+                        const rawSheet: any = { ...extra, horista: extra.totalHorista || 0, mensalista: extra.totalMensalista || 0 }; // raw for badge comparison — alias totalHorista→horista
                         // Copy all 52 individual fields with precision
                         for (const [k, v] of Object.entries(extra)) {
                             if (typeof v === 'number' && k !== 'totalHorista' && k !== 'totalMensalista') sheet[k] = pr(v as number);

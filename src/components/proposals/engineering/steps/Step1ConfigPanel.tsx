@@ -901,7 +901,15 @@ export function Step1ConfigPanel({
                                                                 mensalista: d.totalMensalista || d.mensalista || sheets[idx].mensalista,
                                                                 label: sheet.label || d.basePrincipal || `Base ${idx + 2}` 
                                                             };
-                                                            onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
+                                                            onConfigChange({ 
+                                                                ...engineeringConfig, 
+                                                                encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets },
+                                                                _aiExtractedEncargosAdicionais: (() => {
+                                                                    const arr = [...((engineeringConfig as any)._aiExtractedEncargosAdicionais || [])];
+                                                                    arr[idx] = { ...d, horista: d.totalHorista || 0, mensalista: d.totalMensalista || 0 };
+                                                                    return arr;
+                                                                })(),
+                                                            } as any);
                                                             setHasUnsavedChanges(true);
                                                             // Auto-open detail for this sheet
                                                             setShowAdicionalDetail(prev => ({ ...prev, [idx]: true }));
