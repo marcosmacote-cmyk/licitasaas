@@ -926,7 +926,7 @@ export function Step1ConfigPanel({
                                     {/* Totals */}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
                                         <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...smallLabelStyle, color: '#6d28d9' }}>Horista (%)</label>
+                                            <label style={{ ...smallLabelStyle, color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>Horista (%) {encargosMatchBadge('horista', sheet.horista || 0, (engineeringConfig as any)._aiExtractedEncargosAdicionais?.[idx])}</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={sheet.horista || 0}
                                                 onChange={e => {
@@ -937,7 +937,7 @@ export function Step1ConfigPanel({
                                                 style={{ ...inputStyle, textAlign: 'center', border: 'none', background: 'transparent' }} />
                                         </div>
                                         <div style={{ background: 'white', padding: 8, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'center' }}>
-                                            <label style={{ ...smallLabelStyle, color: '#6d28d9' }}>Mensalista (%)</label>
+                                            <label style={{ ...smallLabelStyle, color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>Mensalista (%) {encargosMatchBadge('mensalista', sheet.mensalista || 0, (engineeringConfig as any)._aiExtractedEncargosAdicionais?.[idx])}</label>
                                             <input type="number" step="0.01" className="form-input"
                                                 value={sheet.mensalista || 0}
                                                 onChange={e => {
