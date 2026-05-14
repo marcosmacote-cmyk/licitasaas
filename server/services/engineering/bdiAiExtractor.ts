@@ -227,8 +227,50 @@ Retorne números sem %.`;
                         if (result?.text) {
                             const parsed = JSON.parse(result.text);
                             if (parsed.found) {
-                                const sanitized = sanitizeBdiResult(parsed);
-                                console.log(`[BDI-AI] ✅ BDI extraído via multimodal PDF — alvo: ${target}, global: ${sanitized.globalBdi}%, tcu: ${sanitized.tcu ? 'SIM (AC=' + sanitized.tcu.adminCentral + ', L=' + sanitized.tcu.lucro + ', I=' + sanitized.tcu.tributos + ')' : 'NÃO (apenas global)'}, fornecimento: ${sanitized.globalBdiFornecimento || 'N/A'}%`);
+                                let sanitized = sanitizeBdiResult(parsed);
+                                console.log(`[BDI-AI] ✅ BDI extraído via multimodal PDF — alvo: ${target}, global: ${sanitized.globalBdi}%, tcu: ${sanitized.tcu ? 'SIM (AC=' + sanitized.tcu.adminCentral + ', L=' + sanitized.tcu.lucro + ')' : 'NÃO (apenas global)'}, fornecimento: ${sanitized.globalBdiFornecimento || 'N/A'}%`);
+
+                                // RETRY: If tcu is null but we found globalBdi, force a second pass with non-nullable tcu
+                                if (!sanitized.tcu && sanitized.globalBdi && pdfParts.length > 0) {
+                                    console.log(`[BDI-AI] 🔄 RETRY: tcu=null, forçando extração de composição com tcu obrigatório...`);
+                                    const forcedSchema = {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            adminCentral: { type: Type.NUMBER }, seguros: { type: Type.NUMBER },
+                                            garantias: { type: Type.NUMBER }, riscos: { type: Type.NUMBER },
+                                            despFinanceiras: { type: Type.NUMBER }, lucro: { type: Type.NUMBER },
+                                            pis: { type: Type.NUMBER }, cofins: { type: Type.NUMBER },
+                                            iss: { type: Type.NUMBER }, csll: { type: Type.NUMBER },
+                                        }
+                                    };
+                                    const retryPrompt = `O BDI GLOBAL deste edital é ${sanitized.globalBdi}%.
+Agora extraia a COMPOSIÇÃO ANALÍTICA (os componentes individuais que formam esse BDI).
+Procure a tabela com AC (Administração Central), S (Seguros), G (Garantias), R (Riscos), DF (Despesas Financeiras), L (Lucro), e Tributos (PIS, COFINS, ISS).
+COPIE os valores EXATOS do documento. Se um campo não aparece, coloque 0.
+NUNCA coloque o BDI total (${sanitized.globalBdi}%) no campo lucro. Lucro é só a margem de lucro.`;
+                                    try {
+                                        const retryResult = await callGeminiWithRetry(ai.models, {
+                                            model: 'gemini-2.5-flash',
+                                            contents: [{ role: 'user', parts: [...pdfParts, { text: retryPrompt }] }],
+                                            config: { responseMimeType: 'application/json', responseSchema: forcedSchema, temperature: 0.02 }
+                                        });
+                                        if (retryResult?.text) {
+                                            const retryParsed = JSON.parse(retryResult.text);
+                                            const retrySum = (retryParsed.adminCentral || 0) + (retryParsed.seguros || 0) + (retryParsed.garantias || 0) + (retryParsed.riscos || 0) + (retryParsed.despFinanceiras || 0) + (retryParsed.lucro || 0);
+                                            console.log(`[BDI-AI] 🔄 RETRY result: AC=${retryParsed.adminCentral} S=${retryParsed.seguros} G=${retryParsed.garantias} R=${retryParsed.riscos} DF=${retryParsed.despFinanceiras} L=${retryParsed.lucro} sum=${retrySum.toFixed(2)}`);
+                                            // Only use retry if it produced meaningful values (sum > 5% and lucro != globalBdi)
+                                            if (retrySum > 5 && Math.abs(retryParsed.lucro - sanitized.globalBdi) > 0.5) {
+                                                sanitized.tcu = retryParsed;
+                                                console.log(`[BDI-AI] ✅ RETRY: composição aceita!`);
+                                            } else {
+                                                console.warn(`[BDI-AI] ⚠️ RETRY: resultado descartado (sum=${retrySum.toFixed(2)}, lucro≈global=${Math.abs(retryParsed.lucro - sanitized.globalBdi) < 0.5})`);
+                                            }
+                                        }
+                                    } catch (retryErr: any) {
+                                        console.warn(`[BDI-AI] ⚠️ RETRY falhou: ${retryErr.message}`);
+                                    }
+                                }
+
                                 return sanitized;
                             }
                         }

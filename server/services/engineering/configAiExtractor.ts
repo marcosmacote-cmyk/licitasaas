@@ -386,6 +386,29 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
         return parsed;
     };
 
+    // ═══════════════════════════════════════════════════
+    // Encargos responseSchema — forces model to fill ALL 52 fields
+    // ═══════════════════════════════════════════════════
+    const n = { type: Type.NUMBER };
+    const encargosSchema = {
+        type: Type.OBJECT,
+        properties: {
+            found: { type: Type.BOOLEAN }, basePrincipal: { type: Type.STRING, nullable: true },
+            totalHorista: { type: Type.NUMBER }, totalMensalista: { type: Type.NUMBER },
+            a1_h: n, a1_m: n, a2_h: n, a2_m: n, a3_h: n, a3_m: n,
+            a4_h: n, a4_m: n, a5_h: n, a5_m: n, a6_h: n, a6_m: n,
+            a7_h: n, a7_m: n, a8_h: n, a8_m: n, a9_h: n, a9_m: n,
+            b1_h: n, b1_m: n, b2_h: n, b2_m: n, b3_h: n, b3_m: n,
+            b4_h: n, b4_m: n, b5_h: n, b5_m: n, b6_h: n, b6_m: n,
+            b7_h: n, b7_m: n, b8_h: n, b8_m: n, b9_h: n, b9_m: n,
+            b10_h: n, b10_m: n,
+            c1_h: n, c1_m: n, c2_h: n, c2_m: n, c3_h: n, c3_m: n,
+            c4_h: n, c4_m: n, c5_h: n, c5_m: n,
+            d1_h: n, d1_m: n, d2_h: n, d2_m: n,
+        },
+        required: ['found', 'totalHorista', 'totalMensalista'] as string[]
+    };
+
     try {
         // ═══════════════════════════════════════════════════
         // PASS 1: Download top-ranked encargos PDFs (up to 5)
@@ -397,11 +420,11 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
                 const result = await callGeminiWithRetry(ai.models, {
                     model: 'gemini-2.5-flash',
                     contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
-                    config: { responseMimeType: 'application/json', temperature: 0.1 }
+                    config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
                 });
                 if (result?.text) {
                     const parsed = JSON.parse(result.text);
-                    console.log(`[Encargos-AI] 📋 PASS 1 result: found=${parsed.found} totalH=${parsed.totalHorista} a1_h=${parsed.a1_h} a8_h=${parsed.a8_h}`);
+                    console.log(`[Encargos-AI] 📋 PASS 1 result: found=${parsed.found} totalH=${parsed.totalHorista} a1_h=${parsed.a1_h} a8_h=${parsed.a8_h} b1_h=${parsed.b1_h} b4_h=${parsed.b4_h}`);
                     if (parsed.found) return enrichResult(parsed);
                     console.log(`[Encargos-AI] ⚠️ PASS 1 returned found=false. Trying broader search...`);
                 }
@@ -423,7 +446,7 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
                 const result = await callGeminiWithRetry(ai.models, {
                     model: 'gemini-2.5-flash',
                     contents: [{ role: 'user', parts: [...allPdfParts, { text: encargosPrompt }] }],
-                    config: { responseMimeType: 'application/json', temperature: 0.1 }
+                    config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
                 });
                 if (result?.text) {
                     const parsed = JSON.parse(result.text);
@@ -447,7 +470,7 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: encargosPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
-            config: { responseMimeType: 'application/json', temperature: 0.1 }
+            config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
         });
         if (!response.text) return { found: false };
         try { return enrichResult(JSON.parse(response.text)); } catch { return { found: false }; }
