@@ -26,6 +26,7 @@ import { prisma } from '../lib/prisma';
 import { fallbackToOpenAiV2 } from './ai/openai.service';
 import { extractMarkdownFromMultiplePdfs, isZeroxAvailable } from './ai/zeroxExtractor';
 import { targetBudgetPages } from './engineering/pageTargeting';
+import { fingerprintPdf, type PdfFingerprint } from './engineering/pdfFingerprinter';
 import { classifyEngineeringAttachments, urlsToEngineeringAttachments } from './engineering/documentClassifier';
 import { parseAndNormalizeEngineeringExtraction } from './engineering/resultNormalizer';
 import {
@@ -216,6 +217,54 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
     if (rawPdfBuffers.length === 0) {
         throw new Error('Nenhum PDF de planilha orçamentária disponível para extração');
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Step 1.4: PDF FINGERPRINTING — classify each PDF's scenario
+    // Runs in ~2-3s per PDF. Determines the optimal extraction mode.
+    // ══════════════════════════════════════════════════════════════
+    await updateJobProgress(job.id, tenantId, {
+        progress: 12,
+        progressMsg: 'Analisando tipo de documento...'
+    });
+
+    const fingerprints: PdfFingerprint[] = [];
+    for (const { buffer, source } of rawPdfBuffers) {
+        try {
+            const fp = await fingerprintPdf(buffer);
+            fingerprints.push(fp);
+
+            // Early abort for ENCRYPTED PDFs
+            if (fp.scenario === 'ENCRYPTED') {
+                throw new Error(
+                    `PDF "${source}" está protegido por senha. ` +
+                    `Envie uma versão não protegida da planilha orçamentária.`
+                );
+            }
+        } catch (err: any) {
+            if (err.message.includes('protegido por senha')) throw err;
+            logger.warn(`[Engineering-BG] ⚠️ Fingerprint failed for "${source}": ${err.message}`);
+            fingerprints.push({
+                totalPages: 0, textPagesCount: 0, imagePagesCount: 0,
+                garbageTextPagesCount: 0, memCalcPagesCount: 0, cpuPagesCount: 0,
+                chronogramPagesCount: 0, budgetKeywordScore: 0, estimatedItemCount: 0,
+                isEncrypted: false, dominantOrientation: 'portrait',
+                scenario: 'UNKNOWN', scenarioConfidence: 0,
+                scenarioReason: `Fingerprint failed: ${err.message}`,
+                scannedPageIndices: [], memCalcPageIndices: [],
+                durationMs: 0,
+            });
+        }
+    }
+
+    // Check if ALL PDFs are NO_BUDGET_TABLE → abort early
+    const allNoBudget = fingerprints.length > 0 && fingerprints.every(fp => fp.scenario === 'NO_BUDGET_TABLE');
+    if (allNoBudget) {
+        logger.warn(
+            `[Engineering-BG] 🚫 Nenhum dos ${rawPdfBuffers.length} PDF(s) contém planilha orçamentária. ` +
+            `Fingerprints: ${fingerprints.map(fp => fp.scenarioReason).join(' | ')}`
+        );
+        // Don't throw — let the pipeline continue with 0 items, which will be caught by diagnostics
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1195,6 +1244,19 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         pageTargetingUsed: targetingUsed,
         zeroxFallbackUsed,
         zeroxFallback: zeroxFallbackMeta,
+        pdfFingerprints: fingerprints.map(fp => ({
+            scenario: fp.scenario,
+            scenarioConfidence: fp.scenarioConfidence,
+            scenarioReason: fp.scenarioReason,
+            totalPages: fp.totalPages,
+            textPages: fp.textPagesCount,
+            scannedPages: fp.imagePagesCount,
+            memCalcPages: fp.memCalcPagesCount,
+            budgetScore: fp.budgetKeywordScore,
+            estimatedItems: fp.estimatedItemCount,
+            orientation: fp.dominantOrientation,
+            durationMs: fp.durationMs,
+        })),
         scannedVisualFallback: scannedPdfVisualBatches.length > 0 ? {
             batchCount: scannedPdfVisualBatches.length,
             pagesProcessed: scannedPdfVisualBatches.reduce((sum, batch) => sum + batch.pageCount, 0),
