@@ -429,13 +429,25 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
                         const primary = enrichResult(parsed);
                         // P4: Multi-table detection — check if document has additional encargos tables
                         try {
-                            const multiPrompt = `Analise os documentos e responda: quantas tabelas DISTINTAS de Encargos Sociais existem?
-Exemplos: um edital pode ter uma tabela SINAPI e outra SEINFRA, ou uma para obras e outra para serviços.
+                            const multiPrompt = `Analise os documentos. Quantas tabelas DISTINTAS de Encargos Sociais existem?
+Exemplos: SINAPI + SEINFRA, ou Obras + Serviços.
 Se há APENAS UMA tabela, retorne: {"count":1}
-Se há DUAS ou MAIS tabelas distintas, retorne a SEGUNDA tabela completa no mesmo formato:
-{"count":2,"secondTable":{"basePrincipal":"SEINFRA","totalHorista":114.15,"totalMensalista":68.50,...todos os 52 campos...}}
-IGNORE a tabela "${primary.basePrincipal || 'principal'}" (já extraída). Extraia APENAS tabelas DIFERENTES.
-Se a segunda tabela pertence a uma base diferente (ex: SEINFRA vs SINAPI), extraia seus valores completos.`;
+Se há DUAS ou MAIS tabelas DIFERENTES, retorne a SEGUNDA tabela completa:
+{"count":2,"secondTable":{
+  "basePrincipal":"SEINFRA","totalHorista":114.15,"totalMensalista":68.50,
+  "a1_h":20,"a1_m":20,"a2_h":1.5,"a2_m":1.5,"a3_h":1,"a3_m":1,
+  "a4_h":0.2,"a4_m":0.2,"a5_h":0.6,"a5_m":0.6,"a6_h":2.5,"a6_m":2.5,
+  "a7_h":3,"a7_m":3,"a8_h":8,"a8_m":8,"a9_h":0,"a9_m":0,
+  "b1_h":17.86,"b1_m":0,"b2_h":4.72,"b2_m":3.98,"b3_h":1.39,"b3_m":0.86,
+  "b4_h":10.91,"b4_m":8.33,"b5_h":0.07,"b5_m":0.06,"b6_h":0.72,"b6_m":0.56,
+  "b7_h":2.07,"b7_m":0,"b8_h":0.08,"b8_m":0.05,"b9_h":14.14,"b9_m":11.11,"b10_h":0.03,"b10_m":0.02,
+  "c1_h":5.05,"c1_m":3.86,"c2_h":0.11,"c2_m":0.08,"c3_h":4.88,"c3_m":4.57,
+  "c4_h":4.44,"c4_m":3.55,"c5_h":0.50,"c5_m":0.38,
+  "d1_h":9.13,"d1_m":3.56,"d2_h":2.40,"d2_m":1.86
+}}
+IMPORTANTE: Os valores acima são EXEMPLO. Extraia os valores REAIS da SEGUNDA tabela do documento.
+IGNORE a tabela "${primary.basePrincipal || 'principal'}" (já extraída). Extraia APENAS a tabela DIFERENTE.
+Se NÃO existe segunda tabela, retorne {"count":1}.`;
                             const multiResult = await ai.models.generateContent({
                                 model: 'gemini-2.5-flash',
                                 contents: [{ role: 'user', parts: [...pdfParts, { text: multiPrompt }] }],
