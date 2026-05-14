@@ -305,36 +305,58 @@ Retorne JSON.`;
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais.
-Analise TODOS os documentos/páginas e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
+    const encargosPrompt = `Você é um engenheiro orçamentista. Analise os documentos e encontre a TABELA DE ENCARGOS SOCIAIS.
 
-🚨 REGRA ABSOLUTA: COPIE os valores EXATOS do documento. NUNCA invente valores.
-NUNCA use percentuais SINAPI padrão como fallback. Se o valor não está no documento, retorne 0.
+🚨 REGRA: COPIE os valores EXATOS do documento. Se um item NÃO aparece no documento, retorne 0 para ele.
+NUNCA invente valores. NUNCA use percentuais padrão SINAPI quando o documento não menciona.
 
-A tabela de encargos tem SEMPRE 4 GRUPOS com colunas HORISTA e MENSALISTA:
+A tabela de encargos tem 4 GRUPOS com colunas HORISTA (%) e MENSALISTA (%):
 
-GRUPO A — Encargos Sociais Básicos (9 itens: INSS, SESI, SENAI, INCRA, SEBRAE, Sal.Educação, RAT/SAT, FGTS, SECONCI)
-GRUPO B — Encargos Trabalhistas (10 itens: Repouso, Feriados, Aux.Enfermidade, 13º, Lic.Paternidade, Faltas, Chuvas, Aux.Acidente, Férias, Maternidade)
-GRUPO C — Encargos Rescisórios (5 itens: AP Indenizado, AP Trabalhado, Férias Ind., Dep.Rescisão, Ind.Adicional)
-GRUPO D — Reincidências (2 itens: Reinc.A/B, Reinc.A/AP+FGTS)
+GRUPO A — Encargos Sociais Básicos:
+  A1=INSS, A2=SESI, A3=SENAI, A4=INCRA, A5=SEBRAE, A6=Sal.Educação, A7=SAT/RAT, A8=FGTS, A9=SECONCI
 
-⚠️ ATENÇÃO CRÍTICA: A tabela de encargos tem 4 GRUPOS, NÃO apenas o Grupo A!
-Grupos B, C e D contêm valores DIFERENTES de zero. Se você está vendo zeros em B/C/D, PROCURE MELHOR no documento.
-O Total Horista típico é entre 80% e 130%, NÃO 36%. Se seu total deu < 50%, você PERDEU os Grupos B/C/D.
+GRUPO B — Encargos Trabalhistas:
+  B1=Repouso Semanal, B2=Feriados, B3=Aux.Enfermidade, B4=13º Salário, B5=Lic.Paternidade,
+  B6=Faltas Justificadas, B7=Dias de Chuvas, B8=Aux.Acidente, B9=Férias Gozadas, B10=Sal.Maternidade
 
-PROCURE em TODAS as páginas dos documentos por:
-- Tabelas com "ENCARGOS SOCIAIS", "LEIS SOCIAIS"
+GRUPO C — Encargos Rescisórios:
+  C1=AP Indenizado, C2=AP Trabalhado, C3=Férias Indenizadas, C4=Dep.Rescisão, C5=Ind.Adicional
+
+GRUPO D — Reincidências:
+  D1=Reincidência A sobre B, D2=Reinc.A/AP + FGTS/AP
+
+⚠️ A tabela COMPLETA tem os 4 grupos. O Total Horista normalmente fica entre 80% e 130%.
+Se seu total ficou menor que 50%, você PERDEU grupos. Procure MELHOR no documento.
+
+PROCURE em TODAS as páginas por:
+- Tabelas "ENCARGOS SOCIAIS", "LEIS SOCIAIS"
 - Colunas "HORISTA %" e "MENSALISTA %"
-- Os 4 grupos A, B, C, D com subtotais
+- Subtotais de cada grupo (A, B, C, D)
 
-RETORNE JSON:
-{ "found": true, "basePrincipal": "SINAPI",
+RETORNE JSON com TODOS estes campos (use 0 para itens não encontrados):
+{
+  "found": true, "basePrincipal": "SINAPI",
   "totalHorista": 115.10, "totalMensalista": 71.84,
-  "a1_h": N, "a1_m": N, ..., "d2_h": N, "d2_m": N }
-Onde N = valor percentual EXATO do documento, sem %. Se item=0, retorne 0.
+  "a1_h": 20.00, "a1_m": 20.00, "a2_h": 1.50, "a2_m": 1.50,
+  "a3_h": 1.00, "a3_m": 1.00, "a4_h": 0.20, "a4_m": 0.20,
+  "a5_h": 0.60, "a5_m": 0.60, "a6_h": 2.50, "a6_m": 2.50,
+  "a7_h": 3.00, "a7_m": 3.00, "a8_h": 8.00, "a8_m": 8.00,
+  "a9_h": 0.00, "a9_m": 0.00,
+  "b1_h": 17.86, "b1_m": 0, "b2_h": 4.72, "b2_m": 3.98,
+  "b3_h": 1.39, "b3_m": 0.86, "b4_h": 10.91, "b4_m": 8.33,
+  "b5_h": 0.07, "b5_m": 0.06, "b6_h": 0.72, "b6_m": 0.56,
+  "b7_h": 2.07, "b7_m": 0, "b8_h": 0.08, "b8_m": 0.05,
+  "b9_h": 14.14, "b9_m": 11.11, "b10_h": 0.03, "b10_m": 0.02,
+  "c1_h": 5.05, "c1_m": 3.86, "c2_h": 0.11, "c2_m": 0.08,
+  "c3_h": 4.88, "c3_m": 4.57, "c4_h": 4.44, "c4_m": 3.55,
+  "c5_h": 0.50, "c5_m": 0.38,
+  "d1_h": 9.13, "d1_m": 3.56, "d2_h": 2.40, "d2_m": 1.86
+}
 
-🚨 SE NÃO ENCONTRAR a tabela completa de encargos, retorne {"found": false}.
-NÃO invente valores. NÃO use defaults SINAPI. NUNCA retorne found=true com dados inventados.`;
+IMPORTANTE: Os valores acima são apenas EXEMPLO de formato. Extraia os valores REAIS do documento.
+
+Retorne found=true se encontrou QUALQUER tabela de encargos sociais no documento (mesmo parcial).
+Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais em nenhum documento.`;
 
     const enrichResult = (parsed: any) => {
         if (!parsed?.found) return parsed;

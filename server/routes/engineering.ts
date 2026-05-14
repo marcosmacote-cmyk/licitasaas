@@ -1330,7 +1330,17 @@ router.post('/ai-extract-bdi', async (req: any, res: any) => {
         const bdiData = await extractBdiFromBidding(biddingId, bdiTarget);
         
         if (!bdiData || !bdiData.found) {
+            console.log(`[BDI-Route] ❌ BDI não encontrado para ${biddingId} target=${bdiTarget}`);
             return res.json({ found: false, message: 'Nenhuma tabela de BDI explícita encontrada no edital.' });
+        }
+        
+        // Detailed logging of what we're sending to frontend
+        console.log(`[BDI-Route] ✅ BDI encontrado: global=${bdiData.globalBdi}%, tcu=${bdiData.tcu ? 'SIM' : 'NÃO'}`);
+        if (bdiData.tcu) {
+            const t = bdiData.tcu;
+            console.log(`[BDI-Route] 📊 TCU: AC=${t.adminCentral} S=${t.seguros} G=${t.garantias} R=${t.riscos} DF=${t.despFinanceiras} L=${t.lucro} PIS=${t.pis} COFINS=${t.cofins} ISS=${t.iss} CSLL=${t.csll}`);
+        } else {
+            console.log(`[BDI-Route] ⚠️ TCU=null → frontend usará autoDistributeBdi(${bdiData.globalBdi})`);
         }
         
         return res.json({ found: true, data: bdiData });
