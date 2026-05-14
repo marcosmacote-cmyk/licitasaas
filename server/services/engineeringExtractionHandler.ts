@@ -914,15 +914,15 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             const visualPhaseStart = Date.now();
             logger.warn(
                 `[Engineering-BG] 📸 SCANNED VISUAL BATCH MODE: processando ` +
-                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-pro (paralelo 2).`
+                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-flash (paralelo 3).`
             );
 
-            // PERF-07: Process visual batches in parallel groups of 2.
-            // Previously sequential — each 6-page batch (~3min) waited for the previous one.
-            // For 10 batches: 30min sequential → ~15min with parallelism of 2.
-            // Using 2 (not 3) because visual batches send large base64 PDFs that are heavier
-            // on the API than text-only requests.
-            const VISUAL_PARALLEL = 2;
+            // PERF-09: Use Flash instead of Pro for visual batches.
+            // Pro was 2-3x slower (~5min/batch vs ~2min/batch) and unnecessary
+            // since visual batch already has pre-selected budget pages.
+            // Flash handles scanned tables well with explicit instructions.
+            // PERF-10: Increased parallelism from 2 to 3 — matches OCR batch.
+            const VISUAL_PARALLEL = 3;
             for (let groupStart = 0; groupStart < scannedPdfVisualBatches.length; groupStart += VISUAL_PARALLEL) {
                 const groupBatches = scannedPdfVisualBatches.slice(groupStart, groupStart + VISUAL_PARALLEL);
 
@@ -940,6 +940,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `FALLBACK VISUAL PARA PDF ESCANEADO:\n` +
                         `Você está recebendo APENAS as páginas ${batch.startPage}-${batch.endPage} do arquivo "${batch.fileName}". ` +
                         `O OCR estruturado falhou ou veio insuficiente, então leia visualmente a imagem/PDF.\n\n` +
+                        `🚨🚨 REGRA ANTI-PROJETO ESTRUTURAL (CRÍTICA):\n` +
+                        `Páginas escaneadas podem conter PROJETOS ESTRUTURAIS, HIDRÁULICOS ou ELÉTRICOS. ` +
+                        `Esses projetos mostram detalhes de dimensionamento (Sapatas, Vigas, Pilares, Baldrame, Radier, ` +
+                        `Tubulações, Eletrodutos) com medidas (comprimento x largura x altura). ` +
+                        `NÃO extraia esses itens. Extraia APENAS itens que estejam em FORMATO DE TABELA ORÇAMENTÁRIA ` +
+                        `com colunas: ITEM | CÓDIGO | DESCRIÇÃO | UNID | QTD | PREÇO. ` +
+                        `Se a página contiver apenas desenhos técnicos ou cálculos dimensionais, retorne [].\n\n` +
                         `INSTRUÇÕES PARA LEITURA VISUAL DE TABELAS ESCANEADAS:\n` +
                         `1. IDENTIFIQUE O CABEÇALHO: Localize as colunas ITEM | CÓDIGO | DESCRIÇÃO | UNID | QTD | P.UNIT S/BDI | P.UNIT C/BDI | TOTAL.\n` +
                         `2. LEIA DA DIREITA PARA ESQUERDA: Em tabelas escaneadas, comece pela coluna TOTAL (última coluna numérica, valores maiores), depois PREÇO UNITÁRIO (coluna anterior), depois QUANTIDADE.\n` +
@@ -964,7 +971,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         }],
                         batchLabel,
                         batchInstruction,
-                        'gemini-2.5-pro',
+                        'gemini-2.5-flash',
                         false
                     );
                 });

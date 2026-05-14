@@ -175,6 +175,29 @@ function classifyEngineeringItem(item: any): EngineeringItemQuality {
         confidence -= narrativeHits * 24;
     }
 
+    // FIX STRUCT-01: Detect items from Projeto Estrutural/Hidráulico/Elétrico
+    // These are hallucinations from Memória de Cálculo pages: "Sapatas (Projeto Estrutural)",
+    // "Viga Baldrame (Projeto Estrutural)", etc. They have quantity but zero cost.
+    const STRUCTURAL_PROJECT_PATTERNS = [
+        /\(projeto\s+estrutural\)/i,
+        /\(projeto\s+hidr[aá]ulico\)/i,
+        /\(projeto\s+sanit[aá]rio\)/i,
+        /\(projeto\s+el[eé]trico\)/i,
+        /\bsapatas?\b.*\b(?:salas?|refeit[oó]rio|quadra)\b/i,
+        /\bvigas?\s+baldrame\b/i,
+        /\bpilares?\s+sapatas?\b/i,
+    ];
+    const isStructuralItem = STRUCTURAL_PROJECT_PATTERNS.some(p => p.test(description));
+    if (isStructuralItem && unitCost === 0) {
+        reasons.push('item de projeto estrutural/memória de cálculo (hallucination)');
+        return {
+            item: itemNumber,
+            classification: 'narrative_noise',
+            confidence: 5,
+            reasons,
+        };
+    }
+
     if (quantity > 0) {
         reasons.push('quantidade numérica');
         confidence += 18;
