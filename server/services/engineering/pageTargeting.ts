@@ -461,21 +461,23 @@ export async function targetBudgetPages(
         }
     }
 
-    // Step 4.5: ALWAYS include last 8 pages — BDI composition tables and
-    // Encargos Sociais tables are typically at the END of engineering PDFs.
-    // These pages may be scanned images with no extractable text, so they
-    // get filtered out by keyword-based scoring. Including them ensures
-    // the AI model always sees these critical tables.
-    const TAIL_PAGES = 8;
-    for (let i = Math.max(0, totalPages - TAIL_PAGES); i < totalPages; i++) {
-        selectedSet.add(i);
-    }
-
     // Sort page indices for sequential reading
     const selectedPageIndices = Array.from(selectedSet).sort((a, b) => a - b);
 
     // Cap at maxPages (context might have pushed us over)
-    const finalIndices = selectedPageIndices.slice(0, maxPages);
+    const cappedIndices = selectedPageIndices.slice(0, maxPages);
+
+    // Step 4.5: ALWAYS include last 8 pages AFTER the cap — BDI composition
+    // tables and Encargos Sociais tables are typically at the END of engineering
+    // PDFs. These pages may be scanned images with no extractable text, so they
+    // get filtered out by keyword-based scoring. Adding them AFTER the cap
+    // ensures they can never be sliced off by maxPages.
+    const TAIL_PAGES = 8;
+    const finalSet = new Set(cappedIndices);
+    for (let i = Math.max(0, totalPages - TAIL_PAGES); i < totalPages; i++) {
+        finalSet.add(i);
+    }
+    const finalIndices = Array.from(finalSet).sort((a, b) => a - b);
 
     // Step 5: Extract selected pages into a new PDF
     let trimmedPdfBuffer: Buffer | null = null;
