@@ -44,6 +44,7 @@ import {
     formatBudgetRowCandidatesForPrompt,
 } from './engineering/budgetRowCandidateExtractor';
 import { buildScannedPdfVisualBatches, type ScannedPdfVisualBatch } from './engineering/scannedPdfVisualFallback';
+import { runExtractionProbe, selectProbePages, type ProbeResult } from './engineering/extractionProbe';
 // Import the engineering prompt (same used by the old E1.5-A)
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from './ai/modules/prompts/engineeringPromptV1';
 
@@ -505,9 +506,85 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Step 1.6: EXTRACTION PROBE — validate in ~5s before full extraction
+    // Extracts 3 representative pages to detect column shift, hallucination,
+    // or empty budget before investing 5-16 minutes in full extraction.
+    // ══════════════════════════════════════════════════════════════
+    let probeResult: ProbeResult | null = null;
+    const shouldProbe = pdfParts.length > 0 && !hasOcrText && scannedPdfVisualBatches.length === 0;
+
+    if (shouldProbe && process.env.ENGINEERING_PROBE_DISABLED !== 'true') {
+        await updateJobProgress(job.id, tenantId, {
+            progress: 26,
+            progressMsg: 'Validando conteúdo do PDF (probe rápido)...'
+        });
+
+        try {
+            // Use the first PDF buffer for probing
+            const probeBuffer = rawPdfBuffers[0].buffer;
+            const probeFp = fingerprints[0];
+            const totalPagesForProbe = probeFp?.totalPages || 0;
+
+            // Select 3 representative pages
+            // If fingerprint identified scanned pages, use them; otherwise use all
+            const candidateIndices = probeFp?.scannedPageIndices?.length > 0
+                ? probeFp.scannedPageIndices
+                : Array.from({ length: totalPagesForProbe }, (_, i) => i);
+
+            const aiForProbe = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+            probeResult = await runExtractionProbe(
+                probeBuffer,
+                totalPagesForProbe,
+                candidateIndices,
+                {
+                    callGemini: async (contents, systemPrompt) => {
+                        const result = await callGeminiWithRetry(aiForProbe.models, {
+                            model: 'gemini-2.5-flash',
+                            contents,
+                            config: {
+                                systemInstruction: systemPrompt,
+                                temperature: 0.1,
+                                maxOutputTokens: 4096,
+                                responseMimeType: 'application/json',
+                            },
+                        }, 1, { tenantId, operation: 'analysis', metadata: { stage: 'engineering_probe' } });
+                        return result.text || '';
+                    },
+                }
+            );
+
+            // Act on probe verdict
+            if (probeResult.verdict === 'FAIL_COLUMN_SHIFT') {
+                logger.warn(
+                    `[Engineering-BG] ⚠️ Probe detected COLUMN SHIFT (${probeResult.columnShiftPercent}%). ` +
+                    `Full extraction will include reinforced header instructions.`
+                );
+            } else if (probeResult.verdict === 'FAIL_HALLUCINATION') {
+                logger.warn(
+                    `[Engineering-BG] ⚠️ Probe detected HALLUCINATION (memória de cálculo items). ` +
+                    `Switching to visual batch mode for scanned pages.`
+                );
+                // Move PDFs from pdfParts to zerox fallback candidates
+                pdfParts.length = 0;
+                zeroxFallbackCandidates.push({
+                    buffer: probeBuffer,
+                    fileName: rawPdfBuffers[0].source,
+                    reason: 'probe_hallucination_detected',
+                });
+            }
+            // FAIL_NO_ITEMS and FAIL_ERROR: let the pipeline continue — the full
+            // extraction may still succeed, and if it doesn't, diagnostics will catch it.
+
+        } catch (probeErr: any) {
+            logger.warn(`[Engineering-BG] ⚠️ Probe failed: ${probeErr.message}. Continuing with full extraction.`);
+        }
+    }
+
     await updateJobProgress(job.id, tenantId, {
-        progress: 25,
-        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (com OCR de apoio)' : ''}${ocrContext.length > 500 && !zeroxFallbackUsed ? ' (OCR texto)' : ''}${scannedPdfVisualBatches.length > 0 ? ' (fallback visual escaneado)' : ''}`
+        progress: 28,
+        progressMsg: `Extraindo itens de ${pdfParts.length} PDF(s) via IA...${targetingUsed ? ' (otimizado por Page Targeting)' : ''}${zeroxFallbackUsed ? ' (com OCR de apoio)' : ''}${ocrContext.length > 500 && !zeroxFallbackUsed ? ' (OCR texto)' : ''}${scannedPdfVisualBatches.length > 0 ? ' (fallback visual escaneado)' : ''}${probeResult ? ` (probe: ${probeResult.verdict})` : ''}`
     });
 
     // ── Step 2: Call Gemini with engineering prompt — NO TIMEOUT RACE ──
@@ -1257,6 +1334,15 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             orientation: fp.dominantOrientation,
             durationMs: fp.durationMs,
         })),
+        extractionProbe: probeResult ? {
+            verdict: probeResult.verdict,
+            confidence: probeResult.confidence,
+            reason: probeResult.reason,
+            itemsFound: probeResult.itemsFound,
+            probePages: probeResult.probePages,
+            durationMs: probeResult.durationMs,
+            columnShiftPercent: probeResult.columnShiftPercent,
+        } : null,
         scannedVisualFallback: scannedPdfVisualBatches.length > 0 ? {
             batchCount: scannedPdfVisualBatches.length,
             pagesProcessed: scannedPdfVisualBatches.reduce((sum, batch) => sum + batch.pageCount, 0),
