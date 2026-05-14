@@ -541,7 +541,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             );
             return;
         }
-        if (!isPolling && items.length > 0) {
+        if (!isPolling && (items.length > 0 || hasPersistedItemsRef.current)) {
             if (!window.confirm('Já existem itens na planilha. Deseja substituí-los completamente por uma nova extração da IA? (Isso iniciará uma nova extração do zero)')) {
                 return;
             }
@@ -561,7 +561,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             // CRITICAL: Exclude polling callbacks (!isPolling) to prevent infinite loop where
             // completed jobs keep clearing cache and spawning new jobs.
             const isNewEmptyProposal = !isPolling && !hasPersistedItemsRef.current && items.length === 0;
-            const forceRefresh = forceRestart || isNewEmptyProposal || (!isPolling && (items.length > 0 || hasCachedFailure));
+            // FIX CACHE-03: In wizard mode, items.length is always 0 (wizard doesn't pre-load items into editor).
+            // But hasPersistedItemsRef.current is true when the proposal has saved items from a previous extraction.
+            // We must include it in forceRefresh to avoid serving stale cached partial extractions.
+            const forceRefresh = forceRestart || isNewEmptyProposal || (!isPolling && (items.length > 0 || hasPersistedItemsRef.current || hasCachedFailure));
             const res = await fetch('/api/engineering/ai-populate', {
                 method: 'POST', headers: hdrs(), body: JSON.stringify({ proposalId, biddingId, engineeringConfig: dashConfig, forceRefresh })
             });
