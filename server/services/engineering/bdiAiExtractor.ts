@@ -19,73 +19,75 @@ export async function extractBdiFromBidding(biddingId: string, target: BdiExtrac
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const bdiPrompt = `Você é um engenheiro orçamentista SÊNIOR analisando um edital de licitação pública.
-Seu objetivo é encontrar a COMPOSIÇÃO ANALÍTICA DO BDI (Benefícios e Despesas Indiretas) exigida pelo edital.
+    const bdiPrompt = `Você é um engenheiro orçamentista SÊNIOR. Analise o documento e encontre a COMPOSIÇÃO ANALÍTICA DO BDI.
 
-ALVO DESTA EXTRAÇÃO: ${target}.
+ALVO: ${target}.
 
-🚨 REGRA DE OURO: Extraia os valores EXATOS que aparecem no documento. NUNCA invente valores.
-NUNCA use medianas do TCU. NUNCA use valores "típicos". Copie os NÚMEROS do edital.
+🚨 REGRA ABSOLUTA: COPIE os valores EXATOS do documento. NUNCA invente. NUNCA use valores padrão/medianas.
+Se o documento diz AC=3,00%, retorne adminCentral=3.00 — NÃO 4.00 (que é mediana TCU).
+Se o documento diz L=6,16%, retorne lucro=6.16 — NÃO 5.48 ou outro valor inventado.
+Se o documento diz ISS=3,00%, retorne iss=3.00 — NÃO 2.00.
 
-PROCURE POR:
-- Tabelas intituladas "COMPOSIÇÃO DO BDI", "COMPOSIÇÃO DE BDI", "BDI - SERVIÇOS", "BDI ADOTADO"
-- Tabelas separadas como "BDI - FORNECIMENTO", "BDI MATERIAIS", "BDI EQUIPAMENTOS", "BDI DIFERENCIADO", "BDI 2" ou "BDI 3"
-- Referências ao Acórdão TCU 2622/2013 ou TCU 2369/2011
-- Quadros com a fórmula: BDI = {(1+AC+S+G+R)×(1+DF)×(1+L)/(1-I) - 1} × 100
-- Em planilhas OGU do TransfereGOV, o BDI aparece no cabeçalho como "BDI 1", "BDI 2", "BDI 3"
+FORMATOS COMUNS DE TABELA BDI EM EDITAIS:
 
-EXTRAIA OBRIGATORIAMENTE os seguintes percentuais individuais (NÃO o BDI total):
-- **adminCentral**: Administração Central (AC)
-- **seguros**: Seguros (S)
-- **garantias**: Garantias (G)
-- **riscos**: Riscos (R)
-- **despFinanceiras**: Despesas Financeiras (DF)
-- **lucro**: Lucro / Remuneração (L)
-- **pis**: PIS
-- **cofins**: COFINS
-- **iss**: ISS (Imposto Sobre Serviços)
-- **csll**: CSLL. Se não mencionado, retorne 0.
+FORMATO 1 — Seções agrupadas:
+| COD   | DESCRIÇÃO                | %     |
+|-------|--------------------------|-------|
+|       | **Benefício**            |       |
+| S + G | Garantia/seguros         | 0,80% |   ← seguros=0.40, garantias=0.40
+| L     | Lucro                    | 6,16% |   ← lucro=6.16
+|       | TOTAL                    | 6,96% |
+|       | **Despesas Indiretas**   |       |
+| AC    | Administração central    | 3,00% |   ← adminCentral=3.00
+| DF    | Despesas financeiras     | 0,59% |   ← despFinanceiras=0.59
+| R     | Riscos                   | 0,97% |   ← riscos=0.97
+|       | TOTAL                    | 4,56% |
+| I     | **Impostos**             |       |
+|       | COFINS                   | 3,00% |   ← cofins=3.00
+|       | ISS                      | 3,00% |   ← iss=3.00
+|       | PIS                      | 0,65% |   ← pis=0.65
+|       | TOTAL                    | 6,65% |
 
-⚠️ CAMPOS COMBINADOS — MUITO IMPORTANTE:
-Muitos editais COMBINAM campos. Quando isso acontecer:
-- "S + G" ou "Garantia/Seguros" = valor combinado → divida igualmente entre seguros e garantias.
-  Ex: "S + G = 0,80%" → seguros=0.40, garantias=0.40
-- "Benefício" ou "S+G+L" (Seguros+Garantias+Lucro) → separe os componentes.
-  Geralmente o "Benefício TOTAL" é a soma de S+G+L. Use o Total menos L para obter S+G.
-- Se não houver divisão possível e o valor for claramente S+G combinado (valor < 2%),
-  divida meio a meio entre seguros e garantias.
+FORMATO 2 — Lista simples:
+AC=4.00, S=0.80, G=0.42, R=0.97, DF=0.59, L=6.16, Tributos=5.65%
 
-⚠️ TRIBUTOS: Extraia INDIVIDUALMENTE (PIS, COFINS, ISS, CSLL).
-Se o edital mostra apenas "Tributos (I) = X%" ou "Impostos = X%" sem detalhar:
-Verifique se há uma subtabela de Impostos com os itens individuais.
-Se não houver detalhamento: PIS = 0.65, COFINS = 3.00, CSLL = 0, ISS = (Total - 0.65 - 3.00).
+⚠️ CAMPOS COMBINADOS:
+- "S + G" ou "Garantia/seguros" como LINHA ÚNICA → divida igualmente: S+G=0.80 → seguros=0.40, garantias=0.40
+- "Benefício TOTAL" = soma de S+G+L. NÃO confundir com BDI Global.
 
-REGRAS CRÍTICAS:
-1. Se encontrar a tabela com QUALQUER nível de detalhamento, SEMPRE retorne tcu preenchido. Mesmo que tenha apenas 3-4 campos visíveis, preencha o que encontrar e os demais = 0.
-2. Só retorne tcu=null se REALMENTE só houver o percentual global sem NENHUMA tabela.
-3. NUNCA coloque o valor do BDI global no campo "lucro". Lucro é APENAS a margem de lucro/remuneração.
-4. Se um componente é "0" ou não mencionado, coloque 0.
-5. Os valores individuais são SEMPRE MUITO MENORES que o BDI total.
-6. Se houver BDI diferenciado para fornecimento, preencha globalBdiFornecimento e tcuFornecimento.
-7. Se o ALVO for FORNECIMENTO e não existir BDI de fornecimento, retorne found=false.
+⚠️ TRIBUTOS:
+Se o edital detalha (COFINS, ISS, PIS), extraia cada um.
+Se mostra apenas "Tributos (I) = X%" sem subtabela: pis=0.65, cofins=3.00, csll=0, iss=(X-0.65-3.00).
 
-Retorne apenas os números (sem o símbolo de %).`;
+EXTRAIA OBRIGATORIAMENTE estes campos do documento:
+- adminCentral (AC), seguros (S), garantias (G), riscos (R)
+- despFinanceiras (DF), lucro (L)
+- pis, cofins, iss, csll (0 se não mencionado)
+
+REGRAS:
+1. Se encontrou QUALQUER tabela de BDI com componentes, SEMPRE retorne tcu preenchido.
+2. Só retorne tcu=null se REALMENTE só houver o percentual global isolado.
+3. NUNCA coloque o BDI total no campo lucro.
+4. Se um campo não aparece no documento, coloque 0.
+5. globalBdi é o BDI resultante da fórmula (não a soma dos componentes).
+
+Retorne números sem %.`;
 
     const tcuSchema = {
         type: Type.OBJECT,
         nullable: true,
-        description: 'Os parâmetros INDIVIDUAIS do BDI extraídos EXATAMENTE do edital. NUNCA use valores default — copie os números do documento.',
+        description: 'Componentes INDIVIDUAIS extraídos EXATAMENTE do documento. PROIBIDO usar valores default.',
         properties: {
-            adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — EXTRAIA o valor EXATO do edital' },
-            seguros: { type: Type.NUMBER, description: 'Seguros (S) — se combinado com G, divida igualmente' },
-            garantias: { type: Type.NUMBER, description: 'Garantias (G) — se combinado com S, divida igualmente' },
-            riscos: { type: Type.NUMBER, description: 'Riscos (R) — EXTRAIA o valor EXATO do edital' },
-            despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — EXTRAIA o valor EXATO do edital' },
-            lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — EXTRAIA o valor EXATO do edital. NUNCA o BDI total.' },
-            pis: { type: Type.NUMBER, description: 'PIS — EXTRAIA o valor EXATO do edital' },
-            cofins: { type: Type.NUMBER, description: 'COFINS — EXTRAIA o valor EXATO do edital' },
-            iss: { type: Type.NUMBER, description: 'ISS — EXTRAIA o valor EXATO do edital' },
-            csll: { type: Type.NUMBER, description: 'CSLL — EXTRAIA o valor EXATO ou 0 se não mencionado' },
+            adminCentral: { type: Type.NUMBER, description: 'Administração Central (AC) — copie o valor EXATO do documento' },
+            seguros: { type: Type.NUMBER, description: 'Seguros (S) — se combinado S+G, divida igualmente' },
+            garantias: { type: Type.NUMBER, description: 'Garantias (G) — se combinado S+G, divida igualmente' },
+            riscos: { type: Type.NUMBER, description: 'Riscos (R) — copie o valor EXATO do documento' },
+            despFinanceiras: { type: Type.NUMBER, description: 'Despesas Financeiras (DF) — copie o valor EXATO' },
+            lucro: { type: Type.NUMBER, description: 'Lucro/Remuneração (L) — copie o valor EXATO. NUNCA o BDI total.' },
+            pis: { type: Type.NUMBER, description: 'PIS — copie o valor EXATO' },
+            cofins: { type: Type.NUMBER, description: 'COFINS — copie o valor EXATO' },
+            iss: { type: Type.NUMBER, description: 'ISS — copie o valor EXATO' },
+            csll: { type: Type.NUMBER, description: 'CSLL — copie ou 0 se não mencionado' },
         }
     };
 
@@ -93,9 +95,9 @@ Retorne apenas os números (sem o símbolo de %).`;
         type: Type.OBJECT,
         properties: {
             found: { type: Type.BOOLEAN, description: 'Se a tabela de BDI foi encontrada no edital.' },
-            globalBdi: { type: Type.NUMBER, description: 'O valor do BDI Global calculado (em percentual).', nullable: true },
+            globalBdi: { type: Type.NUMBER, description: 'O valor do BDI Global (percentual).', nullable: true },
             tcu: tcuSchema,
-            globalBdiFornecimento: { type: Type.NUMBER, description: 'BDI global específico para fornecimento, materiais ou equipamentos, quando o edital trouxer BDI diferenciado.', nullable: true },
+            globalBdiFornecimento: { type: Type.NUMBER, description: 'BDI diferenciado para fornecimento/materiais.', nullable: true },
             tcuFornecimento: tcuSchema,
         },
         required: ['found'] as string[]
@@ -103,19 +105,33 @@ Retorne apenas os números (sem o símbolo de %).`;
 
     const sanitizeBdiResult = (parsed: any) => {
         if (!parsed?.found) return parsed;
-        // Fix: AI put BDI total in lucro field
-        if (parsed.tcu && parsed.globalBdi && Math.abs(parsed.tcu.lucro - parsed.globalBdi) < 0.5) {
-            console.warn(`[BDI-AI] ⚠️ AI colocou BDI total (${parsed.globalBdi}) no campo Lucro. Removendo tcu para usar apenas globalBdi.`);
-            parsed.tcu = null;
+
+        // Fix: AI put BDI total in lucro field (lucro ≈ globalBdi AND other fields are 0 or very small)
+        if (parsed.tcu && parsed.globalBdi) {
+            const t = parsed.tcu;
+            const otherFieldsSum = (t.adminCentral || 0) + (t.seguros || 0) + (t.garantias || 0) + (t.riscos || 0) + (t.despFinanceiras || 0);
+            const lucroApproxGlobal = Math.abs(t.lucro - parsed.globalBdi) < 0.5;
+            // Only strip if lucro ≈ globalBdi AND the other fields are negligible (AI clearly confused them)
+            if (lucroApproxGlobal && otherFieldsSum < 2) {
+                console.warn(`[BDI-AI] ⚠️ AI colocou BDI total (${parsed.globalBdi}) no campo Lucro (otherSum=${otherFieldsSum}). Removendo tcu.`);
+                parsed.tcu = null;
+            } else if (lucroApproxGlobal) {
+                console.warn(`[BDI-AI] ⚠️ Lucro (${t.lucro}) ≈ globalBdi (${parsed.globalBdi}) mas outros campos têm valores (sum=${otherFieldsSum}). Mantendo tcu.`);
+            }
         }
-        if (parsed.tcuFornecimento && parsed.globalBdiFornecimento && Math.abs(parsed.tcuFornecimento.lucro - parsed.globalBdiFornecimento) < 0.5) {
-            console.warn(`[BDI-AI] ⚠️ AI colocou BDI fornecimento total (${parsed.globalBdiFornecimento}) no campo Lucro. Removendo tcuFornecimento.`);
-            parsed.tcuFornecimento = null;
+        if (parsed.tcuFornecimento && parsed.globalBdiFornecimento) {
+            const t = parsed.tcuFornecimento;
+            const otherSum = (t.adminCentral || 0) + (t.seguros || 0) + (t.garantias || 0) + (t.riscos || 0) + (t.despFinanceiras || 0);
+            if (Math.abs(t.lucro - parsed.globalBdiFornecimento) < 0.5 && otherSum < 2) {
+                console.warn(`[BDI-AI] ⚠️ AI colocou BDI fornecimento total no Lucro. Removendo tcuFornecimento.`);
+                parsed.tcuFornecimento = null;
+            }
         }
-        // Fix: If seguros and garantias are identical and small, they might be a combined S+G value duplicated
-        if (parsed.tcu && parsed.tcu.seguros === parsed.tcu.garantias && parsed.tcu.seguros > 0 && parsed.tcu.seguros <= 1.5) {
-            // Check if splitting makes more mathematical sense (total S+G should be the combined value)
-            console.log(`[BDI-AI] 📊 S=${parsed.tcu.seguros} G=${parsed.tcu.garantias} (iguais — pode ser S+G combinado)`);
+
+        // Log detailed extraction for debugging
+        if (parsed.tcu) {
+            const t = parsed.tcu;
+            console.log(`[BDI-AI] 📊 Extracted TCU: AC=${t.adminCentral} S=${t.seguros} G=${t.garantias} R=${t.riscos} DF=${t.despFinanceiras} L=${t.lucro} PIS=${t.pis} COFINS=${t.cofins} ISS=${t.iss} CSLL=${t.csll}`);
         }
         return parsed;
     };

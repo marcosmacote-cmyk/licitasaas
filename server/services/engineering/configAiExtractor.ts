@@ -305,69 +305,36 @@ Retorne JSON.`;
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais SINAPI.
-Analise TODOS os documentos/páginas fornecidos e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
+    const encargosPrompt = `Você é um engenheiro orçamentista especialista em encargos sociais.
+Analise TODOS os documentos/páginas e encontre a TABELA DE ENCARGOS SOCIAIS / LEIS SOCIAIS.
 
-🚨 ATENÇÃO: A tabela de encargos pode estar em QUALQUER parte dos documentos — no edital principal,
-em anexos, na planilha orçamentária, no projeto básico, ou em documento específico de encargos.
-Procure em TODAS as páginas por tabelas com colunas HORISTA e MENSALISTA contendo percentuais (%).
+🚨 REGRA ABSOLUTA: COPIE os valores EXATOS do documento. NUNCA invente valores.
+NUNCA use percentuais SINAPI padrão como fallback. Se o valor não está no documento, retorne 0.
 
-A tabela PODE seguir diferentes formatos:
-- Formato SINAPI completo (4 grupos: A, B, C, D com itens individuais)
-- Formato simplificado (apenas totais por grupo)
-- Formato condensado (apenas Total Horista e Total Mensalista)
-- Tabela integrada dentro da planilha de custos/BDI
+A tabela de encargos tem SEMPRE 4 GRUPOS com colunas HORISTA e MENSALISTA:
 
-Se encontrar QUALQUER um desses formatos, extraia o máximo de detalhamento disponível.
+GRUPO A — Encargos Sociais Básicos (9 itens: INSS, SESI, SENAI, INCRA, SEBRAE, Sal.Educação, RAT/SAT, FGTS, SECONCI)
+GRUPO B — Encargos Trabalhistas (10 itens: Repouso, Feriados, Aux.Enfermidade, 13º, Lic.Paternidade, Faltas, Chuvas, Aux.Acidente, Férias, Maternidade)
+GRUPO C — Encargos Rescisórios (5 itens: AP Indenizado, AP Trabalhado, Férias Ind., Dep.Rescisão, Ind.Adicional)
+GRUPO D — Reincidências (2 itens: Reinc.A/B, Reinc.A/AP+FGTS)
 
-Estrutura SINAPI de referência (4 GRUPOS):
+⚠️ ATENÇÃO CRÍTICA: A tabela de encargos tem 4 GRUPOS, NÃO apenas o Grupo A!
+Grupos B, C e D contêm valores DIFERENTES de zero. Se você está vendo zeros em B/C/D, PROCURE MELHOR no documento.
+O Total Horista típico é entre 80% e 130%, NÃO 36%. Se seu total deu < 50%, você PERDEU os Grupos B/C/D.
 
-GRUPO A — Encargos Sociais Básicos:
-  A1: INSS (20% se onerado, 0% se desonerado)
-  A2: SESI (1.50%), A3: SENAI (1.00%), A4: INCRA (0.20%), A5: SEBRAE (0.60%)
-  A6: Salário Educação (2.50%), A7: Seguro Contra Acidentes de Trabalho / RAT (3.00%)
-  A8: FGTS (8.00%), A9: SECONCI (0.00% quando não aplicável)
+PROCURE em TODAS as páginas dos documentos por:
+- Tabelas com "ENCARGOS SOCIAIS", "LEIS SOCIAIS"
+- Colunas "HORISTA %" e "MENSALISTA %"
+- Os 4 grupos A, B, C, D com subtotais
 
-GRUPO B — Encargos Trabalhistas:
-  B1: Repouso Semanal Remunerado, B2: Feriados, B3: Auxílio Enfermidade
-  B4: 13º Salário, B5: Licença Paternidade, B6: Faltas Justificadas
-  B7: Dias de Chuvas, B8: Auxílio Acidente de Trabalho
-  B9: Férias Gozadas, B10: Salário Maternidade
-
-GRUPO C — Encargos Rescisórios:
-  C1: Aviso Prévio Indenizado, C2: Aviso Prévio Trabalhado, C3: Férias Indenizadas
-  C4: Depósito Rescisão Sem Justa Causa, C5: Indenização Adicional
-
-GRUPO D — Reincidências:
-  D1: Reincidência de Grupo A sobre Grupo B
-  D2: Reincidência de Grupo A sobre Aviso Prévio Trabalhado e FGTS sobre Aviso Prévio Indenizado
-
-RETORNE JSON com EXATAMENTE estes campos:
+RETORNE JSON:
 { "found": true, "basePrincipal": "SINAPI",
   "totalHorista": 115.10, "totalMensalista": 71.84,
-  "a1_h": 20.00, "a1_m": 20.00, "a2_h": 1.50, "a2_m": 1.50,
-  "a3_h": 1.00, "a3_m": 1.00, "a4_h": 0.20, "a4_m": 0.20,
-  "a5_h": 0.60, "a5_m": 0.60, "a6_h": 2.50, "a6_m": 2.50,
-  "a7_h": 3.00, "a7_m": 3.00, "a8_h": 8.00, "a8_m": 8.00,
-  "a9_h": 0.00, "a9_m": 0.00,
-  "b1_h": N, "b1_m": N, "b2_h": N, "b2_m": N, "b3_h": N, "b3_m": N,
-  "b4_h": N, "b4_m": N, "b5_h": N, "b5_m": N, "b6_h": N, "b6_m": N,
-  "b7_h": N, "b7_m": N, "b8_h": N, "b8_m": N, "b9_h": N, "b9_m": N,
-  "b10_h": N, "b10_m": N,
-  "c1_h": N, "c1_m": N, "c2_h": N, "c2_m": N, "c3_h": N, "c3_m": N,
-  "c4_h": N, "c4_m": N, "c5_h": N, "c5_m": N,
-  "d1_h": N, "d1_m": N, "d2_h": N, "d2_m": N }
-Onde N = valor percentual sem símbolo % (ex: 17.86). Se item=0 ou não existe, retorne 0.
+  "a1_h": N, "a1_m": N, ..., "d2_h": N, "d2_m": N }
+Onde N = valor percentual EXATO do documento, sem %. Se item=0, retorne 0.
 
-🚨 REGRA CRÍTICA: Se a tabela mostra apenas os TOTAIS por grupo (ex: "Grupo A: 36.80%") sem detalhar
-os itens individuais, use os totais SINAPI padrão para distribuir e retorne found=true.
-
-🚨 SE encontrar apenas o Total Geral de Encargos (ex: "Encargos Sociais: 113.09%") sem detalhamento,
-RETORNE found=true com totalHorista e totalMensalista iguais a esse valor, e distribua os itens usando
-os percentuais SINAPI padrão proporcionalmente.
-
-Somente retorne {"found": false} se NÃO houver NENHUMA menção a encargos sociais/leis sociais em
-NENHUM dos documentos analisados.`;
+🚨 SE NÃO ENCONTRAR a tabela completa de encargos, retorne {"found": false}.
+NÃO invente valores. NÃO use defaults SINAPI. NUNCA retorne found=true com dados inventados.`;
 
     const enrichResult = (parsed: any) => {
         if (!parsed?.found) return parsed;
@@ -384,7 +351,16 @@ NENHUM dos documentos analisados.`;
         const tm = parsed.grupoA_mensalista + parsed.grupoB_mensalista + parsed.grupoC_mensalista + parsed.grupoD_mensalista;
         if (th > 0) parsed.totalHorista = Math.round(th * 100) / 100;
         if (tm > 0) parsed.totalMensalista = Math.round(tm * 100) / 100;
-        console.log(`[Encargos-AI] 📊 A=${parsed.grupoA_horista} B=${parsed.grupoB_horista} C=${parsed.grupoC_horista} D=${parsed.grupoD_horista} → H=${parsed.totalHorista} M=${parsed.totalMensalista}`);
+
+        // Anti-hallucination: if B+C+D are all zeros but A > 0, the extraction is incomplete
+        const bcdHorista = parsed.grupoB_horista + parsed.grupoC_horista + parsed.grupoD_horista;
+        const bcdMensalista = parsed.grupoB_mensalista + parsed.grupoC_mensalista + parsed.grupoD_mensalista;
+        if (parsed.grupoA_horista > 0 && bcdHorista === 0 && bcdMensalista === 0) {
+            console.warn(`[Encargos-AI] ⚠️ EXTRAÇÃO INCOMPLETA: Grupo A=${parsed.grupoA_horista}% mas B/C/D = 0%. A IA provavelmente não encontrou os grupos B/C/D no documento.`);
+            parsed._extractionIncomplete = true;
+        }
+
+        console.log(`[Encargos-AI] 📊 A=${parsed.grupoA_horista} B=${parsed.grupoB_horista} C=${parsed.grupoC_horista} D=${parsed.grupoD_horista} → H=${parsed.totalHorista} M=${parsed.totalMensalista}${parsed._extractionIncomplete ? ' ⚠️ INCOMPLETA' : ''}`);
         return parsed;
     };
 
