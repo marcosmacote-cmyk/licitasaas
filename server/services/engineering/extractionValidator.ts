@@ -730,6 +730,60 @@ export function validateEngineeringExtraction(
         score -= 2;
     }
 
+    // ── Check 15: CPU Contamination Detection ──
+    // If the AI extracted from "Composições de Custos Unitários" (CPU) instead of
+    // the "Planilha Sintética", items will be individual INSUMOS (servente, pedreiro,
+    // cimento, areia) repeated many times across compositions.
+    const CPU_INSUMO_PATTERNS = [
+        /\bservente\b/i, /\bpedreiro\b/i, /\bcarpinteiro\b/i, /\beletricist/i,
+        /\bencanador\b/i, /\bpintor\b/i, /\barmador\b/i, /\bserralheiro\b/i,
+        /\bajudante\b/i, /\bmestre de obras?\b/i, /\bencarregado\b/i,
+        /\bcimento portland\b/i, /\bareia media\b/i, /\bareia m[eé]dia\b/i,
+        /\bbrita\b/i, /\ba[cç]o ca-?\s?(?:50|60)\b/i, /\btijolo\b/i,
+    ];
+
+    const cpuSuspectItems = leafItems.filter(it => {
+        const desc = String(it.description || '').toLowerCase().trim();
+        return CPU_INSUMO_PATTERNS.some(p => p.test(desc));
+    });
+
+    // Count description repetitions (CPU hallmark: same insumo across many compositions)
+    const cpuDescCounts = new Map<string, number>();
+    for (const it of leafItems) {
+        const desc = String(it.description || '').toLowerCase().trim().substring(0, 40);
+        cpuDescCounts.set(desc, (cpuDescCounts.get(desc) || 0) + 1);
+    }
+    const highRepeatCount = Array.from(cpuDescCounts.values()).filter(c => c >= 5).length;
+
+    const cpuSuspectRatio = leafItems.length > 0 ? cpuSuspectItems.length / leafItems.length : 0;
+    const isCpuContaminated = hasManyRows && (
+        (cpuSuspectRatio > 0.25 && cpuSuspectItems.length > 10) ||
+        (highRepeatCount >= 5 && cpuSuspectRatio > 0.15)
+    );
+
+    if (isCpuContaminated) {
+        forceQuarantine = true;
+        issues.push({
+            code: 'EV15_CPU',
+            severity: 'error',
+            message: `CONTAMINAÇÃO POR CPU DETECTADA: ${cpuSuspectItems.length}/${leafItems.length} itens ` +
+                `(${Math.round(cpuSuspectRatio * 100)}%) são insumos individuais (servente, pedreiro, cimento, etc.). ` +
+                `${highRepeatCount} descrições se repetem ≥5 vezes. ` +
+                `A IA provavelmente extraiu da "Composição de Custos Unitários" em vez da "Planilha Sintética".`,
+            affectedItems: cpuSuspectItems.map(it => it.item).filter(Boolean).slice(0, 20),
+        });
+        score -= 40;
+    } else if (cpuSuspectItems.length > 5 && cpuSuspectRatio > 0.10) {
+        issues.push({
+            code: 'EV15_CPU',
+            severity: 'warning',
+            message: `${cpuSuspectItems.length} itens parecem insumos de CPU (${Math.round(cpuSuspectRatio * 100)}% das composições). ` +
+                `Revisar se a extração inclui itens da "Composição de Custos Unitários".`,
+            affectedItems: cpuSuspectItems.map(it => it.item).filter(Boolean).slice(0, 10),
+        });
+        score -= 8;
+    }
+
     // ── Check 14: OCR row coverage ──
     if (rowCoverage && rowCoverage.candidateCount >= 10) {
         const coveragePercent = Number(rowCoverage.coveragePercent) || 0;

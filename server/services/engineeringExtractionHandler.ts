@@ -610,7 +610,30 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     let ocrRowCoverageMeta: any = null;
 
     try {
-        const userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}`;
+        // P1.3 + P2.3: Build ADAPTIVE user instruction based on fingerprint + probe
+        let userInstruction = `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}`;
+        
+        // Add landscape context if detected
+        const hasLandscape = fingerprints.some(fp => fp.dominantOrientation === 'landscape' || fp.dominantOrientation === 'mixed');
+        if (hasLandscape) {
+            userInstruction += `\n\n🚨 ATENÇÃO — TABELA EM FORMATO PAISAGEM:\n` +
+                `Este PDF contém tabelas em orientação PAISAGEM (horizontal). ` +
+                `As colunas se estendem horizontalmente e podem estar mais largas. ` +
+                `Leia da ESQUERDA para a DIREITA seguindo a ordem: ITEM → CÓDIGO → DESCRIÇÃO → UNID → QTD → PREÇO UNIT → TOTAL. ` +
+                `NÃO confunda colunas — em landscape a distância entre colunas é maior.`;
+            logger.info(`[Engineering-BG] 📐 Landscape/Mixed orientation detected — adding horizontal reading instructions.`);
+        }
+
+        // Add column shift reinforcement if probe detected it
+        if (probeResult?.verdict === 'FAIL_COLUMN_SHIFT') {
+            userInstruction += `\n\n🚨🚨🚨 ALERTA CRÍTICO — COLUMN SHIFT DETECTADO:\n` +
+                `Uma análise prévia detectou que ${probeResult.columnShiftPercent}% dos itens têm ` +
+                `o preço unitário IGUAL à quantidade — isso significa que você está LENDO A COLUNA ERRADA. ` +
+                `PRESTE ATENÇÃO REDOBRADA ao cabeçalho da tabela e identifique EXATAMENTE qual coluna é "Qtd" e qual é "Preço Unit.". ` +
+                `O preço unitário de um serviço de engenharia é tipicamente entre R$ 5 e R$ 50.000. ` +
+                `Se o valor do campo uc for igual ao campo q, VOCÊ ESTÁ ERRADO.`;
+            logger.info(`[Engineering-BG] 🔄 Column shift probe feedback added to prompt.`);
+        }
         let totalRepairs: string[] = [];
         const seenItemKeys = new Set<string>();
 
