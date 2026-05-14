@@ -251,18 +251,35 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             });
 
             if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
-                // Use the trimmed PDF
-                const trimmedBuf = targeting.trimmedPdfBuffer;
-                totalTrimmedKB += trimmedBuf.length / 1024;
-                pdfParts.push({
-                    inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' }
-                });
-                targetingUsed = true;
-                logger.info(
-                    `[Engineering-BG] 🎯 Page Targeting: "${source}" — ` +
-                    `${targeting.totalPages} pgs → ${targeting.selectedPageIndices.length} pgs ` +
-                    `(${targeting.reductionPercent}% redução, ${(buffer.length / 1024).toFixed(0)}KB → ${(trimmedBuf.length / 1024).toFixed(0)}KB)`
-                );
+                // FIX HYBRID-01: If this is a hybrid PDF with mem. cálculo detected,
+                // DON'T use the trimmed PDF (which includes text pages that confuse the AI).
+                // Instead, force it to the scanned path for visual batch extraction.
+                if (targeting.isHybridPdf) {
+                    zeroxFallbackCandidates.push({
+                        buffer,
+                        fileName: source,
+                        reason: 'scanned_pdf_no_text_layer',
+                    });
+                    logger.warn(
+                        `[Engineering-BG] 📸 HYBRID PDF detected: "${source}" — ` +
+                        `${targeting.scannedPageIndices?.length || 0} scanned pages contain the budget table, ` +
+                        `${targeting.totalPages - (targeting.scannedPageIndices?.length || 0)} text pages are Memória de Cálculo. ` +
+                        `Routing to visual batch for scanned-page extraction.`
+                    );
+                } else {
+                    // Use the trimmed PDF (normal targeted path)
+                    const trimmedBuf = targeting.trimmedPdfBuffer;
+                    totalTrimmedKB += trimmedBuf.length / 1024;
+                    pdfParts.push({
+                        inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' }
+                    });
+                    targetingUsed = true;
+                    logger.info(
+                        `[Engineering-BG] 🎯 Page Targeting: "${source}" — ` +
+                        `${targeting.totalPages} pgs → ${targeting.selectedPageIndices.length} pgs ` +
+                        `(${targeting.reductionPercent}% redução, ${(buffer.length / 1024).toFixed(0)}KB → ${(trimmedBuf.length / 1024).toFixed(0)}KB)`
+                    );
+                }
             } else {
                 // Targeting not applicable or failed — use full PDF
 
@@ -279,7 +296,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     });
                     logger.warn(
                         `[Engineering-BG] 📸 PDF escaneado detectado: "${source}" ` +
-                        `(${targeting.totalPages} pgs, ${targeting.scannedPagesPercent}% sem texto). ` +
+                        `(${targeting.totalPages} pgs, ${targeting.scannedPagesPercent}% sem texto` +
+                        `${targeting.isHybridPdf ? ', HYBRID com Memória de Cálculo' : ''}). ` +
                         `OCR será fonte primária — PDF bruto NÃO enviado ao Gemini (${(buffer.length / 1024).toFixed(0)} KB muito pesado).`
                     );
                     // Don't add to pdfParts — will be handled by OCR path below
@@ -296,7 +314,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         });
                     }
                 }
-                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages${targeting.isScannedPdf ? ', SCANNED — deferred to OCR' : ''})`);
+                logger.info(`[Engineering-BG] 📄 Using full PDF: "${source}" (${(buffer.length / 1024).toFixed(0)} KB, ${targeting.totalPages} pages${targeting.isScannedPdf ? ', SCANNED — deferred to OCR' : ''}${targeting.isHybridPdf ? ', HYBRID — deferred to visual batch' : ''})`);
             }
         } catch (err: any) {
             // Page targeting failed — fall back to full PDF

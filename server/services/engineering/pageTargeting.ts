@@ -36,8 +36,10 @@ export interface PageTargetingResult {
     reductionPercent: number;          // e.g. 85 means 85% fewer pages
     trimmedPdfBuffer: Buffer | null;   // The PDF with only candidate pages
     strategy: 'targeted' | 'full';     // 'full' if all pages passed or targeting failed
-    isScannedPdf?: boolean;            // true when ≥80% of pages have no extractable text
+    isScannedPdf?: boolean;            // true when ≥70% of pages have no extractable text
+    isHybridPdf?: boolean;             // true when PDF has BOTH scanned pages AND narrative text (e.g., memória de cálculo)
     scannedPagesPercent?: number;      // % of pages with no text
+    scannedPageIndices?: number[];     // 0-based indices of pages detected as scanned/image-only
 }
 
 // ═══════════════════════════════════════════
@@ -110,6 +112,25 @@ const NEGATIVE_KEYWORDS = [
     'deverão ser obedecidas',
     'cronograma físico', 'cronograma fisico',
     '30 dias', '60 dias', '90 dias', '120 dias',
+];
+
+/** 
+ * FIX HYBRID-01: Patterns that indicate MEMÓRIA DE CÁLCULO pages.
+ * These are auxiliary calculation sheets (not budget tables) that contain
+ * numeric data and engineering terms but are NOT the planilha orçamentária.
+ * In hybrid PDFs, these text pages cause the AI to hallucinate budget items
+ * from calculation data when the real budget table is on scanned pages.
+ * Very high penalty (-12 each) because these pages MUST be excluded.
+ */
+const MEMORY_OF_CALC_PATTERNS = [
+    'memória de cálculo', 'memoria de calculo',
+    'memória de calculo', 'memoria de cálculo',
+    'comprimento   x   largura   x   altura',
+    'comprimento x largura x altura',
+    'projeto estrutural',
+    'projeto hidráulico', 'projeto hidraulico',
+    'projeto sanitário', 'projeto sanitario',
+    'projeto elétrico', 'projeto eletrico',
 ];
 
 // ═══════════════════════════════════════════
@@ -253,6 +274,15 @@ function scorePage(text: string, pageIndex: number, extraKeywords: string[] = []
         const kwNorm = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         if (normalized.includes(kwNorm)) {
             score -= 4;
+        }
+    }
+
+    // FIX HYBRID-01: Heavy penalty for Memória de Cálculo pages (-12 each)
+    // These pages contain numeric data that looks like budget tables but are NOT.
+    for (const kw of MEMORY_OF_CALC_PATTERNS) {
+        const kwNorm = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normalized.includes(kwNorm)) {
+            score -= 12;
         }
     }
 
@@ -411,6 +441,43 @@ export async function targetBudgetPages(
     const scannedPagesPercent = Math.round((garbagePages / totalPages) * 100);
     const isScannedPdf = scannedPagesPercent >= 70; // Lowered from 80 to 70 to catch mixed PDFs
 
+    // FIX HYBRID-01: Identify individual scanned page indices for hybrid PDF handling
+    const scannedPageIndices = pageTexts
+        .map((text, idx) => isGarbagePage(text) ? idx : -1)
+        .filter(idx => idx >= 0);
+
+    // FIX HYBRID-01: Detect HYBRID PDFs — mix of scanned pages (likely budget table)
+    // and text pages (likely memória de cálculo, narrative). In these cases, the text
+    // pages will confuse the AI into hallucinating budget items from calculation data.
+    const hasSignificantScannedPages = scannedPageIndices.length >= 3;
+    const hasSignificantTextPages = (totalPages - garbagePages) >= 3;
+    const isHybridPdf = hasSignificantScannedPages && hasSignificantTextPages && !isScannedPdf;
+
+    // Check if text pages are predominantly memória de cálculo
+    let memCalcPageCount = 0;
+    if (isHybridPdf) {
+        const memCalcNormalized = MEMORY_OF_CALC_PATTERNS.map(kw =>
+            kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        );
+        for (let i = 0; i < pageTexts.length; i++) {
+            if (scannedPageIndices.includes(i)) continue; // skip scanned pages
+            const normalizedText = pageTexts[i].toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const isMemCalc = memCalcNormalized.some(kw => normalizedText.includes(kw));
+            if (isMemCalc) memCalcPageCount++;
+        }
+    }
+
+    const isHybridWithMemCalc = isHybridPdf && memCalcPageCount >= 3;
+
+    if (isHybridWithMemCalc) {
+        logger.warn(
+            `[PageTargeting] ⚠️ HYBRID PDF DETECTED: ${scannedPageIndices.length} scanned pages + ` +
+            `${totalPages - garbagePages} text pages (${memCalcPageCount} are Memória de Cálculo). ` +
+            `Scanned pages likely contain the budget table. Text pages will be EXCLUDED from targeting.`
+        );
+    }
+
     if (isScannedPdf) {
         logger.warn(
             `[PageTargeting] ⚠️ PDF escaneado/garbage-OCR detectado: ${garbagePages}/${totalPages} páginas sem texto útil ` +
@@ -424,7 +491,9 @@ export async function targetBudgetPages(
             trimmedPdfBuffer: null,
             strategy: 'full',
             isScannedPdf: true,
+            isHybridPdf: false,
             scannedPagesPercent,
+            scannedPageIndices,
         };
     }
 
@@ -433,6 +502,26 @@ export async function targetBudgetPages(
     const candidates = scores.filter(s => s.score >= minScore);
 
     if (candidates.length === 0) {
+        // FIX HYBRID-01: If hybrid PDF with memória de cálculo was detected,
+        // treat scanned pages as the actual budget table
+        if (isHybridWithMemCalc && scannedPageIndices.length > 0) {
+            logger.warn(
+                `[PageTargeting] ⚠️ HYBRID FALLBACK: No budget pages scored above threshold. ` +
+                `Treating ${scannedPageIndices.length} scanned pages as budget table candidates (they likely contain the planilha orçamentária).`
+            );
+            return {
+                totalPages,
+                candidatePages: [],
+                selectedPageIndices: scannedPageIndices,
+                reductionPercent: Math.round((1 - scannedPageIndices.length / totalPages) * 100),
+                trimmedPdfBuffer: null,
+                strategy: 'full',
+                isScannedPdf: true,  // Treat as scanned so it goes to visual batch
+                isHybridPdf: true,
+                scannedPagesPercent,
+                scannedPageIndices,
+            };
+        }
         logger.warn(`[PageTargeting] No pages scored ≥ ${minScore}. Using full PDF.`);
         return {
             totalPages,
@@ -442,7 +531,9 @@ export async function targetBudgetPages(
             trimmedPdfBuffer: null,
             strategy: 'full',
             isScannedPdf: false,
+            isHybridPdf,
             scannedPagesPercent,
+            scannedPageIndices,
         };
     }
 
@@ -513,5 +604,7 @@ export async function targetBudgetPages(
         reductionPercent,
         trimmedPdfBuffer,
         strategy: 'targeted',
+        isHybridPdf: isHybridWithMemCalc,
+        scannedPageIndices: isHybridWithMemCalc ? scannedPageIndices : undefined,
     };
 }
