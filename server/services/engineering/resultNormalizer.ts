@@ -625,6 +625,13 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
             const up = normalized.unitPrice;
             const tp = normalized.totalPrice;
 
+            // FIX-VISUAL-02: Handle -1 flag (AI couldn't read the price column).
+            // Convert to 0 so the enricher can auto-fill via code match.
+            if (uc < 0) {
+                normalized.unitCost = 0;
+                repairs.push(`unreadable_price_flag:${normalized.item}`);
+            }
+
             // If unitPrice is missing but unitCost exists, estimate: up ≈ uc (no BDI info available)
             if (up === 0 && uc > 0) {
                 normalized.unitPrice = uc;

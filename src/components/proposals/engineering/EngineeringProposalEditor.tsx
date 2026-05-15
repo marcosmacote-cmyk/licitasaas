@@ -946,17 +946,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             });
             setItems(recalcAll(auditedItems, effectiveBdi, dashConfig));
             setHasUnsavedChanges(true);
-            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Auditoria atualizada contra base, data e regime</span>);
+            // FIX AUDIT-01: Show detailed match counts instead of generic success
+            const okCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'OK').length;
+            const divCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'DIVERGENT').length;
+            const noMatch = auditedItems.filter((it: any) => !it.priceAudit || it.priceAudit.status === 'SEM_MATCH').length;
+            const nonGroupItems = auditedItems.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA').length;
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: okCount > 0 ? 'var(--color-success)' : '#d97706' }}><CheckCircle2 size={14} /> Auditoria: {okCount} OK, {divCount} divergentes, {noMatch} sem match (de {nonGroupItems} itens)</span>);
         } catch (e: any) {
             setItems(prev => recalcAll(prev, effectiveBdi, dashConfig));
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
-            setTimeout(() => setSaveMsg(null), 5000);
+            setTimeout(() => setSaveMsg(null), 8000);
         }
     };
 
     // FIX #4: Use dashConfig (Step 1 priority) instead of potentially stale internal engineeringConfig
+    // FIX DEDUP-01: Normalize description for accent-insensitive deduplication
+    const normalizeDesc = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[=\s]+/g, ' ').trim().toUpperCase();
+
     const syncBases = async () => {
         if (items.length === 0) return;
         setIsAuditing(true);
@@ -984,15 +992,41 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 }
                 return updated;
             });
-            
-            setItems(recalcAll(syncedItems, effectiveBdi, dashConfig));
+
+            // FIX DEDUP-01: Deduplicate items by itemNumber + normalized code.
+            // Prevents accumulation of duplicates when user clicks "Puxar do HUB" multiple times,
+            // or when the enricher returns items with slightly different descriptions (accents).
+            const seen = new Map<string, number>();
+            const dedupedItems = syncedItems.filter((it: any, idx: number) => {
+                if (it.type === 'ETAPA' || it.type === 'SUBETAPA') return true; // Never dedup groupers
+                const key = `${it.itemNumber}::${normalizeDesc(it.code || '')}`;
+                if (seen.has(key)) {
+                    // Keep the version with the higher unitCost (more complete data)
+                    const prevIdx = seen.get(key)!;
+                    const prevCost = Number(syncedItems[prevIdx]?.unitCost) || 0;
+                    const thisCost = Number(it.unitCost) || 0;
+                    if (thisCost > prevCost) {
+                        // Replace previous with this one
+                        syncedItems[prevIdx] = null as any;
+                        seen.set(key, idx);
+                        return true;
+                    }
+                    return false; // Discard this duplicate
+                }
+                seen.set(key, idx);
+                return true;
+            }).filter(Boolean);
+
+            const removedCount = syncedItems.length - dedupedItems.length;
+            setItems(recalcAll(dedupedItems, effectiveBdi, dashConfig));
             setHasUnsavedChanges(true);
-            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Tabela 100% atualizada com os custos do Hub (Nova Data Base).</span>);
+            const matchCount = dedupedItems.filter((it: any) => it.priceAudit?.matchedUnitCost > 0).length;
+            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Hub: {matchCount} preços atualizados{removedCount > 0 ? `, ${removedCount} duplicatas removidas` : ''} ({dashConfig.regimeOneracao})</span>);
         } catch (e: any) {
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
-            setTimeout(() => setSaveMsg(null), 5000);
+            setTimeout(() => setSaveMsg(null), 8000);
         }
     };
 

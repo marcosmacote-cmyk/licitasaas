@@ -1308,7 +1308,15 @@ router.post('/price-audit', async (req: any, res: any) => {
 
         const audited = items.map((item: any) => ({ ...item }));
         await enrichWithOfficialPrices(audited, engineeringConfig, { tenantId: req.user?.tenantId });
-        res.json({ items: audited });
+
+        // FIX AUDIT-01: Log result for diagnostic
+        const nonGroupItems = audited.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA');
+        const matched = nonGroupItems.filter((it: any) => it.priceAudit?.matchedUnitCost > 0).length;
+        const okCount = nonGroupItems.filter((it: any) => it.priceAudit?.status === 'OK').length;
+        const divCount = nonGroupItems.filter((it: any) => it.priceAudit?.status === 'DIVERGENT').length;
+        console.log(`[Price Audit] 📊 ${matched}/${nonGroupItems.length} matched (${okCount} OK, ${divCount} DIVERGENT)`);
+
+        res.json({ items: audited, summary: { matched, total: nonGroupItems.length, ok: okCount, divergent: divCount } });
     } catch (e: any) {
         console.error('[Engineering Price Audit] Error:', e);
         res.status(500).json({ error: 'Erro ao reauditar preços', details: e.message });

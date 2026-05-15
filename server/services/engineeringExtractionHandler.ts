@@ -954,7 +954,11 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `4. DESCRIÇÃO OBRIGATÓRIA: Cada item deve ter a descrição completa. NÃO deixe o campo "d" vazio.\n` +
                         `5. Extraia TODOS os itens orçamentários visíveis neste lote, incluindo etapas, subetapas e composições.\n` +
                         `6. Não pare na primeira tabela. Não use dados de outros lotes.\n` +
-                        `7. Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n`;
+                        `7. Se uma linha estiver cortada por continuação de página, extraia apenas quando houver descrição e valores suficientes.\n` +
+                        `8. 🚨 REGRA DE PREÇO ZERO (FIX-VISUAL-02): Retornar unitCost=0 para um item com quantidade>0 é INACEITÁVEL. ` +
+                        `Se a coluna de preço estiver borrada/ilegível, RELEIA a célula com atenção máxima. ` +
+                        `Preços unitários são sempre números com 2 casas decimais (ex: 12.33, 145.51, 648.65). ` +
+                        `Se REALMENTE impossível ler, retorne unitCost=-1 (flag para post-processing), NUNCA 0.\n`;
 
                     await extractChunk(
                         [{
