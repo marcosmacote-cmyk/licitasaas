@@ -84,6 +84,9 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
    'Quantitativos', 'Planilha de Custos', 'Orçamento Base', 'Estimativa de Custos',
    'Planilha Analítica', 'Planilha Sintética' ou similar.
    🚨 NÃO extraia das tabelas 'Composições de Custos Unitários', 'CPU', 'Composições Auxiliares'.
+   🚨 NÃO extraia de tabelas auxiliares como 'DESCONTOS ESQUADRIAS', 'DESCONTO DE ABERTURAS', 
+   'QUADRO DE ESQUADRIAS' ou 'MAPA DE ABERTURAS'. Essas tabelas listam portas (P1, P2, P3...) 
+   e janelas (J1, J2, J3...) com áreas para cálculo de desconto — NÃO são itens orçamentários.
 
 2. EXTRAIA TODOS OS ITENS DA PLANILHA. Se encontrar a descrição dos serviços sem quantitativos (mas claramente em formato de tabela orçamentária), extraia com quantity=0 e unitCost=0.
    🚨 ALERTA: NÃO confunda checklists de documentos, cronogramas físico-financeiros, listas de exigências ou COMPOSIÇÕES DE CUSTOS UNITÁRIOS com a Planilha Orçamentária. Itens de orçamento sempre descrevem serviços de engenharia completos, não insumos individuais (mão de obra, material).

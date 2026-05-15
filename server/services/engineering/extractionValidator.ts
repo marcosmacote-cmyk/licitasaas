@@ -198,6 +198,36 @@ function classifyEngineeringItem(item: any): EngineeringItemQuality {
         };
     }
 
+    // FIX HALLUCI-01: Detect items from auxiliary tables (door/window discount tables,
+    // area calculation tables, etc.). These are NOT budget items — they're references
+    // like P1, P2, P9, J1, J2, J7 with areas (m²) but zero cost.
+    // Pattern: code is 1-3 chars (letter + digit), description matches code, unitCost=0.
+    const isAuxTableItem = (
+        code && /^[A-Z]{1,2}\d{1,2}$/i.test(code) &&
+        unitCost === 0 &&
+        (description.length <= 5 || description.toUpperCase() === code.toUpperCase())
+    );
+    if (isAuxTableItem) {
+        reasons.push('item de tabela auxiliar (desconto esquadrias/aberturas) — hallucination');
+        return {
+            item: itemNumber,
+            classification: 'narrative_noise',
+            confidence: 3,
+            reasons,
+        };
+    }
+
+    // FIX HALLUCI-02: Detect items with very short descriptions that equal the code.
+    // Real budget items ALWAYS have descriptive text, never just "P1" or "J4".
+    const descEqualsCode = code && description && (
+        description.trim().toUpperCase() === code.trim().toUpperCase() ||
+        description.trim().length <= 3
+    ) && unitCost === 0;
+    if (descEqualsCode) {
+        reasons.push('descrição idêntica ao código e sem preço — provável item fantasma');
+        confidence -= 40;
+    }
+
     if (quantity > 0) {
         reasons.push('quantidade numérica');
         confidence += 18;

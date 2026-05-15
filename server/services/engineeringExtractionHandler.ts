@@ -958,7 +958,12 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `8. 🚨 REGRA DE PREÇO ZERO (FIX-VISUAL-02): Retornar unitCost=0 para um item com quantidade>0 é INACEITÁVEL. ` +
                         `Se a coluna de preço estiver borrada/ilegível, RELEIA a célula com atenção máxima. ` +
                         `Preços unitários são sempre números com 2 casas decimais (ex: 12.33, 145.51, 648.65). ` +
-                        `Se REALMENTE impossível ler, retorne unitCost=-1 (flag para post-processing), NUNCA 0.\n`;
+                        `Se REALMENTE impossível ler, retorne unitCost=-1 (flag para post-processing), NUNCA 0.\n` +
+                        `9. 🚨 REGRA ANTI-TABELA AUXILIAR (FIX-HALLUCI-01): NÃO extraia itens de tabelas auxiliares de cálculo ` +
+                        `como "DESCONTOS ESQUADRIAS", "DESCONTO DE ABERTURAS", "QUADRO DE ESQUADRIAS" ou "MAPA DE ABERTURAS". ` +
+                        `Essas tabelas listam portas (P1, P2, P3...) e janelas (J1, J2, J3...) com suas áreas para cálculo ` +
+                        `de desconto de alvenaria. NÃO são itens orçamentários. Identifique: códigos curtos (P1, J4), ` +
+                        `descrição igual ao código, sem preço unitário. Se encontrar esses padrões, IGNORE a tabela inteira.\n`;
 
                     await extractChunk(
                         [{
