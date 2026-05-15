@@ -65,6 +65,13 @@ const POSITIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/mem[oó]ria.*c[aá]lculo|curva.?abc/i, 16, 'nome menciona memória de cálculo/curva ABC'],
     [/projeto.?b[aá]sico|termo.?refer[eê]ncia/i, 8, 'documento técnico de apoio'],
     [/projeto.*completo|anexo.*completo/i, 20, 'nome menciona projeto/anexo completo'],
+    // FIX DOC-05: Anexos genéricos com numeração romana (ANEXO I, ANEXO XI) frequentemente
+    // contêm a planilha orçamentária em editais do PNCP. Sem este boost, nenhum ANEXO 
+    // genérico atinge o minScore=18 e a extração falha com "nenhum PDF disponível".
+    [/^anexo\s+[IVXLC]{1,5}$/i, 12, 'anexo numerado (possível planilha)'],
+    [/^anexo\s+\d{1,3}$/i, 10, 'anexo numerado (possível planilha)'],
+    [/^anexo\b/i, 6, 'anexo genérico'],
+    [/\bdfd\b|documento\s+de\s+formaliza/i, 4, 'DFD (pode conter orçamento)'],
 ];
 
 const NEGATIVE_PATTERNS: Array<[RegExp, number, string]> = [
@@ -74,6 +81,8 @@ const NEGATIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/edital|minuta|contrato|declara[cç][aã]o|habilita[cç][aã]o/i, -24, 'documento jurídico/editalício'],
     [/retifica|errata|republica/i, -20, 'retificação sem indicação orçamentária'],
     [/\.(zip|rar|7z)$/i, -18, 'arquivo compactado não tratado neste fluxo'],
+    [/\bntci\b|nota\s+t[eé]cnica/i, -14, 'nota técnica (não contém orçamento)'],
+    [/\bdom\b|di[aá]rio\s+oficial|autorizo/i, -12, 'documento administrativo (DOM/autorização)'],
 ];
 
 function attachmentTitle(att: EngineeringAttachmentInput): string {
@@ -99,13 +108,15 @@ export function classifyEngineeringAttachments(
     // Municípios pequenos têm 1-3 anexos; rejeitar tudo = extração impossível
     // FIX DOC-01: Com apenas 1 documento, SEMPRE processa — muitas prefeituras embarcam
     // a planilha orçamentária DENTRO do edital (ex: Santa Maria/PA, 98 pgs com planilha na pg 62)
+    // FIX DOC-05: Threshold para 7+ docs baixado de 18→5 — anexos genéricos (ANEXO I, ANEXO XI)
+    // agora recebem boost de +12, totalizando score=12, que antes era rejeitado pelo minScore=18.
     const totalActive = (attachments || []).filter(att => att && att.ativo !== false).length;
-    const baseMinScore = options.minScore ?? 18;
+    const baseMinScore = options.minScore ?? 5;
     const minScore = totalActive <= 1 ? -999 :   // SEMPRE aceita o único doc disponível
                      totalActive <= 2 ? -30 :    // Aceita quase tudo (2 docs)
                      totalActive <= 4 ? -10 :    // Mais permissivo (3-4 docs)
-                     totalActive <= 6 ? 5 :      // Moderado (5-6 docs)
-                     baseMinScore;                // Restritivo padrão (7+ docs)
+                     totalActive <= 6 ? 0 :      // Moderado (5-6 docs)
+                     baseMinScore;                // Menos restritivo (7+ docs, was 18)
 
     const classified = (attachments || [])
         .filter(att => att && att.ativo !== false && attachmentUrl(att))
