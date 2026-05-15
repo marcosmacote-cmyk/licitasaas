@@ -163,12 +163,25 @@ export function buildCandidateScore(
     }
 
     // Date match scoring
+    // FIX DATE-02: SEINFRA uses version-based numbering (028, 028.1) instead of
+    // monthly cadence like SINAPI. When a base has no referenceMonth/Year but has
+    // a version, give partial date credit and don't produce 'data-base incompatível'.
     if (effectiveTargetDate) {
-        const exactDate = db.referenceYear === effectiveTargetDate.year && db.referenceMonth === effectiveTargetDate.month;
+        const hasRefDate = db.referenceYear && db.referenceMonth;
+        const exactDate = hasRefDate && db.referenceYear === effectiveTargetDate.year && db.referenceMonth === effectiveTargetDate.month;
         const versionDate = String(db.version || '').includes(`${String(effectiveTargetDate.month).padStart(2, '0')}/${effectiveTargetDate.year}`)
             || String(db.version || '').includes(`${effectiveTargetDate.year}-${String(effectiveTargetDate.month).padStart(2, '0')}`);
+        const isVersionBased = !hasRefDate && db.version && /^\d{3}/.test(String(db.version));
         if (exactDate || versionDate) score += 30;
-        else warnings.push(`data-base incompatível (${formatReference(db)})`);
+        else if (isVersionBased) {
+            // Bases like SEINFRA 028 don't have monthly dates — give partial credit
+            score += 15;
+        } else if (hasRefDate) {
+            // Has ref date but it doesn't match — genuine mismatch
+            warnings.push(`data-base incompatível (${formatReference(db)})`);
+        } else {
+            warnings.push(`data-base incompatível (${formatReference(db)})`);
+        }
     } else if (!db.referenceYear && !db.referenceMonth && !db.version) {
         warnings.push('data-base não informada na base');
     }

@@ -3187,6 +3187,13 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
                 continue;
             }
 
+            // FIX DATE-01: SEINFRA 028 doesn't have monthly cadence like SINAPI,
+            // but the enricher's date scoring needs referenceMonth/referenceYear.
+            // Use current month when importing since SIPROCE always serves latest version.
+            const now = new Date();
+            const refYear = now.getFullYear();
+            const refMonth = now.getMonth() + 1; // 1-based
+
             let db = await prisma.engineeringDatabase.findFirst({
                 where: {
                     name: 'SEINFRA',
@@ -3205,6 +3212,8 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
                         version: meta.version,
                         type: 'OFICIAL',
                         payrollExemption: meta.payrollExemption,
+                        referenceYear: refYear,
+                        referenceMonth: refMonth,
                     }
                 });
             } else {
@@ -3213,6 +3222,8 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
                     data: {
                         version: meta.version,
                         payrollExemption: meta.payrollExemption,
+                        referenceYear: refYear,
+                        referenceMonth: refMonth,
                     }
                 });
             }
