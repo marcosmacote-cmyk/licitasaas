@@ -1200,6 +1200,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             modelUsed,
             possibleCauses: [] as string[],
             recommendation: '',
+            filteredArchives: [] as string[],
         };
 
         // Detectar causas prováveis — ordenadas por probabilidade
