@@ -35,10 +35,19 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
         onItemsChange?.(items);
     }, [onItemsChange]);
 
+    // FIX WARN-01: Detect lump-sum extraction (no real budget found in PNCP docs)
+    const currentItems = items || [];
+    const isLumpSum = currentItems.length > 0 &&
+        currentItems.length <= 3 &&
+        !currentItems.some(it => it.type === 'ETAPA') &&
+        !currentItems.some(it => it.sourceName && it.sourceName !== 'PROPRIA' && it.code && it.code !== 'N/A');
+    const showBanner = hasLoadedItems || (items && items.length > 0);
+    const bannerVariant = isLumpSum ? 'extraction_limited' : 'extraction';
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {/* AI Disclaimer — only visible AFTER items are loaded */}
-            {hasLoadedItems && <AiDisclaimerBanner variant="extraction" />}
+            {showBanner && <AiDisclaimerBanner variant={bannerVariant} />}
 
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
             <EngineeringProposalEditor

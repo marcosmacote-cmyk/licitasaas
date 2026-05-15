@@ -16,7 +16,7 @@
 
 import { AlertTriangle, Info, Sparkles } from 'lucide-react';
 
-type DisclaimerVariant = 'extraction' | 'analysis' | 'declaration' | 'petition' | 'proposal' | 'generic';
+type DisclaimerVariant = 'extraction' | 'extraction_limited' | 'analysis' | 'declaration' | 'petition' | 'proposal' | 'generic';
 
 interface Props {
     variant?: DisclaimerVariant;
@@ -34,6 +34,14 @@ const VARIANT_MESSAGES: Record<DisclaimerVariant, { icon: 'warning' | 'info'; ti
         title: 'Extração gerada por IA',
         message: 'Os itens da planilha orçamentária foram extraídos automaticamente por Inteligência Artificial. ' +
             'Confira todos os valores, quantitativos, códigos e descrições junto ao edital e seus anexos antes de submeter a proposta.',
+    },
+    extraction_limited: {
+        icon: 'warning',
+        title: '⚠️ Planilha orçamentária não encontrada nos documentos do PNCP',
+        message: 'A IA não localizou uma planilha orçamentária detalhada nos arquivos disponíveis no PNCP. ' +
+            'O resultado abaixo contém apenas itens genéricos extraídos do Termo de Referência. ' +
+            'Verifique se o órgão licitante disponibilizou os anexos orçamentários (planilha sintética, BDI, composições) ' +
+            'em outro portal ou plataforma. Use a função "Importar" na barra de ferramentas para carregar uma planilha .xlsx ou .pdf obtida externamente.',
     },
     analysis: {
         icon: 'info',

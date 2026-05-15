@@ -87,6 +87,8 @@ export interface EngineeringValidationReport {
     rejectedItems?: any[];
     /** OCR row-level coverage diagnostics, when extraction used row candidates */
     rowCoverage?: EngineeringRowCoverageReport | null;
+    /** FIX WARN-01: Detected that no real budget spreadsheet was found in PNCP docs */
+    lumpSumDetected?: boolean;
 }
 
 // ═══════════════════════════════════════════
@@ -399,6 +401,28 @@ export function validateEngineeringExtraction(
             message: `${items.length} itens extraídos. Planilhas típicas têm 50-300 itens.`,
         });
         score -= 10;
+    }
+
+    // ── Check 16: Lump-sum / No-budget detection ──
+    // FIX WARN-01: When PNCP attachments don't contain a real budget spreadsheet,
+    // the AI typically extracts the object description as a single lump-sum item.
+    // Detect this and flag it so the frontend can show a specific warning.
+    const isLumpSum = (
+        leafItems.length <= 3 &&
+        etapas.length === 0 &&
+        leafItems.filter(it => it.code && it.sourceName && it.sourceName !== 'PROPRIA' && it.code !== 'N/A').length === 0
+    );
+    let lumpSumDetected = false;
+    if (isLumpSum && leafItems.length > 0) {
+        lumpSumDetected = true;
+        issues.push({
+            code: 'EV16_LUMP_SUM',
+            severity: 'warning',
+            message: `Extração resultou em apenas ${leafItems.length} item(ns) genérico(s) sem códigos oficiais. ` +
+                `Os documentos disponíveis no PNCP provavelmente não contêm uma planilha orçamentária detalhada. ` +
+                `Verifique se existem anexos adicionais (planilha, BDI, composições) em outras fontes como o portal do órgão licitante. ` +
+                `Use a função “Importar” para carregar uma planilha .xlsx/.pdf obtida externamente.`,
+        });
     }
 
     if (screening?.rejectedItems?.length) {
@@ -911,6 +935,7 @@ export function validateEngineeringExtraction(
         itemQuality: screening?.itemQuality,
         rejectedItems: screening?.rejectedItems,
         rowCoverage: rowCoverage || null,
+        lumpSumDetected,
     };
 
     const issuesSummary = issues
