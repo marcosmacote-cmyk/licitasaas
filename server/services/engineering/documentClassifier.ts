@@ -80,7 +80,8 @@ const NEGATIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/impugna|recurso|esclarecimento|resposta/i, -34, 'documento de comunicação processual'],
     [/edital|minuta|contrato|declara[cç][aã]o|habilita[cç][aã]o/i, -24, 'documento jurídico/editalício'],
     [/retifica|errata|republica/i, -20, 'retificação sem indicação orçamentária'],
-    [/\.(zip|rar|7z)$/i, -18, 'arquivo compactado não tratado neste fluxo'],
+    // FIX ARCH-01: .rar/.zip/.7z are now hard-rejected in the filter step (see isNonProcessableArchive)
+    // Removed the old -18 penalty that was easily overridden by positive keywords
     [/\bntci\b|nota\s+t[eé]cnica/i, -14, 'nota técnica (não contém orçamento)'],
     [/\bdom\b|di[aá]rio\s+oficial|autorizo/i, -12, 'documento administrativo (DOM/autorização)'],
     [/parecer|julgamento/i, -18, 'parecer/julgamento (não contém planilha)'],
@@ -105,13 +106,21 @@ export function classifyEngineeringAttachments(
 ): EngineeringDocumentClassification {
     const maxDocuments = options.maxDocuments ?? 4;
 
-    // TASK-03: Score mínimo adaptativo — processos com poucos docs aceitam PDFs genéricos
-    // Municípios pequenos têm 1-3 anexos; rejeitar tudo = extração impossível
-    // FIX DOC-01: Com apenas 1 documento, SEMPRE processa — muitas prefeituras embarcam
-    // a planilha orçamentária DENTRO do edital (ex: Santa Maria/PA, 98 pgs com planilha na pg 62)
-    // FIX DOC-05: Threshold para 7+ docs baixado de 18→5 — anexos genéricos (ANEXO I, ANEXO XI)
-    // agora recebem boost de +12, totalizando score=12, que antes era rejeitado pelo minScore=18.
-    const totalActive = (attachments || []).filter(att => att && att.ativo !== false).length;
+    // FIX ARCH-01: Hard-reject non-processable archive formats BEFORE scoring.
+    // These files cannot be opened as PDFs and cause "Invalid PDF structure" errors.
+    // The old -18 penalty was easily overridden by positive keywords
+    // (e.g., PROJETO_ORCAMENTARIO.rar scored +32 for "orçamento" despite being a .rar).
+    const isNonProcessableArchive = (att: EngineeringAttachmentInput): boolean => {
+        const title = attachmentTitle(att).toLowerCase();
+        const url = attachmentUrl(att).toLowerCase();
+        return /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i.test(title) ||
+               /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i.test(url);
+    };
+
+    // FIX ARCH-01: Count only processable docs for adaptive minScore threshold.
+    // Example: 6 PNCP attachments (1 PDF + 5 RARs) → totalActive=1 → minScore=-999 (accept the only PDF)
+    const processableAttachments = (attachments || []).filter(att => att && att.ativo !== false && !isNonProcessableArchive(att));
+    const totalActive = processableAttachments.length;
     const baseMinScore = options.minScore ?? 5;
     const minScore = totalActive <= 1 ? -999 :   // SEMPRE aceita o único doc disponível
                      totalActive <= 2 ? -30 :    // Aceita quase tudo (2 docs)
@@ -121,6 +130,13 @@ export function classifyEngineeringAttachments(
 
     const classified = (attachments || [])
         .filter(att => att && att.ativo !== false && attachmentUrl(att))
+        .filter(att => {
+            if (isNonProcessableArchive(att)) {
+                // Log for diagnostics
+                return false; // Hard-reject
+            }
+            return true;
+        })
         .map((attachment): ClassifiedEngineeringDocument => {
             const title = attachmentTitle(attachment);
             const purpose = normalizePurpose(attachment.purpose);

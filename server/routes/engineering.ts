@@ -1807,9 +1807,16 @@ router.post('/ai-populate', async (req: any, res: any) => {
                                 apiSelected.map(d => `"${d.title}" (${d.score})`).join(', ')
                             );
                         } else {
-                            // Fallback: send all PDFs raw
+                            // Fallback: send all PDFs raw (but exclude non-processable archives)
+                            const ARCHIVE_RE = /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i;
                             for (const arq of arquivos) {
                                 const fileUrl = arq.url || '';
+                                const fileTitle = String(arq.titulo || arq.title || fileUrl);
+                                // FIX ARCH-01: Skip archives that can't be parsed as PDFs
+                                if (ARCHIVE_RE.test(fileTitle) || ARCHIVE_RE.test(fileUrl)) {
+                                    console.log(`[Engineering AI-Populate] ⚠️ Ignorando arquivo compactado: "${fileTitle}"`);
+                                    continue;
+                                }
                                 const correctedUrl = fileUrl.includes('pncp-api/v1') ? fileUrl.replace('pncp-api/v1', 'api/pncp/v1') : fileUrl;
                                 if (correctedUrl) pdfUrls.push(correctedUrl);
                             }
