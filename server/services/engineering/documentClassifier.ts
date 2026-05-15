@@ -83,6 +83,7 @@ const NEGATIVE_PATTERNS: Array<[RegExp, number, string]> = [
     [/\.(zip|rar|7z)$/i, -18, 'arquivo compactado não tratado neste fluxo'],
     [/\bntci\b|nota\s+t[eé]cnica/i, -14, 'nota técnica (não contém orçamento)'],
     [/\bdom\b|di[aá]rio\s+oficial|autorizo/i, -12, 'documento administrativo (DOM/autorização)'],
+    [/parecer|julgamento/i, -18, 'parecer/julgamento (não contém planilha)'],
 ];
 
 function attachmentTitle(att: EngineeringAttachmentInput): string {

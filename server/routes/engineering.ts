@@ -1765,7 +1765,20 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 : classifiedDocs.all.filter(doc => doc.score > (classifiedDocs.summary.total <= 1 ? -999 : -20)).slice(0, 4);
             let pdfUrls = selectedDocs.map(doc => doc.url);
 
-            // FIX DOC-04: Se nenhum anexo no schemaV2, construir URLs diretamente da API PNCP
+            // FIX DOC-06: Se TODOS os docs selecionados têm score negativo, eles são 
+            // provavelmente documentos irrelevantes (parecer, ata, etc.). Descarte-os
+            // e force o fallback para API PNCP que busca os anexos corretos do edital.
+            const allNegativeScores = selectedDocs.length > 0 && selectedDocs.every(doc => doc.score < 0);
+            if (allNegativeScores) {
+                console.log(
+                    `[Engineering AI-Populate] ⚠️ Todos os ${selectedDocs.length} doc(s) selecionados têm score negativo ` +
+                    `(${selectedDocs.map(d => `"${d.title}"=${d.score}`).join(', ')}). ` +
+                    `Descartando e ativando fallback PNCP API.`
+                );
+                pdfUrls = []; // Reset — force PNCP API fallback below
+            }
+
+            // FIX DOC-04: Se nenhum anexo válido, construir URLs diretamente da API PNCP
             if (pdfUrls.length === 0 && bidding?.pncpLink) {
                 const linkMatch = bidding.pncpLink.match(/(\d{14})\/(\d{4})\/(\d+)/);
                 if (linkMatch) {
@@ -1775,10 +1788,26 @@ router.post('/ai-populate', async (req: any, res: any) => {
                         const apiRes = await (await import('axios')).default.get(arquivosUrl, { timeout: 20000 });
                         const arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
                         console.log(`[Engineering AI-Populate] 📎 PNCP API retornou ${arquivos.length} arquivo(s) via pncpLink fallback`);
-                        for (const arq of arquivos) {
-                            const fileUrl = arq.url || '';
-                            const correctedUrl = fileUrl.includes('pncp-api/v1') ? fileUrl.replace('pncp-api/v1', 'api/pncp/v1') : fileUrl;
-                            if (correctedUrl) pdfUrls.push(correctedUrl);
+                        
+                        // Re-classify the fresh PNCP attachments
+                        const apiClassified = classifyEngineeringAttachments(arquivos, { maxDocuments: 4 });
+                        const apiSelected = apiClassified.selected.length > 0
+                            ? apiClassified.selected
+                            : apiClassified.all.filter(doc => doc.score > (arquivos.length <= 1 ? -999 : -20)).slice(0, 4);
+                        
+                        if (apiSelected.length > 0) {
+                            pdfUrls = apiSelected.map(doc => doc.url);
+                            console.log(
+                                `[Engineering AI-Populate] 📎 PNCP API classificou ${apiSelected.length}/${arquivos.length}: ` +
+                                apiSelected.map(d => `"${d.title}" (${d.score})`).join(', ')
+                            );
+                        } else {
+                            // Fallback: send all PDFs raw
+                            for (const arq of arquivos) {
+                                const fileUrl = arq.url || '';
+                                const correctedUrl = fileUrl.includes('pncp-api/v1') ? fileUrl.replace('pncp-api/v1', 'api/pncp/v1') : fileUrl;
+                                if (correctedUrl) pdfUrls.push(correctedUrl);
+                            }
                         }
                     } catch (e: any) {
                         console.warn(`[Engineering AI-Populate] ⚠️ PNCP API fallback falhou: ${e.message}`);
@@ -1788,7 +1817,9 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
             console.log(
                 `[Engineering AI-Populate] 📎 Classificador selecionou ${selectedDocs.length}/${classifiedDocs.summary.total} anexo(s), pdfUrls final: ${pdfUrls.length}: ` +
-                (selectedDocs.length > 0 ? selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ') : pdfUrls.join(', '))
+                (pdfUrls.length > 0 && selectedDocs.length > 0 && !allNegativeScores 
+                    ? selectedDocs.map(doc => `"${doc.title}" (${doc.score})`).join(', ') 
+                    : pdfUrls.map(u => u.substring(u.lastIndexOf('/') - 20)).join(', '))
             );
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', userId: 'system' };
