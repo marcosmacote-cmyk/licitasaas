@@ -1217,6 +1217,8 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
         }
 
         // Transaction: delete all old items + insert new ones + update BDI config
+        // FIX TX-01: Increased timeout from default 5s to 60s — large proposals (80+ items)
+        // can take 30-40s to save with price audit enrichment + BDI config update.
         const result = await prisma.$transaction(async (tx) => {
             // Clear existing items for this proposal
             await tx.engineeringProposalItem.deleteMany({
@@ -1268,6 +1270,9 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
             });
 
             return { count: created.count, totalValue };
+        }, {
+            maxWait: 10000,  // max time to acquire connection
+            timeout: 60000,  // max time for the transaction to complete
         });
 
         // PERF-04: Skip redundant findMany after save.
