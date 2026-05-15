@@ -655,6 +655,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     if (extractionPollRef.current) clearInterval(extractionPollRef.current);
                     let attempts = 0;
                     const maxAttempts = 360; // 30 minutes max: accommodates large engineering PDFs and queue wait.
+                    let pollFailures = 0;
                     extractionPollRef.current = setInterval(async () => {
                         attempts++;
                         if (attempts > maxAttempts) {
@@ -667,7 +668,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         }
                         try {
                             const jobRes = await fetch(`/api/analyze-edital/jobs/${jobId}`, { headers: hdrs() });
-                            if (!jobRes.ok) return;
+                            if (!jobRes.ok) {
+                                pollFailures++;
+                                // FIX POLL-01: After 3 consecutive 403/auth failures, bypass job polling
+                                // and try fetching results directly from cache. The job may have completed
+                                // but the user's session token expired during the 5-15 min extraction.
+                                if (pollFailures >= 3) {
+                                    if (extractionPollRef.current) clearInterval(extractionPollRef.current);
+                                    extractionPollRef.current = null;
+                                    setActiveExtractionJobId(null);
+                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Reconectando e buscando resultados...</span>);
+                                    setTimeout(() => handleExtractAI({ isPolling: true }), 2000);
+                                }
+                                return;
+                            }
+                            pollFailures = 0; // Reset on success
                             const job = await jobRes.json();
                             setSaveMsg(
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>
