@@ -1263,7 +1263,23 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             diagnostics.possibleCauses.push(
                 'Nenhum dos PDFs analisados contém planilha orçamentária estruturada com itens de engenharia.'
             );
-            diagnostics.recommendation = 'Envie a planilha orçamentária manualmente usando o botão "Salvar Planilha".';
+        }
+
+        // FIX ARCH-02: Enrich diagnostics with filtered archive info
+        const filteredArchives: string[] = job.input?.documentSelection?.filteredArchives || [];
+        if (filteredArchives.length > 0) {
+            const archiveList = filteredArchives.slice(0, 5).join(', ');
+            diagnostics.possibleCauses.push(
+                `O PNCP contém ${filteredArchives.length} arquivo(s) compactado(s) (${archiveList}) ` +
+                `que não podem ser processados automaticamente. A planilha orçamentária pode estar dentro desses arquivos.`
+            );
+            diagnostics.recommendation = 
+                `Baixe os arquivos compactados diretamente do PNCP, extraia a planilha orçamentária (.xlsx ou .pdf), ` +
+                `e use a função "Importar" na barra de ferramentas da Planilha Orçamentária para carregar o arquivo manualmente.`;
+            diagnostics.filteredArchives = filteredArchives;
+        } else {
+            diagnostics.recommendation = diagnostics.recommendation || 
+                'Envie a planilha orçamentária manualmente usando o botão "Salvar Planilha".';
         }
 
         // Persistir diagnóstico no schemaV2 para o frontend ler

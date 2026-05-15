@@ -1836,6 +1836,17 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', userId: 'system' };
             
+            // FIX ARCH-02: Collect names of non-processable archives for diagnostics
+            const allAttachments = schemaV2?.pncp_source?.attachments || [];
+            const ARCHIVE_EXT_RE = /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i;
+            const filteredArchiveNames = allAttachments
+                .filter((att: any) => {
+                    const t = String(att?.titulo || att?.title || att?.url || '');
+                    return ARCHIVE_EXT_RE.test(t);
+                })
+                .map((att: any) => String(att?.titulo || att?.title || 'arquivo'))
+                .slice(0, 10);
+
             const newJob = await submitJob({
                 tenantId: user.tenantId,
                 userId: user.userId || user.id || 'system',
@@ -1851,6 +1862,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                         selected: selectedDocs.length,
                         titles: selectedDocs.map(doc => doc.title),
                         scores: selectedDocs.map(doc => doc.score),
+                        filteredArchives: filteredArchiveNames,
                     }
                 }
             });

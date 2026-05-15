@@ -708,7 +708,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     setTimeout(() => handleExtractAI({ isPolling: true }), 1000);
                                 } else {
                                     setIsExtracting(false);
-                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
+                                    // FIX ARCH-02: Detect empty extraction from error msg and load diagnostics
+                                    const isEmptyExtraction = /nenhum item|0 item|empty/i.test(job.error || '');
+                                    if (isEmptyExtraction) {
+                                        // Load the diagnostics from the server's cached result
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> {job.error}</span>);
+                                        // Trigger a cache read to populate extractionMeta with diagnostic info
+                                        setTimeout(() => handleExtractAI({ isPolling: true }), 1500);
+                                    } else {
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Extração falhou: {job.error || 'Erro desconhecido'}</span>);
+                                    }
                                 }
                             }
                         } catch {}
