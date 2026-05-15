@@ -513,9 +513,13 @@ export function validateEngineeringExtraction(
     for (const etapa of [...etapas, ...subetapas]) {
         const prefix = etapa.item;
         if (!prefix) continue;
+        // FIX EV04-01: Strip trailing '.0' from prefix before checking children.
+        // Etapas use "1.0", "2.0" numbering but children are "1.1", "1.2".
+        // Without this fix, startsWith("1.0.") never matches "1.1".
+        const normalizedPrefix = prefix.replace(/\.0$/, '');
         const hasChildren = items.some(it =>
             it.item !== prefix &&
-            it.item?.startsWith(prefix + '.') &&
+            (it.item?.startsWith(prefix + '.') || it.item?.startsWith(normalizedPrefix + '.')) &&
             it.type !== 'ETAPA' &&
             it.type !== 'SUBETAPA'
         );
@@ -531,9 +535,16 @@ export function validateEngineeringExtraction(
     }
 
     // ── Check 5: Duplicate detection ──
+    // FIX EV05-01: Use longer description (120 chars) + quantity in fingerprint.
+    // Transport items (C3311) share the same base description but differ in
+    // route/material after char 60. Including quantity prevents false positives
+    // for items like "TRANSPORTE COMERCIAL... AREIA (24.8KM)" qty=287 vs
+    // "TRANSPORTE COMERCIAL... BRITA (24.8KM)" qty=407.
     const fingerprints = new Map<string, string[]>();
     for (const it of leafItems) {
-        const fp = `${(it.description || '').toLowerCase().trim().substring(0, 60)}|${(it.code || '').toLowerCase()}`;
+        const desc = (it.description || '').toLowerCase().trim().substring(0, 120);
+        const qty = Number(it.quantity) || 0;
+        const fp = `${desc}|${(it.code || '').toLowerCase()}|${qty}`;
         if (!fingerprints.has(fp)) fingerprints.set(fp, []);
         fingerprints.get(fp)!.push(it.item);
     }

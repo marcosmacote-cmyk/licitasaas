@@ -311,6 +311,24 @@ function semanticSourceSql(engineeringConfig?: EngineeringConfig) {
     return Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(desiredSources)})`;
 }
 
+// FIX TRGM-01: Cache pg_trgm availability to avoid dozens of prisma:error per extraction.
+// The similarity() function requires CREATE EXTENSION pg_trgm. If it's not available,
+// the semantic fallback silently returns null instead of generating error noise.
+let _pgTrgmAvailable: boolean | null = null;
+
+async function isPgTrgmAvailable(): Promise<boolean> {
+    if (_pgTrgmAvailable !== null) return _pgTrgmAvailable;
+    try {
+        await prisma.$queryRaw`SELECT similarity('test', 'test')`;
+        _pgTrgmAvailable = true;
+        console.log('[PriceEnricher] ✅ pg_trgm extension available — semantic fallback enabled');
+    } catch {
+        _pgTrgmAvailable = false;
+        console.warn('[PriceEnricher] ⚠️ pg_trgm extension NOT available — semantic fallback disabled. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+    }
+    return _pgTrgmAvailable;
+}
+
 async function semanticFallbackMatch(
     item: any,
     engineeringConfig: EngineeringConfig | undefined,
@@ -318,6 +336,9 @@ async function semanticFallbackMatch(
     options?: PriceEnrichmentOptions
 ) {
     if (!item.description || item.description.length < 5) return null;
+    
+    // FIX TRGM-01: Skip silently if pg_trgm is not installed
+    if (!(await isPgTrgmAvailable())) return null;
     
     try {
         const accessFilter = semanticAccessSql(options);
@@ -386,7 +407,13 @@ async function semanticFallbackMatch(
             return confidence >= 78 ? best : null;
         }
     } catch (e: any) {
-        console.error('Semantic match fallback failed:', e.message);
+        // If the error is about pg_trgm, cache it so we don't retry
+        if (e.message?.includes('similarity') || e.code === '42883') {
+            _pgTrgmAvailable = false;
+            console.warn('[PriceEnricher] ⚠️ pg_trgm not available, disabling semantic fallback');
+        } else {
+            console.error('Semantic match fallback failed:', e.message);
+        }
     }
     return null;
 }
