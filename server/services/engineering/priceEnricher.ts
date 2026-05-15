@@ -390,6 +390,12 @@ export async function enrichWithOfficialPrices(
 
     const codes = [...new Set(itemsWithCode.flatMap(it => buildCodeVariants(it.code)))];
 
+    // DIAG-01: Log enrichment parameters for debugging match failures
+    const sampleCodes = codes.slice(0, 8).join(', ');
+    console.log(`[PriceEnricher] 🔍 Enrichment started: ${itemsWithCode.length} items with code, ${itemsWithoutCode.length} without code`);
+    console.log(`[PriceEnricher] 🔍 Config: dataBase=${engineeringConfig?.dataBase || 'N/A'}, uf=${engineeringConfig?.ufReferencia || engineeringConfig?.uf || engineeringConfig?.estado || 'N/A'}, regime=${engineeringConfig?.regimeOneracao || 'N/A'}, bases=${(engineeringConfig?.basesConsideradas || []).join(',') || 'N/A'}`);
+    console.log(`[PriceEnricher] 🔍 Searching ${codes.length} code variants: [${sampleCodes}${codes.length > 8 ? '...' : ''}]`);
+
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
             where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(options) },
@@ -400,6 +406,21 @@ export async function enrichWithOfficialPrices(
             include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
     ]);
+
+    // DIAG-02: Log what was found in the database
+    console.log(`[PriceEnricher] 📊 DB results: ${dbItems.length} items, ${dbComps.length} compositions found`);
+    if (dbItems.length + dbComps.length === 0) {
+        console.log(`[PriceEnricher] ⚠️ ZERO matches in DB! Possible causes: base not imported, wrong code format, or database filter too strict`);
+        // List all OFICIAL databases for diagnostic
+        try {
+            const allDbs = await prisma.engineeringDatabase.findMany({ where: buildDatabaseWhere(options), select: { name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } });
+            const dbNames = [...new Set(allDbs.map(d => `${d.name}/${d.uf || '?'}/${d.version || '?'}/${d.referenceYear || '?'}-${d.referenceMonth || '?'}/desoneracao:${d.payrollExemption}`))];
+            console.log(`[PriceEnricher] 📚 Available databases (${allDbs.length}): ${dbNames.slice(0, 10).join(' | ')}`);
+        } catch {}
+    } else {
+        const dbSources = [...new Set([...dbItems, ...dbComps].map(d => `${d.database.name}/${d.database.uf}/${d.database.referenceYear}-${d.database.referenceMonth}`))];
+        console.log(`[PriceEnricher] 📚 Sources found: ${dbSources.join(', ')}`);
+    }
 
     const byCode = new Map<string, any[]>();
     for (const dbItem of dbItems) {
