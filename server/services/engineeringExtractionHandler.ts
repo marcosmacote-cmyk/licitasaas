@@ -107,8 +107,85 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 maxContentLength: 50 * 1024 * 1024 // 50MB
             } as any);
             const buf = Buffer.from(resp.data as ArrayBuffer);
-            rawPdfBuffers.push({ buffer: buf, source: url.substring(0, 80) });
-            logger.info(`[Engineering-BG] 📄 PDF downloaded (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)}...`);
+
+            // FIX ARCH-03: Detect archive formats by magic bytes and extract PDFs within
+            const isPdf = buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46; // %PDF
+            const isRar = buf[0] === 0x52 && buf[1] === 0x61 && buf[2] === 0x72 && buf[3] === 0x21; // Rar!
+            const isZip = buf[0] === 0x50 && buf[1] === 0x4B; // PK
+
+            if (isPdf) {
+                rawPdfBuffers.push({ buffer: buf, source: url.substring(0, 80) });
+                logger.info(`[Engineering-BG] 📄 PDF downloaded (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)}...`);
+            } else if (isRar) {
+                logger.info(`[Engineering-BG] 📦 RAR detected (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)} — extracting PDFs...`);
+                try {
+                    const { createExtractorFromData } = await import('node-unrar-js');
+                    const extractor = await createExtractorFromData({ data: new Uint8Array(buf).buffer });
+                    const extracted = extractor.extract({});
+                    const files = [...extracted.files];
+                    // Filter to PDFs and prioritize budget-relevant ones
+                    const pdfFiles = files.filter(f =>
+                        f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
+                        !f.fileHeader.flags.directory &&
+                        f.extraction && f.extraction.length > 0
+                    );
+                    // Sort by relevance: planilha > orçamento > composição > rest
+                    pdfFiles.sort((a, b) => {
+                        const scoreFile = (name: string): number => {
+                            const n = name.toLowerCase();
+                            if (/planilh/i.test(n)) return 0;
+                            if (/or[cç]ament/i.test(n)) return 1;
+                            if (/composi[cç]/i.test(n)) return 2;
+                            if (/bdi/i.test(n)) return 3;
+                            if (/cronograma/i.test(n)) return 4;
+                            if (/sinapi|seinfra|sicro/i.test(n)) return 5;
+                            return 10;
+                        };
+                        return scoreFile(a.fileHeader.name) - scoreFile(b.fileHeader.name);
+                    });
+                    logger.info(`[Engineering-BG] 📦 RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                    for (const rarFile of pdfFiles.slice(0, 4)) { // Max 4 PDFs from archive
+                        const pdfBuffer = Buffer.from(rarFile.extraction!);
+                        rawPdfBuffers.push({ buffer: pdfBuffer, source: `RAR:${rarFile.fileHeader.name}` });
+                        logger.info(`[Engineering-BG] ✅ Extracted from RAR: "${rarFile.fileHeader.name}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    }
+                } catch (rarErr: any) {
+                    logger.warn(`[Engineering-BG] ⚠️ Failed to extract RAR: ${rarErr.message}`);
+                }
+            } else if (isZip) {
+                logger.info(`[Engineering-BG] 📦 ZIP detected (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)} — extracting PDFs...`);
+                try {
+                    const JSZip = (await import('jszip')).default;
+                    const zip = await JSZip.loadAsync(buf);
+                    let zipEntries = Object.keys(zip.files).filter(name =>
+                        name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
+                    );
+                    // Sort by relevance
+                    zipEntries.sort((a, b) => {
+                        const scoreFile = (name: string): number => {
+                            const n = name.toLowerCase();
+                            if (/planilh/i.test(n)) return 0;
+                            if (/or[cç]ament/i.test(n)) return 1;
+                            if (/composi[cç]/i.test(n)) return 2;
+                            if (/bdi/i.test(n)) return 3;
+                            return 10;
+                        };
+                        return scoreFile(a) - scoreFile(b);
+                    });
+                    logger.info(`[Engineering-BG] 📦 ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+                    for (const entryName of zipEntries.slice(0, 4)) {
+                        const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                        if (pdfBuffer.length > 0) {
+                            rawPdfBuffers.push({ buffer: pdfBuffer, source: `ZIP:${entryName}` });
+                            logger.info(`[Engineering-BG] ✅ Extracted from ZIP: "${entryName}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                        }
+                    }
+                } catch (zipErr: any) {
+                    logger.warn(`[Engineering-BG] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
+                }
+            } else {
+                logger.warn(`[Engineering-BG] ⚠️ Unknown file format from ${url.substring(0, 80)} (magic: ${buf[0]?.toString(16)} ${buf[1]?.toString(16)})`);
+            }
         } catch (err: any) {
             logger.warn(`[Engineering-BG] ⚠️ Failed to download PDF: ${err.message}`);
         }

@@ -106,21 +106,19 @@ export function classifyEngineeringAttachments(
 ): EngineeringDocumentClassification {
     const maxDocuments = options.maxDocuments ?? 4;
 
-    // FIX ARCH-01: Hard-reject non-processable archive formats BEFORE scoring.
-    // These files cannot be opened as PDFs and cause "Invalid PDF structure" errors.
-    // The old -18 penalty was easily overridden by positive keywords
-    // (e.g., PROJETO_ORCAMENTARIO.rar scored +32 for "orçamento" despite being a .rar).
-    const isNonProcessableArchive = (att: EngineeringAttachmentInput): boolean => {
+    // FIX ARCH-03: Archives (.rar/.zip) are NOW processable — the handler
+    // extracts PDFs from inside them using node-unrar-js / jszip.
+    // We keep a small penalty so PDFs are preferred when both are available,
+    // but archives are no longer hard-rejected.
+    const isArchiveFormat = (att: EngineeringAttachmentInput): boolean => {
         const title = attachmentTitle(att).toLowerCase();
         const url = attachmentUrl(att).toLowerCase();
         return /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i.test(title) ||
                /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i.test(url);
     };
 
-    // FIX ARCH-01: Count only processable docs for adaptive minScore threshold.
-    // Example: 6 PNCP attachments (1 PDF + 5 RARs) → totalActive=1 → minScore=-999 (accept the only PDF)
-    const processableAttachments = (attachments || []).filter(att => att && att.ativo !== false && !isNonProcessableArchive(att));
-    const totalActive = processableAttachments.length;
+    // Count ALL active attachments (including archives, which are now processable)
+    const totalActive = (attachments || []).filter(att => att && att.ativo !== false).length;
     const baseMinScore = options.minScore ?? 5;
     const minScore = totalActive <= 1 ? -999 :   // SEMPRE aceita o único doc disponível
                      totalActive <= 2 ? -30 :    // Aceita quase tudo (2 docs)
@@ -130,13 +128,6 @@ export function classifyEngineeringAttachments(
 
     const classified = (attachments || [])
         .filter(att => att && att.ativo !== false && attachmentUrl(att))
-        .filter(att => {
-            if (isNonProcessableArchive(att)) {
-                // Log for diagnostics
-                return false; // Hard-reject
-            }
-            return true;
-        })
         .map((attachment): ClassifiedEngineeringDocument => {
             const title = attachmentTitle(attachment);
             const purpose = normalizePurpose(attachment.purpose);
@@ -151,6 +142,13 @@ export function classifyEngineeringAttachments(
             if (/\.pdf(?:$|\?)/i.test(attachmentUrl(attachment)) || /\.pdf$/i.test(title)) {
                 score += 8;
                 reasons.push('arquivo PDF');
+            }
+
+            // FIX ARCH-03: Small penalty for archives (prefer PDFs when both exist)
+            // but archives with budget keywords (e.g., PROJETO_ORCAMENTARIO.rar) still score high
+            if (isArchiveFormat(attachment)) {
+                score -= 5;
+                reasons.push('arquivo compactado (processável via extração)');
             }
 
             for (const [pattern, weight, reason] of POSITIVE_PATTERNS) {
