@@ -19,12 +19,14 @@ interface Props {
     biddingId: string;
     engineeringConfig?: EngineeringConfig;
     bdiConfig?: BdiConfig;
+    /** FIX STEP2-01: Current items from wizard state — passed to editor for remount persistence */
+    items?: EngItem[];
     onItemsChange?: (items: EngItem[]) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, onItemsChange, onPrev, onNext }: Props) {
+export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, onPrev, onNext }: Props) {
     // Track whether items have been loaded (from AI extraction or saved data)
     const [hasLoadedItems, setHasLoadedItems] = useState(false);
 
@@ -45,6 +47,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 wizardConfig={engineeringConfig}
                 wizardBdiConfig={bdiConfig}
                 onItemsChange={handleItemsChange}
+                wizardItems={items}
             />
 
             {/* Step navigation footer */}

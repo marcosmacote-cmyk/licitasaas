@@ -85,6 +85,8 @@ interface Props {
     wizardBdiConfig?: BdiConfig;
     /** Callback: sync items back to the Wizard for other steps (Cronograma, etc.) */
     onItemsChange?: (items: EngItem[]) => void;
+    /** FIX STEP2-01: Items from the Wizard state — used to restore items when Step 2 remounts */
+    wizardItems?: EngItem[];
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -335,8 +337,10 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     );
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange }: Props) {
-    const [items, setItems] = useState<EngItem[]>([]);
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems }: Props) {
+    // FIX STEP2-01: Initialize from wizardItems when remounting in wizard mode,
+    // so items survive Step 2 → Step 1 → Step 2 navigation.
+    const [items, setItems] = useState<EngItem[]>(wizardItems || []);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
 
@@ -461,8 +465,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setHasUnsavedChanges(false);
 
         if (isInsideWizard) {
-            // Wizard already loaded items/config — only fetch extractionMeta
-            hasPersistedItemsRef.current = false; // Will be set by onItemsChange sync
+            // FIX STEP2-01: Restore items from wizard state when remounting.
+            // Without this, the editor starts empty after Step 2 → Step 1 → Step 2.
+            if (wizardItems && wizardItems.length > 0) {
+                setItems(wizardItems);
+                hasPersistedItemsRef.current = true;
+            } else {
+                hasPersistedItemsRef.current = false;
+            }
             fetch(`/api/engineering/proposals/${proposalId}/items?metaOnly=1`, { headers: hdrs() })
                 .then(r => r.json()).then(data => {
                     if (data?.extractionMeta) setExtractionMeta(data.extractionMeta);
