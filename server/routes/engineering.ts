@@ -1807,14 +1807,14 @@ router.post('/ai-populate', async (req: any, res: any) => {
                                 apiSelected.map(d => `"${d.title}" (${d.score})`).join(', ')
                             );
                         } else {
-                            // Fallback: send all PDFs raw (but exclude non-processable archives)
-                            const ARCHIVE_RE = /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i;
+                            // Fallback: send all files including .rar/.zip (handler supports them via ARCH-03)
+                            // Only skip truly unsupported archive formats (.7z, .tar.gz, etc.)
+                            const UNSUPPORTED_ARCHIVE_RE = /\.(7z|tar|gz|bz2|xz)($|\?)/i;
                             for (const arq of arquivos) {
                                 const fileUrl = arq.url || '';
                                 const fileTitle = String(arq.titulo || arq.title || fileUrl);
-                                // FIX ARCH-01: Skip archives that can't be parsed as PDFs
-                                if (ARCHIVE_RE.test(fileTitle) || ARCHIVE_RE.test(fileUrl)) {
-                                    console.log(`[Engineering AI-Populate] ⚠️ Ignorando arquivo compactado: "${fileTitle}"`);
+                                if (UNSUPPORTED_ARCHIVE_RE.test(fileTitle) || UNSUPPORTED_ARCHIVE_RE.test(fileUrl)) {
+                                    console.log(`[Engineering AI-Populate] ⚠️ Ignorando formato não suportado: "${fileTitle}"`);
                                     continue;
                                 }
                                 const correctedUrl = fileUrl.includes('pncp-api/v1') ? fileUrl.replace('pncp-api/v1', 'api/pncp/v1') : fileUrl;
@@ -1836,13 +1836,14 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
             const user = req.user || { tenantId: bidding?.tenantId || 'unknown', userId: 'system' };
             
-            // FIX ARCH-02: Collect names of non-processable archives for diagnostics
+            // FIX ARCH-02 + ARCH-05: Only list truly unsupported archives in diagnostics
+            // .rar and .zip are now processable (ARCH-03), so exclude them from "filtered" list
             const allAttachments = schemaV2?.pncp_source?.attachments || [];
-            const ARCHIVE_EXT_RE = /\.(rar|zip|7z|tar|gz|bz2|xz)($|\?)/i;
+            const UNSUPPORTED_ARCHIVE_EXT_RE = /\.(7z|tar|gz|bz2|xz)($|\?)/i;
             const filteredArchiveNames = allAttachments
                 .filter((att: any) => {
                     const t = String(att?.titulo || att?.title || att?.url || '');
-                    return ARCHIVE_EXT_RE.test(t);
+                    return UNSUPPORTED_ARCHIVE_EXT_RE.test(t);
                 })
                 .map((att: any) => String(att?.titulo || att?.title || 'arquivo'))
                 .slice(0, 10);
