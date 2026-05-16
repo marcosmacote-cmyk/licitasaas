@@ -855,16 +855,21 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // DIAG-01: Phase timing for detailed performance analysis
     const phaseTiming: Record<string, number> = {};
 
-    // Progress ticker (update every 30s while Gemini works)
+    // FIX-13: Progress ticker with real-time stats (update every 20s)
     let progressPercent = 30;
     const progressTimer = setInterval(async () => {
         progressPercent = Math.min(progressPercent + 3, 85);
         const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
+        const itemsSoFar = engItems.length;
+        const statusParts: string[] = [`${elapsed}s`];
+        if (itemsSoFar > 0) statusParts.push(`${itemsSoFar} itens`);
+        if (spreadsheetMarkdowns.length > 0) statusParts.push(`${spreadsheetMarkdowns.length} planilha(s)`);
+        const statusStr = statusParts.join(' | ');
         await updateJobProgress(job.id, tenantId, {
             progress: progressPercent,
-            progressMsg: `Extraindo planilha orçamentária... (${elapsed}s)`
+            progressMsg: `Extraindo planilha orçamentária... (${statusStr})`
         }).catch(() => {});
-    }, 30000);
+    }, 20000);
 
     let engItems: any[] = [];
     let screening: EngineeringItemScreeningResult | null = null;
@@ -1801,6 +1806,24 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             score: benchmarkResult.totalScore,
             details: benchmarkResult.details,
         } : null,
+        // FIX-12: Extraction metrics for performance auditing
+        extractionMetrics: {
+            totalDurationSec: parseFloat(((Date.now() - t0) / 1000).toFixed(1)),
+            phaseTiming: Object.fromEntries(
+                Object.entries(phaseTiming).map(([k, v]) => [k, parseFloat((v / 1000).toFixed(1))])
+            ),
+            pdfCount: rawPdfBuffers.length,
+            spreadsheetCount: spreadsheetMarkdowns.length,
+            spreadsheetSources: spreadsheetMarkdowns.map(s => s.source),
+            originalSizeKB: Math.round(totalOriginalKB),
+            submittedSizeKB: Math.round(totalTrimmedKB),
+            reductionPercent: totalOriginalKB > 0
+                ? Math.round((1 - totalTrimmedKB / totalOriginalKB) * 100)
+                : 0,
+            ocrContextChars: ocrContext.length,
+            itemsExtracted: engItems.length,
+            itemsRejected: screening?.rejectedItems?.length || 0,
+        },
     };
 }
 
