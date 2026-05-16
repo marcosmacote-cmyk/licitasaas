@@ -161,6 +161,39 @@ Retorne números sem %.`;
                     const MAX_SIZE_KB = 20000; // 20MB — increased for large engineering PDFs
                     let totalSizeKB = 0;
 
+                    // Helper: add a PDF buffer with optional page targeting for BDI extraction
+                    const addPdfForBdi = async (buf: Buffer, label: string) => {
+                        const sizeKB = buf.length / 1024;
+                        if (sizeKB > 5000) {
+                            try {
+                                const { targetBudgetPages } = await import('./pageTargeting');
+                                const targeting = await targetBudgetPages(buf, {
+                                    minScore: 3,
+                                    maxPages: 25,
+                                    contextPages: 1,
+                                    minPagesForTargeting: 10,
+                                    extraKeywords: ['BDI', 'B.D.I.', 'LDI', 'L.D.I.', 'COMPOSIÇÃO DO BDI', 'BONIFICAÇÃO', 'DESPESAS INDIRETAS', 'ACÓRDÃO TCU', 'LUCRO', 'ADMINISTRAÇÃO CENTRAL', 'TRIBUTOS'],
+                                });
+                                if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
+                                    const trimmedBuf = targeting.trimmedPdfBuffer;
+                                    const trimmedSizeKB = trimmedBuf.length / 1024;
+                                    if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) return false;
+                                    totalSizeKB += trimmedSizeKB;
+                                    pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
+                                    console.log(`[BDI-AI] 🎯 Page targeting: "${label}" ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
+                                    return true;
+                                }
+                            } catch (ptErr: any) {
+                                console.warn(`[BDI-AI] Page targeting failed: ${ptErr.message}`);
+                            }
+                        }
+                        if (totalSizeKB + sizeKB > MAX_SIZE_KB) return false;
+                        totalSizeKB += sizeKB;
+                        pdfParts.push({ inlineData: { data: buf.toString('base64'), mimeType: 'application/pdf' } });
+                        console.log(`[BDI-AI] ✅ PDF "${label}" (${Math.round(sizeKB)}KB)`);
+                        return true;
+                    };
+
                     for (const doc of selectedDocs.slice(0, 3)) {
                         try {
                             let fileUrl = doc.url || '';
@@ -174,39 +207,57 @@ Retorne números sem %.`;
                             } as any);
                             const buffer = Buffer.from(fileRes.data as ArrayBuffer);
 
-                            if (buffer[0] !== 0x25 || buffer[1] !== 0x50) continue; // Not PDF
+                            // FIX ARCH-04: Detect file format by magic bytes
+                            const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+                            const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21;
+                            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
 
-                            const sizeKB = buffer.length / 1024;
-
-                            // Page targeting for large PDFs (>5MB)
-                            if (sizeKB > 5000) {
+                            if (isPdf) {
+                                const added = await addPdfForBdi(buffer, doc.title || 'unknown');
+                                if (!added) break;
+                            } else if (isRar) {
+                                console.log(`[BDI-AI] 📦 RAR detected: "${doc.title}" (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                                 try {
-                                    const { targetBudgetPages } = await import('./pageTargeting');
-                                    const targeting = await targetBudgetPages(buffer, {
-                                        minScore: 3,
-                                        maxPages: 25,
-                                        contextPages: 1,
-                                        minPagesForTargeting: 10,
-                                        extraKeywords: ['BDI', 'B.D.I.', 'LDI', 'L.D.I.', 'COMPOSIÇÃO DO BDI', 'BONIFICAÇÃO', 'DESPESAS INDIRETAS', 'ACÓRDÃO TCU', 'LUCRO', 'ADMINISTRAÇÃO CENTRAL', 'TRIBUTOS'],
-                                    });
-                                    if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
-                                        const trimmedBuf = targeting.trimmedPdfBuffer;
-                                        const trimmedSizeKB = trimmedBuf.length / 1024;
-                                        if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) break;
-                                        totalSizeKB += trimmedSizeKB;
-                                        pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
-                                        console.log(`[BDI-AI] 🎯 Page targeting: ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
-                                        continue;
+                                    const { createExtractorFromData } = await import('node-unrar-js');
+                                    const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
+                                    const extracted = extractor.extract({});
+                                    const files = [...extracted.files];
+                                    const pdfFiles = files.filter(f =>
+                                        f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
+                                        !f.fileHeader.flags.directory &&
+                                        f.extraction && f.extraction.length > 0
+                                    );
+                                    console.log(`[BDI-AI] 📦 RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                                    for (const rarFile of pdfFiles.slice(0, 3)) {
+                                        const pdfBuffer = Buffer.from(rarFile.extraction!);
+                                        const added = await addPdfForBdi(pdfBuffer, `RAR:${rarFile.fileHeader.name}`);
+                                        if (!added) break;
                                     }
-                                } catch (ptErr: any) {
-                                    console.warn(`[BDI-AI] Page targeting failed: ${ptErr.message}`);
+                                } catch (rarErr: any) {
+                                    console.warn(`[BDI-AI] ⚠️ Failed to extract RAR: ${rarErr.message}`);
                                 }
+                            } else if (isZip) {
+                                console.log(`[BDI-AI] 📦 ZIP detected: "${doc.title}" (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                                try {
+                                    const JSZip = (await import('jszip')).default;
+                                    const zip = await JSZip.loadAsync(buffer);
+                                    const zipEntries = Object.keys(zip.files).filter(name =>
+                                        name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
+                                    );
+                                    console.log(`[BDI-AI] 📦 ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+                                    for (const entryName of zipEntries.slice(0, 3)) {
+                                        const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                                        if (pdfBuffer.length > 0) {
+                                            const added = await addPdfForBdi(pdfBuffer, `ZIP:${entryName}`);
+                                            if (!added) break;
+                                        }
+                                    }
+                                } catch (zipErr: any) {
+                                    console.warn(`[BDI-AI] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
+                                }
+                            } else {
+                                console.warn(`[BDI-AI] ⚠️ Unknown format for "${doc.title}" (magic: 0x${buffer[0]?.toString(16)} 0x${buffer[1]?.toString(16)}). Skipping.`);
                             }
-
-                            if (totalSizeKB + sizeKB > MAX_SIZE_KB) break;
-                            totalSizeKB += sizeKB;
-                            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
-                            console.log(`[BDI-AI] ✅ PDF "${doc.title}" (${Math.round(sizeKB)}KB)`);
                         } catch (dlErr: any) {
                             console.warn(`[BDI-AI] ⚠️ PDF download failed: ${dlErr.message}`);
                         }

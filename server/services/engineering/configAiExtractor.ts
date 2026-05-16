@@ -88,6 +88,42 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3, intent:
         const MAX_SIZE_KB = 20000; // 20MB — increased to handle large engineering PDFs
         const extraKeywords = INTENT_KEYWORDS[intent];
 
+        // Helper: add a PDF buffer to pdfParts with optional page targeting
+        const addPdfBuffer = async (buffer: Buffer, label: string) => {
+            const sizeKB = buffer.length / 1024;
+
+            // For large PDFs (>5MB), use page targeting to extract only relevant pages
+            if (sizeKB > 5000) {
+                try {
+                    const { targetBudgetPages } = await import('./pageTargeting');
+                    const targeting = await targetBudgetPages(buffer, {
+                        minScore: 2,
+                        maxPages: intent === 'config' ? 40 : 35,
+                        contextPages: 2,
+                        minPagesForTargeting: 10,
+                        extraKeywords,
+                    });
+                    if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
+                        const trimmedBuf = targeting.trimmedPdfBuffer;
+                        const trimmedSizeKB = trimmedBuf.length / 1024;
+                        if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) return false;
+                        totalSizeKB += trimmedSizeKB;
+                        pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
+                        console.log(`[Config-AI] 🎯 Page targeting (${intent}): "${label}" ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
+                        return true;
+                    }
+                } catch (ptErr: any) {
+                    console.warn(`[Config-AI] Page targeting failed: ${ptErr.message}, using full PDF`);
+                }
+            }
+
+            if (totalSizeKB + sizeKB > MAX_SIZE_KB) return false;
+            totalSizeKB += sizeKB;
+            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
+            console.log(`[Config-AI] ✅ PDF "${label}" (${Math.round(sizeKB)} KB)`);
+            return true;
+        };
+
         for (const doc of selectedDocs.slice(0, maxDocs)) {
             try {
                 let fileUrl = doc.url || '';
@@ -100,39 +136,88 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3, intent:
                     maxContentLength: 30 * 1024 * 1024, // 30MB max download
                 } as any);
                 const buffer = Buffer.from(fileRes.data as ArrayBuffer);
-                if (buffer[0] !== 0x25 || buffer[1] !== 0x50) continue;
 
-                const sizeKB = buffer.length / 1024;
+                // FIX ARCH-04: Detect file format by magic bytes (same pattern as engineeringExtractionHandler)
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
+                const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
+                const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
 
-                // For large PDFs (>5MB), use page targeting to extract only relevant pages
-                if (sizeKB > 5000) {
+                if (isPdf) {
+                    const added = await addPdfBuffer(buffer, doc.title || fileUrl.substring(0, 60));
+                    if (!added) break; // size limit reached
+                } else if (isRar) {
+                    console.log(`[Config-AI] 📦 RAR detected: "${doc.title}" (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
-                        // Dynamic import of page targeting
-                        const { targetBudgetPages } = await import('./pageTargeting');
-                        const targeting = await targetBudgetPages(buffer, {
-                            minScore: 2,
-                            maxPages: intent === 'config' ? 40 : 35,
-                            contextPages: 2,
-                            minPagesForTargeting: 10,
-                            extraKeywords,
+                        const { createExtractorFromData } = await import('node-unrar-js');
+                        const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
+                        const extracted = extractor.extract({});
+                        const files = [...extracted.files];
+                        const pdfFiles = files.filter(f =>
+                            f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
+                            !f.fileHeader.flags.directory &&
+                            f.extraction && f.extraction.length > 0
+                        );
+                        // Sort by relevance for config/encargos/bdi
+                        pdfFiles.sort((a, b) => {
+                            const scoreFile = (name: string): number => {
+                                const n = name.toLowerCase();
+                                if (/planilh/i.test(n)) return 0;
+                                if (/or[cç]ament/i.test(n)) return 1;
+                                if (/composi[cç]/i.test(n)) return 2;
+                                if (/bdi/i.test(n)) return 3;
+                                if (/encargo|leis.?sociais/i.test(n)) return 4;
+                                if (/cronograma/i.test(n)) return 5;
+                                if (/edital|projeto.?b/i.test(n)) return 6;
+                                return 10;
+                            };
+                            return scoreFile(a.fileHeader.name) - scoreFile(b.fileHeader.name);
                         });
-                        if (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer) {
-                            const trimmedBuf = targeting.trimmedPdfBuffer;
-                            const trimmedSizeKB = trimmedBuf.length / 1024;
-                            if (totalSizeKB + trimmedSizeKB > MAX_SIZE_KB) break;
-                            totalSizeKB += trimmedSizeKB;
-                            pdfParts.push({ inlineData: { data: trimmedBuf.toString('base64'), mimeType: 'application/pdf' } });
-                            console.log(`[Config-AI] 🎯 Page targeting (${intent}): ${(sizeKB/1024).toFixed(1)}MB → ${(trimmedSizeKB/1024).toFixed(1)}MB (${targeting.selectedPageIndices.length}/${targeting.totalPages} pages)`);
-                            continue;
+                        console.log(`[Config-AI] 📦 RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                        for (const rarFile of pdfFiles.slice(0, 3)) {
+                            const pdfBuffer = Buffer.from(rarFile.extraction!);
+                            const added = await addPdfBuffer(pdfBuffer, `RAR:${rarFile.fileHeader.name}`);
+                            if (!added) break;
                         }
-                    } catch (ptErr: any) {
-                        console.warn(`[Config-AI] Page targeting failed: ${ptErr.message}, using full PDF`);
+                    } catch (rarErr: any) {
+                        console.warn(`[Config-AI] ⚠️ Failed to extract RAR: ${rarErr.message}`);
                     }
+                } else if (isZip) {
+                    console.log(`[Config-AI] 📦 ZIP detected: "${doc.title}" (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const JSZip = (await import('jszip')).default;
+                        const zip = await JSZip.loadAsync(buffer);
+                        let zipEntries = Object.keys(zip.files).filter(name =>
+                            name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
+                        );
+                        // Sort by relevance
+                        zipEntries.sort((a, b) => {
+                            const scoreFile = (name: string): number => {
+                                const n = name.toLowerCase();
+                                if (/planilh/i.test(n)) return 0;
+                                if (/or[cç]ament/i.test(n)) return 1;
+                                if (/composi[cç]/i.test(n)) return 2;
+                                if (/bdi/i.test(n)) return 3;
+                                if (/encargo|leis.?sociais/i.test(n)) return 4;
+                                if (/cronograma/i.test(n)) return 5;
+                                if (/edital|projeto.?b/i.test(n)) return 6;
+                                return 10;
+                            };
+                            return scoreFile(a) - scoreFile(b);
+                        });
+                        console.log(`[Config-AI] 📦 ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+                        for (const entryName of zipEntries.slice(0, 3)) {
+                            const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                            if (pdfBuffer.length > 0) {
+                                const added = await addPdfBuffer(pdfBuffer, `ZIP:${entryName}`);
+                                if (!added) break;
+                            }
+                        }
+                    } catch (zipErr: any) {
+                        console.warn(`[Config-AI] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
+                    }
+                } else {
+                    console.warn(`[Config-AI] ⚠️ Unknown file format for "${doc.title}" (magic: 0x${buffer[0]?.toString(16)} 0x${buffer[1]?.toString(16)}). Skipping.`);
                 }
-
-                if (totalSizeKB + sizeKB > MAX_SIZE_KB) break;
-                totalSizeKB += sizeKB;
-                pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
             } catch { /* skip failed downloads */ }
         }
         return pdfParts;
