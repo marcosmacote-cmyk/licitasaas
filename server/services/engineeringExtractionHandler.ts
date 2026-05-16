@@ -577,20 +577,26 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
                 // Detect scanned PDFs — these ALWAYS need OCR
                 if (targeting.isScannedPdf) {
-                    // For scanned PDFs, DON'T add the raw PDF to pdfParts yet.
-                    // Image-heavy PDFs (10MB+) overwhelm Gemini and cause it to skip items.
-                    // Instead, we'll rely on Zerox OCR as the PRIMARY source.
-                    // The raw PDF is added as visual backup ONLY if OCR fails.
+                    // FIX-09: If page targeting identified budget pages, send ONLY those
+                    // pages to Zerox OCR instead of the full PDF. This reduces OCR time
+                    // dramatically (e.g., 43 pages → 15 pages = 65% less Vision API calls).
+                    const ocrBuffer = (targeting.strategy === 'targeted' && targeting.trimmedPdfBuffer)
+                        ? targeting.trimmedPdfBuffer
+                        : buffer;
+                    const ocrPageInfo = (targeting.strategy === 'targeted')
+                        ? `${targeting.selectedPageIndices.length}/${targeting.totalPages} budget pages`
+                        : `${targeting.totalPages} pages (full — no targeting available)`;
+
                     zeroxFallbackCandidates.push({
-                        buffer,
+                        buffer: ocrBuffer,
                         fileName: source,
                         reason: 'scanned_pdf_no_text_layer',
                     });
                     logger.warn(
                         `[Engineering-BG] 📸 PDF escaneado detectado: "${source}" ` +
-                        `(${targeting.totalPages} pgs, ${targeting.scannedPagesPercent}% sem texto` +
-                        `${targeting.isHybridPdf ? ', HYBRID com Memória de Cálculo' : ''}). ` +
-                        `OCR será fonte primária — PDF bruto NÃO enviado ao Gemini (${(buffer.length / 1024).toFixed(0)} KB muito pesado).`
+                        `(${ocrPageInfo}, ${targeting.scannedPagesPercent}% sem texto` +
+                        `${targeting.isHybridPdf ? ', HYBRID' : ''}). ` +
+                        `OCR via Zerox (${(ocrBuffer.length / 1024).toFixed(0)} KB${ocrBuffer !== buffer ? ` — trimmed from ${(buffer.length / 1024).toFixed(0)} KB` : ''})`
                     );
                     // Don't add to pdfParts — will be handled by OCR path below
                 } else {
