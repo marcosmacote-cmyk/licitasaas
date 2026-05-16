@@ -1048,5 +1048,47 @@ if (PROCESS_ROLE !== 'api') {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }
 
+// ── FIX-07: Graceful Shutdown — Mark running jobs as interrupted on deploy ──
+import { stopJobWorker } from './services/backgroundJobWorker';
+
+let isShuttingDown = false;
+async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logger.info(`[Server] ⚠️ Received ${signal}. Graceful shutdown starting...`);
+
+    // 1. Stop accepting new jobs
+    stopJobWorker();
+
+    // 2. Mark any PROCESSING jobs as FAILED with 'interrupted_by_deploy' reason
+    //    so they can be re-queued on startup instead of sitting in limbo for 15 min
+    try {
+        const interrupted = await prisma.backgroundJob.updateMany({
+            where: { status: 'PROCESSING' },
+            data: {
+                status: 'FAILED',
+                error: 'interrupted_by_deploy',
+                completedAt: new Date(),
+            }
+        });
+        if (interrupted.count > 0) {
+            logger.info(`[Server] 🔄 Marked ${interrupted.count} running job(s) as 'interrupted_by_deploy' for recovery on restart`);
+        }
+    } catch (err: any) {
+        logger.error(`[Server] Failed to mark interrupted jobs: ${err.message}`);
+    }
+
+    // 3. Close DB connection
+    try {
+        await prisma.$disconnect();
+    } catch { /* ignore */ }
+
+    logger.info(`[Server] 👋 Shutdown complete. Exiting.`);
+    process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);

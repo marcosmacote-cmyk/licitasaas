@@ -100,6 +100,72 @@ export function startJobWorker(): void {
 
     // Initial cleanup on start
     cleanupStalledJobs().catch(() => {});
+
+    // FIX-07: Recovery — re-queue jobs interrupted by previous deploy
+    recoverInterruptedJobs().catch(() => {});
+}
+
+/**
+ * FIX-07: Recover jobs interrupted by a previous deploy.
+ * Jobs marked as 'interrupted_by_deploy' by the graceful shutdown handler
+ * are re-queued so they run again automatically.
+ * Max 2 recovery attempts (tracked via retryCount in input) to prevent infinite loops.
+ */
+async function recoverInterruptedJobs(): Promise<void> {
+    try {
+        const { PrismaClient } = await import('@prisma/client');
+        const prisma = new PrismaClient();
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+        const interrupted = await prisma.backgroundJob.findMany({
+            where: {
+                status: 'FAILED',
+                error: 'interrupted_by_deploy',
+                completedAt: { gte: oneHourAgo }, // Only recover recent jobs
+            }
+        });
+
+        let recovered = 0;
+        for (const job of interrupted) {
+            const input = (job.input as any) || {};
+            const retryCount = input.__recoveryRetries || 0;
+
+            if (retryCount >= 2) {
+                // Max retries reached — mark as permanently failed
+                await prisma.backgroundJob.update({
+                    where: { id: job.id },
+                    data: {
+                        error: `Falhou após ${retryCount} tentativas de recuperação pós-deploy`,
+                    }
+                });
+                logger.warn(`[JobWorker] ⚠️ Job ${job.id} exceeded max recovery retries (${retryCount}). Marking as permanently failed.`);
+                continue;
+            }
+
+            // Re-queue with incremented retry count
+            await prisma.backgroundJob.update({
+                where: { id: job.id },
+                data: {
+                    status: 'QUEUED',
+                    progress: 0,
+                    progressMsg: `Re-enfileirado após deploy (tentativa ${retryCount + 1}/2)`,
+                    error: null,
+                    completedAt: null,
+                    input: { ...input, __recoveryRetries: retryCount + 1 },
+                }
+            });
+            recovered++;
+            logger.info(`[JobWorker] 🔄 Recovered interrupted job ${job.id} (type=${job.type}, retry=${retryCount + 1})`);
+        }
+
+        if (recovered > 0) {
+            logger.info(`[JobWorker] ✅ Recovered ${recovered}/${interrupted.length} interrupted job(s) from previous deploy`);
+        }
+
+        await prisma.$disconnect();
+    } catch (err: any) {
+        logger.warn(`[JobWorker] ⚠️ Recovery check failed: ${err.message}`);
+    }
 }
 
 /**
