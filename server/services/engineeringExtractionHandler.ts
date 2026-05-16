@@ -94,101 +94,191 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         progressMsg: 'Baixando planilha orçamentária do PNCP...'
     });
 
-    // ── Step 1: Download PDFs (keep raw buffers for page targeting) ──
-    const rawPdfBuffers: Array<{ buffer: Buffer; source: string }> = [];
+    // ══════════════════════════════════════════════════════════════
+    // Step 1: Download & Extract PDFs — with SMART ARCHIVE FILTERING
+    // FIX-01: Budget-aware filter rejects irrelevant PDFs (plants, structural)
+    // FIX-02: Global limit MAX_PDFS = 6 prevents processing 16+ PDFs
+    // FIX-03: Archive-level scoring prioritizes budget-containing archives
+    // ══════════════════════════════════════════════════════════════
+    const rawPdfBuffers: Array<{ buffer: Buffer; source: string; relevanceScore: number }> = [];
     const agent = new (require('https').Agent)({ rejectUnauthorized: false });
+    const MAX_PDFS_GLOBAL = 6; // Never process more than 6 PDFs total
+    const MAX_TOTAL_SIZE_KB = 40000; // 40MB max total
 
+    // FIX-01: Unified budget relevance scorer for file names
+    const scoreBudgetRelevance = (name: string): number => {
+        const n = name.toLowerCase();
+        // HIGH RELEVANCE — budget documents (positive scores)
+        if (/planilh/i.test(n)) return 100;
+        if (/or[cç]ament/i.test(n)) return 90;
+        if (/composi[cç]/i.test(n)) return 80;
+        if (/bdi|b\.d\.i/i.test(n)) return 75;
+        if (/encargo|leis.?sociais/i.test(n)) return 70;
+        if (/cronograma/i.test(n)) return 60;
+        if (/memorial.?descritivo/i.test(n)) return 50;
+        if (/sinapi|seinfra|sicro|orse/i.test(n)) return 45;
+        if (/edital/i.test(n)) return 30;
+        // LOW RELEVANCE — generic (zero scores)
+        if (/anexo|documento|arquivo/i.test(n)) return 10;
+        // NEGATIVE — engineering project drawings (NOT budget data)
+        if (/PROJETO-(ARQ|SAN|HID|ELE|CLI|SPDA|EXM|CAE|GAS|PPCI|STR|DRENAGEM|FUND|PAISAG)/i.test(n)) return -50;
+        if (/planta|desenho|detalh|corte|fachada|perspectiva|implanta[cç]/i.test(n)) return -40;
+        if (/PROJETO-(STRUCT|ELET|HIDR|SANIT|INCEND)/i.test(n)) return -50;
+        if (/projeto.?b[aá]sico|projeto.?exec/i.test(n) && !/or[cç]ament/i.test(n)) return -20;
+        return 0; // Unknown — neutral
+    };
+
+    // FIX-03: Archive-level scoring by name + size
+    const scoreArchiveUrl = (url: string, archiveSizeKB: number): number => {
+        const urlLower = url.toLowerCase();
+        let score = 0;
+        if (/orc|orcament|planilha/i.test(urlLower)) score += 20;
+        if (/edital/i.test(urlLower)) score += 5;
+        if (/projeto|proj[_-]/i.test(urlLower)) score -= 10;
+        // Small archives more likely contain budgets; large archives likely contain drawings
+        if (archiveSizeKB < 5000) score += 10;
+        else if (archiveSizeKB > 20000) score -= 5;
+        return score;
+    };
+
+    // Phase 1: Download all URLs and extract PDFs from archives
     for (const url of (pdfUrls || [])) {
         try {
             const resp = await axios.get(url, {
                 responseType: 'arraybuffer',
                 httpsAgent: agent,
-                timeout: 60000, // 60s per PDF
+                timeout: 60000, // 60s per file
                 maxContentLength: 50 * 1024 * 1024 // 50MB
             } as any);
             const buf = Buffer.from(resp.data as ArrayBuffer);
 
-            // FIX ARCH-03: Detect archive formats by magic bytes and extract PDFs within
+            // Detect file format by magic bytes
             const isPdf = buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46; // %PDF
             const isRar = buf[0] === 0x52 && buf[1] === 0x61 && buf[2] === 0x72 && buf[3] === 0x21; // Rar!
             const isZip = buf[0] === 0x50 && buf[1] === 0x4B; // PK
+            const isXls = buf[0] === 0xD0 && buf[1] === 0xCF && buf[2] === 0x11 && buf[3] === 0xE0; // OLE2 (XLS)
 
             if (isPdf) {
-                rawPdfBuffers.push({ buffer: buf, source: url.substring(0, 80) });
-                logger.info(`[Engineering-BG] 📄 PDF downloaded (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)}...`);
+                const score = scoreBudgetRelevance(url);
+                rawPdfBuffers.push({ buffer: buf, source: url.substring(0, 80), relevanceScore: score });
+                logger.info(`[Engineering-BG] 📄 PDF downloaded (${(buf.length / 1024).toFixed(0)} KB, score=${score}) from ${url.substring(0, 80)}`);
             } else if (isRar) {
-                logger.info(`[Engineering-BG] 📦 RAR detected (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)} — extracting PDFs...`);
+                const archiveSizeKB = buf.length / 1024;
+                const archiveScore = scoreArchiveUrl(url, archiveSizeKB);
+                logger.info(`[Engineering-BG] 📦 RAR detected (${archiveSizeKB.toFixed(0)} KB, archiveScore=${archiveScore}) from ${url.substring(0, 80)} — extracting...`);
                 try {
                     const { createExtractorFromData } = await import('node-unrar-js');
                     const extractor = await createExtractorFromData({ data: new Uint8Array(buf).buffer });
                     const extracted = extractor.extract({});
                     const files = [...extracted.files];
-                    // Filter to PDFs and prioritize budget-relevant ones
                     const pdfFiles = files.filter(f =>
                         f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
                         !f.fileHeader.flags.directory &&
                         f.extraction && f.extraction.length > 0
                     );
-                    // Sort by relevance: planilha > orçamento > composição > rest
-                    pdfFiles.sort((a, b) => {
-                        const scoreFile = (name: string): number => {
-                            const n = name.toLowerCase();
-                            if (/planilh/i.test(n)) return 0;
-                            if (/or[cç]ament/i.test(n)) return 1;
-                            if (/composi[cç]/i.test(n)) return 2;
-                            if (/bdi/i.test(n)) return 3;
-                            if (/cronograma/i.test(n)) return 4;
-                            if (/sinapi|seinfra|sicro/i.test(n)) return 5;
-                            return 10;
-                        };
-                        return scoreFile(a.fileHeader.name) - scoreFile(b.fileHeader.name);
-                    });
                     logger.info(`[Engineering-BG] 📦 RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
-                    for (const rarFile of pdfFiles.slice(0, 4)) { // Max 4 PDFs from archive
+                    for (const rarFile of pdfFiles) {
                         const pdfBuffer = Buffer.from(rarFile.extraction!);
-                        rawPdfBuffers.push({ buffer: pdfBuffer, source: `RAR:${rarFile.fileHeader.name}` });
-                        logger.info(`[Engineering-BG] ✅ Extracted from RAR: "${rarFile.fileHeader.name}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                        const score = scoreBudgetRelevance(rarFile.fileHeader.name);
+                        rawPdfBuffers.push({ buffer: pdfBuffer, source: `RAR:${rarFile.fileHeader.name}`, relevanceScore: score });
+                        logger.info(`[Engineering-BG] 📄 Extracted from RAR: "${rarFile.fileHeader.name}" (${(pdfBuffer.length / 1024).toFixed(0)} KB, score=${score})`);
                     }
                 } catch (rarErr: any) {
                     logger.warn(`[Engineering-BG] ⚠️ Failed to extract RAR: ${rarErr.message}`);
                 }
             } else if (isZip) {
-                logger.info(`[Engineering-BG] 📦 ZIP detected (${(buf.length / 1024).toFixed(0)} KB) from ${url.substring(0, 80)} — extracting PDFs...`);
+                const archiveSizeKB = buf.length / 1024;
+                const archiveScore = scoreArchiveUrl(url, archiveSizeKB);
+                logger.info(`[Engineering-BG] 📦 ZIP detected (${archiveSizeKB.toFixed(0)} KB, archiveScore=${archiveScore}) from ${url.substring(0, 80)} — extracting...`);
                 try {
                     const JSZip = (await import('jszip')).default;
                     const zip = await JSZip.loadAsync(buf);
-                    let zipEntries = Object.keys(zip.files).filter(name =>
+                    // Extract PDFs
+                    const pdfEntries = Object.keys(zip.files).filter(name =>
                         name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
                     );
-                    // Sort by relevance
-                    zipEntries.sort((a, b) => {
-                        const scoreFile = (name: string): number => {
-                            const n = name.toLowerCase();
-                            if (/planilh/i.test(n)) return 0;
-                            if (/or[cç]ament/i.test(n)) return 1;
-                            if (/composi[cç]/i.test(n)) return 2;
-                            if (/bdi/i.test(n)) return 3;
-                            return 10;
-                        };
-                        return scoreFile(a) - scoreFile(b);
-                    });
-                    logger.info(`[Engineering-BG] 📦 ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
-                    for (const entryName of zipEntries.slice(0, 4)) {
+                    // Also check for XLSX/ODS inside ZIP (FIX-06 detection)
+                    const xlsxEntries = Object.keys(zip.files).filter(name =>
+                        /\.(xlsx|xls|ods)$/i.test(name) && !zip.files[name].dir
+                    );
+                    if (xlsxEntries.length > 0) {
+                        logger.info(`[Engineering-BG] 📊 ZIP also contains ${xlsxEntries.length} spreadsheet(s): ${xlsxEntries.join(', ')} (XLSX support pending)`);
+                    }
+                    logger.info(`[Engineering-BG] 📦 ZIP contains ${pdfEntries.length} PDF(s): ${pdfEntries.join(', ')}`);
+                    for (const entryName of pdfEntries) {
                         const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                         if (pdfBuffer.length > 0) {
-                            rawPdfBuffers.push({ buffer: pdfBuffer, source: `ZIP:${entryName}` });
-                            logger.info(`[Engineering-BG] ✅ Extracted from ZIP: "${entryName}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                            const score = scoreBudgetRelevance(entryName);
+                            rawPdfBuffers.push({ buffer: pdfBuffer, source: `ZIP:${entryName}`, relevanceScore: score });
+                            logger.info(`[Engineering-BG] 📄 Extracted from ZIP: "${entryName}" (${(pdfBuffer.length / 1024).toFixed(0)} KB, score=${score})`);
                         }
                     }
                 } catch (zipErr: any) {
                     logger.warn(`[Engineering-BG] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
                 }
+            } else if (isXls) {
+                logger.info(`[Engineering-BG] 📊 XLS (OLE2) detected (${(buf.length / 1024).toFixed(0)} KB) — spreadsheet support pending`);
             } else {
-                logger.warn(`[Engineering-BG] ⚠️ Unknown file format from ${url.substring(0, 80)} (magic: ${buf[0]?.toString(16)} ${buf[1]?.toString(16)})`);
+                logger.warn(`[Engineering-BG] ⚠️ Unknown file format from ${url.substring(0, 80)} (magic: 0x${buf[0]?.toString(16)} 0x${buf[1]?.toString(16)})`);
             }
         } catch (err: any) {
-            logger.warn(`[Engineering-BG] ⚠️ Failed to download PDF: ${err.message}`);
+            logger.warn(`[Engineering-BG] ⚠️ Failed to download: ${err.message}`);
         }
+    }
+
+    // ── FIX-01 + FIX-02: SMART BUDGET FILTER — keep only relevant PDFs ──
+    if (rawPdfBuffers.length > MAX_PDFS_GLOBAL) {
+        const beforeCount = rawPdfBuffers.length;
+        const beforeSizeKB = rawPdfBuffers.reduce((sum, p) => sum + p.buffer.length / 1024, 0);
+
+        // Sort by relevance score (highest first), then by size (smaller first as tiebreaker)
+        rawPdfBuffers.sort((a, b) => {
+            if (b.relevanceScore !== a.relevanceScore) return b.relevanceScore - a.relevanceScore;
+            return a.buffer.length - b.buffer.length; // Smaller PDFs first (budget PDFs are typically small)
+        });
+
+        // Separate into accepted and rejected
+        const accepted: typeof rawPdfBuffers = [];
+        const rejected: typeof rawPdfBuffers = [];
+        let totalSizeKB = 0;
+
+        for (const pdf of rawPdfBuffers) {
+            if (accepted.length < MAX_PDFS_GLOBAL && totalSizeKB + pdf.buffer.length / 1024 < MAX_TOTAL_SIZE_KB) {
+                // Accept: high-relevance PDFs or neutrals (until limit)
+                if (pdf.relevanceScore >= -10 || accepted.length === 0) {
+                    accepted.push(pdf);
+                    totalSizeKB += pdf.buffer.length / 1024;
+                } else {
+                    rejected.push(pdf);
+                }
+            } else {
+                rejected.push(pdf);
+            }
+        }
+
+        // Safety: if we rejected everything with positive score, keep all (fallback)
+        const hasPositiveAccepted = accepted.some(p => p.relevanceScore > 0);
+        if (!hasPositiveAccepted && rawPdfBuffers.some(p => p.relevanceScore > 0)) {
+            // Scoring failed — keep original order but limit count
+            rawPdfBuffers.length = MAX_PDFS_GLOBAL;
+        } else {
+            // Replace with filtered list
+            rawPdfBuffers.length = 0;
+            rawPdfBuffers.push(...accepted);
+        }
+
+        const afterSizeKB = rawPdfBuffers.reduce((sum, p) => sum + p.buffer.length / 1024, 0);
+        logger.info(
+            `[Engineering-BG] 🎯 SMART FILTER: ${beforeCount} PDFs (${(beforeSizeKB/1024).toFixed(1)}MB) → ` +
+            `${rawPdfBuffers.length} PDFs (${(afterSizeKB/1024).toFixed(1)}MB) — ` +
+            `${rejected.length} rejected: ${rejected.map(r => `"${r.source}" (score=${r.relevanceScore})`).join(', ')}`
+        );
+    } else if (rawPdfBuffers.length > 0) {
+        // Even with few PDFs, log the scoring for observability
+        logger.info(
+            `[Engineering-BG] 📋 ${rawPdfBuffers.length} PDF(s) scored: ` +
+            rawPdfBuffers.map(p => `"${p.source}" (score=${p.relevanceScore}, ${(p.buffer.length/1024).toFixed(0)}KB)`).join(', ')
+        );
     }
 
     // Fallback: if no PDFs from URLs, try to get from the bidding's PNCP attachments
@@ -222,7 +312,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         maxContentLength: 50 * 1024 * 1024
                     } as any);
                     const buf = Buffer.from(resp.data as ArrayBuffer);
-                    rawPdfBuffers.push({ buffer: buf, source: att.titulo || att.url });
+                    rawPdfBuffers.push({ buffer: buf, source: att.titulo || att.url, relevanceScore: scoreBudgetRelevance(att.titulo || '') });
                     logger.info(`[Engineering-BG] 📄 PDF from attachments: "${att.titulo}" (${(buf.length / 1024).toFixed(0)} KB)`);
                 } catch (err: any) {
                     logger.warn(`[Engineering-BG] ⚠️ Failed: ${err.message}`);
@@ -273,7 +363,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
                                     // Verify it's a PDF (magic bytes %P)
                                     if (buf[0] === 0x25 && buf[1] === 0x50) {
-                                        rawPdfBuffers.push({ buffer: buf, source: doc.title || 'PNCP PDF' });
+                                        rawPdfBuffers.push({ buffer: buf, source: doc.title || 'PNCP PDF', relevanceScore: scoreBudgetRelevance(doc.title || '') });
                                         logger.info(`[Engineering-BG] ✅ API PDF: "${doc.title}" (${(buf.length / 1024).toFixed(0)} KB)`);
                                     } else {
                                         logger.info(`[Engineering-BG] ⏭️ "${doc.title}" não é PDF, ignorando`);
