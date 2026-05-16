@@ -260,32 +260,55 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 try {
                     const JSZip = (await import('jszip')).default;
                     const zip = await JSZip.loadAsync(buf);
-                    // Extract PDFs
-                    const pdfEntries = Object.keys(zip.files).filter(name =>
-                        name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
-                    );
-                    // FIX-06: Extract and parse XLSX/ODS inside ZIP
-                    const xlsxEntries = Object.keys(zip.files).filter(name =>
-                        /\.(xlsx|xls|ods)$/i.test(name) && !zip.files[name].dir
-                    );
-                    for (const xlsxName of xlsxEntries) {
-                        try {
-                            const xlsxBuf = await zip.files[xlsxName].async('nodebuffer');
-                            const md = parseSpreadsheetToMarkdown(xlsxBuf, `ZIP:${xlsxName}`);
-                            if (md.length > 100) {
-                                spreadsheetMarkdowns.push({ markdown: md, source: `ZIP:${xlsxName}` });
+
+                    // Helper: extract PDFs and spreadsheets from a JSZip instance
+                    const extractFromZip = async (zipInstance: any, prefix: string) => {
+                        // Extract PDFs
+                        const pdfEntries = Object.keys(zipInstance.files).filter(name =>
+                            name.toLowerCase().endsWith('.pdf') && !zipInstance.files[name].dir
+                        );
+                        // FIX-06: Extract and parse XLSX/ODS inside ZIP
+                        const xlsxEntries = Object.keys(zipInstance.files).filter(name =>
+                            /\.(xlsx|xls|ods)$/i.test(name) && !zipInstance.files[name].dir
+                        );
+                        for (const xlsxName of xlsxEntries) {
+                            try {
+                                const xlsxBuf = await zipInstance.files[xlsxName].async('nodebuffer');
+                                const md = parseSpreadsheetToMarkdown(xlsxBuf, `${prefix}${xlsxName}`);
+                                if (md.length > 100) {
+                                    spreadsheetMarkdowns.push({ markdown: md, source: `${prefix}${xlsxName}` });
+                                }
+                            } catch (xlsErr: any) {
+                                logger.warn(`[Engineering-BG] ⚠️ FIX-06: Failed to parse "${xlsxName}" from ${prefix}: ${xlsErr.message}`);
                             }
-                        } catch (xlsErr: any) {
-                            logger.warn(`[Engineering-BG] ⚠️ FIX-06: Failed to parse "${xlsxName}" from ZIP: ${xlsErr.message}`);
                         }
-                    }
-                    logger.info(`[Engineering-BG] 📦 ZIP contains ${pdfEntries.length} PDF(s): ${pdfEntries.join(', ')}`);
-                    for (const entryName of pdfEntries) {
-                        const pdfBuffer = await zip.files[entryName].async('nodebuffer');
-                        if (pdfBuffer.length > 0) {
-                            const score = scoreBudgetRelevance(entryName);
-                            rawPdfBuffers.push({ buffer: pdfBuffer, source: `ZIP:${entryName}`, relevanceScore: score });
-                            logger.info(`[Engineering-BG] 📄 Extracted from ZIP: "${entryName}" (${(pdfBuffer.length / 1024).toFixed(0)} KB, score=${score})`);
+                        logger.info(`[Engineering-BG] 📦 ${prefix || 'ZIP'} contains ${pdfEntries.length} PDF(s): ${pdfEntries.join(', ')}`);
+                        for (const entryName of pdfEntries) {
+                            const pdfBuffer = await zipInstance.files[entryName].async('nodebuffer');
+                            if (pdfBuffer.length > 0) {
+                                const score = scoreBudgetRelevance(entryName);
+                                rawPdfBuffers.push({ buffer: pdfBuffer, source: `${prefix}${entryName}`, relevanceScore: score });
+                                logger.info(`[Engineering-BG] 📄 Extracted from ${prefix || 'ZIP'}: "${entryName}" (${(pdfBuffer.length / 1024).toFixed(0)} KB, score=${score})`);
+                            }
+                        }
+                    };
+
+                    // Process top-level entries
+                    await extractFromZip(zip, 'ZIP:');
+
+                    // FIX-15: Extract NESTED ZIPs (1 level deep)
+                    // Some PNCP uploads have ZIP > ZIP > PDFs structure
+                    const nestedZipEntries = Object.keys(zip.files).filter(name =>
+                        name.toLowerCase().endsWith('.zip') && !zip.files[name].dir
+                    );
+                    for (const nestedName of nestedZipEntries) {
+                        try {
+                            const nestedBuf = await zip.files[nestedName].async('nodebuffer');
+                            logger.info(`[Engineering-BG] 📦📦 Nested ZIP detected: "${nestedName}" (${(nestedBuf.length / 1024).toFixed(0)} KB) — extracting...`);
+                            const nestedZip = await JSZip.loadAsync(nestedBuf);
+                            await extractFromZip(nestedZip, `ZIP>ZIP:${nestedName}/`);
+                        } catch (nestedErr: any) {
+                            logger.warn(`[Engineering-BG] ⚠️ Failed to extract nested ZIP "${nestedName}": ${nestedErr.message}`);
                         }
                     }
                 } catch (zipErr: any) {

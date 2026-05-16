@@ -208,6 +208,43 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3, intent:
                                 if (!added) break;
                             }
                         }
+                        // FIX-15: Nested ZIP support
+                        const nestedZips = Object.keys(zip.files).filter(name =>
+                            name.toLowerCase().endsWith('.zip') && !zip.files[name].dir
+                        );
+                        for (const nestedName of nestedZips) {
+                            try {
+                                const nestedBuf = await zip.files[nestedName].async('nodebuffer');
+                                console.log(`[Config-AI] 📦📦 Nested ZIP: "${nestedName}" (${(nestedBuf.length / 1024).toFixed(0)} KB)`);
+                                const nestedZip = await JSZip.loadAsync(nestedBuf);
+                                let nestedPdfs = Object.keys(nestedZip.files).filter(name =>
+                                    name.toLowerCase().endsWith('.pdf') && !nestedZip.files[name].dir
+                                );
+                                nestedPdfs.sort((a, b) => {
+                                    const scoreFile = (name: string): number => {
+                                        const n = name.toLowerCase();
+                                        if (/planilh/i.test(n)) return 0;
+                                        if (/or[cç]ament/i.test(n)) return 1;
+                                        if (/composi[cç]/i.test(n)) return 2;
+                                        if (/bdi/i.test(n)) return 3;
+                                        if (/encargo|leis.?sociais/i.test(n)) return 4;
+                                        if (/cronograma/i.test(n)) return 5;
+                                        if (/edital|projeto.?b/i.test(n)) return 6;
+                                        return 10;
+                                    };
+                                    return scoreFile(a) - scoreFile(b);
+                                });
+                                for (const entry of nestedPdfs.slice(0, 3)) {
+                                    const pdfBuf = await nestedZip.files[entry].async('nodebuffer');
+                                    if (pdfBuf.length > 0) {
+                                        const added = await addPdfBuffer(pdfBuf, `ZIP>ZIP:${entry}`);
+                                        if (!added) break;
+                                    }
+                                }
+                            } catch (nestedErr: any) {
+                                console.warn(`[Config-AI] ⚠️ Nested ZIP failed: ${nestedErr.message}`);
+                            }
+                        }
                     } catch (zipErr: any) {
                         console.warn(`[Config-AI] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
                     }

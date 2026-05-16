@@ -248,6 +248,29 @@ Retorne números sem %.`;
                                             if (!added) break;
                                         }
                                     }
+                                    // FIX-15: Nested ZIP support
+                                    const nestedZips = Object.keys(zip.files).filter(name =>
+                                        name.toLowerCase().endsWith('.zip') && !zip.files[name].dir
+                                    );
+                                    for (const nestedName of nestedZips) {
+                                        try {
+                                            const nestedBuf = await zip.files[nestedName].async('nodebuffer');
+                                            console.log(`[BDI-AI] 📦📦 Nested ZIP: "${nestedName}" (${(nestedBuf.length / 1024).toFixed(0)} KB)`);
+                                            const nestedZip = await JSZip.loadAsync(nestedBuf);
+                                            const nestedPdfs = Object.keys(nestedZip.files).filter(name =>
+                                                name.toLowerCase().endsWith('.pdf') && !nestedZip.files[name].dir
+                                            );
+                                            for (const entry of nestedPdfs.slice(0, 3)) {
+                                                const pdfBuf = await nestedZip.files[entry].async('nodebuffer');
+                                                if (pdfBuf.length > 0) {
+                                                    const added = await addPdfForBdi(pdfBuf, `ZIP>ZIP:${entry}`);
+                                                    if (!added) break;
+                                                }
+                                            }
+                                        } catch (nestedErr: any) {
+                                            console.warn(`[BDI-AI] ⚠️ Nested ZIP failed: ${nestedErr.message}`);
+                                        }
+                                    }
                                 } catch (zipErr: any) {
                                     console.warn(`[BDI-AI] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
                                 }
