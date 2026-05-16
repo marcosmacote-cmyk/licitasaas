@@ -142,15 +142,36 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     };
 
     // Phase 1: Download all URLs and extract PDFs from archives
+    // FIX-08: Download with retry for PNCP 5xx/timeout errors
+    const downloadWithRetry = async (url: string, maxAttempts = 3): Promise<Buffer> => {
+        const RETRY_DELAYS = [2000, 5000, 10000]; // 2s, 5s, 10s
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const resp = await axios.get(url, {
+                    responseType: 'arraybuffer',
+                    httpsAgent: agent,
+                    timeout: 60000, // 60s per file
+                    maxContentLength: 50 * 1024 * 1024 // 50MB
+                } as any);
+                return Buffer.from(resp.data as ArrayBuffer);
+            } catch (err: any) {
+                const status = err?.response?.status || 0;
+                const isRetryable = status >= 500 || err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET';
+                if (isRetryable && attempt < maxAttempts - 1) {
+                    const delay = RETRY_DELAYS[attempt] || 10000;
+                    logger.warn(`[Engineering-BG] ⚠️ Download failed (${status || err.code}), retry ${attempt + 1}/${maxAttempts - 1} in ${delay / 1000}s: ${url.substring(0, 60)}`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+                throw err;
+            }
+        }
+        throw new Error('Download failed after all retries');
+    };
+
     for (const url of (pdfUrls || [])) {
         try {
-            const resp = await axios.get(url, {
-                responseType: 'arraybuffer',
-                httpsAgent: agent,
-                timeout: 60000, // 60s per file
-                maxContentLength: 50 * 1024 * 1024 // 50MB
-            } as any);
-            const buf = Buffer.from(resp.data as ArrayBuffer);
+            const buf = await downloadWithRetry(url);
 
             // Detect file format by magic bytes
             const isPdf = buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46; // %PDF
@@ -305,13 +326,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
             for (const att of selectedAttachments.slice(0, 4)) { // Max 4 PDFs
                 try {
-                    const resp = await axios.get(att.url, {
-                        responseType: 'arraybuffer',
-                        httpsAgent: agent,
-                        timeout: 60000,
-                        maxContentLength: 50 * 1024 * 1024
-                    } as any);
-                    const buf = Buffer.from(resp.data as ArrayBuffer);
+                    const buf = await downloadWithRetry(att.url);
                     rawPdfBuffers.push({ buffer: buf, source: att.titulo || att.url, relevanceScore: scoreBudgetRelevance(att.titulo || '') });
                     logger.info(`[Engineering-BG] 📄 PDF from attachments: "${att.titulo}" (${(buf.length / 1024).toFixed(0)} KB)`);
                 } catch (err: any) {
@@ -352,14 +367,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                                     if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
                                     if (!fileUrl) continue;
 
-                                    const fileRes = await axios.get(fileUrl, {
-                                        responseType: 'arraybuffer',
-                                        httpsAgent: agent,
-                                        timeout: 60000,
-                                        maxRedirects: 5,
-                                        maxContentLength: 50 * 1024 * 1024,
-                                    } as any);
-                                    const buf = Buffer.from(fileRes.data as ArrayBuffer);
+                                    const buf = await downloadWithRetry(fileUrl);
 
                                     // Verify it's a PDF (magic bytes %P)
                                     if (buf[0] === 0x25 && buf[1] === 0x50) {
