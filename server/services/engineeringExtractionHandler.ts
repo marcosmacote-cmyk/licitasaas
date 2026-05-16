@@ -1121,6 +1121,71 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     `[Engineering-BG] ✅ Gap recovery complete. Total items now: ${engItems.length}`
                 );
             }
+
+            // ── TAIL TRUNCATION DETECTION ──
+            // When the model returns STOP but extracted only a fraction of a large budget,
+            // the last items are often empty ETAPA/SUBETAPA nodes (no child composições).
+            // Detect this and launch a continuation pass to extract the remaining items.
+            if (engItems.length >= 20 && pdfParts.length > 0) {
+                const lastItems = engItems.slice(-5);
+                const lastItemNum = String(lastItems[lastItems.length - 1]?.item || '');
+                const lastTopLevel = parseInt(lastItemNum.split('.')[0]) || 0;
+                
+                // Check if last items are empty groupers (ETAPA/SUBETAPA without child composições)
+                const lastGroupers = lastItems.filter((it: any) => 
+                    it.type === 'ETAPA' || it.type === 'SUBETAPA'
+                );
+                const lastComposicoes = lastItems.filter((it: any) => it.type === 'COMPOSICAO');
+                const hasTrailingEmptyGroupers = lastGroupers.length >= 2 && lastComposicoes.length === 0;
+                
+                // Also detect by checking if there are more top-level etapas expected
+                // A creche/school typically has 10+ etapas; if we stopped at etapa 1, that's truncation
+                const topLevelEtapas = new Set(
+                    engItems.filter((it: any) => it.type === 'ETAPA')
+                        .map((it: any) => parseInt(String(it.item || '0').split('.')[0]))
+                );
+                const maxEtapa = Math.max(...topLevelEtapas, 0);
+                const isSuspiciouslyFewEtapas = topLevelEtapas.size <= 2 && engItems.length >= 30;
+
+                if (hasTrailingEmptyGroupers || isSuspiciouslyFewEtapas) {
+                    logger.warn(
+                        `[Engineering-BG] ⚠️ TAIL TRUNCATION detected: ${engItems.length} items, ` +
+                        `last item="${lastItemNum}", trailing groupers=${lastGroupers.length}, ` +
+                        `top-level etapas=${topLevelEtapas.size} (max=${maxEtapa}), ` +
+                        `suspiciouslyFew=${isSuspiciouslyFewEtapas}. Launching continuation...`
+                    );
+
+                    await updateJobProgress(job.id, tenantId, {
+                        progress: 72,
+                        progressMsg: `Extraindo itens restantes (após item ${lastItemNum})... ${engItems.length} extraídos até agora`
+                    }).catch(() => {});
+
+                    const lastItemsSummary = lastItems.map((it: any) => 
+                        `${it.item}: ${String(it.description || '').substring(0, 50)}`
+                    ).join(', ');
+
+                    const tailInstruction = `${userInstruction}\n\n` +
+                        `🚨 CONTINUAÇÃO OBRIGATÓRIA — EXTRAÇÃO PARCIAL DETECTADA:\n` +
+                        `Uma extração anterior obteve ${engItems.length} itens, terminando em "${lastItemNum}".\n` +
+                        `Últimos itens extraídos: [${lastItemsSummary}]\n\n` +
+                        `CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItemNum}".\n` +
+                        `NÃO repita nenhum dos ${engItems.length} itens já extraídos.\n` +
+                        `Extraia TODOS os itens restantes até o FINAL da planilha orçamentária.\n` +
+                        `Retorne em JSON com o mesmo schema.`;
+
+                    await extractChunk(
+                        [{ role: 'user', parts: [...pdfParts, { text: tailInstruction }] }],
+                        `Tail Continuation (após ${lastItemNum})`,
+                        tailInstruction,
+                        'gemini-2.5-flash',
+                        false
+                    );
+
+                    logger.info(
+                        `[Engineering-BG] ✅ Tail continuation complete. Total items now: ${engItems.length}`
+                    );
+                }
+            }
         }
 
         clearInterval(progressTimer);
