@@ -101,9 +101,55 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // FIX-03: Archive-level scoring prioritizes budget-containing archives
     // ══════════════════════════════════════════════════════════════
     const rawPdfBuffers: Array<{ buffer: Buffer; source: string; relevanceScore: number }> = [];
+    const spreadsheetMarkdowns: Array<{ markdown: string; source: string }> = []; // FIX-06: XLSX/ODS→markdown
     const agent = new (require('https').Agent)({ rejectUnauthorized: false });
     const MAX_PDFS_GLOBAL = 6; // Never process more than 6 PDFs total
     const MAX_TOTAL_SIZE_KB = 40000; // 40MB max total
+
+    // FIX-06: Parse XLSX/XLS/ODS buffer into markdown tables
+    const parseSpreadsheetToMarkdown = (buf: Buffer, source: string): string => {
+        try {
+            const XLSX = require('xlsx');
+            const workbook = XLSX.read(buf, { type: 'buffer' });
+            const parts: string[] = [];
+            // Skip sheets that are clearly not budget data
+            const skipSheetRe = /^(capa|instru[cç][oõ]|logo|assinatura|folha.?rosto|sum[aá]rio|indice)/i;
+
+            for (const sheetName of workbook.SheetNames) {
+                if (skipSheetRe.test(sheetName)) {
+                    logger.info(`[Engineering-BG] 📊 Skipping sheet "${sheetName}" (non-budget)`);
+                    continue;
+                }
+                const sheet = workbook.Sheets[sheetName];
+                if (!sheet || !sheet['!ref']) continue;
+
+                // Convert to array of arrays (header: 1 returns raw values)
+                const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                if (rows.length < 2) continue; // Empty or header-only
+
+                // Build markdown table
+                parts.push(`\n══ Planilha: ${sheetName} (${source}) ══\n`);
+                for (let i = 0; i < rows.length && i < 2000; i++) { // Cap at 2000 rows
+                    const row = rows[i];
+                    // Skip completely empty rows
+                    if (row.every((cell: any) => cell === '' || cell === null || cell === undefined)) continue;
+                    const line = row.map((cell: any) => {
+                        if (cell === null || cell === undefined) return '';
+                        return String(cell).replace(/\|/g, '/').replace(/\n/g, ' ').trim();
+                    }).join(' | ');
+                    parts.push(line);
+                }
+            }
+            const md = parts.join('\n');
+            if (md.length > 100) {
+                logger.info(`[Engineering-BG] 📊 FIX-06: Parsed "${source}" → ${md.length} chars markdown (${workbook.SheetNames.length} sheet(s))`);
+            }
+            return md;
+        } catch (err: any) {
+            logger.warn(`[Engineering-BG] ⚠️ FIX-06: Failed to parse spreadsheet "${source}": ${err.message}`);
+            return '';
+        }
+    };
 
     // FIX-01: Unified budget relevance scorer for file names
     const scoreBudgetRelevance = (name: string): number => {
@@ -218,12 +264,20 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     const pdfEntries = Object.keys(zip.files).filter(name =>
                         name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
                     );
-                    // Also check for XLSX/ODS inside ZIP (FIX-06 detection)
+                    // FIX-06: Extract and parse XLSX/ODS inside ZIP
                     const xlsxEntries = Object.keys(zip.files).filter(name =>
                         /\.(xlsx|xls|ods)$/i.test(name) && !zip.files[name].dir
                     );
-                    if (xlsxEntries.length > 0) {
-                        logger.info(`[Engineering-BG] 📊 ZIP also contains ${xlsxEntries.length} spreadsheet(s): ${xlsxEntries.join(', ')} (XLSX support pending)`);
+                    for (const xlsxName of xlsxEntries) {
+                        try {
+                            const xlsxBuf = await zip.files[xlsxName].async('nodebuffer');
+                            const md = parseSpreadsheetToMarkdown(xlsxBuf, `ZIP:${xlsxName}`);
+                            if (md.length > 100) {
+                                spreadsheetMarkdowns.push({ markdown: md, source: `ZIP:${xlsxName}` });
+                            }
+                        } catch (xlsErr: any) {
+                            logger.warn(`[Engineering-BG] ⚠️ FIX-06: Failed to parse "${xlsxName}" from ZIP: ${xlsErr.message}`);
+                        }
                     }
                     logger.info(`[Engineering-BG] 📦 ZIP contains ${pdfEntries.length} PDF(s): ${pdfEntries.join(', ')}`);
                     for (const entryName of pdfEntries) {
@@ -238,7 +292,20 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     logger.warn(`[Engineering-BG] ⚠️ Failed to extract ZIP: ${zipErr.message}`);
                 }
             } else if (isXls) {
-                logger.info(`[Engineering-BG] 📊 XLS (OLE2) detected (${(buf.length / 1024).toFixed(0)} KB) — spreadsheet support pending`);
+                // FIX-06: Parse XLS (OLE2) directly
+                const md = parseSpreadsheetToMarkdown(buf, url.substring(0, 80));
+                if (md.length > 100) {
+                    spreadsheetMarkdowns.push({ markdown: md, source: url.substring(0, 80) });
+                } else {
+                    logger.warn(`[Engineering-BG] 📊 XLS detected but produced no useful markdown (${(buf.length / 1024).toFixed(0)} KB)`);
+                }
+            } else if (isZip && /\.(xlsx|ods)$/i.test(url)) {
+                // FIX-06: XLSX/ODS files have PK magic bytes (they're actually ZIP archives)
+                const md = parseSpreadsheetToMarkdown(buf, url.substring(0, 80));
+                if (md.length > 100) {
+                    spreadsheetMarkdowns.push({ markdown: md, source: url.substring(0, 80) });
+                    logger.info(`[Engineering-BG] 📊 FIX-06: Standalone XLSX/ODS parsed from URL`);
+                }
             } else {
                 logger.warn(`[Engineering-BG] ⚠️ Unknown file format from ${url.substring(0, 80)} (magic: 0x${buf[0]?.toString(16)} 0x${buf[1]?.toString(16)})`);
             }
@@ -562,6 +629,20 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     }
 
     let ocrContext = '';
+
+    // FIX-06: Inject spreadsheet markdown (XLSX/ODS/XLS) as structured text context
+    if (spreadsheetMarkdowns.length > 0) {
+        const spreadsheetText = spreadsheetMarkdowns.map(s => s.markdown).join('\n\n');
+        ocrContext += '\n\n── DADOS ESTRUTURADOS DE PLANILHA (XLSX/ODS) ──\n' +
+            'Os dados abaixo foram extraídos diretamente de planilhas digitais. ' +
+            'São dados 100% confiáveis e estruturados — use como fonte primária.\n\n' +
+            spreadsheetText;
+        logger.info(
+            `[Engineering-BG] 📊 FIX-06: ${spreadsheetMarkdowns.length} planilha(s) injetada(s) no contexto ` +
+            `(${spreadsheetText.length} chars total): ${spreadsheetMarkdowns.map(s => s.source).join(', ')}`
+        );
+    }
+
     if (zeroxFallbackCandidates.length > 0 && process.env.ENGINEERING_ZEROX_FALLBACK !== 'false') {
         await updateJobProgress(job.id, tenantId, {
             progress: 22,
