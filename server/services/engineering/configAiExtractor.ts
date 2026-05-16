@@ -8,6 +8,7 @@ import { callGeminiWithRetry } from '../ai/gemini.service';
 import axios from 'axios';
 import https from 'https';
 import { classifyEngineeringAttachments } from './documentClassifier';
+import { downloadWithRetry } from './downloadUtils';
 
 const prisma = new PrismaClient();
 
@@ -130,12 +131,7 @@ async function downloadPdfsForExtraction(biddingId: string, maxDocs = 3, intent:
                 if (fileUrl.includes('pncp-api/v1')) fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
                 if (!fileUrl) continue;
 
-                const fileRes = await axios.get(fileUrl, {
-                    responseType: 'arraybuffer', httpsAgent: agent,
-                    timeout: 60000, maxRedirects: 5,
-                    maxContentLength: 30 * 1024 * 1024, // 30MB max download
-                } as any);
-                const buffer = Buffer.from(fileRes.data as ArrayBuffer);
+                const buffer = await downloadWithRetry(fileUrl, 3, 60000);
 
                 // FIX ARCH-04: Detect file format by magic bytes (same pattern as engineeringExtractionHandler)
                 const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
