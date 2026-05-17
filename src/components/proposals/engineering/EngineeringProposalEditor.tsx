@@ -1287,6 +1287,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [propriaDesc, setPropriaDesc] = useState('');
     const [propriaUnit, setPropriaUnit] = useState('UN');
     const [propriaPrice, setPropriaPrice] = useState('');
+    const [propriaQty, setPropriaQty] = useState('1');
     const [propriaSaving, setPropiaSaving] = useState(false);
 
     const addFromSearch = (dbItem: any) => {
@@ -1330,7 +1331,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
         setInsertTargetId(null); setSearchQuantities({}); setAddedItemIds(new Set());
         setAddedCount(0); setStructuralName(''); setAddedStructuralNames([]);
-        setShowPropriaForm(false); setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice('');
+        setShowPropriaForm(false); setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaQty('1');
     };
 
     // Create proprietary item in PROPRIA database and add to budget
@@ -1350,10 +1351,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao criar item');
-            // Auto-add the created item to the budget
+            // Auto-add the created item to the budget with specified quantity
+            const createdId = data.item.id;
+            const qty = parseFloat(propriaQty.replace(',', '.')) || 1;
+            setSearchQuantities(prev => ({ ...prev, [createdId]: qty }));
             addFromSearch(data.item);
-            // Reset form
-            setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice('');
+            // Reset form (keep qty at 1)
+            setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaQty('1');
         } catch (err: any) {
             alert(err.message || 'Erro ao criar item próprio');
         } finally {
@@ -2619,7 +2623,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         <div style={{ flex: '0 0 100px' }}>
                                             <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Valor Unit. *</label>
                                             <input type="text" className="form-input" placeholder="0,00" value={propriaPrice} onChange={e => setPropriaPrice(e.target.value)}
-                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'right' }}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'right' }} />
+                                        </div>
+                                        <div style={{ flex: '0 0 65px' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Qtd.</label>
+                                            <input type="text" className="form-input" value={propriaQty} onChange={e => setPropriaQty(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'center', fontWeight: 600 }}
                                                 onKeyDown={e => e.key === 'Enter' && handleCreatePropria()} />
                                         </div>
                                         <button className="btn btn-primary" disabled={!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || propriaSaving}
