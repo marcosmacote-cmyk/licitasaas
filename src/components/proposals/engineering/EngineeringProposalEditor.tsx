@@ -1281,6 +1281,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [addedCount, setAddedCount] = useState(0);
     const [structuralName, setStructuralName] = useState('');
     const [addedStructuralNames, setAddedStructuralNames] = useState<string[]>([]);
+    // Propria creation form state
+    const [showPropriaForm, setShowPropriaForm] = useState(false);
+    const [propriaCode, setPropriaCode] = useState('');
+    const [propriaDesc, setPropriaDesc] = useState('');
+    const [propriaUnit, setPropriaUnit] = useState('UN');
+    const [propriaPrice, setPropriaPrice] = useState('');
+    const [propriaSaving, setPropiaSaving] = useState(false);
 
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
@@ -1323,6 +1330,35 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
         setInsertTargetId(null); setSearchQuantities({}); setAddedItemIds(new Set());
         setAddedCount(0); setStructuralName(''); setAddedStructuralNames([]);
+        setShowPropriaForm(false); setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice('');
+    };
+
+    // Create proprietary item in PROPRIA database and add to budget
+    const handleCreatePropria = async () => {
+        if (!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim()) return;
+        setPropiaSaving(true);
+        try {
+            const res = await fetch('/api/engineering/propria/create', {
+                method: 'POST', headers: hdrs(),
+                body: JSON.stringify({
+                    code: propriaCode.trim(),
+                    description: propriaDesc.trim(),
+                    unit: propriaUnit.trim() || 'UN',
+                    price: parseFloat(propriaPrice.replace(',', '.')) || 0,
+                    recordKind: insertType === 'COMPOSICAO' ? 'COMPOSICAO' : 'INSUMO',
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao criar item');
+            // Auto-add the created item to the budget
+            addFromSearch(data.item);
+            // Reset form
+            setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice('');
+        } catch (err: any) {
+            alert(err.message || 'Erro ao criar item próprio');
+        } finally {
+            setPropiaSaving(false);
+        }
     };
 
     // BDI helpers
@@ -2551,6 +2587,50 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 </>
                             );
                         })()}
+
+                        {/* ── Criar Próprio (inline form) ── */}
+                        {(insertType === 'COMPOSICAO' || insertType === 'INSUMO') && (
+                            <div style={{ borderRadius: 8, border: `1px solid ${showPropriaForm ? TYPE_META[insertType].color + '40' : 'var(--color-border)'}`, overflow: 'hidden', transition: 'all 0.2s' }}>
+                                <button onClick={() => setShowPropriaForm(p => !p)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: showPropriaForm ? `${TYPE_META[insertType].color}08` : 'var(--color-bg-base)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: TYPE_META[insertType].color, textAlign: 'left' as const }}>
+                                    <Plus size={14} />
+                                    Criar {TYPE_META[insertType].label} Própria
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>
+                                        {showPropriaForm ? 'Recolher' : 'Salva no banco PROPRIA e adiciona ao orçamento'}
+                                    </span>
+                                </button>
+                                {showPropriaForm && (
+                                    <div style={{ padding: '10px 12px', display: 'flex', gap: 6, alignItems: 'flex-end', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-surface)' }}>
+                                        <div style={{ flex: '0 0 100px' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Código *</label>
+                                            <input type="text" className="form-input" placeholder="CP-001" value={propriaCode} onChange={e => setPropriaCode(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px' }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Descrição *</label>
+                                            <input type="text" className="form-input" placeholder="Descrição do item próprio..." value={propriaDesc} onChange={e => setPropriaDesc(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px' }} />
+                                        </div>
+                                        <div style={{ flex: '0 0 65px' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Unid.</label>
+                                            <input type="text" className="form-input" value={propriaUnit} onChange={e => setPropriaUnit(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'center' }} />
+                                        </div>
+                                        <div style={{ flex: '0 0 100px' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Valor Unit. *</label>
+                                            <input type="text" className="form-input" placeholder="0,00" value={propriaPrice} onChange={e => setPropriaPrice(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'right' }}
+                                                onKeyDown={e => e.key === 'Enter' && handleCreatePropria()} />
+                                        </div>
+                                        <button className="btn btn-primary" disabled={!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || propriaSaving}
+                                            onClick={handleCreatePropria}
+                                            style={{ padding: '5px 12px', fontSize: '0.75rem', whiteSpace: 'nowrap', height: 30 }}>
+                                            {propriaSaving ? <Loader2 size={14} className="spin" /> : <><CheckCircle2 size={13} style={{ marginRight: 3 }} /> Criar e Adicionar</>}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* ── Search Results Table (only for COMPOSICAO / INSUMO) ── */}
                         {(insertType === 'COMPOSICAO' || insertType === 'INSUMO') ? (

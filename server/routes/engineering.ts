@@ -618,6 +618,82 @@ router.get('/hub/search', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/propria/create — Criar Item/Composição Própria via Hub
+// ═══════════════════════════════════════════════════════════
+router.post('/propria/create', async (req: any, res: any) => {
+    try {
+        const tenantId = req.user?.tenantId || req.body.tenantId;
+        const { code, description, unit, price, recordKind } = req.body;
+
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Código e descrição são obrigatórios' });
+        }
+        if (price === undefined || price === null || isNaN(Number(price))) {
+            return res.status(400).json({ error: 'Valor unitário é obrigatório' });
+        }
+
+        // Find or create PROPRIA database for this tenant
+        let propriaDb = await prisma.engineeringDatabase.findFirst({
+            where: { name: 'PROPRIA', tenantId }
+        });
+        if (!propriaDb) {
+            propriaDb = await prisma.engineeringDatabase.create({
+                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
+            });
+        }
+
+        const kind = (recordKind || 'INSUMO').toUpperCase();
+        const unitValue = (unit || 'UN').toUpperCase().trim();
+        const priceValue = Number(price);
+
+        if (kind === 'COMPOSICAO') {
+            // Check duplicate
+            const existing = await prisma.engineeringComposition.findFirst({
+                where: { code, databaseId: propriaDb.id }
+            });
+            if (existing) {
+                return res.status(400).json({ error: `Já existe composição com código "${code}" na base própria` });
+            }
+            const comp = await prisma.engineeringComposition.create({
+                data: { code, description, unit: unitValue, databaseId: propriaDb.id, totalPrice: priceValue }
+            });
+            // Update counter
+            await prisma.engineeringDatabase.update({
+                where: { id: propriaDb.id },
+                data: { compositionCount: { increment: 1 } }
+            });
+            return res.json({
+                message: 'Composição própria criada com sucesso',
+                item: { id: comp.id, code: comp.code, description: comp.description, unit: comp.unit, price: comp.totalPrice, recordKind: 'COMPOSICAO' }
+            });
+        } else {
+            // INSUMO
+            const existing = await prisma.engineeringItem.findFirst({
+                where: { code, databaseId: propriaDb.id }
+            });
+            if (existing) {
+                return res.status(400).json({ error: `Já existe insumo com código "${code}" na base própria` });
+            }
+            const item = await prisma.engineeringItem.create({
+                data: { code, description, unit: unitValue, price: priceValue, type: 'MATERIAL', databaseId: propriaDb.id }
+            });
+            // Update counter
+            await prisma.engineeringDatabase.update({
+                where: { id: propriaDb.id },
+                data: { itemCount: { increment: 1 } }
+            });
+            return res.json({
+                message: 'Insumo próprio criado com sucesso',
+                item: { id: item.id, code: item.code, description: item.description, unit: item.unit, price: item.price, recordKind: 'INSUMO' }
+            });
+        }
+    } catch (e: any) {
+        console.error('[Propria Create] Error:', e);
+        res.status(500).json({ error: 'Erro ao criar item próprio' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/compositions — Criar Composição (PRÓPRIA)
 // ═══════════════════════════════════════════════════════════
 router.post('/compositions', async (req: any, res: any) => {
