@@ -30,6 +30,7 @@ interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
+    type?: string; // ETAPA, SUBETAPA, COMPOSICAO, INSUMO
     officialUnitCost?: number;
     priceAudit?: {
         matchedDatabaseId?: string | null;
@@ -60,6 +61,8 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
 };
 
 const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+const isGrouperType = (type?: string) => type === 'ETAPA' || type === 'SUBETAPA';
 
 /**
  * STRICT base filter — enforces Step 1 config (name + UF + data-base).
@@ -211,6 +214,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [rateioData, setRateioData] = useState({ prazo: '2', fracao: '100' });
 
     const [isSearching, setIsSearching] = useState(false);
+
+    // Drill-down stack for auxiliary compositions
+    const [drillStack, setDrillStack] = useState<{ code: string; description: string }[]>([]);
+    // Grouper editing states
+    const [grouperDesc, setGrouperDesc] = useState('');
+    const [grouperFactor, setGrouperFactor] = useState('1');
+    const [grouperFactorSaved, setGrouperFactorSaved] = useState(false);
 
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
@@ -374,8 +384,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig?.precision]);
 
     useEffect(() => {
-        if (currentItem?.code) loadComposition(currentItem.code);
-    }, [currentItem?.code, loadComposition]);
+        if (currentItem) {
+            if (isGrouperType(currentItem.type)) {
+                // For groupers, don't load composition — show editor
+                setData(null);
+                setLoading(false);
+                setError('');
+                setGrouperDesc(currentItem.description || '');
+                setGrouperFactor('1');
+                setGrouperFactorSaved(false);
+            } else if (currentItem.code) {
+                setDrillStack([]);
+                loadComposition(currentItem.code);
+            }
+        }
+    }, [currentItem?.code, currentItem?.type, loadComposition]);
 
     const navigate = (dir: -1 | 1) => {
         const next = currentIndex + dir;
@@ -844,31 +867,40 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{items.length} itens</span>
                 </div>
 
-                {items.map((item, idx) => (
+                {items.map((item, idx) => {
+                    const isGrp = isGrouperType(item.type);
+                    return (
                     <button key={item.id} onClick={() => setCurrentIndex(idx)}
                         style={{
-                            display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                            display: 'block', width: '100%', padding: isGrp ? '8px 16px' : '10px 16px', border: 'none',
                             borderBottom: '1px solid var(--color-border)', cursor: 'pointer', textAlign: 'left',
-                            background: idx === currentIndex ? 'var(--color-primary-light)' : 'transparent',
-                            borderLeft: idx === currentIndex ? '3px solid var(--color-primary)' : '3px solid transparent',
+                            background: idx === currentIndex
+                                ? (isGrp ? 'rgba(217,119,6,0.08)' : 'var(--color-primary-light)')
+                                : (isGrp ? 'rgba(217,119,6,0.03)' : 'transparent'),
+                            borderLeft: idx === currentIndex
+                                ? `3px solid ${isGrp ? '#d97706' : 'var(--color-primary)'}`
+                                : '3px solid transparent',
                             transition: 'all 0.1s',
                         }}>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: idx === currentIndex ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}>
-                            {item.itemNumber} · {item.code || 'N/A'}
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: isGrp ? '#d97706' : (idx === currentIndex ? 'var(--color-primary)' : 'var(--color-text-tertiary)') }}>
+                            {isGrp ? `${item.type === 'ETAPA' ? '📂' : '📁'} ${item.itemNumber}` : `${item.itemNumber} · ${item.code || 'N/A'}`}
                         </div>
                         <div style={{
                             fontSize: '0.72rem', lineHeight: 1.3, marginTop: 2,
                             color: idx === currentIndex ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            fontWeight: idx === currentIndex ? 600 : 400,
+                            fontWeight: isGrp ? 700 : (idx === currentIndex ? 600 : 400),
                         }}>
                             {item.description}
                         </div>
+                        {!isGrp && (
                         <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
                             {fmt(item.unitCost)} × {item.quantity} {item.unit}
                         </div>
+                        )}
                     </button>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Main Content */}
@@ -878,7 +910,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 <div style={{
                     padding: '12px 24px', borderBottom: '1px solid var(--color-border)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(124,58,237,0.03))',
+                    background: isGrouperType(currentItem.type)
+                        ? 'linear-gradient(135deg, rgba(217,119,6,0.06), rgba(234,88,12,0.04))'
+                        : 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(124,58,237,0.03))',
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <button onClick={() => navigate(-1)} disabled={!hasPrev}
@@ -903,18 +937,47 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
 
                     <div style={{ textAlign: 'center', flex: 1 }}>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                            CPU — Composição de Preços Unitários
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: isGrouperType(currentItem.type) ? '#d97706' : 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            {isGrouperType(currentItem.type)
+                                ? `${currentItem.type === 'ETAPA' ? '📂 ETAPA' : '📁 SUBETAPA'} — Agrupador`
+                                : 'CPU — Composição de Preços Unitários'}
                         </div>
                         <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>{currentItem.description}</h3>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                            Código: <strong>{currentItem.code}</strong> · {currentItem.sourceName}
-                            {hasChanges && <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 700 }}>● Modificado</span>}
-                        </span>
+                        {!isGrouperType(currentItem.type) && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
+                                Código: <strong>{currentItem.code}</strong> · {currentItem.sourceName}
+                                {hasChanges && <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 700 }}>● Modificado</span>}
+                            </span>
+                        )}
+                        {/* Drill-down breadcrumb */}
+                        {drillStack.length > 0 && (
+                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center', fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
+                                <button onClick={() => { setDrillStack([]); loadComposition(currentItem.code); }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, padding: 0 }}>
+                                    {currentItem.code}
+                                </button>
+                                {drillStack.map((level, i) => (
+                                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <ChevronRight size={12} />
+                                        {i < drillStack.length - 1 ? (
+                                            <button onClick={() => {
+                                                const newStack = drillStack.slice(0, i + 1);
+                                                setDrillStack(newStack);
+                                                loadComposition(newStack[newStack.length - 1].code);
+                                            }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, padding: 0 }}>
+                                                {level.code}
+                                            </button>
+                                        ) : (
+                                            <strong style={{ color: 'var(--color-text-primary)' }}>{level.code}</strong>
+                                        )}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {data && (
+                        {data && !isGrouperType(currentItem.type) && (
                             <>
                                 <button onClick={() => { setSearchType('composition'); setShowSearch(true); }} title="Adicionar Composição Auxiliar"
                                     style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
@@ -926,14 +989,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </button>
                             </>
                         )}
-                        {data && hasChanges && (
+                        {data && !isGrouperType(currentItem.type) && hasChanges && (
                             <button onClick={saveToBase} disabled={isSavingToBase} title={data.database?.name === 'PROPRIA' ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                                 {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} 
                                 {data.database?.name === 'PROPRIA' ? 'Salvar na Base' : 'Salvar como Própria'}
                             </button>
                         )}
-                        {data && (
+                        {data && !isGrouperType(currentItem.type) && (
                             <>
                                 <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, data, engineeringConfig)}
                                     title="Exportar Excel" style={{ padding: 6, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
@@ -951,9 +1014,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </button>
                     </div>
                 </div>
-
-                {/* Cascade indicator */}
-                {hasChanges && (
+                {/* Cascade indicator — only for non-groupers */}
+                {!isGrouperType(currentItem.type) && hasChanges && (
                     <div style={{
                         padding: '6px 24px', background: 'rgba(34,197,94,0.06)', borderBottom: '1px solid rgba(34,197,94,0.15)',
                         display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.72rem', color: '#16a34a',
@@ -963,8 +1025,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
                 )}
 
-                {/* Toolbar Módulo Livre */}
-                {data && !error && (
+                {/* Toolbar Módulo Livre — only for non-groupers */}
+                {!isGrouperType(currentItem.type) && data && !error && (
                     <div style={{
                         padding: '8px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
                         display: 'flex', gap: 12, alignItems: 'center'
@@ -999,7 +1061,74 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
                 )}
 
-                {/* Composition Detail */}
+                {/* ── ETAPA/SUBETAPA special view ── */}
+                {isGrouperType(currentItem.type) && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '40px 24px', maxWidth: 600, margin: '0 auto' }}>
+                        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                            <div style={{ width: 56, height: 56, borderRadius: 'var(--radius-lg)', background: 'rgba(217,119,6,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                                <Layers size={28} color="#d97706" />
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                                {currentItem.type === 'ETAPA' ? 'Etapas' : 'Subetapas'} são agrupadores hierárquicos.
+                                <br />Não possuem composição de preços — apenas organizam itens no orçamento.
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {/* Description editor */}
+                            <div style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
+                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                                    <Pencil size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Descrição da {currentItem.type === 'ETAPA' ? 'Etapa' : 'Subetapa'}
+                                </label>
+                                <input type="text" className="form-input" value={grouperDesc}
+                                    onChange={e => setGrouperDesc(e.target.value)}
+                                    onBlur={() => {
+                                        if (grouperDesc.trim() && grouperDesc !== currentItem.description) {
+                                            onUpdateItem(currentItem.id, { description: grouperDesc.trim() } as any);
+                                        }
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    style={{ width: '100%', fontSize: '0.9rem', padding: '10px 14px', fontWeight: 600 }} />
+                            </div>
+
+                            {/* Multiplication factor */}
+                            <div style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
+                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                                    <Calculator size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Fator de Multiplicação
+                                </label>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 8, lineHeight: 1.4 }}>
+                                    Se definido como &gt; 1, todas as quantidades dos itens filhos (composições e insumos) desta {currentItem.type === 'ETAPA' ? 'etapa' : 'subetapa'} serão multiplicadas por este fator.
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <input type="text" className="form-input" value={grouperFactor}
+                                        onChange={e => setGrouperFactor(e.target.value)}
+                                        style={{ width: 100, fontSize: '0.9rem', padding: '8px 14px', textAlign: 'center', fontWeight: 700 }} />
+                                    <button className="btn btn-primary"
+                                        disabled={grouperFactorSaved}
+                                        onClick={() => {
+                                            const factor = parseFloat(grouperFactor.replace(',', '.')) || 1;
+                                            if (factor <= 0) return;
+                                            onUpdateItem(currentItem.id, { quantity: factor } as any);
+                                            setGrouperFactorSaved(true);
+                                            setTimeout(() => setGrouperFactorSaved(false), 2000);
+                                        }}
+                                        style={{ padding: '8px 16px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        {grouperFactorSaved
+                                            ? <><Check size={14} /> Aplicado!</>
+                                            : <><Calculator size={14} /> Aplicar Fator</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: 24, textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                            Use ◀ ▶ ou a sidebar para navegar até composições e insumos.
+                        </div>
+                    </div>
+                )}
+
+                {/* Composition Detail — only for non-groupers */}
+                {!isGrouperType(currentItem.type) && (
                 <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
                     {loading && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 80, gap: 10, color: 'var(--color-text-tertiary)' }}>
@@ -1197,7 +1326,27 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             <div style={itemData?.isObservation ? { gridColumn: '2 / 6', fontStyle: 'italic', color: 'var(--color-text-secondary)', fontSize: '0.75rem' } : {}}>
                                                                 {!itemData?.isObservation ? (
                                                                     <>
-                                                                        <div style={{ fontSize: '0.8rem', fontWeight: 500 }}>{itemData?.description || '—'}</div>
+                                                                        <div style={{ fontSize: '0.8rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                            {itemData?.description || '—'}
+                                                                            {/* Drill-down button for auxiliary compositions */}
+                                                                            {ci.auxiliaryComposition && itemData?.code && !itemData?.isNew && (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setDrillStack(prev => [...prev, { code: itemData.code, description: itemData.description }]);
+                                                                                        loadComposition(itemData.code);
+                                                                                    }}
+                                                                                    title={`Abrir composição ${itemData.code}`}
+                                                                                    style={{
+                                                                                        background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)',
+                                                                                        cursor: 'pointer', padding: '1px 6px', borderRadius: 4,
+                                                                                        color: '#7c3aed', fontSize: '0.62rem', fontWeight: 700, flexShrink: 0,
+                                                                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                                                    }}>
+                                                                                    <Layers size={10} /> Abrir ▸
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                                                             {itemData?.code && (
                                                                                 <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
@@ -1308,6 +1457,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* Footer */}
                 {data && !error && (
