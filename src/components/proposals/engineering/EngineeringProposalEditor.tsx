@@ -2032,9 +2032,24 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                         </div>
                                                     </td>
                                             <td style={{ padding: '6px 8px' }}>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.68rem', fontWeight: 700 }}>
-                                                    <IconComp size={11} /> {meta.label}
-                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 4, background: meta.bg, color: meta.color, fontSize: '0.68rem', fontWeight: 700 }}>
+                                                        <IconComp size={11} /> {meta.label}
+                                                    </span>
+                                                    <button title={`Configurações da ${it.type === 'ETAPA' ? 'Etapa' : 'Subetapa'}${it.multiplicationFactor && it.multiplicationFactor > 1 ? ` (Fator: ×${it.multiplicationFactor})` : ''}`}
+                                                        onClick={() => setCompositionEditorIndex(items.indexOf(it))}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: it.multiplicationFactor && it.multiplicationFactor > 1 ? 1 : 0.5, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center' }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                        onMouseLeave={e => { if (!(it.multiplicationFactor && it.multiplicationFactor > 1)) (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
+                                                    >
+                                                        <Settings size={13} color={meta.color} />
+                                                        {it.multiplicationFactor && it.multiplicationFactor > 1 && (
+                                                            <span style={{ position: 'absolute', top: -5, right: -8, fontSize: '0.55rem', fontWeight: 800, color: '#fff', background: meta.color, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                                                                ×{it.multiplicationFactor}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </td>
                                                     <td colSpan={6} style={{ padding: '8px 12px' }}>
                                                         <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
@@ -2839,22 +2854,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         }
                         if (updates.multiplicationFactor !== undefined) {
                             const factor = Number(updates.multiplicationFactor) || 1;
-                            // 1. Save the factor on the grouper itself
-                            updateItem(itemId, 'multiplicationFactor', factor);
-                            // 2. Apply the factor to all child items' quantities
+                            // Unified: save factor on grouper + cascade to children in ONE setItems call
                             setItems(prev => {
                                 const grouperIdx = prev.findIndex(it => it.id === itemId);
                                 if (grouperIdx < 0) return prev;
                                 const grouper = prev[grouperIdx];
                                 const grouperDepth = getDepth(grouper.itemNumber);
+                                const prevFactor = grouper.multiplicationFactor || 1;
                                 const updated = [...prev];
+                                // 1. Save factor on the grouper itself
+                                updated[grouperIdx] = { ...grouper, multiplicationFactor: factor };
+                                // 2. Cascade: multiply all child item quantities
                                 for (let i = grouperIdx + 1; i < updated.length; i++) {
                                     const child = updated[i];
                                     if (isGrouper(child.type) && getDepth(child.itemNumber) <= grouperDepth) break;
                                     if (!isGrouper(child.type)) {
-                                        // Compute base quantity (original / previous factor)
-                                        const prevFactor = grouper.multiplicationFactor || 1;
-                                        const baseQty = child.quantity / prevFactor;
+                                        const baseQty = prevFactor !== 0 ? child.quantity / prevFactor : child.quantity;
                                         const newQty = applyPrecision(baseQty * factor, { precision: engineeringConfig?.precision });
                                         const itemBdi = resolveItemBdi(child);
                                         const unitPrice = applyBdi(child.unitCost, itemBdi, engineeringConfig.precision);
