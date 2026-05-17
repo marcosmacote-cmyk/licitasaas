@@ -171,7 +171,11 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
         }
 
         // Get the target date for this base
-        const targetDate = perBaseDates[baseName] || globalDate; // "2025-09"
+        // FIX: Only apply strict date filtering when the base has an EXPLICIT entry in perBaseDates.
+        // The global `dataBase` was meant for SINAPI but was incorrectly applied to ALL bases (SEINFRA, ORSE, etc.)
+        // causing them to be filtered out when they don't share the same monthly cadence.
+        const hasExplicitDate = !!perBaseDates[baseName];
+        const targetDate = perBaseDates[baseName] || ''; // Only use per-base date, NOT global fallback
         let targetMonth = 0;
         let targetYear = 0;
         if (targetDate) {
@@ -179,14 +183,14 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
-        // Find matching bases: name + UF + date + REGIME (4-way compliance)
+        // Find matching bases: name + UF + date (if explicit) + REGIME (multi-factor compliance)
         const candidates = allBases.filter(b => {
             // Must match base name
             if (!b.name.toUpperCase().includes(upperName)) return false;
             // Must match UF if configured
             if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
-            // Must match date if configured
-            if (targetYear && targetMonth) {
+            // Must match date ONLY if this base has an explicit date configured
+            if (hasExplicitDate && targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
             }
             // Must match regime de encargos (payrollExemption)
@@ -198,10 +202,19 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
         });
 
         if (candidates.length > 0) {
-            result.push(...candidates);
+            // If multiple candidates (no date filter applied), pick most recent
+            candidates.sort((a: any, b: any) =>
+                (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0)
+            );
+            // If no explicit date, only include the most recent version to avoid duplicates
+            if (!hasExplicitDate && candidates.length > 1) {
+                result.push(candidates[0]);
+            } else {
+                result.push(...candidates);
+            }
         } else {
             // Generate specific warning
-            const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+            const datePart = hasExplicitDate && targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
             const ufPart = uf ? ` ${uf}` : '';
             warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Verifique se a base foi importada.`);
         }
