@@ -66,6 +66,8 @@ export interface EngItem {
     notes?: string;
     /** FIX F5.6: Desconto individual (%) aplicado ao preço unitário */
     discount?: number;
+    /** Fator de multiplicação para ETAPAs/SUBETAPAs. Quando aplicado, multiplica as quantidades dos itens filhos. */
+    multiplicationFactor?: number;
 }
 
 export const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';

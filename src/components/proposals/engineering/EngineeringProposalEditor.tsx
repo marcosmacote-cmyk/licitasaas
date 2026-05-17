@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings } from 'lucide-react';
 import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -2171,6 +2171,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                         <Layers size={13} color="var(--color-primary)" />
                                                     </button>
                                                 )}
+                                                {isGrouper(it.type) && (
+                                                    <button title={`Configurações da ${it.type === 'ETAPA' ? 'Etapa' : 'Subetapa'}${it.multiplicationFactor && it.multiplicationFactor > 1 ? ` (Fator: ×${it.multiplicationFactor})` : ''}`}
+                                                        onClick={() => setCompositionEditorIndex(items.indexOf(it))}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: it.multiplicationFactor && it.multiplicationFactor > 1 ? 1 : 0.5, flexShrink: 0, position: 'relative' }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                        onMouseLeave={e => { if (!(it.multiplicationFactor && it.multiplicationFactor > 1)) (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
+                                                    >
+                                                        <Settings size={13} color="#d97706" />
+                                                        {it.multiplicationFactor && it.multiplicationFactor > 1 && (
+                                                            <span style={{ position: 'absolute', top: -4, right: -6, fontSize: '0.55rem', fontWeight: 800, color: '#fff', background: '#d97706', borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                                                                ×{it.multiplicationFactor}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
@@ -2818,6 +2833,42 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     onUpdateItem={(itemId, updates) => {
                         if (updates.unitCost !== undefined) {
                             updateItem(itemId, 'unitCost', updates.unitCost);
+                        }
+                        if (updates.description !== undefined) {
+                            updateItem(itemId, 'description', updates.description);
+                        }
+                        if (updates.multiplicationFactor !== undefined) {
+                            const factor = Number(updates.multiplicationFactor) || 1;
+                            // 1. Save the factor on the grouper itself
+                            updateItem(itemId, 'multiplicationFactor', factor);
+                            // 2. Apply the factor to all child items' quantities
+                            setItems(prev => {
+                                const grouperIdx = prev.findIndex(it => it.id === itemId);
+                                if (grouperIdx < 0) return prev;
+                                const grouper = prev[grouperIdx];
+                                const grouperDepth = getDepth(grouper.itemNumber);
+                                const updated = [...prev];
+                                for (let i = grouperIdx + 1; i < updated.length; i++) {
+                                    const child = updated[i];
+                                    if (isGrouper(child.type) && getDepth(child.itemNumber) <= grouperDepth) break;
+                                    if (!isGrouper(child.type)) {
+                                        // Compute base quantity (original / previous factor)
+                                        const prevFactor = grouper.multiplicationFactor || 1;
+                                        const baseQty = child.quantity / prevFactor;
+                                        const newQty = applyPrecision(baseQty * factor, { precision: engineeringConfig?.precision });
+                                        const itemBdi = resolveItemBdi(child);
+                                        const unitPrice = applyBdi(child.unitCost, itemBdi, engineeringConfig.precision);
+                                        updated[i] = {
+                                            ...child,
+                                            quantity: newQty,
+                                            unitPrice,
+                                            totalPrice: applyPrecision(newQty * unitPrice, { precision: engineeringConfig?.precision }),
+                                        };
+                                    }
+                                }
+                                return updated;
+                            });
+                            setHasUnsavedChanges(true);
                         }
                     }}
                     engineeringConfig={engineeringConfig}

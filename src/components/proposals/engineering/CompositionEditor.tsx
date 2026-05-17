@@ -31,6 +31,7 @@ interface EngItem {
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
     type?: string; // ETAPA, SUBETAPA, COMPOSICAO, INSUMO
+    multiplicationFactor?: number;
     officialUnitCost?: number;
     priceAudit?: {
         matchedDatabaseId?: string | null;
@@ -391,7 +392,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 setLoading(false);
                 setError('');
                 setGrouperDesc(currentItem.description || '');
-                setGrouperFactor('1');
+                setGrouperFactor(String(currentItem.multiplicationFactor || 1));
                 setGrouperFactorSaved(false);
             } else if (currentItem.code) {
                 setDrillStack([]);
@@ -1108,7 +1109,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         onClick={() => {
                                             const factor = parseFloat(grouperFactor.replace(',', '.')) || 1;
                                             if (factor <= 0) return;
-                                            onUpdateItem(currentItem.id, { quantity: factor } as any);
+                                            onUpdateItem(currentItem.id, { multiplicationFactor: factor } as any);
                                             setGrouperFactorSaved(true);
                                             setTimeout(() => setGrouperFactorSaved(false), 2000);
                                         }}
