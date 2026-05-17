@@ -1269,20 +1269,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
     }, [searchQuery, selectedBaseId, insertType, showSearch]);
 
+    // Track per-item quantity in search results & flash feedback for added items
+    const [searchQuantities, setSearchQuantities] = useState<Record<string, number>>({});
+    const [addedItemIds, setAddedItemIds] = useState<Set<string>>(new Set());
+    const [addedCount, setAddedCount] = useState(0);
+
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
         const cost = parseLocaleNumber(dbItem.price);
         const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
         const typeFromBase = dbItem.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : insertType;
+        const qty = searchQuantities[dbItem.id] || 1;
         setHasUnsavedChanges(true);
         setItems(prev => {
             const newItem = {
                 id: `db-${Date.now()}`, itemNumber: '',
                 code: dbItem.code, sourceName: base?.name || 'OFICIAL',
-                description: dbItem.description, unit: dbItem.unit, quantity: 1,
+                description: dbItem.description, unit: dbItem.unit, quantity: qty,
                 unitCost: cost, unitPrice,
-                // FIX BUG-02: totalPrice = qty × unitPrice (was missing qty multiplication)
-                totalPrice: applyPrecision(1 * unitPrice, { precision: engineeringConfig.precision }), type: typeFromBase,
+                totalPrice: applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision }), type: typeFromBase,
                 priceOrigin: 'BASE' as const,
             };
             let newList = [...prev];
@@ -1296,7 +1301,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             newList.push(newItem);
             return renumberItems(newList);
         });
-        setShowSearch(false); setSearchQuery(''); setSearchResults([]); setInsertTargetId(null);
+        // Flash feedback — keep modal open for adding more items
+        setAddedItemIds(prev => new Set(prev).add(dbItem.id));
+        setAddedCount(c => c + 1);
+        setTimeout(() => setAddedItemIds(prev => { const next = new Set(prev); next.delete(dbItem.id); return next; }), 1500);
+    };
+
+    // Reset search session state when modal closes
+    const closeSearchModal = () => {
+        setShowSearch(false); setSearchQuery(''); setSearchResults([]);
+        setInsertTargetId(null); setSearchQuantities({}); setAddedItemIds(new Set()); setAddedCount(0);
     };
 
     // BDI helpers
@@ -2434,8 +2448,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0 }}>Buscar {insertType === 'COMPOSICAO' ? 'Composição' : 'Insumo'} na Base Oficial</h3>
-                            <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <h3 style={{ margin: 0 }}>Buscar {insertType === 'COMPOSICAO' ? 'Composição' : 'Insumo'} na Base Oficial</h3>
+                                {addedCount > 0 && (
+                                    <span style={{ padding: '2px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}>
+                                        {addedCount} {addedCount === 1 ? 'item adicionado' : 'itens adicionados'}
+                                    </span>
+                                )}
+                            </div>
+                            <button onClick={closeSearchModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
                         {(() => {
                             const { filtered, warnings } = filterConfigBasesWithWarnings(bases, dashConfig);
@@ -2491,27 +2512,52 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>
-                                    {['Tipo','Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 4 ? 'right' : 'left' }}>{h}</th>)}
+                                    {['Tipo','Código','Descrição','Unid.','Preço','Qtd.',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 4 ? 'right' : (i === 5 ? 'center' : 'left') }}>{h}</th>)}
                                 </tr></thead>
                                 <tbody>
-                                    {searchResults.map(r => (
-                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                    {searchResults.map(r => {
+                                        const wasAdded = addedItemIds.has(r.id);
+                                        return (
+                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)', background: wasAdded ? 'rgba(16,185,129,0.08)' : undefined, transition: 'background 0.3s' }}>
                                             <td style={{ padding: 8, color: 'var(--color-text-tertiary)', fontWeight: 700 }}>{r.recordKind === 'COMPOSICAO' ? 'Comp.' : 'Insumo'}</td>
                                             <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
                                             <td style={{ padding: 8 }}>{r.description}</td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>
                                             <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(r.price) || 0)}</td>
+                                            <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                                <input type="number" min="0.01" step="0.01"
+                                                    value={searchQuantities[r.id] ?? 1}
+                                                    onChange={e => setSearchQuantities(prev => ({ ...prev, [r.id]: parseFloat(e.target.value) || 1 }))}
+                                                    style={{ width: 60, textAlign: 'center', padding: '4px 4px', fontSize: '0.78rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none' }} />
+                                            </td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>
-                                                <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
+                                                {wasAdded ? (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}>
+                                                        <CheckCircle2 size={14} /> Adicionado
+                                                    </span>
+                                                ) : (
+                                                    <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
+                                                )}
                                             </td>
                                         </tr>
-                                    ))}
-                                    {searchResults.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite uma busca para começar.'}
+                                        );
+                                    })}
+                                    {searchResults.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite código ou descrição para buscar.'}
                                     </td></tr>}
                                 </tbody>
                             </table>
                         </div>
+                        {/* Footer with close button */}
+                        {addedCount > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>
+                                    <CheckCircle2 size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} color="#059669" />
+                                    {addedCount} {addedCount === 1 ? 'item adicionado' : 'itens adicionados'} à planilha
+                                </span>
+                                <button className="btn btn-primary" onClick={closeSearchModal} style={{ padding: '6px 16px', fontSize: '0.8rem' }}>Concluir</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
