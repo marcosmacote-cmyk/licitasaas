@@ -115,6 +115,17 @@ function hasEditalPriceSnapshot(item: EngItem): boolean {
 }
 
 /**
+ * Bases that use version-based identification instead of monthly data-base cadence.
+ * SEINFRA uses 028 (Onerada) / 028.1 (Desonerada) — no monthly reference.
+ * This affects: dropdown labels, Step 1 date config, and base filtering.
+ */
+const VERSION_BASED_BASES = ['SEINFRA', 'SICRO', 'SBC'];
+
+function isVersionBasedBase(name: string): boolean {
+    return VERSION_BASED_BASES.some(vb => name.toUpperCase().includes(vb));
+}
+
+/**
  * STRICT base filter — enforces Step 1 config as absolute rule.
  * Bases are shown ONLY if they match ALL criteria:
  *   1. Name matches basesConsideradas (SINAPI, SEINFRA, ORSE, PROPRIA)
@@ -2423,9 +2434,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             {filtered.length === 0
                                                 ? <option value="">Nenhuma base configurada</option>
                                                 : filtered.map(b => {
-                                                    const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                                    // Version-based bases (SEINFRA) show version; date-based (SINAPI) show month/year
+                                                    const isVersionBased = isVersionBasedBase(b.name);
+                                                    const ref = isVersionBased
+                                                        ? (b.version || 'N/I')
+                                                        : (b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I'));
                                                     const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
-                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} {isVersionBased ? `v${ref}` : `· ${ref}`} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
                                                 })
                                             }
                                         </select>

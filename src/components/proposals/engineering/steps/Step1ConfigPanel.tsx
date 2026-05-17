@@ -473,30 +473,44 @@ export function Step1ConfigPanel({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--color-bg-base)', padding: 10, borderRadius: 'var(--radius-md)' }}>
                             {engineeringConfig.basesConsideradas.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Nenhuma base selecionada</span>}
                             {engineeringConfig.basesConsideradas.map(base => {
+                                // Bases that use version-based identification (SEINFRA 028/028.1) instead of monthly cadence
+                                const VERSION_BASES = ['SEINFRA', 'SICRO', 'SBC'];
+                                const isVersionBased = VERSION_BASES.some(vb => base.toUpperCase().includes(vb));
+
                                 const curVal = engineeringConfig.dataBases?.[base] || engineeringConfig.dataBase || '';
                                 const aiDbs = engineeringConfig._aiExtractedRef?.dataBases;
                                 const aiVal = aiDbs?.[base] || engineeringConfig._aiExtractedRef?.dataBase;
                                 let dateBadge: React.ReactNode = null;
-                                if (aiVal && curVal) {
-                                    dateBadge = curVal === aiVal
-                                        ? <MatchBadge status="ok" label="✓ Edital" title={`Data base confere com o edital: ${aiVal}`} />
-                                        : <MatchBadge status="divergent" label={`Edital: ${aiVal}`} title={`IA extraiu: ${aiVal}. Atual: ${curVal}`} />;
-                                } else if (aiVal && !curVal) {
-                                    dateBadge = <MatchBadge status="info" label={`IA: ${aiVal}`} title={`IA extraiu: ${aiVal}. Preencha o campo.`} />;
+                                if (!isVersionBased) {
+                                    if (aiVal && curVal) {
+                                        dateBadge = curVal === aiVal
+                                            ? <MatchBadge status="ok" label="✓ Edital" title={`Data base confere com o edital: ${aiVal}`} />
+                                            : <MatchBadge status="divergent" label={`Edital: ${aiVal}`} title={`IA extraiu: ${aiVal}. Atual: ${curVal}`} />;
+                                    } else if (aiVal && !curVal) {
+                                        dateBadge = <MatchBadge status="info" label={`IA: ${aiVal}`} title={`IA extraiu: ${aiVal}. Preencha o campo.`} />;
+                                    }
                                 }
                                 return (
                                     <div key={base} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            {dateBadge}
-                                            <input type="month" className="form-input"
-                                                value={curVal}
-                                                onChange={e => onConfigChange({
-                                                    ...engineeringConfig,
-                                                    dataBase: engineeringConfig.dataBase || e.target.value,
-                                                    dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
-                                                })}
-                                                style={{ ...inputStyle, width: 160 }} />
+                                            {isVersionBased ? (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', padding: '6px 12px', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', fontStyle: 'italic' }}>
+                                                    Identificada por versão (sem data-base mensal)
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    {dateBadge}
+                                                    <input type="month" className="form-input"
+                                                        value={curVal}
+                                                        onChange={e => onConfigChange({
+                                                            ...engineeringConfig,
+                                                            dataBase: engineeringConfig.dataBase || e.target.value,
+                                                            dataBases: { ...engineeringConfig.dataBases, [base]: e.target.value }
+                                                        })}
+                                                        style={{ ...inputStyle, width: 160 }} />
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 );
