@@ -940,7 +940,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         const planilhaFp = planilhaPdf ? fingerprints[rawPdfBuffers.indexOf(planilhaPdf)] : null;
 
         if (hasPlanilha && (hasComposicoes || hasResumo)) {
-            const estimatedItems = planilhaFp?.estimatedItems || '?';
+            const estimatedItems = planilhaFp?.estimatedItemCount || '?';
             userInstruction += `\n\n🚨 MÚLTIPLOS DOCUMENTOS DE ORÇAMENTO DETECTADOS:\n` +
                 `Você está recebendo múltiplos PDFs. A FONTE PRINCIPAL é a "Planilha Orçamentária" ` +
                 `que contém TODOS os itens do orçamento com suas QUANTIDADES REAIS, unidades e preços unitários.\n\n` +
@@ -1544,23 +1544,23 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
         // FIX-18: Post-extraction quantity health check
         // If >80% of composition items have qty=1, the model likely read the Composições PDF
         // (unit breakdowns) instead of the Planilha Orçamentária (budget with real quantities).
-        const compositionItems = engItems.filter((it: any) => it.type === 'COMPOSICAO');
-        const qtyOneItems = compositionItems.filter((it: any) => {
+        const qtyCheckItems = engItems.filter((it: any) => it.type === 'COMPOSICAO');
+        const qtyOneItems = qtyCheckItems.filter((it: any) => {
             const qty = parseFloat(String(it.quantity || '0'));
             return qty === 1 || qty === 0;
         });
-        const qtyOneRatio = compositionItems.length > 0 ? qtyOneItems.length / compositionItems.length : 0;
+        const qtyOneRatio = qtyCheckItems.length > 0 ? qtyOneItems.length / qtyCheckItems.length : 0;
         
-        if (qtyOneRatio > 0.8 && compositionItems.length > 30) {
+        if (qtyOneRatio > 0.8 && qtyCheckItems.length > 30) {
             logger.warn(
                 `[Engineering-BG] ⚠️ FIX-18: QUANTITY HEALTH CHECK FAILED — ` +
-                `${qtyOneItems.length}/${compositionItems.length} composições (${(qtyOneRatio * 100).toFixed(0)}%) têm qty=1. ` +
+                `${qtyOneItems.length}/${qtyCheckItems.length} composições (${(qtyOneRatio * 100).toFixed(0)}%) têm qty=1. ` +
                 `Provável leitura do PDF de Composições (detalhamento unitário) em vez da Planilha Orçamentária.`
             );
-        } else if (compositionItems.length > 0) {
-            const avgQty = compositionItems.reduce((sum: number, it: any) => sum + parseFloat(String(it.quantity || '0')), 0) / compositionItems.length;
+        } else if (qtyCheckItems.length > 0) {
+            const avgQty = qtyCheckItems.reduce((sum: number, it: any) => sum + parseFloat(String(it.quantity || '0')), 0) / qtyCheckItems.length;
             logger.info(
-                `[Engineering-BG] ✅ Quantity health check: ${compositionItems.length} composições, ` +
+                `[Engineering-BG] ✅ Quantity health check: ${qtyCheckItems.length} composições, ` +
                 `${qtyOneItems.length} com qty=1 (${(qtyOneRatio * 100).toFixed(0)}%), avg qty=${avgQty.toFixed(1)}`
             );
         }
