@@ -1194,13 +1194,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }
     };
 
-    const addTypedItem = (type: EngItemType, insertAfterId?: string) => {
+    const addTypedItem = (type: EngItemType, insertAfterId?: string, description?: string) => {
         const isGroup = isGrouper(type);
         setHasUnsavedChanges(true);
         setItems(prev => {
             const newItem = {
                 id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
-                description: '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
+                description: description || '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
                 unitCost: 0, unitPrice: 0, totalPrice: 0, type, priceOrigin: isGroup ? undefined : ('MANUAL' as const),
             };
             let newList = [...prev];
@@ -1275,6 +1275,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [searchQuantities, setSearchQuantities] = useState<Record<string, number>>({});
     const [addedItemIds, setAddedItemIds] = useState<Set<string>>(new Set());
     const [addedCount, setAddedCount] = useState(0);
+    const [structuralName, setStructuralName] = useState('');
+    const [addedStructuralNames, setAddedStructuralNames] = useState<string[]>([]);
 
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
@@ -1312,7 +1314,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // Reset search session state when modal closes
     const closeSearchModal = () => {
         setShowSearch(false); setSearchQuery(''); setSearchResults([]);
-        setInsertTargetId(null); setSearchQuantities({}); setAddedItemIds(new Set()); setAddedCount(0);
+        setInsertTargetId(null); setSearchQuantities({}); setAddedItemIds(new Set());
+        setAddedCount(0); setStructuralName(''); setAddedStructuralNames([]);
     };
 
     // BDI helpers
@@ -2467,16 +2470,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 const m = TYPE_META[type];
                                 const Icon = m.icon;
                                 const isActive = insertType === type;
-                                const isSearchable = type === 'COMPOSICAO' || type === 'INSUMO';
                                 return (
                                     <button key={type}
                                         onClick={() => {
                                             setInsertType(type);
-                                            if (!isSearchable) {
-                                                // Structural items: add directly and flash
-                                                addTypedItem(type, insertTargetId || undefined);
-                                                setAddedCount(c => c + 1);
-                                            }
+                                            setStructuralName('');
+                                            setAddedStructuralNames([]);
                                         }}
                                         style={{
                                             display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
@@ -2487,11 +2486,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             color: isActive ? m.color : 'var(--color-text-secondary)',
                                             transition: 'all 0.15s',
                                         }}
-                                        title={isSearchable ? `Buscar ${m.label} na base oficial` : `Adicionar ${m.label} diretamente`}
+                                        title={`Inserir ${m.label}`}
                                     >
                                         <Icon size={14} />
                                         {m.label}
-                                        {!isSearchable && <Plus size={10} style={{ opacity: 0.6 }} />}
                                     </button>
                                 );
                             })}
@@ -2589,18 +2587,58 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             </table>
                         </div>
                         ) : (
-                        /* ── Structural type info panel (ETAPA / SUBETAPA) ── */
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40, border: '1px dashed var(--color-border)', borderRadius: 8, background: 'var(--color-bg-base)' }}>
-                            {(() => { const m = TYPE_META[insertType]; const Icon = m.icon; return <Icon size={32} color={m.color} />; })()}
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
-                                    Clique no botão "{TYPE_META[insertType].label}" para adicionar
-                                </div>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                                    {insertType === 'ETAPA' ? 'Etapas são agrupadores de alto nível (ex: FUNDAÇÃO, ESTRUTURA).' : 'Subetapas organizam itens dentro de uma etapa.'}
-                                    {' '}O item será inserido {insertTargetId ? 'após o item selecionado' : 'ao final da planilha'}.
-                                </div>
+                        /* ── Structural type form (ETAPA / SUBETAPA) ── */
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, padding: 20, border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-bg-base)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {(() => { const m = TYPE_META[insertType]; const Icon = m.icon; return <Icon size={18} color={m.color} />; })()}
+                                <span style={{ fontWeight: 700, fontSize: '0.88rem', color: TYPE_META[insertType].color }}>Nova {TYPE_META[insertType].label}</span>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
+                                    {insertTargetId ? '(será inserida após o item selecionado)' : '(será inserida ao final da planilha)'}
+                                </span>
                             </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input
+                                    type="text" className="form-input" autoFocus
+                                    placeholder={insertType === 'ETAPA' ? 'Ex: FUNDAÇÃO, ESTRUTURA, ALVENARIA...' : 'Ex: Serviços Preliminares, Impermeabilização...'}
+                                    value={structuralName}
+                                    onChange={e => setStructuralName(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && structuralName.trim()) {
+                                            addTypedItem(insertType, insertTargetId || undefined, structuralName.trim());
+                                            setAddedStructuralNames(prev => [...prev, structuralName.trim()]);
+                                            setAddedCount(c => c + 1);
+                                            setStructuralName('');
+                                        }
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                                <button className="btn btn-primary" style={{ padding: '6px 16px', fontSize: '0.8rem' }}
+                                    disabled={!structuralName.trim()}
+                                    onClick={() => {
+                                        addTypedItem(insertType, insertTargetId || undefined, structuralName.trim());
+                                        setAddedStructuralNames(prev => [...prev, structuralName.trim()]);
+                                        setAddedCount(c => c + 1);
+                                        setStructuralName('');
+                                    }}
+                                >
+                                    <Plus size={14} style={{ marginRight: 4 }} /> Adicionar
+                                </button>
+                            </div>
+                            {/* List of added structural items */}
+                            {addedStructuralNames.length > 0 && (
+                                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+                                        {TYPE_META[insertType].label}s adicionadas nesta sessão:
+                                    </div>
+                                    {addedStructuralNames.map((name, i) => (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 'var(--radius-sm)', background: 'rgba(16,185,129,0.06)', marginBottom: 3, fontSize: '0.78rem' }}>
+                                            <CheckCircle2 size={12} color="#059669" />
+                                            <span style={{ fontWeight: 600, color: TYPE_META[insertType].color, minWidth: 30 }}>{i + 1}.</span>
+                                            <span>{name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         )}
 
