@@ -949,13 +949,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 `NÃO extraia os sub-itens das composições como se fossem itens do orçamento.\n\n` +
                 `REGRAS OBRIGATÓRIAS:\n` +
                 `1. Extraia TODOS os itens da "Planilha Orçamentária" — são ~${estimatedItems} itens, NÃO apenas 20 etapas.\n` +
-                `2. Cada item DEVE ter sua QUANTIDADE REAL (campo "q") extraída da planilha. Se a maioria das quantidades for 1, você está lendo o documento errado.\n` +
-                `3. O total global deve ser compatível com o valor da licitação. Se o total estiver muito abaixo, as quantidades estão erradas.\n` +
+                `2. Leia a QUANTIDADE de cada item EXATAMENTE como aparece na coluna "QTD" da tabela. NUNCA invente ou estime quantidades. Se a planilha mostra qty=1 para um item UN, extraia q=1.\n` +
+                `3. VALIDAÇÃO CRUZADA: Para cada item, confira que quantity × unitPrice ≈ totalPrice. Se não bater, você leu a quantidade errada.\n` +
                 `4. O PDF de "Resumo" mostra apenas totais por etapa — use-o como referência de hierarquia.\n` +
-                `5. O PDF de "Composições" mostra detalhamento unitário — use-o apenas para confirmar códigos.\n` +
-                `6. ⚠️ ANTI-TRANSIÇÃO: O PDF da Planilha pode ter duas seções — a Planilha Sintética (início) e as Composições de Custo Unitário (depois). ` +
-                `Se as quantidades começarem a ser TODAS = 1 para itens M2/M3/M/KG, você transicionou para as composições. PARE e extraia apenas da Planilha Sintética.\n` +
-                `7. VALIDAÇÃO: A soma dos totalPrice dos itens de cada ETAPA deve bater com o totalPrice da ETAPA. Se for <50%, as quantidades estão erradas.`;
+                `5. O PDF de "Composições" mostra detalhamento unitário de insumos — NÃO extraia dele. Use apenas a Planilha Orçamentária.`;
             logger.info(
                 `[Engineering-BG] 📋 Multi-PDF detected: Planilha(${planilhaFp?.totalPages || '?'}pgs, ~${estimatedItems} items) + ` +
                 `Composições. Instruction prioritizes Planilha for quantities.`
@@ -1500,7 +1497,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                               `NÃO repita nenhum dos ${engItems.length} itens já extraídos.\n\n`
                         ) +
                         `Extraia TODOS os itens restantes até o FINAL da planilha orçamentária.\n` +
-                        `DICA: Se a maioria das quantidades é 1.00, você está lendo o PDF errado (composições unitárias).\n` +
+                        `Leia as quantidades EXATAMENTE como aparecem na coluna QTD da tabela. NUNCA invente quantidades.\n` +
                         `Retorne em JSON com o mesmo schema.`;
 
                     await extractChunk(

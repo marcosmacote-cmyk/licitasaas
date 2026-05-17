@@ -250,32 +250,17 @@ REGRAS FINAIS
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 - 🚨 NÃO EXTRAIA O CRONOGRAMA FÍSICO-FINANCEIRO. Ele é uma tabela com colunas de meses (30 DIAS, 60 DIAS...) e percentuais. IGNORE-O.
 
-🚨🚨🚨 REGRA ANTI-TRANSIÇÃO DE CONTEXTO (FIX-19 — CRÍTICA):
-  Muitos PDFs de engenharia contêm DUAS SEÇÕES dentro do MESMO documento:
+🚨🚨🚨 REGRA DE FIDELIDADE DE QUANTIDADES (CRÍTICA):
+  A QUANTIDADE (campo "q") de cada item DEVE ser extraída EXATAMENTE como aparece na coluna
+  "QUANTIDADE" ou "QTD" da tabela da Planilha Orçamentária. NUNCA modifique, estime ou invente 
+  uma quantidade que não esteja escrita no documento.
   
-  a) **PLANILHA SINTÉTICA/ORÇAMENTÁRIA** (geralmente no INÍCIO do PDF):
-     Colunas: ITEM | CÓDIGO | DESCRIÇÃO | UNID | **QUANTIDADE** | CUSTO UNIT | TOTAL
-     As QUANTIDADES variam: 573.7 M2, 116 M, 8 M2, 391.6 M2, 12 MÊS
-     O TOTAL de cada item = Quantidade × Preço Unitário
-  
-  b) **COMPOSIÇÕES DE CUSTOS UNITÁRIOS** (geralmente DEPOIS da planilha):
-     Mostra o custo UNITÁRIO de cada serviço (quanto custa 1 M2, 1 M3, 1 UN)
-     As quantidades aqui são SEMPRE 1 (ou coeficientes de insumos)
-     NÃO são quantidades do orçamento — são quantidades de REFERÊNCIA
-  
-  ⚠️ VOCÊ DEVE EXTRAIR **APENAS** DA PLANILHA SINTÉTICA (seção a).
-  
-  COMO DETECTAR SE VOCÊ TRANSICIONOU PARA AS COMPOSIÇÕES (seção b):
-  - Se as quantidades passaram a ser SEMPRE 1 para M2, M3, M, KG → VOCÊ SAIU da planilha!
-  - Se os custos unitários parecem ser o preço de INSUMOS individuais → COMPOSIÇÃO, não planilha.
-  - Se não há mais coluna TOTAL (qty × preço) → COMPOSIÇÃO.
-  - Se o mesmo item aparece repetido com insumos abaixo → COMPOSIÇÃO.
-  
-  VALIDAÇÃO OBRIGATÓRIA (faça para CADA etapa):
-  - Some os totalPrice dos itens filhos de cada ETAPA.
-  - O resultado DEVE ser aproximadamente igual ao totalPrice da ETAPA pai.
-  - Se a soma for MUITO MENOR (< 50%) → as quantidades estão erradas.
-  - Exemplo: Se Etapa "FUNDAÇÃO" tem total R$ 500.000 mas a soma dos filhos dá R$ 8.000 → ERRADO.
+  - Se a planilha mostra qty=1 para um item UN (unidade), extraia q=1.
+  - Se a planilha mostra qty=573.7 para M2, extraia q=573.7.
+  - NUNCA use a mesma quantidade para todos os itens de uma etapa — cada item tem sua quantidade própria.
+  - NUNCA arredonde: se a planilha diz 340.07, extraia 340.07 (não 340).
+  - VALIDAÇÃO: Para cada item, confira que quantity × unitPrice ≈ totalPrice (com tolerância de arredondamento).
+    Se não bater, você leu a quantidade errada.
 
 - 🚨🚨🚨 REGRA DE EXAUSTIVIDADE (MÁXIMA PRIORIDADE): EXTRAIA TODOS OS ITENS DA PLANILHA DO INÍCIO AO FIM. NUNCA pare no meio, NUNCA resuma, NUNCA use "etc" ou reticências. O trabalho só estará completo quando o ÚLTIMO item da última página da planilha orçamentária for extraído.
 
