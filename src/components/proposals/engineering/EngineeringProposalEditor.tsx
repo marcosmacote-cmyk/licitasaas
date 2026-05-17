@@ -1217,7 +1217,25 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         });
         // Advance cursor so next insertion goes after this item
         setInsertTargetId(newId);
+        scrollToItem(newId);
         return newId;
+    };
+
+    // Auto-scroll the main table to show a newly added item
+    const scrollToItem = (itemId: string) => {
+        // Wait for React to render the new row, then scroll into view
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                const row = document.querySelector(`[data-item-id="${itemId}"]`) as HTMLElement;
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Brief highlight flash
+                    row.style.transition = 'background 0.3s';
+                    row.style.background = 'rgba(16,185,129,0.15)';
+                    setTimeout(() => { row.style.background = ''; }, 1200);
+                }
+            }, 80);
+        });
     };
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1318,8 +1336,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             newList.push(newItem);
             return renumberItems(newList);
         });
-        // Advance cursor so next insertion goes after this item
         setInsertTargetId(newId);
+        scrollToItem(newId);
         // Flash feedback — keep modal open for adding more items
         setAddedItemIds(prev => new Set(prev).add(dbItem.id));
         setAddedCount(c => c + 1);
@@ -1380,6 +1398,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 return renumberItems(newList);
             });
             setInsertTargetId(newId);
+            scrollToItem(newId);
             setAddedCount(c => c + 1);
 
             // Reset form (keep qty at 1)
@@ -1613,6 +1632,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined, position: 'relative' as const };
             return (
                 <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}
+                    data-item-id={id}
                     onMouseEnter={() => setHoveredRowId(id)}
                     onMouseLeave={() => setHoveredRowId(null)}
                 >
