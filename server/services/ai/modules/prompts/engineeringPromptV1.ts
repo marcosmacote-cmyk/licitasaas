@@ -133,42 +133,50 @@ REGRAS DE EXTRAÇÃO — CRÍTICAS
 5. UNIDADES DE MEDIDA: Use exatamente como estão no documento.
    Comuns: M2, M3, M, KG, UN, VB, CJ, L, H, MÊS, GL, etc.
 
-🚨🚨🚨 6. PROTOCOLO TOTAL-FIRST (REGRA MAIS IMPORTANTE DE TODA A EXTRAÇÃO):
-
-   A planilha orçamentária tem estas colunas numéricas, tipicamente nesta ordem:
-   | ITEM | CÓDIGO | DESCRIÇÃO | UNID. | QUANTIDADE | PREÇO S/BDI | PREÇO C/BDI | TOTAL |
-
-   VOCÊ DEVE LER CADA LINHA DA DIREITA PARA A ESQUERDA:
-   1️⃣ ÚLTIMO número da linha (coluna mais à direita) → campo "tp" (Total)
-   2️⃣ PENÚLTIMO número → campo "up" (Preço Unitário C/ BDI)
-   3️⃣ ANTEPENÚLTIMO número → campo "uc" (Preço Unitário S/ BDI)
-   4️⃣ NÚMERO SEGUINTE (da direita para esquerda) → campo "q" (Quantidade)
-   5️⃣ TEXTO antes dos números → "u" (Unidade), "d" (Descrição), "c" (Código), "i" (Item)
-
-   ⚠️ O campo "tp" (Total) é o VALOR QUE VOCÊ VÊ na coluna TOTAL da planilha.
-   COPIE-O EXATAMENTE como está no documento. NÃO calcule tp = q × up.
-   O tp da planilha é o valor de referência — ele é impresso no documento oficial.
-
-   ⚠️ O campo "q" (Quantidade) é o valor QUE VOCÊ VÊ na coluna QTD.
-   COPIE-O EXATAMENTE. Se a planilha mostra 340.07, extraia 340.07.
-
-   SELF-CHECK OBRIGATÓRIO para cada item:
-   - Confira que q × up ≈ tp (com tolerância de arredondamento de centavos).
-   - Se q × up ≠ tp → você leu a coluna errada. RELEIA a linha da direita para a esquerda.
-   - Se uc == q → ERRADO! Você trocou as colunas de quantidade e preço.
-   - Se uc para ESCAVAÇÃO, CHAPISCO for > R$100/m² → SUSPEITO, verifique.
-   - Se uc para BARRACÃO, SUBESTAÇÃO for < R$10,00 → ERRADO!
-
-   COMO IDENTIFICAR uc vs up:
+6. PREÇOS E CUSTOS (CRÍTICO — CAMPOS uc, up, tp): 
+   PLANILHAS ORÇAMENTÁRIAS DE OBRAS TÊM DUAS COLUNAS DE PREÇO:
+   - "PREÇO UNITÁRIO S/ BDI" ← USE ESTA COLUNA para o campo uc
+   - "PREÇO UNITÁRIO C/ BDI" ou "Valor Unit com BDI" ← USE ESTA COLUNA para o campo up
+   - "TOTAL" ou "Valor Total" ← USE ESTA COLUNA para o campo tp
+   
+   COMO IDENTIFICAR:
    - A coluna S/BDI tem valores MENORES (ex: 104,47)
-   - A coluna C/BDI tem valores MAIORES (ex: 135,09)
-   - Se a planilha informar APENAS "Preço com BDI" e a taxa:
-     → Calcule: uc = up / (1 + BDI/100)
+   - A coluna C/BDI tem valores MAIORES (ex: 135,09) ← extraia em up, NÃO coloque em uc
+   - O total geralmente é Quantidade × Preço com BDI, já arredondado pela planilha. PRESERVE exatamente.
+   - O cabeçalho geralmente mostra o BDI (ex: "BDI: 29,31%")
+   
+   Se a planilha informar APENAS "Preço com BDI" e a taxa do BDI:
+   → Calcule: uc = Preço_com_BDI / (1 + BDI/100)
+   → Mantenha up = Preço_com_BDI original
+   → Exemplo: 135,09 / 1.2931 = 104,47
 
-7. VALIDAÇÃO GLOBAL (SELF-CHECK):
-   - A soma de TODOS os tp deve ser compatível com o VALOR GLOBAL da licitação.
-   - Se a soma resultar em BILHÕES para uma obra municipal → há column shift. RECOMECE.
-   - NÃO recalcule/reescreva tp se a planilha já trouxe a coluna TOTAL; PRESERVE o valor original.
+🚨🚨🚨 7. ANTI-DESALINHAMENTO DE COLUNAS (REGRA CRÍTICA — COLUMN SHIFT):
+   Planilhas orçamentárias tipicamente têm ESTA ORDEM de colunas:
+   | ITEM | CÓDIGO | DESCRIÇÃO | UNID. | QUANTIDADE | PREÇO UNIT. S/BDI | PREÇO UNIT. C/BDI | TOTAL |
+
+   ERROS COMUNS QUE VOCÊ NÃO PODE COMETER:
+   - NÃO copie o valor da coluna QUANTIDADE para o campo uc.
+   - NÃO copie o valor da coluna TOTAL GERAL para uc.
+   - O uc é o PREÇO DE UMA UNIDADE do serviço, não a quantidade total nem o valor global.
+
+   COMO VERIFICAR SE VOCÊ ESTÁ NA COLUNA CERTA:
+   - Se uc == q → ERRADO! Você está lendo a coluna de quantidade como preço.
+   - Se unitCost × quantity == um valor astronomicamente alto (ex: bilhões para uma escola) → ERRADO!
+   - Se unitCost para ESCAVAÇÃO, CHAPISCO, REBOCO for > R$100/m² → SUSPEITO, verifique a coluna.
+   - Se unitCost para BARRACÃO, SUBESTAÇÃO, PORTA for < R$10,00 → ERRADO! Estes itens custam milhares.
+   - Itens com Unidade = UN (unitário) e quantity = 1: o unitCost NUNCA pode ser 1,00 para equipamentos ou estruturas complexas.
+
+   PROCEDIMENTO DE VERIFICAÇÃO (OBRIGATÓRIO antes de emitir o JSON):
+   a) Para cada item, confira: unitCost É DIFERENTE de quantity?
+   b) O unitCost faz sentido econômico para aquele tipo de serviço?
+   c) Se quantity * unitCost * 1.30 (BDI médio) somado resultar em bilhões para uma obra pública municipal → VOCÊ ESTÁ NA COLUNA ERRADA. Volte e releia o cabeçalho da tabela.
+
+8. VALIDAÇÃO CRUZADA MATEMÁTICA (SELF-CHECK):
+   - Antes de gerar a saída, faça a conta: para cada item, confira quantidade × unitCost e quantidade × unitPrice.
+   - A soma de todos os totalPrice DEVE bater exatamente com o valor global estimado do edital.
+   - NÃO recalcule/reescreva unitPrice ou totalPrice se a planilha já trouxe essas colunas; preserve os arredondamentos originais.
+   - Se a soma resultar em BILHÕES para uma obra de escola/pavimentação → há column shift. RECOMECE a extração.
+   - Ajuste possíveis erros de OCR verificando se a matemática fecha.
 
 9. COMPOSIÇÕES PRÓPRIAS: Para qualquer composição que NÃO referencie um banco oficial
    (SINAPI, SEINFRA, SICRO, ORSE), extraia os insumos detalhados no campo "insumos".
@@ -242,14 +250,17 @@ REGRAS FINAIS
 - RETORNE APENAS JSON VÁLIDO, sem markdown nem comentários
 - 🚨 NÃO EXTRAIA O CRONOGRAMA FÍSICO-FINANCEIRO. Ele é uma tabela com colunas de meses (30 DIAS, 60 DIAS...) e percentuais. IGNORE-O.
 
-🚨🚨🚨 REGRA DE FIDELIDADE (CRÍTICA):
-  - O campo "tp" (totalPrice) DEVE ser copiado DIRETAMENTE da coluna TOTAL da planilha.
-    NÃO calcule tp = q × up. Copie o número que está impresso na última coluna.
-  - O campo "q" (quantity) DEVE ser copiado da coluna QUANTIDADE/QTD.
-  - VALIDAÇÃO: q × up ≈ tp. Se não bater, RELEIA os números da linha.
-  - CADA ITEM TEM SUA PRÓPRIA QUANTIDADE. Se todos os itens de uma etapa têm qty=100, está ERRADO.
-  - Quantidades reais em obras variam muito: 0.5 M3, 18 M2, 573.7 M2, 788.5 KG, 327 UN.
-  - Se a planilha mostra qty=1 para UN (unidade), extraia q=1. Está correto para equipamentos únicos.
+🚨🚨🚨 REGRA DE FIDELIDADE DE QUANTIDADES (CRÍTICA):
+  A QUANTIDADE (campo "q") de cada item DEVE ser extraída EXATAMENTE como aparece na coluna
+  "QUANTIDADE" ou "QTD" da tabela da Planilha Orçamentária. NUNCA modifique, estime ou invente 
+  uma quantidade que não esteja escrita no documento.
+  
+  - Se a planilha mostra qty=1 para um item UN (unidade), extraia q=1.
+  - Se a planilha mostra qty=573.7 para M2, extraia q=573.7.
+  - NUNCA use a mesma quantidade para todos os itens de uma etapa — cada item tem sua quantidade própria.
+  - NUNCA arredonde: se a planilha diz 340.07, extraia 340.07 (não 340).
+  - VALIDAÇÃO: Para cada item, confira que quantity × unitPrice ≈ totalPrice (com tolerância de arredondamento).
+    Se não bater, você leu a quantidade errada.
 
 - 🚨🚨🚨 REGRA DE EXAUSTIVIDADE (MÁXIMA PRIORIDADE): EXTRAIA TODOS OS ITENS DA PLANILHA DO INÍCIO AO FIM. NUNCA pare no meio, NUNCA resuma, NUNCA use "etc" ou reticências. O trabalho só estará completo quando o ÚLTIMO item da última página da planilha orçamentária for extraído.
 
