@@ -1229,7 +1229,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }
     };
 
-    const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
+    const [insertType, setInsertType] = useState<EngItemType>('COMPOSICAO');
     const [insertTargetId, setInsertTargetId] = useState<string | null>(null);
 
     // Search — core function (reusable by both auto-search and manual button)
@@ -1247,8 +1247,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const selectedBase = bases.find(b => b.id === selectedBaseId);
             const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
             if (effectiveDate) params.append('dataBase', effectiveDate);
-            // Filter by record kind: COMPOSICAO or INSUMO based on insertType
-            params.append('kind', insertType);
+            // Filter by record kind for searchable types only
+            if (insertType === 'COMPOSICAO' || insertType === 'INSUMO') {
+                params.append('kind', insertType);
+            }
             const url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
             const res = await fetch(url, { headers: hdrs() });
             const data = await res.json();
@@ -1668,24 +1670,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     {/* ── Separator ── */}
                     <div style={{ width: 1, height: 28, background: 'var(--color-border)', margin: '0 4px', flexShrink: 0 }} />
 
-                    {/* ── INSERTION TOOLBAR (merged into sticky bar) ── */}
+                    {/* ── INSERTION TOOLBAR — all types open the Hub ── */}
                     <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>Inserir:</span>
                     {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([type, Icon]) => {
                         const m = TYPE_META[type];
                         const handleClick = (e: React.MouseEvent) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (type === 'COMPOSICAO' || type === 'INSUMO') {
-                                // Open search modal to let user pick from official bases
-                                setInsertType(type);
-                                setInsertTargetId(null);
-                                setSearchQuery('');
-                                setSearchResults([]);
-                                setShowSearch(true);
-                            } else {
-                                // Etapa/Subetapa are structural — add directly
-                                addTypedItem(type);
-                            }
+                            // All types open the Hub de Inserção
+                            setInsertType(type);
+                            setInsertTargetId(null);
+                            setSearchQuery('');
+                            setSearchResults([]);
+                            setSearchQuantities({});
+                            setAddedItemIds(new Set());
+                            setAddedCount(0);
+                            setShowSearch(true);
                         };
                         return (
                             <button key={type} onClick={handleClick}
@@ -1985,15 +1985,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                     const handleClick = (e: React.MouseEvent) => {
                                                                         e.preventDefault();
                                                                         e.stopPropagation();
-                                                                        if (t === 'COMPOSICAO' || t === 'INSUMO') {
-                                                                            setInsertType(t);
-                                                                            setInsertTargetId(it.id);
-                                                                            setSearchQuery('');
-                                                                            setSearchResults([]);
-                                                                            setShowSearch(true);
-                                                                        } else {
-                                                                            addTypedItem(t, it.id);
-                                                                        }
+                                                                        // All types open the Hub de Inserção
+                                                                        setInsertType(t);
+                                                                        setInsertTargetId(it.id);
+                                                                        setSearchQuery('');
+                                                                        setSearchResults([]);
+                                                                        setSearchQuantities({});
+                                                                        setAddedItemIds(new Set());
+                                                                        setAddedCount(0);
+                                                                        setShowSearch(true);
                                                                     };
                                                                     return (
                                                                         <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
@@ -2147,15 +2147,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                 const handleClick = (e: React.MouseEvent) => {
                                                                     e.preventDefault();
                                                                     e.stopPropagation();
-                                                                    if (t === 'COMPOSICAO' || t === 'INSUMO') {
-                                                                        setInsertType(t);
-                                                                        setInsertTargetId(it.id);
-                                                                        setSearchQuery('');
-                                                                        setSearchResults([]);
-                                                                        setShowSearch(true);
-                                                                    } else {
-                                                                        addTypedItem(t, it.id);
-                                                                    }
+                                                                    // All types open the Hub de Inserção
+                                                                    setInsertType(t);
+                                                                    setInsertTargetId(it.id);
+                                                                    setSearchQuery('');
+                                                                    setSearchResults([]);
+                                                                    setSearchQuantities({});
+                                                                    setAddedItemIds(new Set());
+                                                                    setAddedCount(0);
+                                                                    setShowSearch(true);
                                                                 };
                                                                 return (
                                                                     <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
@@ -2443,13 +2443,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             </div>
             )}
 
-            {/* Search Modal */}
+            {/* ═══ INSERTION HUB MODAL ═══ */}
             {showSearch && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 860, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                        {/* ── Header ── */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <h3 style={{ margin: 0 }}>Buscar {insertType === 'COMPOSICAO' ? 'Composição' : 'Insumo'} na Base Oficial</h3>
+                                <Database size={20} color="var(--color-primary)" />
+                                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Hub de Inserção</h3>
                                 {addedCount > 0 && (
                                     <span style={{ padding: '2px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}>
                                         {addedCount} {addedCount === 1 ? 'item adicionado' : 'itens adicionados'}
@@ -2458,12 +2460,48 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             </div>
                             <button onClick={closeSearchModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
-                        {(() => {
+
+                        {/* ── Type Selector Tabs ── */}
+                        <div style={{ display: 'flex', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
+                            {(['ETAPA', 'SUBETAPA', 'COMPOSICAO', 'INSUMO'] as EngItemType[]).map(type => {
+                                const m = TYPE_META[type];
+                                const Icon = m.icon;
+                                const isActive = insertType === type;
+                                const isSearchable = type === 'COMPOSICAO' || type === 'INSUMO';
+                                return (
+                                    <button key={type}
+                                        onClick={() => {
+                                            setInsertType(type);
+                                            if (!isSearchable) {
+                                                // Structural items: add directly and flash
+                                                addTypedItem(type, insertTargetId || undefined);
+                                                setAddedCount(c => c + 1);
+                                            }
+                                        }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
+                                            borderRadius: 'var(--radius-md)',
+                                            border: isActive ? `2px solid ${m.color}` : '1px solid var(--color-border)',
+                                            background: isActive ? `${m.color}12` : 'var(--color-bg-base)',
+                                            cursor: 'pointer', fontSize: '0.78rem', fontWeight: isActive ? 700 : 600,
+                                            color: isActive ? m.color : 'var(--color-text-secondary)',
+                                            transition: 'all 0.15s',
+                                        }}
+                                        title={isSearchable ? `Buscar ${m.label} na base oficial` : `Adicionar ${m.label} diretamente`}
+                                    >
+                                        <Icon size={14} />
+                                        {m.label}
+                                        {!isSearchable && <Plus size={10} style={{ opacity: 0.6 }} />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* ── Search Bar (only for COMPOSICAO / INSUMO) ── */}
+                        {(insertType === 'COMPOSICAO' || insertType === 'INSUMO') && (() => {
                             const { filtered, warnings } = filterConfigBasesWithWarnings(bases, dashConfig);
-                            // Auto-sync selectedBaseId to first filtered base if current selection is not in the list
                             const isCurrentBaseInFiltered = filtered.some((b: any) => b.id === selectedBaseId);
                             if (!isCurrentBaseInFiltered && filtered.length > 0) {
-                                // Schedule state update for next tick to avoid setState during render
                                 setTimeout(() => setSelectedBaseId(filtered[0].id), 0);
                             }
                             return (
@@ -2473,7 +2511,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             {filtered.length === 0
                                                 ? <option value="">Nenhuma base configurada</option>
                                                 : filtered.map(b => {
-                                                    // Version-based bases (SEINFRA) show version; date-based (SINAPI) show month/year
                                                     const isVersionBased = isVersionBasedBase(b.name);
                                                     const ref = isVersionBased
                                                         ? (b.version || 'N/I')
@@ -2485,7 +2522,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </select>
                                         <div style={{ flex: 1, position: 'relative' }}>
                                             <input type="text" className="form-input"
-                                                placeholder="Digite código ou descrição (mín. 2 caracteres)..."
+                                                placeholder={`Buscar ${TYPE_META[insertType].label.toLowerCase()} por código ou descrição...`}
                                                 value={searchQuery}
                                                 onChange={e => setSearchQuery(e.target.value)}
                                                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
@@ -2509,6 +2546,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 </>
                             );
                         })()}
+
+                        {/* ── Search Results Table (only for COMPOSICAO / INSUMO) ── */}
+                        {(insertType === 'COMPOSICAO' || insertType === 'INSUMO') ? (
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>
@@ -2543,11 +2583,27 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         );
                                     })}
                                     {searchResults.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite código ou descrição para buscar.'}
+                                        {searchQuery ? 'Nenhum resultado encontrado.' : `Busque ${TYPE_META[insertType].label.toLowerCase()} por código ou descrição acima.`}
                                     </td></tr>}
                                 </tbody>
                             </table>
                         </div>
+                        ) : (
+                        /* ── Structural type info panel (ETAPA / SUBETAPA) ── */
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40, border: '1px dashed var(--color-border)', borderRadius: 8, background: 'var(--color-bg-base)' }}>
+                            {(() => { const m = TYPE_META[insertType]; const Icon = m.icon; return <Icon size={32} color={m.color} />; })()}
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+                                    Clique no botão "{TYPE_META[insertType].label}" para adicionar
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
+                                    {insertType === 'ETAPA' ? 'Etapas são agrupadores de alto nível (ex: FUNDAÇÃO, ESTRUTURA).' : 'Subetapas organizam itens dentro de uma etapa.'}
+                                    {' '}O item será inserido {insertTargetId ? 'após o item selecionado' : 'ao final da planilha'}.
+                                </div>
+                            </div>
+                        </div>
+                        )}
+
                         {/* Footer with close button */}
                         {addedCount > 0 && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
