@@ -1565,6 +1565,88 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             );
         }
 
+        // ── FIX-20: QUANTITY RECALCULATION (qty = totalPrice / unitPrice) ──
+        // The model reads codes and prices correctly but often FABRICATES quantities.
+        // We can recover the real quantity from: qty = totalPrice / unitPrice
+        // because totalPrice comes directly from the "TOTAL" column of the PDF table.
+        {
+            const recalcItems = engItems.filter((it: any) => 
+                (it.type === 'COMPOSICAO' || it.type === 'INSUMO')
+            );
+            let recalcCount = 0;
+            let recalcDetails: string[] = [];
+
+            for (const item of recalcItems) {
+                const qty = parseFloat(String(item.quantity || '0'));
+                const up = parseFloat(String(item.unitPrice || '0'));
+                const tp = parseFloat(String(item.totalPrice || '0'));
+                const uc = parseFloat(String(item.unitCost || '0'));
+
+                // Skip items where we don't have enough data to recalculate
+                if (tp <= 0 || (up <= 0 && uc <= 0)) continue;
+                
+                // Use unitPrice (c/ BDI) if available, otherwise unitCost (s/ BDI)
+                const priceRef = up > 0 ? up : uc;
+                const expectedQty = tp / priceRef;
+
+                // Only recalculate if the current qty is significantly wrong
+                // Tolerance: allow 5% difference for rounding
+                const currentTotal = qty * priceRef;
+                const deviation = Math.abs(currentTotal - tp);
+                const deviationPct = tp > 0 ? (deviation / tp) * 100 : 0;
+
+                if (deviationPct > 5 && expectedQty > 0) {
+                    // Round to 2 decimal places to match typical planilha precision
+                    const newQty = Math.round(expectedQty * 100) / 100;
+                    
+                    if (newQty !== qty && newQty > 0) {
+                        recalcDetails.push(
+                            `${item.itemNumber}: qty ${qty}→${newQty} (tp=${tp}/up=${priceRef})`
+                        );
+                        item.quantity = newQty;
+                        item._qtyRecalculated = true;
+                        item._qtyOriginal = qty;
+                        recalcCount++;
+                    }
+                }
+            }
+
+            if (recalcCount > 0) {
+                logger.info(
+                    `[Engineering-BG] 🔧 FIX-20: Recalculou qty para ${recalcCount}/${recalcItems.length} itens ` +
+                    `usando fórmula qty=totalPrice/unitPrice. Exemplos:\n  ` +
+                    recalcDetails.slice(0, 20).join('\n  ')
+                );
+            } else {
+                logger.info(
+                    `[Engineering-BG] ✅ FIX-20: Nenhuma correção de qty necessária — ` +
+                    `${recalcItems.length} itens com math check OK.`
+                );
+            }
+
+            // Recalculate unitCost for items where only unitPrice was available
+            // uc = up / (1 + BDI) — detect BDI from items that have both
+            const bdiSamples = recalcItems
+                .filter((it: any) => {
+                    const uc2 = parseFloat(String(it.unitCost || '0'));
+                    const up2 = parseFloat(String(it.unitPrice || '0'));
+                    return uc2 > 0 && up2 > 0 && up2 > uc2;
+                })
+                .map((it: any) => {
+                    const uc2 = parseFloat(String(it.unitCost || '0'));
+                    const up2 = parseFloat(String(it.unitPrice || '0'));
+                    return (up2 / uc2) - 1;
+                });
+            
+            if (bdiSamples.length > 0) {
+                const avgBdi = bdiSamples.reduce((a: number, b: number) => a + b, 0) / bdiSamples.length;
+                logger.info(
+                    `[Engineering-BG] 📊 BDI médio detectado: ${(avgBdi * 100).toFixed(2)}% ` +
+                    `(${bdiSamples.length} amostras)`
+                );
+            }
+        }
+
         if (totalRepairs.length > 0) {
             logger.info(
                 `[Engineering-BG] 🛠️ Normalização aplicou ${totalRepairs.length} reparo(s): ` +
