@@ -952,7 +952,10 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 `2. Cada item DEVE ter sua QUANTIDADE REAL (campo "q") extraída da planilha. Se a maioria das quantidades for 1, você está lendo o documento errado.\n` +
                 `3. O total global deve ser compatível com o valor da licitação. Se o total estiver muito abaixo, as quantidades estão erradas.\n` +
                 `4. O PDF de "Resumo" mostra apenas totais por etapa — use-o como referência de hierarquia.\n` +
-                `5. O PDF de "Composições" mostra detalhamento unitário — use-o apenas para confirmar códigos.`;
+                `5. O PDF de "Composições" mostra detalhamento unitário — use-o apenas para confirmar códigos.\n` +
+                `6. ⚠️ ANTI-TRANSIÇÃO: O PDF da Planilha pode ter duas seções — a Planilha Sintética (início) e as Composições de Custo Unitário (depois). ` +
+                `Se as quantidades começarem a ser TODAS = 1 para itens M2/M3/M/KG, você transicionou para as composições. PARE e extraia apenas da Planilha Sintética.\n` +
+                `7. VALIDAÇÃO: A soma dos totalPrice dos itens de cada ETAPA deve bater com o totalPrice da ETAPA. Se for <50%, as quantidades estão erradas.`;
             logger.info(
                 `[Engineering-BG] 📋 Multi-PDF detected: Planilha(${planilhaFp?.totalPages || '?'}pgs, ~${estimatedItems} items) + ` +
                 `Composições. Instruction prioritizes Planilha for quantities.`
