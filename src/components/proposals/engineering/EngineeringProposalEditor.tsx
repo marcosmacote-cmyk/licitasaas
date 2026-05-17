@@ -1229,12 +1229,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }
     };
 
-    // Search
-    const handleSearch = async () => {
-        if (!selectedBaseId || !searchQuery) return;
+    const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
+    const [insertTargetId, setInsertTargetId] = useState<string | null>(null);
+
+    // Search — core function (reusable by both auto-search and manual button)
+    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleSearch = useCallback(async (query?: string) => {
+        const q = query ?? searchQuery;
+        if (!selectedBaseId || !q || q.length < 2) {
+            if (!q) setSearchResults([]);
+            return;
+        }
         setIsSearching(true);
         try {
-            const params = new URLSearchParams({ q: searchQuery });
+            const params = new URLSearchParams({ q });
             if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
             const selectedBase = bases.find(b => b.id === selectedBaseId);
             const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
@@ -1246,10 +1254,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const data = await res.json();
             setSearchResults(data.items || []);
         } catch (err) { console.error('[Search] Error:', err); } finally { setIsSearching(false); }
-    };
+    }, [searchQuery, selectedBaseId, bases, engineeringConfig, insertType]);
 
-    const [insertType, setInsertType] = useState<'COMPOSICAO' | 'INSUMO'>('COMPOSICAO');
-    const [insertTargetId, setInsertTargetId] = useState<string | null>(null);
+    // Auto-search: fires when user types 2+ characters, with 350ms debounce
+    useEffect(() => {
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+        if (!showSearch || !searchQuery || searchQuery.length < 2) {
+            if (showSearch && !searchQuery) setSearchResults([]);
+            return;
+        }
+        searchDebounceRef.current = setTimeout(() => {
+            handleSearch(searchQuery);
+        }, 350);
+        return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+    }, [searchQuery, selectedBaseId, insertType, showSearch]);
 
     const addFromSearch = (dbItem: any) => {
         const base = bases.find(b => b.id === selectedBaseId);
@@ -2444,8 +2462,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 })
                                             }
                                         </select>
-                                        <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-                                        <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
+                                        <div style={{ flex: 1, position: 'relative' }}>
+                                            <input type="text" className="form-input"
+                                                placeholder="Digite código ou descrição (mín. 2 caracteres)..."
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                                autoFocus
+                                                style={{ width: '100%', paddingRight: isSearching ? 36 : 12 }} />
+                                            {isSearching && (
+                                                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                                                    <Loader2 size={16} className="spin" color="var(--color-primary)" />
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     {warnings.length > 0 && (
                                         <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
