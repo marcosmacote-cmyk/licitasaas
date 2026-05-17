@@ -925,32 +925,56 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             logger.info(`[Engineering-BG] 🔄 Column shift probe feedback added to prompt.`);
         }
 
-        // FIX-16: Multi-PDF intelligence — detect Summary + Compositions pattern
-        // When the PNCP provides a "Resumo" (summary with etapas/totals only) alongside
-        // a "Composições" (detailed line items), the model tends to extract only from
-        // the summary and stop. Inject explicit instruction to drill into the detailed PDF.
+        // FIX-16v2: Multi-PDF intelligence — detect Planilha Orçamentária + Composições pattern
+        // When the PNCP provides both a "Planilha Orçamentária" (budget with ALL items + real quantities)
+        // and a "Composições" (unit composition breakdowns showing sub-items/insumos per service),
+        // the model must prioritize the Planilha Orçamentária which has the actual budget quantities.
+        // The Composições PDF shows what materials/labor make up each service — NOT the budget itself.
         const pdfSources = rawPdfBuffers.map(p => p.source.toLowerCase());
-        const hasResumo = pdfSources.some(s => /resumo|planilha.orc/i.test(s));
+        const hasPlanilha = pdfSources.some(s => /planilha.orc/i.test(s));
+        const hasResumo = pdfSources.some(s => /resumo/i.test(s));
         const hasComposicoes = pdfSources.some(s => /composi[cç]/i.test(s));
-        const longPdf = rawPdfBuffers.find(p => {
-            const fp = fingerprints[rawPdfBuffers.indexOf(p)];
-            return fp && fp.totalPages >= 20;
-        });
+        
+        // Find the planilha PDF (budget-level items with quantities)
+        const planilhaPdf = rawPdfBuffers.find(p => /planilha.orc/i.test(p.source.toLowerCase()));
+        const planilhaFp = planilhaPdf ? fingerprints[rawPdfBuffers.indexOf(planilhaPdf)] : null;
 
-        if (hasResumo && hasComposicoes && longPdf) {
-            userInstruction += `\n\n🚨 MÚLTIPLOS DOCUMENTOS — RESUMO + COMPOSIÇÕES:\n` +
-                `Você está recebendo múltiplos PDFs. Um deles é um RESUMO DO ORÇAMENTO que lista apenas as ` +
-                `etapas com totais. Outro contém as COMPOSIÇÕES DETALHADAS com todos os itens individuais ` +
-                `(código, descrição, unidade, quantidade, custo unitário).\n\n` +
-                `REGRA OBRIGATÓRIA: Extraia TODOS os itens do PDF de COMPOSIÇÕES DETALHADAS.\n` +
-                `O resumo serve apenas como referência de hierarquia (etapas/subetapas). ` +
-                `NÃO extraia apenas as etapas do resumo — isso é INSUFICIENTE.\n` +
-                `Cada ETAPA deve ter suas COMPOSIÇÕES (itens filho) extraídas do documento detalhado.\n` +
-                `Espera-se centenas de itens, NÃO apenas 20-30 etapas.`;
+        if (hasPlanilha && (hasComposicoes || hasResumo)) {
+            const estimatedItems = planilhaFp?.estimatedItems || '?';
+            userInstruction += `\n\n🚨 MÚLTIPLOS DOCUMENTOS DE ORÇAMENTO DETECTADOS:\n` +
+                `Você está recebendo múltiplos PDFs. A FONTE PRINCIPAL é a "Planilha Orçamentária" ` +
+                `que contém TODOS os itens do orçamento com suas QUANTIDADES REAIS, unidades e preços unitários.\n\n` +
+                `⚠️ ATENÇÃO — O PDF "Composições" NÃO é a planilha orçamentária. ` +
+                `Ele contém o DETALHAMENTO UNITÁRIO de cada serviço (quais insumos e mão-de-obra compõem cada item). ` +
+                `NÃO extraia os sub-itens das composições como se fossem itens do orçamento.\n\n` +
+                `REGRAS OBRIGATÓRIAS:\n` +
+                `1. Extraia TODOS os itens da "Planilha Orçamentária" — são ~${estimatedItems} itens, NÃO apenas 20 etapas.\n` +
+                `2. Cada item DEVE ter sua QUANTIDADE REAL (campo "q") extraída da planilha. Se a maioria das quantidades for 1, você está lendo o documento errado.\n` +
+                `3. O total global deve ser compatível com o valor da licitação. Se o total estiver muito abaixo, as quantidades estão erradas.\n` +
+                `4. O PDF de "Resumo" mostra apenas totais por etapa — use-o como referência de hierarquia.\n` +
+                `5. O PDF de "Composições" mostra detalhamento unitário — use-o apenas para confirmar códigos.`;
             logger.info(
-                `[Engineering-BG] 📋 Multi-PDF detected: Resumo + Composições pattern. ` +
-                `Injecting drill-down instruction (long PDF: ${longPdf.source}, ${fingerprints[rawPdfBuffers.indexOf(longPdf)]?.totalPages || '?'} pages).`
+                `[Engineering-BG] 📋 Multi-PDF detected: Planilha(${planilhaFp?.totalPages || '?'}pgs, ~${estimatedItems} items) + ` +
+                `Composições. Instruction prioritizes Planilha for quantities.`
             );
+        } else if (hasResumo && hasComposicoes && !hasPlanilha) {
+            // Fallback: no explicit "Planilha" but has Resumo + Composições
+            const longPdf = rawPdfBuffers.find(p => {
+                const fp = fingerprints[rawPdfBuffers.indexOf(p)];
+                return fp && fp.totalPages >= 20;
+            });
+            if (longPdf) {
+                userInstruction += `\n\n🚨 MÚLTIPLOS DOCUMENTOS — RESUMO + COMPOSIÇÕES:\n` +
+                    `Foram detectados múltiplos PDFs. O "Resumo" lista apenas etapas com totais.\n` +
+                    `Extraia TODOS os itens individuais dos outros PDFs fornecidos.\n` +
+                    `Cada ETAPA deve ter suas COMPOSIÇÕES (itens filho) com quantidades, unidades e custos.\n` +
+                    `Espera-se centenas de itens, NÃO apenas 20-30 etapas.\n` +
+                    `Se a maioria das quantidades for 1, você está lendo o detalhamento unitário — busque as quantidades do orçamento.`;
+                logger.info(
+                    `[Engineering-BG] 📋 Multi-PDF fallback: Resumo + Composições (no explicit Planilha). ` +
+                    `Long PDF: ${longPdf.source}, ${fingerprints[rawPdfBuffers.indexOf(longPdf)]?.totalPages || '?'} pages.`
+                );
+            }
         }
 
         let totalRepairs: string[] = [];
@@ -1463,15 +1487,17 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `Últimos itens extraídos: [${lastItemsSummary}]\n\n` +
                         (lastComposicoes.length === 0
                             ? `⚠️ ALERTA: Foram extraídas APENAS ${topLevelEtapas.size} ETAPAS (categorias/agrupadores), mas NENHUMA COMPOSIÇÃO (item de serviço com código, unidade, quantidade e custo unitário).\n` +
-                              `Isso significa que a extração leu apenas o RESUMO do orçamento.\n` +
-                              `Nos PDFs fornecidos há um documento de COMPOSIÇÕES DETALHADAS — encontre-o e extraia TODOS os itens individuais.\n` +
-                              `Cada item deve ter: código fonte (SINAPI, ORSE, etc.), descrição do serviço, unidade, quantidade e custo unitário.\n` +
+                              `Isso significa que a extração leu apenas os CABEÇALHOS do orçamento.\n` +
+                              `A "Planilha Orçamentária" contém TODOS os itens detalhados com quantidades reais. Releia-a cuidadosamente.\n` +
+                              `NÃO confunda com o PDF de "Composições" que mostra detalhamento unitário de insumos.\n` +
+                              `Cada item deve ter: código fonte (SINAPI, SEINFRA, CDHU, etc.), descrição, unidade, QUANTIDADE REAL e custo unitário.\n` +
                               `Use as etapas já extraídas como hierarquia pai. As composições são os itens filho (ex: 1.1, 1.2, 2.1, 2.2...).\n` +
                               `Espera-se CENTENAS de itens de composição, NÃO apenas etapas.\n\n`
                             : `CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItemNum}".\n` +
                               `NÃO repita nenhum dos ${engItems.length} itens já extraídos.\n\n`
                         ) +
                         `Extraia TODOS os itens restantes até o FINAL da planilha orçamentária.\n` +
+                        `DICA: Se a maioria das quantidades é 1.00, você está lendo o PDF errado (composições unitárias).\n` +
                         `Retorne em JSON com o mesmo schema.`;
 
                     await extractChunk(
@@ -1514,6 +1540,30 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             return 0;
         });
         logger.info(`[Engineering-BG] 🔄 Itens reordenados por numeração hierárquica (${engItems.length} itens).`);
+
+        // FIX-18: Post-extraction quantity health check
+        // If >80% of composition items have qty=1, the model likely read the Composições PDF
+        // (unit breakdowns) instead of the Planilha Orçamentária (budget with real quantities).
+        const compositionItems = engItems.filter((it: any) => it.type === 'COMPOSICAO');
+        const qtyOneItems = compositionItems.filter((it: any) => {
+            const qty = parseFloat(String(it.quantity || '0'));
+            return qty === 1 || qty === 0;
+        });
+        const qtyOneRatio = compositionItems.length > 0 ? qtyOneItems.length / compositionItems.length : 0;
+        
+        if (qtyOneRatio > 0.8 && compositionItems.length > 30) {
+            logger.warn(
+                `[Engineering-BG] ⚠️ FIX-18: QUANTITY HEALTH CHECK FAILED — ` +
+                `${qtyOneItems.length}/${compositionItems.length} composições (${(qtyOneRatio * 100).toFixed(0)}%) têm qty=1. ` +
+                `Provável leitura do PDF de Composições (detalhamento unitário) em vez da Planilha Orçamentária.`
+            );
+        } else if (compositionItems.length > 0) {
+            const avgQty = compositionItems.reduce((sum: number, it: any) => sum + parseFloat(String(it.quantity || '0')), 0) / compositionItems.length;
+            logger.info(
+                `[Engineering-BG] ✅ Quantity health check: ${compositionItems.length} composições, ` +
+                `${qtyOneItems.length} com qty=1 (${(qtyOneRatio * 100).toFixed(0)}%), avg qty=${avgQty.toFixed(1)}`
+            );
+        }
 
         if (totalRepairs.length > 0) {
             logger.info(
