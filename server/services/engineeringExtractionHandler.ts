@@ -924,6 +924,35 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 `Se o valor do campo uc for igual ao campo q, VOCÊ ESTÁ ERRADO.`;
             logger.info(`[Engineering-BG] 🔄 Column shift probe feedback added to prompt.`);
         }
+
+        // FIX-16: Multi-PDF intelligence — detect Summary + Compositions pattern
+        // When the PNCP provides a "Resumo" (summary with etapas/totals only) alongside
+        // a "Composições" (detailed line items), the model tends to extract only from
+        // the summary and stop. Inject explicit instruction to drill into the detailed PDF.
+        const pdfSources = rawPdfBuffers.map(p => p.source.toLowerCase());
+        const hasResumo = pdfSources.some(s => /resumo|planilha.orc/i.test(s));
+        const hasComposicoes = pdfSources.some(s => /composi[cç]/i.test(s));
+        const longPdf = rawPdfBuffers.find(p => {
+            const fp = fingerprints[rawPdfBuffers.indexOf(p)];
+            return fp && fp.totalPages >= 20;
+        });
+
+        if (hasResumo && hasComposicoes && longPdf) {
+            userInstruction += `\n\n🚨 MÚLTIPLOS DOCUMENTOS — RESUMO + COMPOSIÇÕES:\n` +
+                `Você está recebendo múltiplos PDFs. Um deles é um RESUMO DO ORÇAMENTO que lista apenas as ` +
+                `etapas com totais. Outro contém as COMPOSIÇÕES DETALHADAS com todos os itens individuais ` +
+                `(código, descrição, unidade, quantidade, custo unitário).\n\n` +
+                `REGRA OBRIGATÓRIA: Extraia TODOS os itens do PDF de COMPOSIÇÕES DETALHADAS.\n` +
+                `O resumo serve apenas como referência de hierarquia (etapas/subetapas). ` +
+                `NÃO extraia apenas as etapas do resumo — isso é INSUFICIENTE.\n` +
+                `Cada ETAPA deve ter suas COMPOSIÇÕES (itens filho) extraídas do documento detalhado.\n` +
+                `Espera-se centenas de itens, NÃO apenas 20-30 etapas.`;
+            logger.info(
+                `[Engineering-BG] 📋 Multi-PDF detected: Resumo + Composições pattern. ` +
+                `Injecting drill-down instruction (long PDF: ${longPdf.source}, ${fingerprints[rawPdfBuffers.indexOf(longPdf)]?.totalPages || '?'} pages).`
+            );
+        }
+
         let totalRepairs: string[] = [];
         const seenItemKeys = new Set<string>();
 
@@ -1381,8 +1410,16 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         `🚨 CONTINUAÇÃO OBRIGATÓRIA — EXTRAÇÃO PARCIAL DETECTADA:\n` +
                         `Uma extração anterior obteve ${engItems.length} itens, terminando em "${lastItemNum}".\n` +
                         `Últimos itens extraídos: [${lastItemsSummary}]\n\n` +
-                        `CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItemNum}".\n` +
-                        `NÃO repita nenhum dos ${engItems.length} itens já extraídos.\n` +
+                        (lastComposicoes.length === 0
+                            ? `⚠️ ALERTA: Foram extraídas APENAS ${topLevelEtapas.size} ETAPAS (categorias/agrupadores), mas NENHUMA COMPOSIÇÃO (item de serviço com código, unidade, quantidade e custo unitário).\n` +
+                              `Isso significa que a extração leu apenas o RESUMO do orçamento.\n` +
+                              `Nos PDFs fornecidos há um documento de COMPOSIÇÕES DETALHADAS — encontre-o e extraia TODOS os itens individuais.\n` +
+                              `Cada item deve ter: código fonte (SINAPI, ORSE, etc.), descrição do serviço, unidade, quantidade e custo unitário.\n` +
+                              `Use as etapas já extraídas como hierarquia pai. As composições são os itens filho (ex: 1.1, 1.2, 2.1, 2.2...).\n` +
+                              `Espera-se CENTENAS de itens de composição, NÃO apenas etapas.\n\n`
+                            : `CONTINUE a extração a partir do PRÓXIMO item APÓS "${lastItemNum}".\n` +
+                              `NÃO repita nenhum dos ${engItems.length} itens já extraídos.\n\n`
+                        ) +
                         `Extraia TODOS os itens restantes até o FINAL da planilha orçamentária.\n` +
                         `Retorne em JSON com o mesmo schema.`;
 
