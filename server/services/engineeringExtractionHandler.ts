@@ -1565,14 +1565,66 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             );
         }
 
-        // ── FIX-20: QUANTITY RECALCULATION (qty = totalPrice / unitPrice) ──
-        // The model reads codes and prices correctly but often FABRICATES quantities.
-        // We can recover the real quantity from: qty = totalPrice / unitPrice
-        // because totalPrice comes directly from the "TOTAL" column of the PDF table.
+        // ── FIX-21: CONSTANT-QTY-PER-ETAPA DETECTION + QUANTITY RECALCULATION ──
+        // The model often fabricates quantities by using ONE constant number for ALL items
+        // in an etapa (e.g., qty=100 for all Fundação items, qty=115 for all Elétricas).
+        // We detect this pattern and then recalculate qty = tp / up.
         {
             const recalcItems = engItems.filter((it: any) => 
                 (it.type === 'COMPOSICAO' || it.type === 'INSUMO')
             );
+
+            // Step 1: Group items by their parent etapa (first level of itemNumber)
+            const etapaGroups = new Map<string, any[]>();
+            for (const item of recalcItems) {
+                const parentEtapa = String(item.itemNumber || '').split('.').slice(0, 1).join('.');
+                if (!etapaGroups.has(parentEtapa)) etapaGroups.set(parentEtapa, []);
+                etapaGroups.get(parentEtapa)!.push(item);
+            }
+
+            // Step 2: Detect constant-qty pattern per etapa
+            const flaggedItems = new Set<any>();
+            for (const [etapaId, items] of etapaGroups.entries()) {
+                if (items.length < 5) continue; // Need enough items to detect pattern
+
+                // Count qty frequencies (excluding qty=0 and qty=1 which can be legitimate)
+                const qtyFreq = new Map<number, number>();
+                for (const item of items) {
+                    const qty = parseFloat(String(item.quantity || '0'));
+                    if (qty > 1) { // Only count non-trivial quantities
+                        const key = Math.round(qty * 100) / 100;
+                        qtyFreq.set(key, (qtyFreq.get(key) || 0) + 1);
+                    }
+                }
+
+                // Find most common qty (excluding 1)
+                let mostCommonQty = 0;
+                let mostCommonCount = 0;
+                for (const [qty, count] of qtyFreq.entries()) {
+                    if (count > mostCommonCount) {
+                        mostCommonCount = count;
+                        mostCommonQty = qty;
+                    }
+                }
+
+                // If >60% of items with qty>1 share the same quantity, it's fabricated
+                const itemsWithQtyGt1 = items.filter((it: any) => parseFloat(String(it.quantity || '0')) > 1);
+                const ratioSameQty = itemsWithQtyGt1.length > 0 ? mostCommonCount / itemsWithQtyGt1.length : 0;
+
+                if (ratioSameQty > 0.6 && mostCommonCount >= 4) {
+                    logger.warn(
+                        `[Engineering-BG] 🚨 FIX-21: Etapa ${etapaId} has CONSTANT QTY pattern! ` +
+                        `${mostCommonCount}/${itemsWithQtyGt1.length} items (${(ratioSameQty * 100).toFixed(0)}%) ` +
+                        `have qty=${mostCommonQty}. Flagging for recalculation.`
+                    );
+                    // Flag ALL items in this etapa for forced recalculation
+                    for (const item of items) {
+                        flaggedItems.add(item);
+                    }
+                }
+            }
+
+            // Step 3: Recalculate qty = tp / up for flagged items AND items with math mismatch
             let recalcCount = 0;
             let recalcDetails: string[] = [];
 
@@ -1582,26 +1634,27 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 const tp = parseFloat(String(item.totalPrice || '0'));
                 const uc = parseFloat(String(item.unitCost || '0'));
 
-                // Skip items where we don't have enough data to recalculate
+                // Skip items where we don't have enough data
                 if (tp <= 0 || (up <= 0 && uc <= 0)) continue;
                 
-                // Use unitPrice (c/ BDI) if available, otherwise unitCost (s/ BDI)
                 const priceRef = up > 0 ? up : uc;
                 const expectedQty = tp / priceRef;
-
-                // Only recalculate if the current qty is significantly wrong
-                // Tolerance: allow 5% difference for rounding
                 const currentTotal = qty * priceRef;
                 const deviation = Math.abs(currentTotal - tp);
                 const deviationPct = tp > 0 ? (deviation / tp) * 100 : 0;
 
-                if (deviationPct > 5 && expectedQty > 0) {
-                    // Round to 2 decimal places to match typical planilha precision
+                // Recalculate if:
+                // a) Math doesn't check out (deviation > 5%), OR
+                // b) Item was flagged by constant-qty detection
+                const isFlagged = flaggedItems.has(item);
+                const shouldRecalc = (deviationPct > 5) || (isFlagged && Math.abs(expectedQty - qty) > 0.5);
+
+                if (shouldRecalc && expectedQty > 0) {
                     const newQty = Math.round(expectedQty * 100) / 100;
                     
                     if (newQty !== qty && newQty > 0) {
                         recalcDetails.push(
-                            `${item.itemNumber}: qty ${qty}→${newQty} (tp=${tp}/up=${priceRef})`
+                            `${item.itemNumber}: qty ${qty}→${newQty} (tp=${tp}/up=${priceRef})${isFlagged ? ' [CONST-QTY]' : ''}`
                         );
                         item.quantity = newQty;
                         item._qtyRecalculated = true;
@@ -1613,19 +1666,18 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
             if (recalcCount > 0) {
                 logger.info(
-                    `[Engineering-BG] 🔧 FIX-20: Recalculou qty para ${recalcCount}/${recalcItems.length} itens ` +
-                    `usando fórmula qty=totalPrice/unitPrice. Exemplos:\n  ` +
-                    recalcDetails.slice(0, 20).join('\n  ')
+                    `[Engineering-BG] 🔧 FIX-21: Recalculou qty para ${recalcCount}/${recalcItems.length} itens ` +
+                    `(${flaggedItems.size} flagged por constant-qty). Exemplos:\n  ` +
+                    recalcDetails.slice(0, 25).join('\n  ')
                 );
             } else {
                 logger.info(
-                    `[Engineering-BG] ✅ FIX-20: Nenhuma correção de qty necessária — ` +
-                    `${recalcItems.length} itens com math check OK.`
+                    `[Engineering-BG] ✅ FIX-21: Nenhuma correção de qty necessária — ` +
+                    `${recalcItems.length} itens com math check OK, ${flaggedItems.size} flagged.`
                 );
             }
 
-            // Recalculate unitCost for items where only unitPrice was available
-            // uc = up / (1 + BDI) — detect BDI from items that have both
+            // BDI detection for diagnostic purposes
             const bdiSamples = recalcItems
                 .filter((it: any) => {
                     const uc2 = parseFloat(String(it.unitCost || '0'));
