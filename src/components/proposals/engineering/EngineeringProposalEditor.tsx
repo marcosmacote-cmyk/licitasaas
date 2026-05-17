@@ -1194,12 +1194,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }
     };
 
-    const addTypedItem = (type: EngItemType, insertAfterId?: string, description?: string) => {
+    const addTypedItem = (type: EngItemType, insertAfterId?: string, description?: string): string => {
         const isGroup = isGrouper(type);
+        const newId = `new-${Date.now()}`;
         setHasUnsavedChanges(true);
         setItems(prev => {
             const newItem = {
-                id: `new-${Date.now()}`, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
+                id: newId, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
                 description: description || '', unit: isGroup ? '' : 'UN', quantity: isGroup ? 0 : 1,
                 unitCost: 0, unitPrice: 0, totalPrice: 0, type, priceOrigin: isGroup ? undefined : ('MANUAL' as const),
             };
@@ -1214,6 +1215,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             newList.push(newItem);
             return renumberItems(newList);
         });
+        // Advance cursor so next insertion goes after this item
+        setInsertTargetId(newId);
+        return newId;
     };
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1284,10 +1288,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
         const typeFromBase = dbItem.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : insertType;
         const qty = searchQuantities[dbItem.id] || 1;
+        const newId = `db-${Date.now()}`;
         setHasUnsavedChanges(true);
         setItems(prev => {
             const newItem = {
-                id: `db-${Date.now()}`, itemNumber: '',
+                id: newId, itemNumber: '',
                 code: dbItem.code, sourceName: base?.name || 'OFICIAL',
                 description: dbItem.description, unit: dbItem.unit, quantity: qty,
                 unitCost: cost, unitPrice,
@@ -1305,6 +1310,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             newList.push(newItem);
             return renumberItems(newList);
         });
+        // Advance cursor so next insertion goes after this item
+        setInsertTargetId(newId);
         // Flash feedback — keep modal open for adding more items
         setAddedItemIds(prev => new Set(prev).add(dbItem.id));
         setAddedCount(c => c + 1);
