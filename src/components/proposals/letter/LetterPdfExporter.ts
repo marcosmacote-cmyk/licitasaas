@@ -26,6 +26,8 @@ export interface PdfExportOptions {
     printLandscape?: boolean;
     printDelay?: number; // ms before triggering print (default: 500)
     compositionHtml?: string; // HTML das composições para anexar ao final
+    /** FIX F3.1: Engineering-specific config for BDI/Encargos declaration */
+    engineeringConfig?: { bdiGlobal?: number; encargosSociais?: { horista?: number; mensalista?: number } };
 }
 
 export class LetterPdfExporter {
@@ -45,6 +47,13 @@ export class LetterPdfExporter {
         printWindow.document.write(html);
         printWindow.document.close();
         return printWindow;
+    }
+
+    /**
+     * FIX F3.2: Retorna o HTML completo do documento (para preview em iframe).
+     */
+    buildHtml(options: PdfExportOptions): string {
+        return this.buildFullHtml({ ...options, printDelay: -1 }); // -1 = skip auto-print
     }
 
     /**
@@ -144,7 +153,7 @@ export class LetterPdfExporter {
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
     <script>
     window.onload = function() {
-        setTimeout(function() { window.print(); }, ${opts.printDelay ?? 500});
+        ${(opts.printDelay ?? 500) >= 0 ? `setTimeout(function() { window.print(); }, ${opts.printDelay ?? 500});` : '// preview mode — no auto-print'}
     };
     </script>
 

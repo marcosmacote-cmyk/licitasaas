@@ -22,6 +22,9 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
     const [editBuffer, setEditBuffer] = useState('');
     const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
     const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
+    // FIX F3.2: Preview HTML state
+    const [previewHtml, setPreviewHtml] = useState<string>('');
+    const [showPreview, setShowPreview] = useState(false);
 
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
     const [savedLetterInicial, setSavedLetterInicial] = useState<ProposalLetterResult | null>(null);
@@ -364,6 +367,34 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         }
     };
 
+    // FIX F3.2: Preview in iframe (no auto-print)
+    const handlePreview = () => {
+        if (!letterResult) return;
+        const isReadequada = proposalType === 'READEQUADA' && props.adjustedEnabled;
+        const effectiveBdi = isReadequada ? (props.adjustedBdi ?? props.bdi) : props.bdi;
+        const isFullWithComp = selectedExportMode === 'FULL_WITH_COMPOSITION';
+        const baseMode: LetterExportMode = (isFullWithComp || selectedExportMode === 'FULL_WITHOUT_COMPOSITION') ? 'FULL' : selectedExportMode;
+        const compositionHtml = isFullWithComp
+            ? buildCompositionInlineHtml(props.items, effectiveBdi, isReadequada)
+            : undefined;
+
+        const exporter = new LetterPdfExporter();
+        const html = exporter.buildHtml({
+            result: letterResult,
+            data: normalizedData,
+            items: props.items,
+            mode: baseMode === 'COMPOSITION_ONLY' ? 'FULL' : baseMode,
+            headerImage: props.headerImage,
+            footerImage: props.footerImage,
+            headerImageHeight: props.headerImageHeight,
+            footerImageHeight: props.footerImageHeight,
+            printLandscape: props.printLandscape,
+            compositionHtml,
+        });
+        setPreviewHtml(html);
+        setShowPreview(true);
+    };
+
     return {
         step, setStep,
         validation,
@@ -385,6 +416,8 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         handleSwitchProposalType,
         handleSave,
         handleExport,
+        handlePreview,
+        previewHtml, showPreview, setShowPreview,
         normalizedData
     };
 }

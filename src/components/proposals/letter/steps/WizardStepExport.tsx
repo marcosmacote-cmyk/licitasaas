@@ -1,4 +1,4 @@
-import { Printer, FileText, Table2, FileStack, ListOrdered, BarChart3, Layers, ChevronLeft } from 'lucide-react';
+import { Printer, FileText, Table2, FileStack, ListOrdered, BarChart3, Layers, ChevronLeft, Eye, X } from 'lucide-react';
 import type { ProposalLetterWizardProps } from '../ProposalLetterWizard';
 import type { useProposalWizard } from '../useProposalWizard';
 
@@ -90,6 +90,19 @@ export function WizardStepExport({ p, w }: { p: ProposalLetterWizardProps, w: Re
                         <Printer size={12} style={{ color: 'var(--color-text-tertiary)' }} />
                         <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
                     </label>
+
+                    {/* FIX F3.2: Preview button */}
+                    <button onClick={w.handlePreview} disabled={!w.letterResult}
+                        style={{
+                            padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)',
+                            background: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                            fontWeight: 700, fontSize: 'var(--text-sm)', cursor: w.letterResult ? 'pointer' : 'default',
+                            display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-primary)',
+                            opacity: w.letterResult ? 1 : 0.5,
+                        }}>
+                        <Eye size={16} /> Preview
+                    </button>
+
                     <button onClick={w.handleExport} style={{
                         padding: 'var(--space-3) var(--space-8)', borderRadius: 'var(--radius-lg)',
                         background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
@@ -102,6 +115,54 @@ export function WizardStepExport({ p, w }: { p: ProposalLetterWizardProps, w: Re
 
                 </div>
             </div>
+
+            {/* FIX F3.2: Preview Modal */}
+            {w.showPreview && w.previewHtml && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.6)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+                }}>
+                    <div style={{
+                        width: '90vw', height: '90vh', background: 'var(--color-bg-surface)',
+                        borderRadius: 'var(--radius-xl)', overflow: 'hidden', display: 'flex',
+                        flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                    }}>
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '12px 20px', borderBottom: '1px solid var(--color-border)',
+                            background: 'var(--color-bg-base)',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Eye size={16} color="var(--color-primary)" />
+                                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Preview do Documento</span>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', padding: '2px 8px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-sm)' }}>
+                                    {w.selectedExportMode.replace(/_/g, ' ')}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => { w.setShowPreview(false); w.handleExport(); }}
+                                    style={{
+                                        padding: '6px 16px', borderRadius: 'var(--radius-md)',
+                                        background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                        color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem',
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                    }}>
+                                    <Printer size={14} /> Imprimir
+                                </button>
+                                <button onClick={() => w.setShowPreview(false)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                                    <X size={20} color="var(--color-text-tertiary)" />
+                                </button>
+                            </div>
+                        </div>
+                        <iframe
+                            srcDoc={w.previewHtml}
+                            style={{ flex: 1, border: 'none', width: '100%' }}
+                            title="Preview da Carta Proposta"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -5,15 +5,20 @@
  * FIX ARQ-04: Agora recebe onDataChange callback para persistir dados
  * no state do componente pai (EngineeringProposalEditor), evitando
  * perda de dados ao trocar de aba.
+ * 
+ * FIX F4.1: Auto-sync planilha → cronograma (etapa values update automatically)
+ * FIX F4.2: Auto-distribuição (Linear / Curva S / Limpar)
+ * FIX F4.3: Adicionar/Remover etapas manuais + edição de valor total
  */
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Calendar, Plus, Minus } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw } from 'lucide-react';
 import { calcularCronograma, gerarEtapasPadrao, type CronogramaEtapa } from './cronogramaEngine';
+import { isGrouper } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 interface Props {
-    items: { itemNumber: string; description: string; totalPrice: number }[];
+    items: { itemNumber: string; description: string; totalPrice: number; type?: string }[];
     /** Dados previamente salvos do cronograma — FIX ARQ-04 */
     savedData?: { meses: number; etapas: CronogramaEtapa[] } | null;
     /** Callback para persistir mudanças no pai — FIX ARQ-04 */
@@ -36,6 +41,65 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
         onDataChange?.({ meses, etapas });
     }, [meses, etapas]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ══════════════════════════════════════════
+    // FIX F4.1: Auto-sync planilha → cronograma
+    // Update etapa values when items change (preserve user percentuais)
+    // ══════════════════════════════════════════
+    const prevItemsRef = useRef<string>('');
+    useEffect(() => {
+        if (items.length === 0) return;
+        
+        // Build current etapa totals from items
+        const etapaItems = items.filter(it => it.type === 'ETAPA');
+        if (etapaItems.length === 0) return;
+
+        // Create a fingerprint to avoid unnecessary updates
+        const fingerprint = etapaItems.map(e => `${e.itemNumber}:${e.totalPrice}`).join('|');
+        if (fingerprint === prevItemsRef.current) return;
+        prevItemsRef.current = fingerprint;
+
+        // Compute subtotals per etapa from child items
+        const etapaTotals = new Map<string, { name: string; total: number }>();
+        let currentEtapa = '';
+        for (const it of items) {
+            if (it.type === 'ETAPA') {
+                currentEtapa = it.itemNumber.split('.')[0] || it.itemNumber;
+                etapaTotals.set(currentEtapa, { name: it.description, total: 0 });
+            } else if (!isGrouper(it.type as any) && currentEtapa) {
+                const entry = etapaTotals.get(currentEtapa);
+                if (entry) entry.total += it.totalPrice || 0;
+            }
+        }
+
+        if (etapaTotals.size === 0) return;
+
+        setEtapas(prev => {
+            // Match existing etapas by id, update valorTotal only
+            const updated = prev.map(e => {
+                const match = etapaTotals.get(e.id);
+                if (match) {
+                    return { ...e, valorTotal: match.total, nome: match.name || e.nome };
+                }
+                return e;
+            });
+
+            // Add new etapas from items that don't exist in cronograma
+            const existingIds = new Set(prev.map(e => e.id));
+            for (const [id, data] of etapaTotals) {
+                if (!existingIds.has(id)) {
+                    updated.push({
+                        id,
+                        nome: data.name,
+                        valorTotal: data.total,
+                        percentuais: Array(12).fill(0),
+                    });
+                }
+            }
+
+            return updated;
+        });
+    }, [items]);
+
     const updatePct = useCallback((etapaId: string, mesIdx: number, val: number) => {
         setEtapas(prev => prev.map(e =>
             e.id === etapaId ? { ...e, percentuais: e.percentuais.map((p, i) => i === mesIdx ? val : p) } : e
@@ -44,6 +108,67 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
 
     const updateNome = useCallback((id: string, nome: string) => {
         setEtapas(prev => prev.map(e => e.id === id ? { ...e, nome } : e));
+    }, []);
+
+    // ══════════════════════════════════════════
+    // FIX F4.3: Add/Remove etapas
+    // ══════════════════════════════════════════
+    const addEtapa = useCallback(() => {
+        const newId = String(Date.now());
+        setEtapas(prev => [...prev, {
+            id: newId,
+            nome: `Nova Etapa ${prev.length + 1}`,
+            valorTotal: 0,
+            percentuais: Array(12).fill(0),
+        }]);
+    }, []);
+
+    const removeEtapa = useCallback((id: string) => {
+        setEtapas(prev => prev.length > 1 ? prev.filter(e => e.id !== id) : prev);
+    }, []);
+
+    const updateValorTotal = useCallback((id: string, valor: number) => {
+        setEtapas(prev => prev.map(e => e.id === id ? { ...e, valorTotal: valor } : e));
+    }, []);
+
+    // ══════════════════════════════════════════
+    // FIX F4.2: Auto-distribuição de percentuais
+    // ══════════════════════════════════════════
+    const distribuirLinear = useCallback(() => {
+        const pctPerMonth = Math.round((100 / meses) * 100) / 100;
+        const lastPct = Math.round((100 - pctPerMonth * (meses - 1)) * 100) / 100;
+        setEtapas(prev => prev.map(e => ({
+            ...e,
+            percentuais: Array(12).fill(0).map((_, i) =>
+                i < meses ? (i === meses - 1 ? lastPct : pctPerMonth) : 0
+            ),
+        })));
+    }, [meses]);
+
+    const distribuirCurvaS = useCallback(() => {
+        // Bell curve (S-curve) — concentrates in the middle
+        const raw: number[] = [];
+        for (let i = 0; i < meses; i++) {
+            const x = (i / (meses - 1 || 1)) * Math.PI;
+            raw.push(Math.sin(x));
+        }
+        const sum = raw.reduce((a, b) => a + b, 0);
+        const normalized = raw.map(v => Math.round((v / sum) * 10000) / 100);
+        // Adjust last month to ensure exactly 100%
+        const total = normalized.reduce((a, b) => a + b, 0);
+        normalized[meses - 1] += Math.round((100 - total) * 100) / 100;
+
+        setEtapas(prev => prev.map(e => ({
+            ...e,
+            percentuais: Array(12).fill(0).map((_, i) => i < meses ? normalized[i] : 0),
+        })));
+    }, [meses]);
+
+    const limparDistribuicao = useCallback(() => {
+        setEtapas(prev => prev.map(e => ({
+            ...e,
+            percentuais: Array(12).fill(0),
+        })));
     }, []);
 
     const result = useMemo(() => calcularCronograma(etapas, meses), [etapas, meses]);
@@ -64,7 +189,7 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
 
             {/* Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
                 <Calendar size={16} color="var(--color-primary)" />
                 <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Duração da obra:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -73,6 +198,25 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                     <button onClick={() => setMeses(m => Math.min(36, m + 1))} style={{ background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}><Plus size={12} /></button>
                 </div>
                 <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>meses</span>
+
+                {/* FIX F4.2: Distribution buttons */}
+                <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
+                <button onClick={distribuirLinear} className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                    title="Distribui 100% igualmente entre os meses">
+                    <BarChart3 size={12} /> Linear
+                </button>
+                <button onClick={distribuirCurvaS} className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                    title="Distribui com concentração no meio (curva S)">
+                    <TrendingUp size={12} /> Curva S
+                </button>
+                <button onClick={limparDistribuicao} className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                    title="Zera todos os percentuais">
+                    <RotateCcw size={12} /> Limpar
+                </button>
+
                 <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
                     Total: <strong style={{ color: 'var(--color-primary)' }}>{fmt(result.totalGlobal)}</strong>
                 </div>
@@ -84,10 +228,11 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                     <thead>
                         <tr style={{ background: 'var(--color-bg-base)' }}>
                             <th style={{ ...cs, textAlign: 'left', width: 200, fontWeight: 700 }}>Etapa</th>
-                            <th style={{ ...cs, width: 90, fontWeight: 700 }}>Valor Total</th>
+                            <th style={{ ...cs, width: 110, fontWeight: 700 }}>Valor Total</th>
                             {Array.from({ length: meses }, (_, i) => (
                                 <th key={i} style={{ ...cs, fontWeight: 700, minWidth: 70, textAlign: 'center' }}>Mês {i + 1}</th>
                             ))}
+                            <th style={{ ...cs, width: 40, textAlign: 'center', fontWeight: 700 }}></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -99,10 +244,18 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                                         <input value={etapa.nome} onChange={e => updateNome(etapa.id, e.target.value)}
                                             style={{ border: 'none', background: 'transparent', fontSize: '0.75rem', fontWeight: 600, width: '100%', padding: 0 }} />
                                     </td>
+                                    {/* FIX F4.3: Editable valor total */}
                                     <td style={{ ...cs, fontWeight: 600 }}>
-                                        {fmt(etapa.valorTotal)}
+                                        <input
+                                            type="number"
+                                            value={etapa.valorTotal || ''}
+                                            onChange={e => updateValorTotal(etapa.id, parseFloat(e.target.value) || 0)}
+                                            style={{ width: '100%', border: '1px solid transparent', borderRadius: 3, background: 'transparent', textAlign: 'right', fontSize: '0.72rem', fontWeight: 600, padding: '2px 4px' }}
+                                            onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+                                            onBlur={e => { e.currentTarget.style.borderColor = 'transparent'; }}
+                                        />
                                         <div style={{ fontSize: '0.6rem', color: pctSum === 100 ? 'var(--color-success)' : pctSum > 0 ? '#ca8a04' : 'var(--color-text-tertiary)' }}>
-                                            {pctSum}%
+                                            {pctSum.toFixed(1)}%
                                         </div>
                                     </td>
                                     {Array.from({ length: meses }, (_, m) => (
@@ -122,11 +275,29 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                                             )}
                                         </td>
                                     ))}
+                                    {/* FIX F4.3: Remove etapa button */}
+                                    <td style={{ ...cs, textAlign: 'center' }}>
+                                        <button onClick={() => removeEtapa(etapa.id)}
+                                            disabled={result.etapas.length <= 1}
+                                            style={{ background: 'none', border: 'none', cursor: result.etapas.length > 1 ? 'pointer' : 'default', padding: 2, color: result.etapas.length > 1 ? 'var(--color-danger)' : 'var(--color-text-tertiary)', opacity: result.etapas.length > 1 ? 0.6 : 0.2 }}
+                                            title="Remover etapa">
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </td>
                                 </tr>
                             );
                         })}
                     </tbody>
                     <tfoot>
+                        {/* FIX F4.3: Add etapa row */}
+                        <tr>
+                            <td colSpan={2 + meses + 1} style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>
+                                <button onClick={addEtapa} className="btn btn-outline"
+                                    style={{ padding: '3px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Plus size={12} /> Adicionar Etapa
+                                </button>
+                            </td>
+                        </tr>
                         <tr style={{ background: 'rgba(37,99,235,0.04)', borderTop: '2px solid var(--color-primary)' }}>
                             <td style={{ ...cs, textAlign: 'left', fontWeight: 800, color: 'var(--color-primary)' }}>Mensal</td>
                             <td style={cs}></td>
@@ -136,6 +307,7 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                                     <div style={{ fontSize: '0.58rem', color: 'var(--color-text-tertiary)' }}>{result.percentMensal[i]}%</div>
                                 </td>
                             ))}
+                            <td style={cs}></td>
                         </tr>
                         <tr style={{ background: 'rgba(37,99,235,0.08)' }}>
                             <td style={{ ...cs, textAlign: 'left', fontWeight: 800, color: 'var(--color-primary)' }}>Acumulado</td>
@@ -146,6 +318,7 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                                     <div style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-primary)' }}>{result.percentAcumulado[i]}%</div>
                                 </td>
                             ))}
+                            <td style={cs}></td>
                         </tr>
                     </tfoot>
                 </table>

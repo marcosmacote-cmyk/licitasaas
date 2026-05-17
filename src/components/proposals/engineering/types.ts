@@ -62,6 +62,10 @@ export interface EngItem {
     officialTotalPrice?: number;
     priceAudit?: PriceAudit;
     insumos?: EngInsumo[];
+    /** FIX F5.5: Observações/notas do usuário por item */
+    notes?: string;
+    /** FIX F5.6: Desconto individual (%) aplicado ao preço unitário */
+    discount?: number;
 }
 
 export const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';

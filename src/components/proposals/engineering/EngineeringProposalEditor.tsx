@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2 } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote } from 'lucide-react';
+import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -87,6 +88,8 @@ interface Props {
     onItemsChange?: (items: EngItem[]) => void;
     /** FIX STEP2-01: Items from the Wizard state — used to restore items when Step 2 remounts */
     wizardItems?: EngItem[];
+    /** FIX F2.3: Estimated value from the bidding for comparison */
+    estimatedValue?: number;
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -337,10 +340,21 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     );
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems }: Props) {
-    // FIX STEP2-01: Initialize from wizardItems when remounting in wizard mode,
-    // so items survive Step 2 → Step 1 → Step 2 navigation.
-    const [items, setItems] = useState<EngItem[]>(wizardItems || []);
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems, estimatedValue }: Props) {
+    // FIX F1.2: Undo/Redo integration — replaces plain useState<EngItem[]>
+    // - setItems: tracked changes (user edits) → pushed to undo stack
+    // - setItemsSilent: system changes (recalc, load, save) → no undo stack
+    const {
+        state: items,
+        setState: setItems,
+        setStateNoHistory: setItemsSilent,
+        undo: undoItems,
+        redo: redoItems,
+        canUndo,
+        canRedo,
+        undoCount,
+        redoCount,
+    } = useUndoRedo<EngItem[]>(wizardItems || [], 50);
     const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
     const [engineeringConfig, setEngineeringConfig] = useState<EngineeringConfig>({ ...DEFAULT_ENGINEERING_CONFIG });
 
@@ -377,6 +391,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
+    // FIX F2.1: Collapse/Expand state for ETAPA/SUBETAPA groupers
+    const [collapsedGroupers, setCollapsedGroupers] = useState<Set<string>>(new Set());
+
+    // FIX F2.2: Filter/Search state
+    const [filterText, setFilterText] = useState('');
+    const [filterType, setFilterType] = useState<string>('');
+
     const updateEngineeringConfig = (next: EngineeringConfig) => {
         setHasUnsavedChanges(true);
         setEngineeringConfig(next);
@@ -389,6 +410,55 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             return next;
         });
     };
+
+    // FIX F2.1: Toggle collapse for groupers
+    const toggleCollapse = (id: string) => {
+        setCollapsedGroupers(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+    const collapseAll = () => {
+        const ids = new Set(items.filter(it => isGrouper(it.type)).map(it => it.id));
+        setCollapsedGroupers(ids);
+    };
+    const expandAll = () => setCollapsedGroupers(new Set());
+
+    // FIX F2.1: Check if item is hidden because a parent grouper is collapsed
+    const isItemHiddenByCollapse = useCallback((itemIndex: number): boolean => {
+        for (let i = itemIndex - 1; i >= 0; i--) {
+            const prev = items[i];
+            if (isGrouper(prev.type)) {
+                const prevDepth = getDepth(prev.itemNumber);
+                const itemDepth = getDepth(items[itemIndex].itemNumber);
+                if (prevDepth < itemDepth || (!isGrouper(items[itemIndex].type) && prevDepth <= itemDepth)) {
+                    if (collapsedGroupers.has(prev.id)) return true;
+                }
+                if (prevDepth < getDepth(items[itemIndex].itemNumber)) break;
+            }
+        }
+        return false;
+    }, [items, collapsedGroupers]);
+
+    // FIX F2.2: Filtered + visible items
+    const visibleItems = useMemo(() => {
+        const ft = filterText.toLowerCase().trim();
+        return items.map((it, idx) => {
+            // Collapse check
+            if (!isGrouper(it.type) && isItemHiddenByCollapse(idx)) return { item: it, visible: false };
+            // Also hide collapsed sub-groupers
+            if (isGrouper(it.type) && idx > 0 && isItemHiddenByCollapse(idx)) return { item: it, visible: false };
+            // Filter check
+            if (ft && !it.description.toLowerCase().includes(ft) && !(it.code || '').toLowerCase().includes(ft) && !(it.itemNumber || '').includes(ft)) {
+                // Keep groupers visible if they have visible children (unless filtering by type)
+                if (!isGrouper(it.type)) return { item: it, visible: false };
+            }
+            if (filterType && it.type !== filterType && isGrouper(it.type) && filterType !== 'ETAPA' && filterType !== 'SUBETAPA') return { item: it, visible: true }; // Keep groupers
+            if (filterType && it.type !== filterType && !isGrouper(it.type)) return { item: it, visible: false };
+            return { item: it, visible: true };
+        });
+    }, [items, filterText, filterType, isItemHiddenByCollapse]);
 
     // Active tab
     const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma' | 'encargos_sociais' | 'caderno'>('planilha');
@@ -424,12 +494,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const itemBdi = config.bdiDiferenciado && audited.bdiCategoria === 'FORNECIMENTO'
                 ? (config.bdiFornecimento || 14.02)
                 : _bdi;
-            const up = applyBdi(audited.unitCost, itemBdi, config.precision);
+            let up = applyBdi(audited.unitCost, itemBdi, config.precision);
+            // FIX F5.6: Apply per-item discount after BDI
+            if (audited.discount && audited.discount > 0) {
+                up = applyPrecision(up * (1 - audited.discount / 100), config);
+            }
             return { ...audited, unitPrice: up, totalPrice: applyPrecision(audited.quantity * up, config) };
         });
     }, []);
 
-    useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
+    // System recalc on BDI/config change — silent (no undo tracking)
+    useEffect(() => { setItemsSilent(recalcAll(items, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync items back to Wizard for Cronograma, Carta Proposta, etc.
     useEffect(() => {
@@ -440,6 +515,27 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         return () => {
             if (extractionPollRef.current) clearInterval(extractionPollRef.current);
         };
+    }, []);
+
+    // FIX F5.1: Global keyboard shortcuts
+    const filterInputRef = useRef<HTMLInputElement>(null);
+    const handleSaveRef = useRef<(() => void) | null>(null);
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            const isMeta = e.metaKey || e.ctrlKey;
+            // Ctrl+S → Save
+            if (isMeta && e.key === 's') {
+                e.preventDefault();
+                handleSaveRef.current?.();
+            }
+            // Ctrl+F → Focus filter bar
+            if (isMeta && e.key === 'f') {
+                e.preventDefault();
+                filterInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
     }, []);
 
     // Ref para input de importação Excel oculto
@@ -468,7 +564,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             // FIX STEP2-01: Restore items from wizard state when remounting.
             // Without this, the editor starts empty after Step 2 → Step 1 → Step 2.
             if (wizardItems && wizardItems.length > 0) {
-                setItems(wizardItems);
+                setItemsSilent(wizardItems);
                 hasPersistedItemsRef.current = true;
             } else {
                 hasPersistedItemsRef.current = false;
@@ -481,17 +577,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 }).catch(console.error);
         } else {
             // Standalone mode — full load
-            setItems([]);
+            setItemsSilent([]);
             setCronogramaData(null);
             hasPersistedItemsRef.current = false;
             fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
                 .then(r => r.json()).then(data => {
                     if (Array.isArray(data)) {
-                        setItems(data);
+                        setItemsSilent(data);
                         hasPersistedItemsRef.current = data.length > 0;
                     } else if (data && data.items) {
                         const loadedItems = Array.isArray(data.items) ? data.items : [];
-                        setItems(loadedItems);
+                        setItemsSilent(loadedItems);
                         hasPersistedItemsRef.current = loadedItems.length > 0;
                         if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
                         if (data.engineeringConfig) {
@@ -518,7 +614,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setIsSaving(true); setSaveMsg(null);
         try {
             const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
-            setItems(itemsToSave);
+            setItemsSilent(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
                 body: JSON.stringify({ items: itemsToSave, bdiConfig, engineeringConfig, cronogramaData })
@@ -532,6 +628,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         } catch { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro de rede</span>); }
         finally { setIsSaving(false); setTimeout(() => setSaveMsg(null), 4000); }
     };
+    // FIX F5.1: Keep ref in sync for Ctrl+S shortcut
+    handleSaveRef.current = handleSave;
 
     // Warn on page leave with unsaved changes
     useEffect(() => {
@@ -861,6 +959,29 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // AI BDI extraction
     const [isExtractingBdi, setIsExtractingBdi] = useState(false);
     const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+    // FIX F5.5: Notes popover state
+    const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+    // FIX F5.4: Multi-selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const toggleSelect = useCallback((id: string) => {
+        setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+    }, []);
+    const selectAll = useCallback(() => {
+        const billable = items.filter(it => !isGrouper(it.type));
+        setSelectedIds(new Set(billable.map(it => it.id)));
+    }, [items]);
+    const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+    const deleteSelected = useCallback(() => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`Deseja remover ${selectedIds.size} itens selecionados?`)) return;
+        setItems(prev => prev.filter(it => !selectedIds.has(it.id)));
+        setSelectedIds(new Set());
+    }, [selectedIds, setItems]);
+    const changeTypeSelected = useCallback((newType: EngItemType) => {
+        if (selectedIds.size === 0) return;
+        setItems(prev => prev.map(it => selectedIds.has(it.id) ? { ...it, type: newType } : it));
+        setSelectedIds(new Set());
+    }, [selectedIds, setItems]);
     const handleExtractBdi = async () => {
         setIsExtractingBdi(true);
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Lendo edital com IA em busca do BDI...</span>);
@@ -972,7 +1093,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const nonGroupItems = auditedItems.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA').length;
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: okCount > 0 ? 'var(--color-success)' : '#d97706' }}><CheckCircle2 size={14} /> Auditoria: {okCount} OK, {divCount} divergentes, {noMatch} sem match (de {nonGroupItems} itens)</span>);
         } catch (e: any) {
-            setItems(prev => recalcAll(prev, effectiveBdi, dashConfig));
+            setItemsSilent(recalcAll(items, effectiveBdi, dashConfig));
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
@@ -1241,11 +1362,41 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     return;
                 }
 
-                setItems(prev => [...prev, ...imported]);
-                setHasUnsavedChanges(true);
-                const etapas = imported.filter(i => i.type === 'ETAPA').length;
-                const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
-                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {imported.length} itens importados do Excel ({etapas} etapas, {comps} composições)</span>);
+                // FIX F1.4: If table already has items, ask user to REPLACE or APPEND
+                const applyImport = (mode: 'replace' | 'append') => {
+                    if (mode === 'replace') {
+                        setItems(imported);
+                    } else {
+                        setItems(prev => [...prev, ...imported]);
+                    }
+                    setHasUnsavedChanges(true);
+                    const etapas = imported.filter(i => i.type === 'ETAPA').length;
+                    const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
+                    const modeLabel = mode === 'replace' ? 'substituídos' : 'adicionados';
+                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {imported.length} itens {modeLabel} ({etapas} etapas, {comps} composições)</span>);
+                };
+
+                if (items.length > 0) {
+                    // Show inline confirmation in the save message area
+                    setSaveMsg(
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-primary)' }}>
+                            <AlertTriangle size={14} color="#d97706" />
+                            <span style={{ fontSize: '0.82rem' }}>Planilha já possui {items.length} itens. Importar {imported.length} novos como:</span>
+                            <button onClick={() => applyImport('replace')} className="btn btn-outline"
+                                style={{ padding: '3px 10px', fontSize: '0.75rem', fontWeight: 700, borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}>
+                                Substituir tudo
+                            </button>
+                            <button onClick={() => applyImport('append')} className="btn btn-primary"
+                                style={{ padding: '3px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                Adicionar ao final
+                            </button>
+                        </span>
+                    );
+                    return; // Wait for user click
+                }
+
+                // If table is empty, import directly
+                applyImport('replace');
             } catch (err: any) {
                 console.error('Erro ao importar Excel:', err);
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao ler arquivo: {err.message}</span>);
@@ -1363,7 +1514,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             </div>
 
             {/* Contextual Toolbar — sticky below tabs, always visible while scrolling */}
-            {activeTab === 'planilha' && (
+            {activeTab === 'planilha' && (<>
                 <div style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                     {/* ── AI Group (dropdown) ── */}
                     <div style={{ position: 'relative' }}>
@@ -1385,6 +1536,30 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             </div>
                         </>)}
                     </div>
+
+                    <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
+
+                    {/* ── FIX F1.2: Undo / Redo ── */}
+                    <button
+                        className="btn btn-outline"
+                        onClick={() => { undoItems(); setHasUnsavedChanges(true); }}
+                        disabled={!canUndo}
+                        title={`Desfazer (${undoCount}) — Ctrl+Z`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', padding: '5px 8px', opacity: canUndo ? 1 : 0.35, position: 'relative' }}
+                    >
+                        <Undo2 size={14} />
+                        {canUndo && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-primary)' }}>{undoCount}</span>}
+                    </button>
+                    <button
+                        className="btn btn-outline"
+                        onClick={() => { redoItems(); setHasUnsavedChanges(true); }}
+                        disabled={!canRedo}
+                        title={`Refazer (${redoCount}) — Ctrl+Shift+Z`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', padding: '5px 8px', opacity: canRedo ? 1 : 0.35, position: 'relative' }}
+                    >
+                        <Redo2 size={14} />
+                        {canRedo && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-primary)' }}>{redoCount}</span>}
+                    </button>
 
                     <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
 
@@ -1467,7 +1642,51 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         );
                     })}
                 </div>
-            )}
+
+                {/* FIX F2.1 + F2.2: Filter Bar + Collapse Controls */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 14px', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                    <Search size={14} color="var(--color-text-tertiary)" />
+                    <input
+                        ref={filterInputRef}
+                        type="text"
+                        placeholder="Buscar por descrição, código... (Ctrl+F)"
+                        value={filterText}
+                        onChange={e => setFilterText(e.target.value)}
+                        style={{ flex: 1, minWidth: 180, padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                    />
+                    <select
+                        value={filterType}
+                        onChange={e => setFilterType(e.target.value)}
+                        style={{ padding: '4px 8px', fontSize: '0.76rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                    >
+                        <option value="">Todos os tipos</option>
+                        <option value="ETAPA">Etapas</option>
+                        <option value="SUBETAPA">Subetapas</option>
+                        <option value="COMPOSICAO">Composições</option>
+                        <option value="INSUMO">Insumos</option>
+                    </select>
+                    {(filterText || filterType) && (
+                        <button onClick={() => { setFilterText(''); setFilterType(''); }}
+                            className="btn btn-outline" style={{ padding: '3px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <X size={12} /> Limpar
+                        </button>
+                    )}
+                    <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
+                    <button onClick={collapseAll} className="btn btn-outline"
+                        style={{ padding: '3px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                        title="Colapsar todas as etapas">
+                        <ChevronRight size={12} /> Colapsar
+                    </button>
+                    <button onClick={expandAll} className="btn btn-outline"
+                        style={{ padding: '3px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                        title="Expandir todas as etapas">
+                        <ChevronDown size={12} /> Expandir
+                    </button>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginLeft: 'auto' }}>
+                        {visibleItems.filter(v => v.visible).length}/{items.length} itens
+                    </span>
+                </div>
+            </>)}
 
             {/* Tab Content: Hub de Insumos */}
             {activeTab === 'hub_insumos' && (
@@ -1583,11 +1802,49 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             {activeTab === 'planilha' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--space-4)' }}>
 
+                {/* FIX F5.4: Batch Actions Bar */}
+                {selectedIds.size > 0 && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', marginBottom: 6,
+                        background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(139,92,246,0.04))',
+                        borderRadius: 'var(--radius-md)', border: '1px solid rgba(37,99,235,0.15)',
+                    }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                            {selectedIds.size} selecionado(s)
+                        </span>
+                        <div style={{ width: 1, height: 18, background: 'var(--color-border)' }} />
+                        <button onClick={deleteSelected} className="btn btn-outline"
+                            style={{ padding: '3px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-danger)', borderColor: 'rgba(239,68,68,0.3)' }}>
+                            <Trash2 size={12} /> Remover ({selectedIds.size})
+                        </button>
+                        <button onClick={() => changeTypeSelected('COMPOSICAO')} className="btn btn-outline"
+                            style={{ padding: '3px 10px', fontSize: '0.72rem' }}>
+                            → Composição
+                        </button>
+                        <button onClick={() => changeTypeSelected('INSUMO')} className="btn btn-outline"
+                            style={{ padding: '3px 10px', fontSize: '0.72rem' }}>
+                            → Insumo
+                        </button>
+                        <button onClick={clearSelection} className="btn btn-outline"
+                            style={{ padding: '3px 10px', fontSize: '0.72rem', marginLeft: 'auto' }}>
+                            <X size={12} /> Limpar seleção
+                        </button>
+                    </div>
+                )}
+
                 {/* Table */}
                 <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 1400 }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                                {/* FIX F5.4: Select All checkbox */}
+                                <th style={{ padding: '10px 4px', width: 28, textAlign: 'center' }}>
+                                    <input type="checkbox"
+                                        checked={selectedIds.size > 0 && selectedIds.size >= items.filter(it => !isGrouper(it.type)).length}
+                                        onChange={e => e.target.checked ? selectAll() : clearSelection()}
+                                        style={{ width: 14, height: 14, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                    />
+                                </th>
                                 {['Item','Tipo','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)','Total','Auditoria',''].map((h,i) => (
                                     <th key={i} style={{ padding: '10px 8px', textAlign: i >= 6 ? 'right' : 'left', color: i === 8 || i === 9 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 9 ? 800 : i === 8 ? 700 : 600, fontSize: '0.72rem', whiteSpace: 'nowrap', width: i === 4 ? 'auto' : i === 0 ? 150 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 90 : i === 5 ? 50 : i === 6 ? 85 : i === 7 ? 110 : i === 8 ? 110 : i === 9 ? 110 : i === 10 ? 90 : 40 }}>{h}</th>
                                 ))}
@@ -1596,11 +1853,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <SortableContext items={items.map(it => it.id)} strategy={verticalListSortingStrategy}>
                             <tbody>
-                            {items.map(it => {
+                            {visibleItems.map(({ item: it, visible }, idx) => {
+                                if (!visible) return null;
                                 const meta = TYPE_META[it.type || 'COMPOSICAO'];
                                 const isGroup = isGrouper(it.type);
                                 const depth = getDepth(it.itemNumber);
                                 const IconComp = meta.icon;
+                                const isCollapsed = collapsedGroupers.has(it.id);
 
                                 // ── ETAPA / SUBETAPA ROW (header style) ──
 
@@ -1609,9 +1868,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         <SortableRow key={it.id} id={it.id}>
                                             {(listeners: any) => (
                                                 <>
+                                                    {/* F5.4: Empty checkbox for grouper */}
+                                                    <td style={{ padding: '8px 4px', width: 28 }} />
                                                     <td style={{ padding: '8px 12px', fontWeight: 800, color: meta.color, fontSize: '0.85rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: Math.min(depth, 4) * 12 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: Math.min(depth, 4) * 12 }}>
                                                             <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: meta.color, opacity: 0.5, display: 'flex' }}><GripVertical size={14} /></button>
+                                                            <button onClick={() => toggleCollapse(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: meta.color, display: 'flex', transition: 'transform 0.15s' }}>
+                                                                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                                                            </button>
                                                             {it.itemNumber}
                                                         </div>
                                                     </td>
@@ -1630,9 +1894,26 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     {(() => {
                                                         const grouperIdx = items.indexOf(it);
                                                         const grouperTotal = computeGrouperSubtotal(items, grouperIdx);
+                                                        const pctPeso = total > 0 ? (grouperTotal / total * 100) : 0;
+                                                        // F2.1: Count hidden children when collapsed
+                                                        let childCount = 0;
+                                                        if (isCollapsed) {
+                                                            const gDepth = getDepth(it.itemNumber);
+                                                            for (let ci = grouperIdx + 1; ci < items.length; ci++) {
+                                                                const child = items[ci];
+                                                                if (isGrouper(child.type) && getDepth(child.itemNumber) <= gDepth) break;
+                                                                if (!isGrouper(child.type)) childCount++;
+                                                            }
+                                                        }
                                                         return (
                                                             <>
-                                                                <td colSpan={2} style={{ padding: '6px 8px' }} />
+                                                                <td style={{ padding: '6px 8px', textAlign: 'right', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                                    {pctPeso > 0 ? `${pctPeso.toFixed(1)}%` : ''}
+                                                                    {isCollapsed && childCount > 0 && (
+                                                                        <span style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 8, background: `${meta.color}12`, color: meta.color, fontSize: '0.62rem', fontWeight: 700 }}>{childCount} itens</span>
+                                                                    )}
+                                                                </td>
+                                                                <td />
                                                                 <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, fontSize: '0.82rem', color: meta.color, whiteSpace: 'nowrap' }}>
                                                                     {grouperTotal > 0 ? fmt(grouperTotal) : ''}
                                                                 </td>
@@ -1686,6 +1967,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     <SortableRow key={it.id} id={it.id}>
                                         {(listeners: any) => (
                                             <>
+                                                {/* FIX F5.4: Row checkbox */}
+                                                <td style={{ padding: '6px 4px', textAlign: 'center', width: 28 }}>
+                                                    <input type="checkbox" checked={selectedIds.has(it.id)} onChange={() => toggleSelect(it.id)}
+                                                        style={{ width: 13, height: 13, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                                    />
+                                                </td>
                                                 <td style={{ padding: '6px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 2, paddingLeft: Math.min(depth, 4) * 12 }}>
                                                         <button {...listeners} style={{ cursor: 'grab', background: 'none', border: 'none', padding: 0, color: 'var(--color-text-tertiary)', display: 'flex', marginRight: 4 }}><GripVertical size={14} /></button>
@@ -1735,7 +2022,32 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             </div>
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500, flex: 1 }} />
+                                                {/* FIX F5.5: Notes icon */}
+                                                <button
+                                                    title={it.notes ? `Nota: ${it.notes}` : 'Adicionar observação'}
+                                                    onClick={() => setEditingNotesId(editingNotesId === it.id ? null : it.id)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: it.notes ? 1 : 0.3, flexShrink: 0, display: 'flex', transition: 'opacity 0.15s' }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                    onMouseLeave={e => { if (!it.notes) (e.currentTarget as HTMLElement).style.opacity = '0.3'; }}
+                                                >
+                                                    <StickyNote size={12} color={it.notes ? '#d97706' : 'var(--color-text-tertiary)'} />
+                                                </button>
+                                            </div>
+                                            {/* FIX F5.5: Notes popover */}
+                                            {editingNotesId === it.id && (
+                                                <div style={{ marginTop: 4, padding: '6px 8px', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 'var(--radius-sm)' }}>
+                                                    <textarea
+                                                        value={it.notes || ''}
+                                                        onChange={e => updateItem(it.id, 'notes', e.target.value)}
+                                                        placeholder="Observação..."
+                                                        rows={2}
+                                                        style={{ width: '100%', fontSize: '0.7rem', border: 'none', background: 'transparent', resize: 'vertical', outline: 'none', color: 'var(--color-text-primary)', fontFamily: 'inherit' }}
+                                                        autoFocus
+                                                    />
+                                                </div>
+                                            )}
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center', padding: '4px' }} />
@@ -1754,6 +2066,18 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             ) : (
                                                 <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01" />
                                             )}
+                                            {/* FIX F5.6: Discount input */}
+                                            {(it.discount && it.discount > 0) || hoveredRowId === it.id ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2, justifyContent: 'flex-end' }}>
+                                                    <span style={{ fontSize: '0.58rem', color: '#059669', fontWeight: 700 }}>Desc:</span>
+                                                    <input
+                                                        type="number" value={it.discount || 0} min={0} max={100} step={0.5}
+                                                        onChange={e => updateItem(it.id, 'discount', parseLocaleNumber(e.target.value))}
+                                                        style={{ width: 44, fontSize: '0.6rem', padding: '1px 3px', textAlign: 'right', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 3, background: 'rgba(34,197,94,0.04)', color: '#059669', fontWeight: 700 }}
+                                                    />
+                                                    <span style={{ fontSize: '0.58rem', color: '#059669' }}>%</span>
+                                                </div>
+                                            ) : null}
                                         </td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
@@ -1997,6 +2321,68 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>{fmt(total)}</span>
                             </div>
                         </div>
+
+                        {estimatedValue && estimatedValue > 0 && total > 0 && (() => {
+                            const diff = total - estimatedValue;
+                            const pct = ((diff / estimatedValue) * 100);
+                            const isAbove = diff > 0;
+                            const barPct = Math.min((total / estimatedValue) * 100, 120);
+                            return (
+                                <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: `1px solid ${isAbove ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`, overflow: 'hidden' }}>
+                                    <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Valor Estimado</span>
+                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>{fmt(estimatedValue)}</span>
+                                    </div>
+                                    <div style={{ padding: '0 14px 6px' }}>
+                                        <div style={{ height: 6, borderRadius: 3, background: 'var(--color-bg-base)', overflow: 'hidden' }}>
+                                            <div style={{ height: '100%', borderRadius: 3, width: `${Math.min(barPct, 100)}%`, background: isAbove ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #059669)', transition: 'width 0.3s' }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: '6px 14px 10px', display: 'flex', justifyContent: 'center' }}>
+                                        <span style={{
+                                            padding: '3px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.72rem', fontWeight: 800,
+                                            background: isAbove ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+                                            color: isAbove ? '#dc2626' : '#059669',
+                                        }}>
+                                            {isAbove ? '⚠️ Acima' : '✅ Abaixo'} do estimado ({pct > 0 ? '+' : ''}{pct.toFixed(1)}%)
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* FIX F5.3: Audit Coverage Indicators */}
+                        {billableItems.length > 0 && (() => {
+                            const audited = billableItems.filter(it => it.priceAudit?.status);
+                            const ok = audited.filter(it => it.priceAudit?.status === 'OK').length;
+                            const div = audited.filter(it => it.priceAudit?.status === 'DIVERGENT').length;
+                            const noMatch = audited.filter(it => it.priceAudit?.status === 'SEM_MATCH').length;
+                            const totalBillable = billableItems.length;
+                            const coverage = totalBillable > 0 ? Math.round((audited.length / totalBillable) * 100) : 0;
+                            const okPct = audited.length > 0 ? (ok / audited.length) * 100 : 0;
+                            const divPct = audited.length > 0 ? (div / audited.length) * 100 : 0;
+                            return (
+                                <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+                                    <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Auditoria de Preços</span>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: coverage === 100 ? '#059669' : '#d97706' }}>
+                                            {audited.length}/{totalBillable} ({coverage}%)
+                                        </span>
+                                    </div>
+                                    <div style={{ padding: '0 14px 8px' }}>
+                                        <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--color-bg-base)' }}>
+                                            {okPct > 0 && <div style={{ width: `${okPct}%`, background: '#10b981', transition: 'width 0.3s' }} />}
+                                            {divPct > 0 && <div style={{ width: `${divPct}%`, background: '#f59e0b', transition: 'width 0.3s' }} />}
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: '0 14px 10px', display: 'flex', gap: 8, justifyContent: 'center' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#059669' }}>✅ {ok} OK</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#d97706' }}>⚠️ {div} Div.</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-tertiary)' }}>— {noMatch} N/D</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
             </div>
             )}

@@ -2,9 +2,12 @@
  * EngineeringProposalWizard.tsx — Orquestrador do Wizard de 5 passos
  * Substitui o EngineeringProposalEditor monolítico.
  * Mantém todo o estado centralizado e distribui via props para cada step.
+ *
+ * FIX F1.1: Auto-save debounced a cada 30s quando hasUnsavedChanges
+ * FIX F1.3: BudgetDocsPanel agora recebe cronogramaResult e insumos reais
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, TableProperties, Calendar, FileText, Package as PackageIcon, Save, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Settings, TableProperties, Calendar, FileText, Package as PackageIcon, Save, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { StepperBar } from './StepperBar';
 import { Step1ConfigPanel } from './steps/Step1ConfigPanel';
 import { Step2BudgetEditor } from './steps/Step2BudgetEditor';
@@ -13,10 +16,12 @@ import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, autoDistributeBdi, resol
 import { applyPrecision } from './precisionEngine';
 import { CronogramaPanel } from './CronogramaPanel';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
+import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
+import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig } from './types';
 import { isGrouper, DEFAULT_ENGINEERING_CONFIG } from './types';
 
-interface Props { proposalId: string; biddingId: string; }
+interface Props { proposalId: string; biddingId: string; estimatedValue?: number; }
 
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
@@ -31,7 +36,7 @@ function parseLocaleNumber(value: unknown, fallback = 0): number {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
+export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValue }: Props) {
     // ══════════════════════════════════════════
     // CORE STATE (same as legacy editor)
     // ══════════════════════════════════════════
@@ -43,6 +48,14 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
     const [isSaving, setIsSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
     const [bases, setBases] = useState<any[]>([]);
+
+    // FIX F1.1: Auto-save state
+    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+    const [isAutoSaving, setIsAutoSaving] = useState(false);
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // FIX F1.3: Insumos consolidados para BudgetDocsPanel
+    const [consolidatedInsumos, setConsolidatedInsumos] = useState<InsumoConsolidado[]>([]);
 
     // UI state
     const [currentStep, setCurrentStep] = useState(1);
@@ -140,12 +153,91 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
         } finally { setIsSaving(false); setTimeout(() => setSaveMsg(null), 4000); }
     };
 
+    // ══════════════════════════════════════════
+    // FIX F1.1: AUTO-SAVE (debounced 30s)
+    // ══════════════════════════════════════════
+    const isAnyAIRunning = isExtractingBdi || isExtractingConfig || isExtractingEncargos || isAuditing;
+
+    useEffect(() => {
+        // Clear any pending auto-save timer
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
+            autoSaveTimerRef.current = null;
+        }
+
+        // Only schedule auto-save if there are unsaved changes and no AI is running
+        if (hasUnsavedChanges && !isSaving && !isAnyAIRunning && items.length > 0) {
+            autoSaveTimerRef.current = setTimeout(async () => {
+                setIsAutoSaving(true);
+                try {
+                    const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
+                    const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
+                    const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
+                        method: 'POST', headers: hdrs(),
+                        body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig, cronogramaData })
+                    });
+                    if (res.ok) {
+                        setHasUnsavedChanges(false);
+                        setLastSavedAt(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+                    }
+                } catch (e) {
+                    console.error('[Auto-Save] Error:', e);
+                }
+                setIsAutoSaving(false);
+            }, 30000); // 30 seconds
+        }
+
+        return () => {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasUnsavedChanges, isSaving, isAnyAIRunning, items.length]);
+
     // Warn on page leave
     useEffect(() => {
         const handler = (e: BeforeUnloadEvent) => { if (hasUnsavedChanges) e.preventDefault(); };
         window.addEventListener('beforeunload', handler);
         return () => window.removeEventListener('beforeunload', handler);
     }, [hasUnsavedChanges]);
+
+    // ══════════════════════════════════════════
+    // FIX F1.3: Cronograma Result for BudgetDocsPanel
+    // ══════════════════════════════════════════
+    const cronogramaResult: CronogramaResult | null = useMemo(() => {
+        if (!cronogramaData || !cronogramaData.etapas || cronogramaData.etapas.length === 0) return null;
+        return calcularCronograma(cronogramaData.etapas, cronogramaData.meses);
+    }, [cronogramaData]);
+
+    // FIX F1.3: Fetch insumos consolidados when items change (for BudgetDocsPanel)
+    const insumosLoadedRef = useRef(false);
+    useEffect(() => {
+        // Only load once per proposal when items are available
+        if (items.length === 0 || insumosLoadedRef.current) return;
+        insumosLoadedRef.current = true;
+
+        const loadInsumos = async () => {
+            try {
+                const payload = items
+                    .filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                    .map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
+                if (payload.length === 0) return;
+
+                const res = await fetch('/api/engineering/insumos-hub-resolve', {
+                    method: 'POST', headers: hdrs(),
+                    body: JSON.stringify({ items: payload }),
+                });
+                const data = await res.json();
+                if (data.insumos && data.insumos.length > 0) {
+                    setConsolidatedInsumos(data.insumos);
+                }
+            } catch (e) {
+                console.error('[Wizard] Insumo consolidation for BudgetDocsPanel failed:', e);
+            }
+        };
+        loadInsumos();
+    }, [items]);
 
     // ══════════════════════════════════════════
     // BDI EXTRACTION
@@ -408,6 +500,17 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    {/* FIX F1.1: Auto-save indicator */}
+                    {isAutoSaving && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
+                            <Loader2 size={12} className="spin" /> Salvando...
+                        </span>
+                    )}
+                    {!isAutoSaving && lastSavedAt && !saveMsg && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 500, opacity: 0.7 }}>
+                            <Clock size={11} /> Salvo às {lastSavedAt}
+                        </span>
+                    )}
                     {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
                     <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={handleSave} disabled={isSaving}>
                         {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
@@ -459,6 +562,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                     bdiConfig={bdiConfig}
                     items={items}
                     onItemsChange={setItems}
+                    estimatedValue={estimatedValue}
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}
                 />
@@ -499,15 +603,56 @@ export function EngineeringProposalWizard({ proposalId, biddingId }: Props) {
                 />
             )}
 
-            {/* Step 5: Exportação */}
+            {/* Step 5: Exportação — FIX F1.3: agora com insumos reais e cronograma */}
             {currentStep === 5 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+
+                    {/* FIX F5.2: Validation Checklist */}
+                    {(() => {
+                        const billable = items.filter(it => !isGrouper(it.type));
+                        const checks = [
+                            { label: 'Itens na planilha', ok: billable.length > 0, blocker: billable.length === 0, detail: billable.length > 0 ? `${billable.length} itens` : 'Nenhum item' },
+                            { label: 'BDI configurado', ok: effectiveBdi > 0, blocker: false, detail: effectiveBdi > 0 ? `${effectiveBdi.toFixed(2)}%` : '0%' },
+                            { label: 'Preços unitários', ok: billable.every(it => it.unitCost > 0), blocker: false, detail: (() => { const z = billable.filter(it => it.unitCost <= 0).length; return z > 0 ? `${z} sem preço` : 'Todos preenchidos'; })() },
+                            { label: 'Encargos Sociais', ok: (engineeringConfig.encargosSociais?.horista || 0) > 0, blocker: false, detail: (engineeringConfig.encargosSociais?.horista || 0) > 0 ? `H: ${engineeringConfig.encargosSociais?.horista?.toFixed(1)}% / M: ${engineeringConfig.encargosSociais?.mensalista?.toFixed(1)}%` : 'Não configurado' },
+                            { label: 'Cronograma', ok: !!(cronogramaData && cronogramaData.etapas.some((e: any) => e.percentuais.some((p: number) => p > 0))), blocker: false, detail: cronogramaData?.etapas?.some((e: any) => e.percentuais.some((p: number) => p > 0)) ? `${cronogramaData.meses} meses` : 'Vazio' },
+                        ];
+                        const hasBlocker = checks.some(c => c.blocker);
+                        return (
+                            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: '14px 18px' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-tertiary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {hasBlocker ? '❌' : '✅'} Checklist Pré-Exportação
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {checks.map(c => (
+                                        <div key={c.label} style={{
+                                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                                            borderRadius: 'var(--radius-md)', fontSize: '0.76rem', fontWeight: 600,
+                                            background: c.blocker ? 'rgba(239,68,68,0.08)' : c.ok ? 'rgba(34,197,94,0.06)' : 'rgba(245,158,11,0.08)',
+                                            color: c.blocker ? '#dc2626' : c.ok ? '#059669' : '#d97706',
+                                            border: `1px solid ${c.blocker ? 'rgba(239,68,68,0.2)' : c.ok ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.2)'}`,
+                                        }}>
+                                            <span>{c.blocker ? '❌' : c.ok ? '✅' : '⚠️'}</span>
+                                            <span>{c.label}</span>
+                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>({c.detail})</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {hasBlocker && (
+                                    <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                                        ⚠️ Corrija os erros críticos antes de exportar.
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     <BudgetDocsPanel
                         items={items}
                         bdiConfig={bdiConfig}
                         effectiveBdi={effectiveBdi}
-                        insumos={[]}
-                        cronogramaResult={null}
+                        insumos={consolidatedInsumos}
+                        cronogramaResult={cronogramaResult}
                         proposalId={proposalId}
                         engineeringConfig={engineeringConfig}
                     />

@@ -803,7 +803,8 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             {p.activeTab === 'items' && p.proposal && p.objectType === 'ENGENHARIA' && (
                 <EngineeringProposalWizard 
                     proposalId={p.proposal.id} 
-                    biddingId={p.selectedBiddingId} 
+                    biddingId={p.selectedBiddingId}
+                    estimatedValue={p.selectedBidding?.estimatedValue || 0}
                 />
             )}
 
