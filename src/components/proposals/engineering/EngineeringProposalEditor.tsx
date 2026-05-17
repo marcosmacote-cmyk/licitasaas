@@ -1351,11 +1351,37 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao criar item');
-            // Auto-add the created item to the budget with specified quantity
-            const createdId = data.item.id;
+
+            // Direct insert into budget (bypasses addFromSearch to avoid state race condition)
+            const cost = Number(data.item.price) || 0;
+            const unitPrice = applyBdi(cost, effectiveBdi, engineeringConfig.precision);
             const qty = parseFloat(propriaQty.replace(',', '.')) || 1;
-            setSearchQuantities(prev => ({ ...prev, [createdId]: qty }));
-            addFromSearch(data.item);
+            const typeFromKind = (data.item.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : 'INSUMO') as EngItemType;
+            const newId = `propria-${Date.now()}`;
+            setHasUnsavedChanges(true);
+            setItems(prev => {
+                const newItem = {
+                    id: newId, itemNumber: '',
+                    code: data.item.code, sourceName: 'PROPRIA',
+                    description: data.item.description, unit: data.item.unit || 'UN', quantity: qty,
+                    unitCost: cost, unitPrice,
+                    totalPrice: applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision }),
+                    type: typeFromKind, priceOrigin: 'BASE' as const,
+                };
+                let newList = [...prev];
+                if (insertTargetId) {
+                    const idx = newList.findIndex(it => it.id === insertTargetId);
+                    if (idx >= 0) {
+                        newList.splice(idx + 1, 0, newItem);
+                        return renumberItems(newList);
+                    }
+                }
+                newList.push(newItem);
+                return renumberItems(newList);
+            });
+            setInsertTargetId(newId);
+            setAddedCount(c => c + 1);
+
             // Reset form (keep qty at 1)
             setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaQty('1');
         } catch (err: any) {
