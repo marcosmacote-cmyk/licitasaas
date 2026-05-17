@@ -983,12 +983,63 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     const normalizedChunk = parseAndNormalizeEngineeringExtraction(chunkText);
                     
                     let newItemsInChunk = 0;
+                    let duplicateContentCount = 0;
                     for (const item of normalizedChunk.engineeringItems) {
                         const key = `${item.item}::${String(item.description || '').substring(0, 40).toUpperCase()}`;
                         if (!seenItemKeys.has(key)) {
+                            // FIX-17: Content-based dedup — detect same code+description under different item numbers
+                            const contentFingerprint = `${String(item.code || '').toUpperCase()}::${String(item.description || '').substring(0, 50).toUpperCase()}`;
+                            const existingWithSameContent = engItems.filter(existing => {
+                                const existFp = `${String(existing.code || '').toUpperCase()}::${String(existing.description || '').substring(0, 50).toUpperCase()}`;
+                                return existFp === contentFingerprint && existing.type === 'COMPOSICAO';
+                            });
+                            
+                            if (existingWithSameContent.length >= 3 && item.type === 'COMPOSICAO') {
+                                // Same composition appearing 3+ times = hallucination loop
+                                duplicateContentCount++;
+                                continue;
+                            }
+                            
                             seenItemKeys.add(key);
                             engItems.push(item);
                             newItemsInChunk++;
+                        }
+                    }
+                    
+                    if (duplicateContentCount > 0) {
+                        logger.warn(
+                            `[Engineering-BG] 🔄 FIX-17: ${duplicateContentCount} itens rejeitados por content-dedup ` +
+                            `(mesma composição repetida 3+ vezes com item numbers diferentes)`
+                        );
+                    }
+
+                    // FIX-17: Cycle detector — abort if last N items form a repeating pattern
+                    if (engItems.length > 30) {
+                        const last20 = engItems.slice(-20).filter((it: any) => it.type === 'COMPOSICAO');
+                        const last20Codes = last20.map((it: any) => String(it.code || it.description || '').substring(0, 30));
+                        const uniqueInLast20 = new Set(last20Codes);
+                        if (last20.length >= 15 && uniqueInLast20.size <= 8) {
+                            logger.warn(
+                                `[Engineering-BG] 🚨 FIX-17: HALLUCINATION LOOP detected! Last 20 composições have only ` +
+                                `${uniqueInLast20.size} unique codes. Truncating to remove loop artifacts.`
+                            );
+                            // Remove the looping tail — keep only items up to the first repetition onset
+                            const codeFrequency = new Map<string, number>();
+                            let truncateAt = engItems.length;
+                            for (let i = 0; i < engItems.length; i++) {
+                                if (engItems[i].type !== 'COMPOSICAO') continue;
+                                const fp = `${String(engItems[i].code || '')}::${String(engItems[i].description || '').substring(0, 40)}`;
+                                const count = (codeFrequency.get(fp) || 0) + 1;
+                                codeFrequency.set(fp, count);
+                                if (count >= 4) {
+                                    truncateAt = i;
+                                    break;
+                                }
+                            }
+                            const removedCount = engItems.length - truncateAt;
+                            engItems.splice(truncateAt);
+                            logger.info(`[Engineering-BG] ✂️ Truncated ${removedCount} loop items. ${engItems.length} items remain.`);
+                            break; // Stop the extraction loop
                         }
                     }
                     
