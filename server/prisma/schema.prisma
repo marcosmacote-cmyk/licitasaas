@@ -710,6 +710,9 @@ model EngineeringProposalItem {
   officialUnitPrice Float?
   officialTotalPrice Float?
   priceAudit      Json?    // Comparação não destrutiva: preço edital vs base oficial
+  multiplicationFactor Float? // Fator de multiplicação para ETAPAs/SUBETAPAs (cascata de quantidades)
+  notes           String?  // Observações/notas do usuário por item
+  discount        Float?   // Desconto individual (%) aplicado ao preço unitário
   sortOrder       Int      @default(0)
   
   proposal        PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)

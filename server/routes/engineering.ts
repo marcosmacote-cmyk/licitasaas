@@ -1321,6 +1321,9 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     officialUnitPrice: item.officialUnitPrice === undefined ? null : Number(item.officialUnitPrice) || 0,
                     officialTotalPrice: item.officialTotalPrice === undefined ? null : Number(item.officialTotalPrice) || 0,
                     priceAudit: refreshSubmittedPriceAudit(item),
+                    multiplicationFactor: item.multiplicationFactor != null ? Number(item.multiplicationFactor) || null : null,
+                    notes: item.notes || null,
+                    discount: item.discount != null ? Number(item.discount) || null : null,
                     sortOrder: index,
                 }))
             });
