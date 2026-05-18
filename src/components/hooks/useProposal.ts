@@ -92,9 +92,6 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         if (!selectedCompanyId) return;
 
         // PERF-05: Use companies prop directly instead of re-fetching all companies.
-        // The parent component already provides fresh company data. The previous
-        // GET /api/companies call added 500ms-2s of unnecessary latency on every
-        // company/bidding change, blocking the initial page render.
         const loadSignatureDefaults = () => {
             const co = companies.find(c => c.id === selectedCompanyId);
             if (!co) return;
@@ -108,9 +105,22 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
                     if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
                     if (cfg.sigCompany) setSigCompany(cfg.sigCompany);
-                    if (cfg.bankData)  setBankData(cfg.bankData);
                     if (cfg.signatureMode) setSignatureMode(cfg.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
                     if (cfg.validityDays)  setValidityDays(cfg.validityDays);
+
+                    // Dados bancários: priorizar campos reais se JSON legado vazio
+                    if (cfg.bankData && (cfg.bankData.bank || cfg.bankData.pix)) {
+                        setBankData(cfg.bankData);
+                    } else {
+                        // Migrar dos campos estruturados v2
+                        setBankData({
+                            bank: (co as any).bankName || '',
+                            agency: (co as any).bankAgency || '',
+                            account: (co as any).bankAccount || '',
+                            accountType: (co as any).bankAccountType || 'Conta Corrente',
+                            pix: (co as any).bankPix || '',
+                        });
+                    }
                 }
             } catch { /* ignore */ }
 
@@ -130,32 +140,54 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 } catch { /* ignore */ }
             }
 
-            // ─── 3. Fallback final: campos diretos do BD (primeira vez, sem JSON) ───
+            // ─── 3. Fallback final: campos estruturados v2 (primeira vez, sem JSON) ───
             if (!loadedFromJson) {
+                // Representante Legal — campos reais
                 setSigLegal({
                     name: (co as any).contactName || '',
                     cpf: (co as any).contactCpf || '',
-                    role: 'Representante Legal',
+                    role: (co as any).contactCargo || 'Representante Legal',
                 });
+
                 setSigCompany({
                     razaoSocial: (co as any).razaoSocial || '',
                     cnpj: (co as any).cnpj || '',
                 });
-                const techQual = (co as any).technicalQualification || '';
-                if (techQual) {
-                    const techName = techQual.split(',')[0].trim();
-                    const regMatch = techQual.match(/((?:CREA|CAU|CRA|CONFEA|Carteira\s+Profissional)[^,]*)/i);
-                    const techReg = regMatch ? regMatch[1].trim() : '';
-                    setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
+
+                // RT — campos estruturados v2, fallback regex do legado
+                const techName = (co as any).techName || '';
+                const techReg = (co as any).techRegistration || '';
+                const techTitle = (co as any).techTitle || 'Responsável Técnico';
+
+                if (techName || techReg) {
+                    setSigTech({ name: techName, registration: techReg, role: techTitle });
                 } else {
-                    setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
+                    // Regex legado sobre technicalQualification
+                    const techQual = (co as any).technicalQualification || '';
+                    if (techQual) {
+                        const tName = techQual.split(',')[0].trim();
+                        const regMatch = techQual.match(/((?:CREA|CAU|CRA|CONFEA|Carteira\s+Profissional)[^,]*)/i);
+                        const tReg = regMatch ? regMatch[1].trim() : '';
+                        setSigTech({ name: tName, registration: tReg, role: techTitle });
+                    } else {
+                        setSigTech({ name: '', registration: '', role: techTitle });
+                    }
                 }
-                setBankData({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+
+                // Bancário — campos estruturados v2
+                setBankData({
+                    bank: (co as any).bankName || '',
+                    agency: (co as any).bankAgency || '',
+                    account: (co as any).bankAccount || '',
+                    accountType: (co as any).bankAccountType || 'Conta Corrente',
+                    pix: (co as any).bankPix || '',
+                });
             }
         };
 
         loadSignatureDefaults();
     }, [selectedCompanyId, selectedBiddingId]);
+
 
     // Load proposals when bidding changes
     useEffect(() => {
