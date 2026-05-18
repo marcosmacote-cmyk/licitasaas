@@ -6,7 +6,7 @@
  * FIX A3: Botão "Exportar Caderno Completo"
  * FIX A5: Carta Proposta integrada ao caderno
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
@@ -88,6 +88,20 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
     const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+    // Inject company logo into reportConfig at runtime (not persisted — Base64 too large for JSON)
+    const engConfigWithLogo = useMemo((): EngineeringConfig | undefined => {
+        if (!engineeringConfig) return engineeringConfig;
+        const logoBase64 = company?.defaultProposalHeader || '';
+        if (!logoBase64) return engineeringConfig;
+        return {
+            ...engineeringConfig,
+            reportConfig: {
+                ...(engineeringConfig.reportConfig || {}),
+                logoBase64,
+            },
+        };
+    }, [engineeringConfig, company?.defaultProposalHeader]);
+
     const handleExportCarta = useCallback(async () => {
         setGenerating('carta');
         try {
@@ -166,31 +180,31 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             if (format === 'excel') {
                 // Fase 3/C1: Excel export
                 switch (docId) {
-                    case 'resumido': xlsOrcamentoResumido(items, engineeringConfig, effectiveBdi); break;
-                    case 'sintetico': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
-                    case 'analitico': await xlsOrcamentoAnalitico(proposalId, items, engineeringConfig, effectiveBdi); break;
-                    case 'cpu': await xlsCpuBatch(proposalId, items, engineeringConfig, effectiveBdi); break;
-                    case 'abc_servicos': xlsCurvaAbcServicos(items, engineeringConfig, effectiveBdi); break;
-                    case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engineeringConfig); break;
+                    case 'resumido': xlsOrcamentoResumido(items, engConfigWithLogo, effectiveBdi); break;
+                    case 'sintetico': xlsOrcamentoSintetico(items, engConfigWithLogo, effectiveBdi); break;
+                    case 'analitico': await xlsOrcamentoAnalitico(proposalId, items, engConfigWithLogo, effectiveBdi); break;
+                    case 'cpu': await xlsCpuBatch(proposalId, items, engConfigWithLogo, effectiveBdi); break;
+                    case 'abc_servicos': xlsCurvaAbcServicos(items, engConfigWithLogo, effectiveBdi); break;
+                    case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engConfigWithLogo); break;
                     case 'cronograma':
-                        if (cronogramaResult) xlsCronograma(cronogramaResult, engineeringConfig);
+                        if (cronogramaResult) xlsCronograma(cronogramaResult, engConfigWithLogo);
                         else alert('Configure o cronograma primeiro.');
                         break;
-                    case 'bdi': xlsBdiEncargos(engineeringConfig, effectiveBdi); break;
+                    case 'bdi': xlsBdiEncargos(engConfigWithLogo, effectiveBdi); break;
                 }
             } else {
                 switch (docId) {
-                    case 'resumido': docOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
-                    case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
-                    case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engineeringConfig); break;
-                    case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engineeringConfig); break;
-                    case 'abc_servicos': docCurvaAbcServicos(items, engineeringConfig); break;
-                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engineeringConfig); break;
+                    case 'resumido': docOrcamentoResumido(items, effectiveBdi, engConfigWithLogo); break;
+                    case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engConfigWithLogo); break;
+                    case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engConfigWithLogo); break;
+                    case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engConfigWithLogo); break;
+                    case 'abc_servicos': docCurvaAbcServicos(items, engConfigWithLogo); break;
+                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engConfigWithLogo); break;
                     case 'cronograma':
-                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig } as any);
+                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig: engConfigWithLogo } as any);
                         else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
                         break;
-                    case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
+                    case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engConfigWithLogo); break;
                 }
             }
             markGenerated(docId + (format === 'excel' ? '_xls' : ''));
@@ -246,6 +260,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     config={engineeringConfig?.reportConfig || {}}
                     onChange={(rc) => onConfigChange?.({ ...engineeringConfig, reportConfig: rc })}
                     companyName={company?.razaoSocial || company?.nomeFantasia}
+                    logoBase64={company?.defaultProposalHeader || ''}
                 />
             )}
 

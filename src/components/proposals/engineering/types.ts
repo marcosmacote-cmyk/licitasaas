@@ -225,6 +225,8 @@ export interface ReportConfig {
     showBancoOrigem?: boolean;
     /** Observações por composição (chave = código). Exibido nos relatórios PDF/XLS. */
     compositionNotes?: Record<string, string>;
+    /** Logo da empresa em Base64 (data:image/...). Populado em runtime, não persistido. */
+    logoBase64?: string;
 }
 
 export const DEFAULT_REPORT_CONFIG: ReportConfig = {

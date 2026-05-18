@@ -4,7 +4,7 @@
  * Permite customizar cabeçalhos, rodapés, campos legais e
  * opções de exibição dos relatórios PDF/Excel de engenharia.
  */
-import { Settings, FileText, Stamp, Eye, EyeOff } from 'lucide-react';
+import { Settings, FileText, Stamp, Eye, EyeOff, Image as ImageIcon } from 'lucide-react';
 import type { ReportConfig } from './types';
 import { DEFAULT_REPORT_CONFIG } from './types';
 
@@ -12,6 +12,8 @@ interface Props {
     config: ReportConfig;
     onChange: (config: ReportConfig) => void;
     companyName?: string;
+    /** Logo Base64 from CompanyProfile (read-only preview) */
+    logoBase64?: string;
 }
 
 const S = {
@@ -101,7 +103,7 @@ function Toggle({ label, checked, onChange, icon }: { label: string; checked: bo
     );
 }
 
-export function ReportConfigPanel({ config, onChange, companyName }: Props) {
+export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }: Props) {
     const c = { ...DEFAULT_REPORT_CONFIG, ...config };
     const set = <K extends keyof ReportConfig>(key: K, value: ReportConfig[K]) => {
         onChange({ ...c, [key]: value });
@@ -109,6 +111,70 @@ export function ReportConfigPanel({ config, onChange, companyName }: Props) {
 
     return (
         <div style={S.panel}>
+            {/* ═══ LOGOTIPO ═══ */}
+            <div style={S.section}>
+                <div style={S.sectionHeader}>
+                    <ImageIcon size={16} color="var(--color-primary)" />
+                    Logotipo nos Relatórios
+                </div>
+                <div style={S.sectionBody}>
+                    {logoBase64 ? (
+                        <>
+                            <div style={{
+                                padding: '12px', borderRadius: 'var(--radius-md)',
+                                border: '1px dashed var(--color-border)', background: 'var(--color-bg-base)',
+                                textAlign: (c.logoPosition || 'left') as any,
+                            }}>
+                                <img
+                                    src={logoBase64}
+                                    alt="Logo da empresa"
+                                    style={{ maxHeight: c.logoMaxHeight || 50, maxWidth: '90%', objectFit: 'contain' }}
+                                />
+                            </div>
+                            <div style={S.row}>
+                                <div style={S.half}>
+                                    <Field label="Posição do logo">
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            {(['left', 'center', 'right'] as const).map(pos => (
+                                                <button key={pos} type="button"
+                                                    onClick={() => set('logoPosition', pos)}
+                                                    style={{
+                                                        flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-md)',
+                                                        border: c.logoPosition === pos ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                                        background: c.logoPosition === pos ? 'rgba(37,99,235,0.06)' : 'var(--color-bg-base)',
+                                                        cursor: 'pointer', fontSize: '0.78rem', fontWeight: c.logoPosition === pos ? 700 : 400,
+                                                        color: c.logoPosition === pos ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                    }}
+                                                >
+                                                    {pos === 'left' ? 'Esquerda' : pos === 'center' ? 'Centro' : 'Direita'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </Field>
+                                </div>
+                                <div style={{ flex: '0 0 120px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <Field label="Altura máx. (px)">
+                                        <input type="number" style={{ ...S.input, textAlign: 'center' }}
+                                            value={c.logoMaxHeight || 50} min={20} max={120} step={5}
+                                            onChange={e => set('logoMaxHeight', Number(e.target.value) || 50)}
+                                            onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+                                            onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }} />
+                                    </Field>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ padding: '16px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.82rem' }}>
+                            <ImageIcon size={24} style={{ marginBottom: 6, opacity: 0.4 }} />
+                            <div>Nenhum timbrado configurado.</div>
+                            <div style={{ fontSize: '0.72rem', marginTop: 4 }}>
+                                Configure o timbrado no <strong>Perfil da Empresa</strong> (Passo 4 → Configuração).
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* ═══ CABEÇALHO ═══ */}
             <div style={S.section}>
                 <div style={S.sectionHeader}>

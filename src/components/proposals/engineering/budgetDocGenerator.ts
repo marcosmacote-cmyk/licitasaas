@@ -65,10 +65,20 @@ function openDoc(title: string, html: string, landscape: boolean = false, report
     const dataStr = now.toLocaleDateString('pt-BR');
     const horaStr = now.toLocaleTimeString('pt-BR');
 
-    // Custom header
+    // Custom header — logo + text lines
+    const logoBase64 = rc.logoBase64 || '';
+    const logoPos = rc.logoPosition || 'left';
+    const logoMaxH = rc.logoMaxHeight || 50;
+    const logoHtml = logoBase64
+        ? `<div style="text-align:${logoPos};margin-bottom:6px;"><img src="${logoBase64}" style="max-height:${logoMaxH}px;max-width:90%;object-fit:contain;" /></div>`
+        : '';
+
     const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
-    const headerHtml = hdrLines.length > 0
-        ? `<div style="text-align:center;margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
+    const headerTextHtml = hdrLines.length > 0
+        ? `<div style="text-align:center;margin-bottom:4px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
+        : '';
+    const headerHtml = (logoHtml || headerTextHtml)
+        ? `<div style="margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${logoHtml}${headerTextHtml}</div>`
         : '';
 
     // Custom footer

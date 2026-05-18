@@ -207,6 +207,47 @@ function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: num
   mkRow('VALOR GLOBAL COM BDI', fmt(totalComBdi), true);
 }
 
+/** Insert company logo as embedded image in the worksheet header area */
+function logoRow(wb: ExcelJS.Workbook, ws: ExcelJS.Worksheet, colCount: number, reportConfig?: any) {
+  const rc = reportConfig || {};
+  const logoB64 = rc.logoBase64 || '';
+  if (!logoB64) return;
+
+  try {
+    // Extract raw Base64 and extension from data URI
+    const match = logoB64.match(/^data:image\/(png|jpeg|jpg|gif);base64,(.+)$/i);
+    if (!match) return;
+    const ext = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
+    const b64data = match[2];
+
+    const imageId = wb.addImage({ base64: b64data, extension: ext as 'png' | 'jpeg' | 'gif' });
+
+    const maxH = rc.logoMaxHeight || 50;
+    // ExcelJS row height in points: ~0.75pt per px → 50px ≈ 38pt, add buffer
+    const rowH = Math.max(28, Math.round(maxH * 0.8));
+
+    // Add an empty row for the logo
+    const rn = ws.rowCount + 1;
+    ws.addRow(Array(colCount).fill(''));
+    ws.mergeCells(rn, 1, rn, colCount);
+    ws.getRow(rn).height = rowH;
+
+    // Position logo based on logoPosition
+    const pos = rc.logoPosition || 'left';
+    let col0 = 0; // 0-indexed column
+    if (pos === 'center') col0 = Math.max(0, Math.floor((colCount - 2) / 2));
+    else if (pos === 'right') col0 = Math.max(0, colCount - 3);
+
+    ws.addImage(imageId, {
+      tl: { col: col0, row: rn - 1 } as any,
+      ext: { width: 200, height: maxH },
+    });
+  } catch (e) {
+    // Silently skip logo if Base64 is invalid
+    console.warn('Logo insertion failed:', e);
+  }
+}
+
 function titleRow(ws: ExcelJS.Worksheet, title: string, colCount: number) {
   ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, colCount);
   const r = ws.lastRow!;
@@ -235,6 +276,7 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
   const ws = wb.addWorksheet('Orçamento Resumido');
   setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 8 }];
+  logoRow(wb, ws, 5, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const chapters = groupByChapter(items);
@@ -268,6 +310,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
   const ws = wb.addWorksheet('Orçamento Sintético');
   setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }];
+  logoRow(wb, ws, 8, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const chapters = groupByChapter(items);
@@ -397,6 +440,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
   const ws = wb.addWorksheet('Orçamento Analítico');
   setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
+  logoRow(wb, ws, 7, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
@@ -453,6 +497,7 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
   const ws = wb.addWorksheet('Composições');
   setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
+  logoRow(wb, ws, 7, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   titleRow(ws, 'CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS', 7);
@@ -492,6 +537,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
   const ws = wb.addWorksheet('ABC Serviços');
   setupPrint(ws, true, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 8 }, { width: 8 }];
+  logoRow(wb, ws, 11, engConfig?.reportConfig);
 
   titleRow(ws, 'CURVA ABC DE SERVIÇOS', 11);
   metaRows(ws, engConfig, items, 11);
@@ -522,6 +568,7 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
   const ws = wb.addWorksheet('BDI e Encargos');
   setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
+  logoRow(wb, ws, 4, engConfig?.reportConfig);
 
   titleRow(ws, 'BDI E ENCARGOS SOCIAIS', 4);
 
@@ -607,6 +654,7 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   for (let m = 0; m < meses; m++) widths.push({ width: 12 });
   widths.push({ width: 14 });
   ws.columns = widths;
+  logoRow(wb, ws, colCount, engConfig?.reportConfig);
 
   titleRow(ws, 'CRONOGRAMA FÍSICO-FINANCEIRO', colCount);
   const rn0 = ws.rowCount + 1;
@@ -689,6 +737,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, true, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
+  logoRow(wb, ws, 8, engConfig?.reportConfig);
 
   titleRow(ws, 'CURVA ABC DE INSUMOS', 8);
   metaRows(ws, engConfig, insumos, 8);
