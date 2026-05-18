@@ -182,6 +182,33 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                     Cabeçalho dos Relatórios
                 </div>
                 <div style={S.sectionBody}>
+                    {/* Header image upload */}
+                    <Field label="Imagem do cabeçalho (timbrado)" hint="Imagem que aparecerá no topo de cada relatório. Formatos: PNG, JPG. Recomendado: 1000×120px.">
+                        {c.headerImageBase64 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ padding: 8, border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-base)', textAlign: 'center' }}>
+                                    <img src={c.headerImageBase64} alt="Cabeçalho" style={{ maxHeight: c.headerImageHeight || 80, maxWidth: '100%', objectFit: 'contain' }} />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <label style={S.label}>Altura (px):</label>
+                                    <input type="number" style={{ ...S.input, width: 70, textAlign: 'center' }} value={c.headerImageHeight || 80} min={30} max={200} step={5}
+                                        onChange={e => set('headerImageHeight', Number(e.target.value) || 80)} />
+                                    <button type="button" onClick={() => { set('headerImageBase64', ''); set('headerImageHeight', 80); }}
+                                        style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                        Remover imagem
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--color-text-tertiary)', transition: 'border-color 0.2s' }}>
+                                <ImageIcon size={16} />
+                                Clique para enviar imagem do cabeçalho
+                                <input type="file" accept="image/png,image/jpeg,image/jpg" style={{ display: 'none' }}
+                                    onChange={e => { const f = e.target.files?.[0]; if (!f) return; const reader = new FileReader(); reader.onload = ev => { set('headerImageBase64', ev.target?.result as string); }; reader.readAsDataURL(f); }} />
+                            </label>
+                        )}
+                    </Field>
+
                     <Field label="Linha 1 (principal)" hint="Ex: nome da empresa. Deixe vazio para usar o nome do perfil.">
                         <input style={S.input} value={c.headerLine1 || ''} placeholder={companyName || 'Nome da Empresa'}
                             onChange={e => set('headerLine1', e.target.value)}
@@ -211,9 +238,36 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                     Rodapé dos Relatórios
                 </div>
                 <div style={S.sectionBody}>
+                    {/* Footer image upload */}
+                    <Field label="Imagem do rodapé" hint="Imagem que aparecerá no final de cada relatório. Formatos: PNG, JPG. Recomendado: 1000×80px.">
+                        {c.footerImageBase64 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ padding: 8, border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-base)', textAlign: 'center' }}>
+                                    <img src={c.footerImageBase64} alt="Rodapé" style={{ maxHeight: c.footerImageHeight || 60, maxWidth: '100%', objectFit: 'contain' }} />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <label style={S.label}>Altura (px):</label>
+                                    <input type="number" style={{ ...S.input, width: 70, textAlign: 'center' }} value={c.footerImageHeight || 60} min={20} max={150} step={5}
+                                        onChange={e => set('footerImageHeight', Number(e.target.value) || 60)} />
+                                    <button type="button" onClick={() => { set('footerImageBase64', ''); set('footerImageHeight', 60); }}
+                                        style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                        Remover imagem
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--color-text-tertiary)', transition: 'border-color 0.2s' }}>
+                                <ImageIcon size={16} />
+                                Clique para enviar imagem do rodapé
+                                <input type="file" accept="image/png,image/jpeg,image/jpg" style={{ display: 'none' }}
+                                    onChange={e => { const f = e.target.files?.[0]; if (!f) return; const reader = new FileReader(); reader.onload = ev => { set('footerImageBase64', ev.target?.result as string); }; reader.readAsDataURL(f); }} />
+                            </label>
+                        )}
+                    </Field>
+
                     <div style={S.row}>
                         <div style={S.half}>
-                            <Field label="Rodapé esquerdo" hint="Use {data}, {hora} para substituição automática">
+                            <Field label="Rodapé esquerdo (texto)" hint="Use {data}, {hora} para substituição automática">
                                 <input style={S.input} value={c.footerLine1 || ''} placeholder="LicitaSaaS — {data} {hora}"
                                     onChange={e => set('footerLine1', e.target.value)}
                                     onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
@@ -221,7 +275,7 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                             </Field>
                         </div>
                         <div style={S.half}>
-                            <Field label="Rodapé direito" hint="Use {pagina}, {total} para numeração">
+                            <Field label="Rodapé direito (texto)" hint="Use {pagina}, {total} para numeração">
                                 <input style={S.input} value={c.footerLine2 || ''} placeholder="Página {pagina} de {total}"
                                     onChange={e => set('footerLine2', e.target.value)}
                                     onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}

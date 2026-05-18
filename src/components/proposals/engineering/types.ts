@@ -206,7 +206,13 @@ export interface ReportConfig {
     headerLine3?: string;
     logoPosition?: 'left' | 'center' | 'right';
     logoMaxHeight?: number;
-    // Footer
+    /** Imagem do cabeçalho (Base64 data:image/...). Persistido no reportConfig. */
+    headerImageBase64?: string;
+    headerImageHeight?: number;
+    /** Imagem do rodapé (Base64 data:image/...). Persistido no reportConfig. */
+    footerImageBase64?: string;
+    footerImageHeight?: number;
+    // Footer text
     footerLine1?: string;
     footerLine2?: string;
     showHeaderOnAllPages?: boolean;

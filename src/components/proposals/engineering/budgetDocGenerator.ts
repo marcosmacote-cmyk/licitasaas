@@ -65,23 +65,38 @@ function openDoc(title: string, html: string, landscape: boolean = false, report
     const dataStr = now.toLocaleDateString('pt-BR');
     const horaStr = now.toLocaleTimeString('pt-BR');
 
-    // Custom header — logo + text lines
-    const logoBase64 = rc.logoBase64 || '';
-    const logoPos = rc.logoPosition || 'left';
-    const logoMaxH = rc.logoMaxHeight || 50;
-    const logoHtml = logoBase64
-        ? `<div style="text-align:${logoPos};margin-bottom:6px;"><img src="${logoBase64}" style="max-height:${logoMaxH}px;max-width:90%;object-fit:contain;" /></div>`
+    // Header image (timbrado) — takes priority over logo + text
+    const headerImgB64 = rc.headerImageBase64 || '';
+    const headerImgH = rc.headerImageHeight || 80;
+
+    let headerHtml = '';
+    if (headerImgB64) {
+        headerHtml = `<div style="text-align:center;margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;"><img src="${headerImgB64}" style="max-height:${headerImgH}px;max-width:100%;object-fit:contain;" /></div>`;
+    } else {
+        // Logo + text lines fallback
+        const logoBase64 = rc.logoBase64 || '';
+        const logoPos = rc.logoPosition || 'left';
+        const logoMaxH = rc.logoMaxHeight || 50;
+        const logoHtml = logoBase64
+            ? `<div style="text-align:${logoPos};margin-bottom:6px;"><img src="${logoBase64}" style="max-height:${logoMaxH}px;max-width:90%;object-fit:contain;" /></div>`
+            : '';
+        const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
+        const headerTextHtml = hdrLines.length > 0
+            ? `<div style="text-align:center;margin-bottom:4px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
+            : '';
+        if (logoHtml || headerTextHtml) {
+            headerHtml = `<div style="margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${logoHtml}${headerTextHtml}</div>`;
+        }
+    }
+
+    // Footer image
+    const footerImgB64 = rc.footerImageBase64 || '';
+    const footerImgH = rc.footerImageHeight || 60;
+    const footerImgHtml = footerImgB64
+        ? `<div style="text-align:center;margin-top:12px;border-top:1px solid #cbd5e1;padding-top:8px;"><img src="${footerImgB64}" style="max-height:${footerImgH}px;max-width:100%;object-fit:contain;" /></div>`
         : '';
 
-    const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
-    const headerTextHtml = hdrLines.length > 0
-        ? `<div style="text-align:center;margin-bottom:4px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
-        : '';
-    const headerHtml = (logoHtml || headerTextHtml)
-        ? `<div style="margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${logoHtml}${headerTextHtml}</div>`
-        : '';
-
-    // Custom footer
+    // Custom footer text
     const footL = (rc.footerLine1 || `LicitaSaaS — ${dataStr} ${horaStr}`).replace('{data}', dataStr).replace('{hora}', horaStr);
     const footR = (rc.footerLine2 || '').replace('{pagina}', '').replace('{total}', '');
 
@@ -104,6 +119,7 @@ ${headerHtml}
 ${html}
 ${obsHtml}
 ${sigHtml}
+${footerImgHtml}
 <div class="footer">${footL}${footR ? `&nbsp;&nbsp;&nbsp;&nbsp;${footR}` : ''}</div>
 <div class="no-print"><button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Imprimir / Salvar PDF</button></div>
 </body></html>`);
@@ -634,4 +650,243 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
     }
 
     openDoc('Caderno de Composições', html, false, engineeringConfig?.reportConfig);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 9. PROPOSTA COMPLETA — PDF UNIFICADO
+// Combina múltiplas seções em um único documento.
+// ═══════════════════════════════════════════════════════════
+export type PropostaSectionId = 'sintetico' | 'analitico' | 'cpu' | 'abc_servicos' | 'abc_insumos' | 'cronograma' | 'bdi';
+
+export interface PropostaCompletaParams {
+    sections: PropostaSectionId[];
+    items: EngItem[];
+    bdi: number;
+    insumos: InsumoConsolidado[];
+    cronogramaResult?: CronogramaResult | null;
+    bdiConfig: BdiConfig;
+    proposalId: string;
+    engineeringConfig?: EngineeringConfig;
+    /** Pre-rendered Carta Proposta HTML (from LetterPdfExporter.buildHtml) */
+    cartaHtml?: string;
+}
+
+export async function docPropostaCompleta(params: PropostaCompletaParams) {
+    const { sections, items, bdi, insumos, cronogramaResult, bdiConfig, proposalId, engineeringConfig } = params;
+    const rc = engineeringConfig?.reportConfig || {};
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    const total = billable.reduce((s, i) => s + i.totalPrice, 0);
+    const chapters = groupByChapter(items);
+    const showCU = rc.showCustoUnit !== false;
+    const showPU = rc.showPrecoUnit !== false;
+
+    const parts: string[] = [];
+
+    // ── Carta Proposta (optional, pre-built HTML) ──
+    if (params.cartaHtml) {
+        parts.push(params.cartaHtml);
+    }
+
+    // ── Orçamento Sintético ──
+    if (sections.includes('sintetico')) {
+        let h = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
+        for (const [prefix, ch] of chapters) {
+            h += `<h2>${ch.title}</h2>
+<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
+            const colSpan = 5 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
+            for (const it of ch.items) {
+                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            }
+            h += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
+        }
+        h += `<table><tfoot><tr class="grand"><td colspan="${5 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
+        h += renderGlobalTotals(billable, bdi, rc);
+        parts.push(h);
+    }
+
+    // ── Orçamento Analítico ──
+    if (sections.includes('analitico')) {
+        let h = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens · Total: ${fmt(total)}</div>${renderConfigTable(engineeringConfig)}`;
+        try {
+            const token = localStorage.getItem('token') || '';
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items, bdi, engineeringConfig })
+            });
+            if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+            const report = await res.json();
+            const cNotes = rc.compositionNotes || {};
+            for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+                if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+            }
+            const compMap = new Map<string, any[]>();
+            for (const comp of report.principalCompositions) {
+                const prefix = (comp.itemNumbers?.[0] || '').split('.')[0] || '?';
+                if (!compMap.has(prefix)) compMap.set(prefix, []);
+                compMap.get(prefix)!.push(comp);
+            }
+            for (const [, chComps] of compMap) {
+                chComps.sort((a: any, b: any) => (a.itemNumbers?.[0] || '').localeCompare(b.itemNumbers?.[0] || '', 'pt-BR', { numeric: true }));
+            }
+            for (const [prefix, chComps] of compMap) {
+                const ch = chapters.get(prefix);
+                const chTitle = ch ? ch.title : `Etapa ${prefix}`;
+                h += `<h2 style="margin-top:20px;">${chTitle}</h2>`;
+                for (const comp of chComps) h += renderComposition(comp, true, rc);
+                const chTotal = chComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
+                h += `<div style="background:#f1f5f9; padding:6px 10px; font-weight:700; font-size:9px; text-align:right; border:1px solid #cbd5e1; margin-bottom:16px;">Subtotal ${chTitle}: ${fmt(chTotal)}</div>`;
+            }
+        } catch (e: any) {
+            h += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
+        }
+        h += renderGlobalTotals(billable, bdi, rc);
+        parts.push(h);
+    }
+
+    // ── CPU — Composições ──
+    if (sections.includes('cpu')) {
+        let h = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${billable.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
+        try {
+            const token = localStorage.getItem('token') || '';
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items, bdi, engineeringConfig })
+            });
+            if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+            const report = await res.json();
+            const cNotes = rc.compositionNotes || {};
+            for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+                if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+            }
+            h += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
+            for (const comp of report.principalCompositions) h += renderComposition(comp, false, rc);
+            if (report.auxiliaryCompositions.length > 0) {
+                h += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
+                for (const comp of report.auxiliaryCompositions) h += renderComposition(comp, false, rc);
+            }
+        } catch (e: any) {
+            h += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
+        }
+        parts.push(h);
+    }
+
+    // ── Curva ABC de Serviços ──
+    if (sections.includes('abc_servicos')) {
+        const validItems = items.filter(it => !isGrouper(it.type as any));
+        const svTotal = validItems.reduce((s, i) => s + i.totalPrice, 0);
+        const sorted = [...validItems].sort((a, b) => b.totalPrice - a.totalPrice);
+        let accum = 0;
+        let rows = '';
+        sorted.forEach((it, idx) => {
+            accum += it.totalPrice;
+            const pct = svTotal > 0 ? (it.totalPrice / svTotal * 100) : 0;
+            const pctAccum = svTotal > 0 ? (accum / svTotal * 100) : 0;
+            const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
+            const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
+            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        });
+        parts.push(`<h1>CURVA ABC DE SERVIÇOS</h1>
+<div class="meta">${validItems.length} serviços · Total: ${fmt(svTotal)}</div>
+${renderConfigTable(engineeringConfig)}
+<table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(svTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+    }
+
+    // ── Curva ABC de Insumos ──
+    if (sections.includes('abc_insumos') && insumos.length > 0) {
+        const insTotal = insumos.reduce((s, i) => s + i.custoTotal, 0);
+        const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
+        let accum = 0;
+        let rows = '';
+        sorted.forEach((ins, idx) => {
+            accum += ins.custoTotal;
+            const pct = insTotal > 0 ? (ins.custoTotal / insTotal * 100) : 0;
+            const pctAccum = insTotal > 0 ? (accum / insTotal * 100) : 0;
+            const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
+            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        });
+        parts.push(`<h1>CURVA ABC DE INSUMOS</h1>
+<div class="meta">${insumos.length} insumos · Total: ${fmt(insTotal)}</div>
+${renderConfigTable(engineeringConfig)}
+<table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(insTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+    }
+
+    // ── Cronograma ──
+    if (sections.includes('cronograma') && cronogramaResult) {
+        const { meses, etapas, mensalTotal, percentMensal, percentAcumulado, totalGlobal } = cronogramaResult;
+        let headerCols = '<th>Etapa</th><th class="r">Valor</th>';
+        for (let m = 0; m < meses; m++) headerCols += `<th class="r">Mês ${m+1}</th>`;
+        headerCols += '<th class="r">Total</th>';
+        let rows = '';
+        for (const et of etapas) {
+            const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal * 100) : 0;
+            rows += `<tr><td class="bold">${et.nome}</td><td class="r">${fmt(et.valorTotal)}<div style="font-size:7px;color:#64748b;">${fmtPct(etPctGlobal)}</div></td>`;
+            let etTotal = 0;
+            for (let m = 0; m < meses; m++) {
+                const v = et.valoresMensais[m] || 0;
+                const pct = et.percentuais?.[m] || 0;
+                etTotal += v;
+                rows += `<td class="r">${v > 0 ? `${fmt(v)}<div style="font-size:7px;color:#64748b;">${fmtPct(pct)}</div>` : '—'}</td>`;
+            }
+            rows += `<td class="r bold">${fmt(etTotal)}</td></tr>`;
+        }
+        rows += `<tr class="total"><td>TOTAL MENSAL</td><td></td>`;
+        for (let m = 0; m < meses; m++) rows += `<td class="r">${fmt(mensalTotal[m])}</td>`;
+        rows += `<td class="r">${fmt(totalGlobal)}</td></tr>`;
+        rows += `<tr class="total"><td>% MENSAL</td><td></td>`;
+        for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentMensal[m])}</td>`;
+        rows += `<td class="r">100%</td></tr>`;
+        rows += `<tr class="total"><td>% ACUMULADO</td><td></td>`;
+        for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentAcumulado[m])}</td>`;
+        rows += `<td class="r">100%</td></tr>`;
+        parts.push(`<h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
+<div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
+${renderConfigTable(engineeringConfig)}
+<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`);
+    }
+
+    // ── BDI e Encargos ──
+    if (sections.includes('bdi')) {
+        const tcu = bdiConfig.tcu;
+        const isTcu = bdiConfig.mode === 'TCU';
+        const regime = engineeringConfig?.regimeOneracao || 'DESONERADO';
+        const esConfig = engineeringConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
+        let h = `<h1>BDI E ENCARGOS SOCIAIS</h1>`;
+        // BDI section
+        h += `<h2>Composição do BDI</h2>`;
+        if (isTcu) {
+            const rows = [
+                ['Administração Central (AC)', tcu.adminCentral], ['Seguros (S)', tcu.seguros], ['Garantias (G)', tcu.garantias],
+                ['Riscos (R)', tcu.riscos], ['Despesas Financeiras (DF)', tcu.despFinanceiras], ['Lucro / Remuneração (L)', tcu.lucro],
+                ['PIS', tcu.pis], ['COFINS', tcu.cofins], ['ISS', tcu.iss], ['CSLL', tcu.csll || 0],
+                ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis||0)+(tcu.cofins||0)+(tcu.iss||0)+(tcu.csll||0)],
+            ];
+            h += `<table><thead><tr><th>Componente</th><th class="r">Valor (%)</th></tr></thead><tbody>`;
+            for (const [label, val] of rows) h += `<tr><td>${label}</td><td class="r">${fmtPct(val as number)}</td></tr>`;
+            h += `</tbody></table>`;
+        }
+        h += `<table><tfoot><tr class="grand"><td>BDI EFETIVO</td><td class="r">${fmtPct(bdi)}</td></tr></tfoot></table>`;
+        // Encargos Sociais
+        if (rc.showEncargosSociais !== false) {
+            const es = buildEncargosSociais(esConfig, regime);
+            h += `<h2>Encargos Sociais (${regime})</h2>
+<div class="meta">Horista: ${fmtPct(es.horista ?? 0)} · Mensalista: ${fmtPct(es.mensalista ?? 0)}</div>`;
+            for (const g of es.groups) {
+                h += `<h2 style="font-size:10px;">${g.label}</h2><table><thead><tr><th>Cód</th><th>Descrição</th><th class="r">Horista (%)</th><th class="r">Mensalista (%)</th></tr></thead><tbody>`;
+                let subH = 0, subM = 0;
+                for (const item of g.items) { subH += item.h; subM += item.m; h += `<tr><td>${item.cod}</td><td>${item.item}</td><td class="r">${fmtPct(item.h)}</td><td class="r">${fmtPct(item.m)}</td></tr>`; }
+                h += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split('—')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
+            }
+        }
+        parts.push(h);
+    }
+
+    // Combine with page breaks
+    const combined = parts.map((p, i) => i === 0 ? p : `<div style="page-break-before:always;"></div>${p}`).join('\n');
+    openDoc('Proposta Completa', combined, false, rc);
 }

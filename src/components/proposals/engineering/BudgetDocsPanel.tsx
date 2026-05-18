@@ -8,7 +8,8 @@
  */
 import { useState, useCallback, useMemo } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings } from 'lucide-react';
-import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos } from './budgetDocGenerator';
+import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta } from './budgetDocGenerator';
+import type { PropostaSectionId } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
 import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
@@ -83,6 +84,9 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     const [generating, setGenerating] = useState<string | null>(null);
     const [generated, setGenerated] = useState<Record<string, string>>({}); // A4: Track generated docs
     const [activeTab, setActiveTab] = useState<'docs' | 'config'>('docs');
+    const [showPropostaModal, setShowPropostaModal] = useState(false);
+    const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi']);
+    const [includeCartaProposta, setIncludeCartaProposta] = useState(true);
 
     const billable = items.filter(it => !isGrouper(it.type));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -224,6 +228,56 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
         setGenerating(null);
     };
 
+    // Generate unified proposal PDF
+    const handlePropostaCompleta = async () => {
+        setShowPropostaModal(false);
+        setGenerating('proposta');
+        try {
+            let cartaHtml: string | undefined;
+            if (includeCartaProposta) {
+                try {
+                    const res = await fetch(`/api/proposals/detail/${proposalId}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.letterContent) {
+                            const envelope = JSON.parse(data.letterContent);
+                            const { LetterRenderer } = await import('../letter/LetterRenderer');
+                            const renderer = new LetterRenderer();
+                            const letterBodyHtml = renderer.renderToHtml({
+                                blocks: envelope.blocks || [],
+                                plainText: envelope.plainText || '',
+                                htmlContent: '',
+                                validation: { isValid: true, errors: [], warnings: [] },
+                                meta: { generatedAt: new Date().toISOString(), builderVersion: '1', aiBlockIds: [], dataHash: '' },
+                            });
+                            cartaHtml = `<div style="font-family:Arial,sans-serif;font-size:10.5px;line-height:1.3;">
+                                <h1 style="font-size:14px;text-align:center;margin-bottom:12px;">CARTA PROPOSTA</h1>
+                                ${letterBodyHtml}
+                            </div>`;
+                        }
+                    }
+                } catch { /* Carta not available — skip silently */ }
+            }
+            await docPropostaCompleta({
+                sections: propostaSections,
+                items, bdi: effectiveBdi, insumos,
+                cronogramaResult,
+                bdiConfig,
+                proposalId,
+                engineeringConfig: engConfigWithLogo,
+                cartaHtml,
+            });
+            markGenerated('proposta');
+        } catch (e: any) {
+            console.error('Erro ao gerar proposta:', e);
+            alert('Erro ao gerar proposta completa: ' + e.message);
+        } finally {
+            setGenerating(null);
+        }
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
@@ -285,6 +339,23 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
+                        {/* Gerar Proposta button */}
+                        <button
+                            onClick={() => setShowPropostaModal(true)}
+                            disabled={generating === 'proposta' || !!generating}
+                            style={{
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                                color: '#fff', cursor: (generating === 'proposta' || !!generating) ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem',
+                                fontWeight: 700, transition: 'all 0.15s',
+                                boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+                            }}
+                        >
+                            {generating === 'proposta' ? <Loader2 size={16} className="spin" /> : <Layers size={16} />}
+                            {generating === 'proposta' ? 'Gerando...' : 'Gerar Proposta'}
+                        </button>
                         {/* Carta Proposta button */}
                         <button
                             onClick={handleExportCarta}
@@ -420,6 +491,92 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 );
             })}
             </>)}
+
+            {/* ═══ Modal: Seletor de Seções da Proposta ═══ */}
+            {showPropostaModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 10000,
+                    background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(3px)',
+                }} onClick={() => setShowPropostaModal(false)}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)',
+                        padding: '24px', width: '100%', maxWidth: 520, maxHeight: '80vh', overflow: 'auto',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        border: '1px solid var(--color-border)',
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                            <div style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', padding: 8, borderRadius: 'var(--radius-md)' }}>
+                                <Layers size={20} color="#fff" />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Gerar Proposta Completa</h3>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Selecione os documentos que farão parte do PDF unificado</span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+                            {([
+                                { id: '_carta', label: 'Carta Proposta', desc: 'Carta formal gerada no Passo 4', icon: '📄' },
+                                { id: 'sintetico', label: 'Orçamento Sintético', desc: 'Itens agrupados por etapa com totais', icon: '📊' },
+                                { id: 'analitico', label: 'Orçamento Analítico', desc: 'Composições detalhadas com insumos', icon: '📋' },
+                                { id: 'cpu', label: 'Composições de Custo (CPU)', desc: 'Caderno completo de composições unitárias', icon: '🧮' },
+                                { id: 'abc_servicos', label: 'Curva ABC de Serviços', desc: 'Ranking Pareto dos serviços', icon: '📈' },
+                                { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${insumos.length} insumos classificados`, icon: '📦', disabled: insumos.length === 0 },
+                                { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: '📅', disabled: !cronogramaResult },
+                                { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Composição detalhada do BDI', icon: '🔢' },
+                            ] as { id: string; label: string; desc: string; icon: string; disabled?: boolean }[]).map(item => {
+                                const isCarta = item.id === '_carta';
+                                const isChecked = isCarta ? includeCartaProposta : propostaSections.includes(item.id as PropostaSectionId);
+                                const isDisabled = item.disabled;
+                                return (
+                                    <label key={item.id} style={{
+                                        display: 'flex', alignItems: 'center', gap: 10,
+                                        padding: '10px 12px', borderRadius: 'var(--radius-md)',
+                                        border: isChecked ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                        background: isChecked ? 'rgba(37,99,235,0.04)' : 'var(--color-bg-base)',
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                        opacity: isDisabled ? 0.4 : 1,
+                                        transition: 'all 0.15s',
+                                    }}>
+                                        <input type="checkbox" checked={isChecked} disabled={isDisabled}
+                                            onChange={() => {
+                                                if (isCarta) { setIncludeCartaProposta(!includeCartaProposta); return; }
+                                                const sid = item.id as PropostaSectionId;
+                                                setPropostaSections(prev => prev.includes(sid) ? prev.filter(s => s !== sid) : [...prev, sid]);
+                                            }}
+                                            style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }} />
+                                        <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.label}</div>
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>{item.desc}</div>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setShowPropostaModal(false)}
+                                style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+                                Cancelar
+                            </button>
+                            <button onClick={handlePropostaCompleta}
+                                disabled={propostaSections.length === 0 && !includeCartaProposta}
+                                style={{
+                                    padding: '8px 22px', borderRadius: 'var(--radius-md)', border: 'none',
+                                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                                    color: '#fff', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700,
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    opacity: (propostaSections.length === 0 && !includeCartaProposta) ? 0.5 : 1,
+                                }}>
+                                <Layers size={14} />
+                                Gerar PDF ({(includeCartaProposta ? 1 : 0) + propostaSections.length} seções)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
