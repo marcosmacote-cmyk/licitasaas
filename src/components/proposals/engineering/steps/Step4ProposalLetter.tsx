@@ -78,24 +78,66 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
             if (proposalData) {
                 setProposal(proposalData);
                 if (proposalData.company) {
-                    setCompany(proposalData.company);
-                    setSigCompany({ razaoSocial: proposalData.company.razaoSocial || '', cnpj: proposalData.company.cnpj || '' });
-                    // Load company template if available
-                    if (proposalData.company.defaultProposalHeader) setHeaderImage(proposalData.company.defaultProposalHeader);
-                    if (proposalData.company.defaultProposalFooter) setFooterImage(proposalData.company.defaultProposalFooter);
-                    if (proposalData.company.defaultProposalHeaderHeight) setHeaderImageHeight(proposalData.company.defaultProposalHeaderHeight);
-                    if (proposalData.company.defaultProposalFooterHeight) setFooterImageHeight(proposalData.company.defaultProposalFooterHeight);
-                    // Restore signature config
-                    if (proposalData.company.defaultSignatureConfig) {
+                    const co = proposalData.company;
+                    setCompany(co);
+                    setSigCompany({ razaoSocial: co.razaoSocial || '', cnpj: co.cnpj || '' });
+                    // Timbrado padrão
+                    if (co.defaultProposalHeader) setHeaderImage(co.defaultProposalHeader);
+                    if (co.defaultProposalFooter) setFooterImage(co.defaultProposalFooter);
+                    if (co.defaultProposalHeaderHeight) setHeaderImageHeight(co.defaultProposalHeaderHeight);
+                    if (co.defaultProposalFooterHeight) setFooterImageHeight(co.defaultProposalFooterHeight);
+
+                    // ─── 1. Fonte primária: JSON dedicado (defaultSignatureConfig) ───
+                    let loadedFromJson = false;
+                    if (co.defaultSignatureConfig) {
                         try {
-                            const sig = JSON.parse(proposalData.company.defaultSignatureConfig);
-                            if (sig.sigLegal) setSigLegal(sig.sigLegal);
-                            if (sig.sigTech) setSigTech(sig.sigTech);
+                            const sig = JSON.parse(co.defaultSignatureConfig);
+                            if (sig.sigLegal)  { setSigLegal(sig.sigLegal); loadedFromJson = true; }
+                            if (sig.sigTech)   { setSigTech(sig.sigTech); loadedFromJson = true; }
                             if (sig.sigCompany) setSigCompany(sig.sigCompany);
-                            if (sig.bankData) setBankData(sig.bankData);
                             if (sig.signatureMode) setSignatureMode(sig.signatureMode);
                             if (sig.validityDays) setValidityDays(sig.validityDays);
+                            // Bancário: priorizar campos reais se JSON legado vazio
+                            if (sig.bankData && (sig.bankData.bank || sig.bankData.pix)) {
+                                setBankData(sig.bankData);
+                            } else {
+                                setBankData({
+                                    bank: co.bankName || '',
+                                    agency: co.bankAgency || '',
+                                    account: co.bankAccount || '',
+                                    accountType: co.bankAccountType || 'Corrente',
+                                    pix: co.bankPix || '',
+                                });
+                            }
                         } catch { /* ignore */ }
+                    }
+
+                    // ─── 2. Fallback: campos estruturados v2 (sem JSON salvo) ───
+                    if (!loadedFromJson) {
+                        setSigLegal({
+                            name: co.contactName || '',
+                            cpf: co.contactCpf || '',
+                            role: co.contactCargo || 'Representante Legal',
+                        });
+
+                        const techName = co.techName || '';
+                        const techReg = co.techRegistration || '';
+                        const techTitle = co.techTitle || 'Responsável Técnico';
+                        if (techName || techReg) {
+                            setSigTech({ name: techName, registration: techReg, role: techTitle });
+                        } else if (co.technicalQualification) {
+                            const tName = co.technicalQualification.split(',')[0].trim();
+                            const regM = co.technicalQualification.match(/((?:CREA|CAU|CRA|CONFEA)[^,]*)/i);
+                            setSigTech({ name: tName, registration: regM ? regM[1].trim() : '', role: techTitle });
+                        }
+
+                        setBankData({
+                            bank: co.bankName || '',
+                            agency: co.bankAgency || '',
+                            account: co.bankAccount || '',
+                            accountType: co.bankAccountType || 'Corrente',
+                            pix: co.bankPix || '',
+                        });
                     }
                 }
                 if (proposalData.letterContent) setLetterContent(proposalData.letterContent);
