@@ -193,13 +193,23 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
                         {p.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                         Salvar Carta
                     </button>
-                    <button onClick={() => w.setStep('export')} style={{
-                        padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
-                        background: 'var(--color-primary)', color: 'white', border: 'none',
-                        fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                    }}>
-                        Exportar <ChevronRight size={16} />
-                    </button>
+                    {p.hideExportStep ? (
+                        <button onClick={p.onFinish} style={{
+                            padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                            background: 'var(--color-primary)', color: 'white', border: 'none',
+                            fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                            Concluir Carta <ChevronRight size={16} />
+                        </button>
+                    ) : (
+                        <button onClick={() => w.setStep('export')} style={{
+                            padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                            background: 'var(--color-primary)', color: 'white', border: 'none',
+                            fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                            Exportar <ChevronRight size={16} />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

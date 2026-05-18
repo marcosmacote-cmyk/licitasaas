@@ -47,18 +47,23 @@ export interface ProposalLetterWizardProps {
     setSigCompany: (v: { razaoSocial: string; cnpj: string }) => void;
     bankData: { bank: string; agency: string; account: string; accountType: string; pix: string };
     setBankData: (v: { bank: string; agency: string; account: string; accountType: string; pix: string }) => void;
+    hideExportStep?: boolean;
+    onFinish?: () => void;
 }
 
-const STEPS = [
+const BASE_STEPS = [
     { id: 'config',     label: 'Configuração',  icon: <Settings size={16} /> },
     { id: 'validation', label: 'Validação',      icon: <CheckCircle2 size={16} /> },
     { id: 'generation', label: 'Geração',        icon: <Cpu size={16} /> },
     { id: 'review',     label: 'Revisão',        icon: <Edit3 size={16} /> },
-    { id: 'export',     label: 'Exportação',     icon: <Printer size={16} /> },
-] as const;
+];
 
 export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const w = useProposalWizard(props);
+    const STEPS = props.hideExportStep 
+        ? BASE_STEPS 
+        : [...BASE_STEPS, { id: 'export', label: 'Exportação', icon: <Printer size={16} /> }];
+        
     const stepIndex = STEPS.findIndex(s => s.id === w.step);
 
     return (
@@ -71,7 +76,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                 {STEPS.map((s, i) => {
                     const isActive = s.id === w.step;
                     const isPast = i < stepIndex;
-                    const isAccessible = i <= stepIndex || (w.letterResult && i <= 4);
+                    const isAccessible = i <= stepIndex || (w.letterResult && i <= (props.hideExportStep ? 3 : 4));
                     return (
                         <button key={s.id}
                             onClick={() => isAccessible && w.setStep(s.id as any)}
@@ -103,7 +108,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                 {w.step === 'validation' && <WizardStepValidation p={props} w={w} />}
                 {w.step === 'generation' && <WizardStepGeneration p={props} w={w} />}
                 {w.step === 'review' && <WizardStepReview p={props} w={w} />}
-                {w.step === 'export' && <WizardStepExport p={props} w={w} />}
+                {w.step === 'export' && !props.hideExportStep && <WizardStepExport p={props} w={w} />}
             </div>
         </div>
     );

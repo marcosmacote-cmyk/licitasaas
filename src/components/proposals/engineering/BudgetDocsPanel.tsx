@@ -18,6 +18,9 @@ interface Props {
     cronogramaResult: CronogramaResult | null;
     proposalId: string;
     engineeringConfig?: EngineeringConfig;
+    proposal?: any;
+    company?: any;
+    bidding?: any;
 }
 
 const DOCS = [
@@ -31,8 +34,77 @@ const DOCS = [
     { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Detalhamento BDI (TCU) + tabela de encargos', icon: Calculator, color: '#475569' },
 ];
 
-export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId, engineeringConfig }: Props) {
+export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId, engineeringConfig, proposal, company, bidding }: Props) {
     const [generating, setGenerating] = useState<string | null>(null);
+
+    const handleExportCarta = async () => {
+        setGenerating('carta');
+        try {
+            // Fetch the latest proposal to get up-to-date letterContent
+            const res = await fetch(`/api/proposals/detail/${proposalId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+            });
+            if (!res.ok) throw new Error('Falha ao buscar detalhes da proposta.');
+            const data = await res.json();
+
+            if (!data.letterContent) {
+                alert('A Carta Proposta ainda não foi gerada ou salva. Retorne ao Passo 4 e clique em "Concluir Carta".');
+                return;
+            }
+
+            let envelope;
+            try {
+                envelope = JSON.parse(data.letterContent);
+            } catch {
+                throw new Error('Falha ao decodificar dados da carta salva.');
+            }
+
+            const { LetterDataNormalizer } = await import('../letter/LetterDataNormalizer');
+            const { LetterPdfExporter } = await import('../letter/LetterPdfExporter');
+
+            const totalValue = items.reduce((s, i) => s + i.totalPrice, 0);
+
+            const normalizer = new LetterDataNormalizer();
+            const effectiveData = normalizer.normalize({
+                bidding: data.biddingProcess,
+                company: data.company,
+                proposal: data,
+                items: [], // Let items table be empty for letter only mode
+                totalValue,
+                signatureMode: envelope.cockpit?.signatureMode || 'BOTH',
+                validityDays: envelope.cockpit?.validityDays || 60,
+                bdiPercentage: effectiveBdi,
+                bankingData: envelope.cockpit?.bankingData,
+            });
+
+            // Ensure we use the exact structure expected by LetterPdfExporter
+            const exporter = new LetterPdfExporter();
+            exporter.export({
+                result: { 
+                    blocks: envelope.blocks || [], 
+                    plainText: envelope.plainText || '', 
+                    htmlContent: '', 
+                    validation: { isValid: true, errors: [], warnings: [] }, 
+                    meta: { generatedAt: new Date().toISOString(), builderVersion: '1', aiBlockIds: [], dataHash: '' } 
+                },
+                data: effectiveData,
+                items: [], 
+                mode: 'LETTER', // Carta apenas
+                headerImage: data.company.defaultProposalHeader || '',
+                footerImage: data.company.defaultProposalFooter || '',
+                headerImageHeight: data.company.defaultProposalHeaderHeight || 80,
+                footerImageHeight: data.company.defaultProposalFooterHeight || 40,
+                printLandscape: false,
+                engineeringConfig,
+            });
+
+        } catch (e: any) {
+            console.error(e);
+            alert('Erro ao exportar carta: ' + e.message);
+        } finally {
+            setGenerating(null);
+        }
+    };
 
     const handleGenerate = async (docId: string) => {
         setGenerating(docId);
@@ -59,7 +131,43 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {/* Header */}
+            
+            {/* Seção 1: Documentação Principal (Carta) */}
+            <div style={{
+                padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)',
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.04))',
+                border: '1px solid rgba(16,185,129,0.12)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ background: 'rgba(16,185,129,0.1)', padding: 10, borderRadius: 'var(--radius-md)' }}>
+                            <FileText size={22} color="#059669" />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Documentação Principal</h3>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
+                                Carta proposta com declarações embutidas e termos do edital
+                            </span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleExportCarta}
+                        disabled={generating === 'carta'}
+                        style={{
+                            padding: '10px 18px', borderRadius: 'var(--radius-md)',
+                            border: `none`, background: `#059669`,
+                            color: '#fff', cursor: generating === 'carta' ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem',
+                            fontWeight: 700, transition: 'all 0.15s',
+                        }}
+                    >
+                        {generating === 'carta' ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+                        {generating === 'carta' ? 'Gerando...' : 'Exportar Carta Proposta'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Seção 2: Header do Caderno de Orçamento */}
             <div style={{
                 padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)',
                 background: 'linear-gradient(135deg, rgba(30,64,175,0.06), rgba(124,58,237,0.04))',
@@ -72,13 +180,13 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     <div>
                         <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Caderno de Orçamento</h3>
                         <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                            8 documentos · {items.length} itens · {insumos.length} insumos · Total: {fmt(total)}
+                            8 documentos operacionais e financeiros · {items.length} itens · {insumos.length} insumos · Total: {fmt(total)}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Document Grid */}
+            {/* Document Grid (Caderno) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}>
                 {DOCS.map(doc => {
                     const Icon = doc.icon;

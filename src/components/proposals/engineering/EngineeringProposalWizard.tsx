@@ -20,8 +20,16 @@ import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig } from './types';
 import { isGrouper, DEFAULT_ENGINEERING_CONFIG } from './types';
+import type { BiddingProcess, CompanyProfile, PriceProposal } from '../../../types';
 
-interface Props { proposalId: string; biddingId: string; estimatedValue?: number; }
+interface Props { 
+    proposalId: string; 
+    biddingId: string; 
+    estimatedValue?: number;
+    proposal?: PriceProposal;
+    company?: CompanyProfile;
+    bidding?: BiddingProcess;
+}
 
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
@@ -36,7 +44,7 @@ function parseLocaleNumber(value: unknown, fallback = 0): number {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValue }: Props) {
+export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValue, proposal, company, bidding }: Props) {
     // ══════════════════════════════════════════
     // CORE STATE (same as legacy editor)
     // ══════════════════════════════════════════
@@ -655,6 +663,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                         cronogramaResult={cronogramaResult}
                         proposalId={proposalId}
                         engineeringConfig={engineeringConfig}
+                        proposal={proposal}
+                        company={company}
+                        bidding={bidding}
                     />
                     <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '12px 0', borderTop: '1px solid var(--color-border)' }}>
                         <button className="btn btn-outline" onClick={() => setCurrentStep(4)}

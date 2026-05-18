@@ -299,6 +299,8 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                 setSigCompany={setSigCompany}
                 bankData={bankData}
                 setBankData={setBankData}
+                hideExportStep={true}
+                onFinish={onNext}
             />
 
             {/* Step navigation */}

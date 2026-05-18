@@ -801,6 +801,9 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     proposalId={p.proposal.id} 
                     biddingId={p.selectedBiddingId}
                     estimatedValue={p.selectedBidding?.estimatedValue || 0}
+                    proposal={p.proposal}
+                    company={p.selectedCompany}
+                    bidding={p.selectedBidding}
                 />
             )}
 
