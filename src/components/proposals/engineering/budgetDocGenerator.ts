@@ -429,6 +429,69 @@ function buildEncargosSociais(es: EncargosSociaisConfig, regime: string) {
     };
 }
 
+/** Shared BDI HTML builder — TCU formula, tax breakdown, numeric demo */
+function buildBdiHtml(tcu: any, isTcu: boolean, bdiEfetivo: number): string {
+    let h = `<h2>Composição do BDI</h2>`;
+    if (isTcu) {
+        const ac = tcu.adminCentral, s = tcu.seguros, g = tcu.garantias, r = tcu.riscos;
+        const df = tcu.despFinanceiras, l = tcu.lucro;
+        const pis = tcu.pis || 0, cofins = tcu.cofins || 0, iss = tcu.iss || 0, csll = tcu.csll || 0;
+        const tribI = pis + cofins + iss + csll;
+
+        // Formula reference
+        h += `<div style="margin-bottom:10px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
+<p style="font-size:9px;font-weight:700;color:#1e40af;margin-bottom:4px;">Fórmula TCU — Acórdão 2622/2013-Plenário</p>
+<p style="font-size:9px;color:#334155;margin-bottom:6px;font-family:Consolas,'Courier New',monospace;">BDI = { (1 + AC + S + G + R) × (1 + DF) × (1 + L) / (1 − I) − 1 } × 100</p>
+<p style="font-size:8px;color:#64748b;margin-bottom:2px;">Onde: AC = Adm. Central · S = Seguros · G = Garantias · R = Riscos · DF = Desp. Financeiras · L = Lucro · I = Tributos</p>
+</div>`;
+
+        // Components table
+        const rows: [string, number, string][] = [
+            ['Administração Central (AC)', ac, 'AC'],
+            ['Seguros (S)', s, 'S'],
+            ['Garantias (G)', g, 'G'],
+            ['Riscos (R)', r, 'R'],
+            ['Despesas Financeiras (DF)', df, 'DF'],
+            ['Lucro / Remuneração (L)', l, 'L'],
+        ];
+        h += `<table><thead><tr><th>Componente</th><th>Sigla</th><th class="r">Valor (%)</th></tr></thead><tbody>`;
+        for (const [label, val, sigla] of rows) h += `<tr><td>${label}</td><td class="c mono bold">${sigla}</td><td class="r">${fmtPct(val)}</td></tr>`;
+        h += `</tbody></table>`;
+
+        // Tax breakdown table
+        h += `<h2 style="font-size:10px;color:#dc2626;">Detalhamento dos Tributos (I)</h2>`;
+        h += `<table><thead><tr><th>Tributo</th><th class="r">Alíquota (%)</th></tr></thead><tbody>`;
+        h += `<tr><td>PIS (Programa de Integração Social)</td><td class="r">${fmtPct(pis)}</td></tr>`;
+        h += `<tr><td>COFINS (Contribuição p/ Financiamento da Seg. Social)</td><td class="r">${fmtPct(cofins)}</td></tr>`;
+        h += `<tr><td>ISS (Imposto Sobre Serviços)</td><td class="r">${fmtPct(iss)}</td></tr>`;
+        h += `<tr><td>CSLL (Contribuição Social sobre Lucro Líquido)</td><td class="r">${fmtPct(csll)}</td></tr>`;
+        h += `<tr class="total"><td class="r">Total Tributos (I = PIS + COFINS + ISS + CSLL)</td><td class="r bold">${fmtPct(tribI)}</td></tr>`;
+        h += `</tbody></table>`;
+
+        // Numeric demonstration
+        const acD = ac/100, sD = s/100, gD = g/100, rD = r/100, dfD = df/100, lD = l/100, iD = tribI/100;
+        const p1 = (1 + acD + sD + gD + rD);
+        const p2 = (1 + dfD);
+        const p3 = (1 + lD);
+        const p4 = (1 - iD);
+        const bdiCalc = (p1 * p2 * p3 / p4 - 1) * 100;
+        h += `<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;">
+<p style="font-size:8.5px;font-weight:700;color:#1e40af;margin-bottom:4px;">Demonstração Numérica</p>
+<p style="font-size:8px;color:#334155;font-family:Consolas,monospace;line-height:1.6;">
+BDI = { (1 + ${(acD).toFixed(4)} + ${(sD).toFixed(4)} + ${(gD).toFixed(4)} + ${(rD).toFixed(4)}) × (1 + ${(dfD).toFixed(4)}) × (1 + ${(lD).toFixed(4)}) / (1 − ${(iD).toFixed(4)}) − 1 } × 100<br>
+BDI = { ${p1.toFixed(4)} × ${p2.toFixed(4)} × ${p3.toFixed(4)} / ${p4.toFixed(4)} − 1 } × 100<br>
+BDI = { ${(p1*p2*p3/p4).toFixed(4)} − 1 } × 100<br>
+<strong style="font-size:9px;color:#1e40af;">BDI = ${bdiCalc.toFixed(2).replace('.', ',')}%</strong>
+</p></div>`;
+
+        // Final result
+        h += `<table><tfoot><tr class="grand"><td>BDI CALCULADO (TCU)</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tfoot></table>`;
+    } else {
+        h += `<table><tbody><tr class="grand"><td>BDI SIMPLIFICADO</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tbody></table>`;
+    }
+    return h;
+}
+
 export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?: EngineeringConfig) {
     const tcu = config.tcu;
     const isTcu = config.mode === 'TCU';
@@ -436,23 +499,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     const esConfig = engConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
 
     // ── BDI ──
-    let bdiHtml = `<h2>Composição do BDI</h2>`;
-    if (isTcu) {
-        const rows = [
-            ['Administração Central (AC)', tcu.adminCentral],
-            ['Seguros (S)', tcu.seguros], ['Garantias (G)', tcu.garantias],
-            ['Riscos (R)', tcu.riscos], ['Despesas Financeiras (DF)', tcu.despFinanceiras],
-            ['Lucro / Remuneração (L)', tcu.lucro],
-            ['PIS', tcu.pis], ['COFINS', tcu.cofins], ['ISS', tcu.iss], ['CSLL', tcu.csll || 0],
-            ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis||0)+(tcu.cofins||0)+(tcu.iss||0)+(tcu.csll||0)],
-        ];
-        bdiHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Fórmula TCU — Acórdão 2622/2013:<br>BDI = {(1+AC+S+G+R)×(1+DF)×(1+L) / (1−I) − 1} × 100</p>
-<table><thead><tr><th>Componente</th><th class="r">Valor (%)</th></tr></thead><tbody>`;
-        for (const [label, val] of rows) bdiHtml += `<tr><td>${label}</td><td class="r">${fmtPct(val as number)}</td></tr>`;
-        bdiHtml += `</tbody><tfoot><tr class="grand"><td>BDI CALCULADO</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tfoot></table>`;
-    } else {
-        bdiHtml += `<table><tbody><tr class="grand"><td>BDI SIMPLIFICADO</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tbody></table>`;
-    }
+    let bdiHtml = buildBdiHtml(tcu, isTcu, bdiEfetivo);
 
     // ── Encargos Sociais — valores reais configurados ──
     const esData = buildEncargosSociais(esConfig, regime);
@@ -656,7 +703,7 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
 // 9. PROPOSTA COMPLETA — PDF UNIFICADO
 // Combina múltiplas seções em um único documento.
 // ═══════════════════════════════════════════════════════════
-export type PropostaSectionId = 'sintetico' | 'analitico' | 'cpu' | 'abc_servicos' | 'abc_insumos' | 'cronograma' | 'bdi';
+export type PropostaSectionId = 'resumido' | 'sintetico' | 'analitico' | 'cpu' | 'abc_servicos' | 'abc_insumos' | 'cronograma' | 'bdi';
 
 export interface PropostaCompletaParams {
     sections: PropostaSectionId[];
@@ -685,6 +732,20 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
     // ── Carta Proposta (optional, pre-built HTML) ──
     if (params.cartaHtml) {
         parts.push(params.cartaHtml);
+    }
+
+    // ── Orçamento Resumido ──
+    if (sections.includes('resumido')) {
+        let rows = '';
+        for (const [prefix, ch] of chapters) {
+            const pct = total > 0 ? (ch.total / total * 100) : 0;
+            rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
+        }
+        parts.push(`<h1>ORÇAMENTO RESUMIDO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}
+<table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
+${renderGlobalTotals(billable, bdi, rc)}`);
     }
 
     // ── Orçamento Sintético ──
@@ -857,20 +918,7 @@ ${renderConfigTable(engineeringConfig)}
         const regime = engineeringConfig?.regimeOneracao || 'DESONERADO';
         const esConfig = engineeringConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
         let h = `<h1>BDI E ENCARGOS SOCIAIS</h1>`;
-        // BDI section
-        h += `<h2>Composição do BDI</h2>`;
-        if (isTcu) {
-            const rows = [
-                ['Administração Central (AC)', tcu.adminCentral], ['Seguros (S)', tcu.seguros], ['Garantias (G)', tcu.garantias],
-                ['Riscos (R)', tcu.riscos], ['Despesas Financeiras (DF)', tcu.despFinanceiras], ['Lucro / Remuneração (L)', tcu.lucro],
-                ['PIS', tcu.pis], ['COFINS', tcu.cofins], ['ISS', tcu.iss], ['CSLL', tcu.csll || 0],
-                ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis||0)+(tcu.cofins||0)+(tcu.iss||0)+(tcu.csll||0)],
-            ];
-            h += `<table><thead><tr><th>Componente</th><th class="r">Valor (%)</th></tr></thead><tbody>`;
-            for (const [label, val] of rows) h += `<tr><td>${label}</td><td class="r">${fmtPct(val as number)}</td></tr>`;
-            h += `</tbody></table>`;
-        }
-        h += `<table><tfoot><tr class="grand"><td>BDI EFETIVO</td><td class="r">${fmtPct(bdi)}</td></tr></tfoot></table>`;
+        h += buildBdiHtml(tcu, isTcu, bdi);
         // Encargos Sociais
         if (rc.showEncargosSociais !== false) {
             const es = buildEncargosSociais(esConfig, regime);

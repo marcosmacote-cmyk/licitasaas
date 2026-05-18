@@ -85,7 +85,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     const [generated, setGenerated] = useState<Record<string, string>>({}); // A4: Track generated docs
     const [activeTab, setActiveTab] = useState<'docs' | 'config'>('docs');
     const [showPropostaModal, setShowPropostaModal] = useState(false);
-    const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi']);
+    const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['resumido', 'sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi']);
     const [includeCartaProposta, setIncludeCartaProposta] = useState(true);
 
     const billable = items.filter(it => !isGrouper(it.type));
@@ -216,16 +216,58 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
         setGenerating(null);
     };
 
-    // FIX A3: Generate all documents sequentially
+    // FIX A3: Generate ZIP with all PDFs + Excel files
     const handleExportAll = async () => {
         setGenerating('all');
-        const allDocIds = DOC_SECTIONS.flatMap(s => s.docs.map(d => d.id));
-        for (const docId of allDocIds) {
-            if (docId === 'abc_insumos' && insumos.length === 0) continue;
-            if (docId === 'cronograma' && !cronogramaResult) continue;
-            await handleGenerate(docId);
+        try {
+            const JSZip = (await import('jszip')).default;
+            const zip = new JSZip();
+            const ec = engConfigWithLogo;
+
+            // ── Excel files ──
+            const excelFiles: { name: string; gen: () => Promise<ArrayBuffer | void> }[] = [
+                { name: 'orcamento-resumido.xlsx',   gen: () => xlsOrcamentoResumido(items, ec, effectiveBdi, true) },
+                { name: 'orcamento-sintetico.xlsx',  gen: () => xlsOrcamentoSintetico(items, ec, effectiveBdi, true) },
+                { name: 'orcamento-analitico.xlsx',   gen: () => xlsOrcamentoAnalitico(proposalId, items, ec, effectiveBdi, true) },
+                { name: 'composicoes-cpu.xlsx',       gen: () => xlsCpuBatch(proposalId, items, ec, effectiveBdi, true) },
+                { name: 'abc-servicos.xlsx',          gen: () => xlsCurvaAbcServicos(items, ec, effectiveBdi, true) },
+                { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, true) },
+            ];
+            if (insumos.length > 0) {
+                excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(insumos, ec, true) });
+            }
+            if (cronogramaResult) {
+                excelFiles.push({ name: 'cronograma.xlsx', gen: () => xlsCronograma(cronogramaResult, ec, true) });
+            }
+
+            for (const f of excelFiles) {
+                try {
+                    const buf = await f.gen();
+                    if (buf) zip.file(f.name, buf);
+                } catch (e) { console.warn(`ZIP: falha ao gerar ${f.name}`, e); }
+            }
+
+            // ── Generate individual PDFs (open in new window for user to print/save) ──
+            const pdfDocs = DOC_SECTIONS.flatMap(s => s.docs.map(d => d.id));
+            for (const docId of pdfDocs) {
+                if (docId === 'abc_insumos' && insumos.length === 0) continue;
+                if (docId === 'cronograma' && !cronogramaResult) continue;
+                await handleGenerate(docId);
+            }
+
+            // ── Download ZIP ──
+            const blob = await zip.generateAsync({ type: 'blob' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'caderno-orcamento.zip';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        } catch (e: any) {
+            console.error('Erro ao gerar ZIP:', e);
+            alert('Erro ao gerar arquivo ZIP: ' + e.message);
+        } finally {
+            setGenerating(null);
         }
-        setGenerating(null);
     };
 
     // Generate unified proposal PDF
@@ -385,7 +427,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                             }}
                         >
                             {generating === 'all' ? <Loader2 size={16} className="spin" /> : <Archive size={16} />}
-                            {generating === 'all' ? 'Gerando Caderno...' : 'Exportar Tudo (PDF)'}
+                            {generating === 'all' ? 'Gerando ZIP...' : 'Exportar Tudo (.ZIP)'}
                         </button>
                     </div>
                 </div>
@@ -518,6 +560,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
                             {([
                                 { id: '_carta', label: 'Carta Proposta', desc: 'Carta formal gerada no Passo 4', icon: '📄' },
+                                { id: 'resumido', label: 'Orçamento Resumido', desc: 'Visão geral por etapa com totais', icon: '📑' },
                                 { id: 'sintetico', label: 'Orçamento Sintético', desc: 'Itens agrupados por etapa com totais', icon: '📊' },
                                 { id: 'analitico', label: 'Orçamento Analítico', desc: 'Composições detalhadas com insumos', icon: '📋' },
                                 { id: 'cpu', label: 'Composições de Custo (CPU)', desc: 'Caderno completo de composições unitárias', icon: '🧮' },

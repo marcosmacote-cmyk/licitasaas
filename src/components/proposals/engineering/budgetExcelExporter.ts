@@ -47,8 +47,9 @@ function fmt(v: number) {
 
 function fmtPct(v: number) { return `${v.toFixed(2).replace('.', ',')}%`; }
 
-async function saveWb(wb: ExcelJS.Workbook, name: string) {
+async function saveWb(wb: ExcelJS.Workbook, name: string, returnBuffer?: boolean): Promise<ArrayBuffer | void> {
   const buf = await wb.xlsx.writeBuffer();
+  if (returnBuffer) return buf as ArrayBuffer;
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -271,7 +272,7 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
 }
 
 // ── 1. ORÇAMENTO RESUMIDO — mirrors docOrcamentoResumido exactly ─────────────
-export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Resumido');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -301,11 +302,11 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 
   grandRow(ws, 'TOTAL GERAL', [fmt(total), '100%'], 5);
   bdiRows(ws, items, bdi, 5);
-  await saveWb(wb, 'orcamento-resumido.xlsx');
+  return saveWb(wb, 'orcamento-resumido.xlsx', returnBuffer);
 }
 
 // ── 2. ORÇAMENTO SINTÉTICO — mirrors docOrcamentoSintetico exactly ───────────
-export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Sintético');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -341,7 +342,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
 
   grandRow(ws, 'TOTAL GERAL DO ORÇAMENTO', [fmt(total)], 8);
   bdiRows(ws, items, bdi, 8);
-  await saveWb(wb, 'orcamento-sintetico.xlsx');
+  return saveWb(wb, 'orcamento-sintetico.xlsx', returnBuffer);
 }
 
 // Helper: fetch analytical report from backend (same API as PDF)
@@ -435,7 +436,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
 }
 
 // ── 2B. ORÇAMENTO ANALÍTICO — mirrors docOrcamentoAnalitico ──────────────────
-export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Analítico');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -488,11 +489,11 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
   }
 
   bdiRows(ws, items, bdi, 7);
-  await saveWb(wb, 'orcamento-analitico.xlsx');
+  return saveWb(wb, 'orcamento-analitico.xlsx', returnBuffer);
 }
 
 // ── 2C. CADERNO DE COMPOSIÇÕES (CPU) — mirrors docCpuBatch ───────────────────
-export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Composições');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -528,11 +529,11 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
     ws.addRow([`Erro: ${e.message}`]);
   }
 
-  await saveWb(wb, 'composicoes-cpu.xlsx');
+  return saveWb(wb, 'composicoes-cpu.xlsx', returnBuffer);
 }
 
 // ── 3. CURVA ABC SERVIÇOS ────────────────────────────────────────────────────
-export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Serviços');
   setupPrint(ws, true, engConfig?.reportConfig);
@@ -559,11 +560,11 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
 
   grandRow(ws, 'TOTAL', [fmt(total), '100,00%', ''], 11);
   bdiRows(ws, items, bdi, 11);
-  await saveWb(wb, 'abc-servicos.xlsx');
+  return saveWb(wb, 'abc-servicos.xlsx', returnBuffer);
 }
 
 // ── 4. BDI E ENCARGOS SOCIAIS ────────────────────────────────────────────────
-export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number) {
+export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('BDI e Encargos');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -639,11 +640,11 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
   }
 
   grandRow(ws, 'A + B + C + D =', [fmtPct(totalH), fmtPct(totalM)], 4);
-  await saveWb(wb, 'bdi-encargos.xlsx');
+  return saveWb(wb, 'bdi-encargos.xlsx', returnBuffer);
 }
 
 // ── 5. CRONOGRAMA FÍSICO-FINANCEIRO — mirrors docCronograma exactly ──────────
-export async function xlsCronograma(result: any, engConfig: EngineeringConfig | undefined) {
+export async function xlsCronograma(result: any, engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
   const { meses, etapas, mensalTotal, percentMensal, percentAcumulado, totalGlobal } = result;
   const colCount = 2 + meses + 1; // Etapa | Valor | Mês1..N | Total
 
@@ -728,11 +729,11 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   grandRow(ws, 'TOTAL GERAL', [fmt(totalGlobal), ...Array(meses).fill(''), '100,00%'], colCount);
-  await saveWb(wb, 'cronograma.xlsx');
+  return saveWb(wb, 'cronograma.xlsx', returnBuffer);
 }
 
 // ── 6. CURVA ABC INSUMOS ─────────────────────────────────────────────────────
-export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined) {
+export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, true, engConfig?.reportConfig);
@@ -757,5 +758,5 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   });
 
   grandRow(ws, 'TOTAL', [fmt(total), '100,00%', ''], 8);
-  await saveWb(wb, 'abc-insumos.xlsx');
+  return saveWb(wb, 'abc-insumos.xlsx', returnBuffer);
 }
