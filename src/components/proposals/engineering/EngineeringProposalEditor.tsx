@@ -2846,6 +2846,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     initialIndex={compositionEditorIndex}
                     onClose={() => setCompositionEditorIndex(null)}
                     onUpdateItem={(itemId, updates) => {
+                        // Handle compositionNotes from the CompositionEditor observation textarea
+                        if (itemId === '__reportConfig__') {
+                            setEngineeringConfig((prev: any) => ({ ...prev, reportConfig: updates }));
+                            setHasUnsavedChanges(true);
+                            return;
+                        }
                         if (updates.unitCost !== undefined) {
                             updateItem(itemId, 'unitCost', updates.unitCost);
                         }

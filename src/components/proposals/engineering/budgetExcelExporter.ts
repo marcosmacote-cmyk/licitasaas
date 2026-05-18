@@ -377,6 +377,17 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
     }
   }
 
+  // Observation note (from reportConfig.compositionNotes)
+  if (comp.observacao) {
+    const obsRn = ws.rowCount + 1;
+    const obsRow = ws.addRow([`Obs: ${comp.observacao}`]);
+    ws.mergeCells(obsRn, 1, obsRn, 7);
+    obsRow.height = 14;
+    obsRow.getCell(1).fill = fill('FEFCE8');
+    obsRow.getCell(1).border = border('FDE68A');
+    obsRow.getCell(1).font = { italic: true, size: 8, color: { argb: '92400E' } };
+  }
+
   ws.addRow([]); // spacing
 }
 
@@ -402,6 +413,12 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
 
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
+
+    // Inject compositionNotes from reportConfig
+    const cNotes = engConfig?.reportConfig?.compositionNotes || {};
+    for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+      if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+    }
 
     // Group compositions by chapter
     const compMap = new Map<string, any[]>();
@@ -448,6 +465,12 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
 
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
+
+    // Inject compositionNotes from reportConfig
+    const cNotes = engConfig?.reportConfig?.compositionNotes || {};
+    for (const comp of [...report.principalCompositions, ...(report.auxiliaryCompositions || [])]) {
+      if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+    }
 
     sectionHeaderRow(ws, 'Composições Principais', 7);
     for (const comp of report.principalCompositions) renderCompXls(ws, comp, false);

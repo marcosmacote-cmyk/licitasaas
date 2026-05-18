@@ -130,7 +130,8 @@ function renderConfigTable(engineeringConfig?: any) {
 }
 
 // Helper: Render the BDI tripé (Sem BDI / Valor do BDI / Com BDI)
-function renderGlobalTotals(billable: EngItem[], bdi: number) {
+function renderGlobalTotals(billable: EngItem[], bdi: number, reportConfig?: any) {
+    if (reportConfig?.showBdiTripe === false) return '';
     const totalComBdi = billable.reduce((s, i) => s + i.totalPrice, 0);
     const totalSemBdi = billable.reduce((s, i) => s + (i.unitCost * i.quantity), 0);
     const valorBdi = totalComBdi - totalSemBdi;
@@ -189,13 +190,16 @@ ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
-${renderGlobalTotals(billable, bdi)}`, false, engineeringConfig?.reportConfig);
+${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 2. ORÇAMENTO SINTÉTICO
 // ═══════════════════════════════════════════════════════════
 export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any) {
+    const rc = engineeringConfig?.reportConfig || {};
+    const showCU = rc.showCustoUnit !== false;
+    const showPU = rc.showPrecoUnit !== false;
     // FIX B4: Only count billable items
     const billable = items.filter(i => !isGrouper(i.type as any));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -204,15 +208,15 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 
     for (const [prefix, ch] of chapters) {
         html += `<h2>${ch.title}</h2>
-<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th><th class="r">Custo Unit.</th><th class="r">Preço Unit.</th><th class="r">Total</th></tr></thead><tbody>`;
+<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
+        const colSpan = 5 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
         for (const it of ch.items) {
-            // FIX B5: Format quantity with locale separators
-            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td><td class="r">${fmt(it.unitCost)}</td><td class="r">${fmt(it.unitPrice)}</td><td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
         }
-        html += `<tr class="total"><td colspan="7" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
+        html += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
-    html += `<table><tfoot><tr class="grand"><td colspan="7" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
-    html += renderGlobalTotals(billable, bdi);
+    html += `<table><tfoot><tr class="grand"><td colspan="${5 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
+    html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
     openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig);
 }
 
@@ -447,7 +451,10 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
 }
 
 // Helper para renderizar Composição no padrão TCU
-function renderComposition(comp: any, showQuantities: boolean = false) {
+function renderComposition(comp: any, showQuantities: boolean = false, reportConfig?: any) {
+    const rc = reportConfig || {};
+    const showCoef = rc.showCoeficientes !== false;
+    const showBanco = rc.showBancoOrigem !== false;
     let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
             ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
@@ -455,7 +462,7 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
             <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
         </div>
         <table>
-        <thead><tr><th>Tipo</th><th>Código</th><th>Banco</th><th>Descrição</th><th class="c">Und</th><th class="r">Coef.</th><th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Código</th>${showBanco ? '<th>Banco</th>' : ''}<th>Descrição</th><th class="c">Und</th>${showCoef ? '<th class="r">Coef.</th>' : ''}<th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
         <tbody>`;
 
     for (const ci of comp.items) {
@@ -469,17 +476,16 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
         ch += `<tr>
             <td>${tipo}</td>
             <td class="mono">${ci.code || ''}</td>
-            <td>${ci.sourceName || ''}</td>
+            ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
             <td>${ci.description || '—'}</td>
             <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
-            <td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : ci.coefficient.toFixed(7)}</td>
+            ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : ci.coefficient.toFixed(7)}</td>` : ''}
             <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
             <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
         </tr>`;
     }
 
     // Composition footer: CUSTO UNITÁRIO TOTAL is the primary highlight (sem BDI)
-    // Preço com BDI is secondary info below
     ch += `</tbody></table>
     <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
         <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
@@ -503,6 +509,7 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
         <span>Quantidade: ${fmtQty(comp.proposalQuantity)}</span>
         <span style="font-size:9px;">PREÇO TOTAL => ${fmt(comp.proposalTotal || 0)}</span>
     </div>` : ''}
+    ${comp.observacao ? `<div style="padding:5px 10px; font-size:7.5px; color:#475569; background:#fefce8; border:1px solid #fde68a; border-top:none;"><strong>Obs:</strong> ${comp.observacao}</div>` : ''}
     </div>`;
     return ch;
 }
@@ -528,6 +535,12 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         });
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
+
+        // Inject compositionNotes from reportConfig
+        const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
+        for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+            if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+        }
 
         // FIX B6: Group compositions by etapa/chapter, using itemNumbers[0] for routing
         const chapters = groupByChapter(items);
@@ -555,7 +568,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
             const chTotal = chapterComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
             html += `<h2 style="margin-top:20px;">${chTitle}</h2>`;
             for (const comp of chapterComps) {
-                html += renderComposition(comp, true);
+                html += renderComposition(comp, true, engineeringConfig?.reportConfig);
             }
             html += `<div style="background:#f1f5f9; padding:6px 10px; font-weight:700; font-size:9px; text-align:right; border:1px solid #cbd5e1; margin-bottom:16px;">Subtotal ${chTitle}: ${fmt(chTotal)}</div>`;
         }
@@ -564,7 +577,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
     }
 
-    html += renderGlobalTotals(billable, bdi);
+    html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
     openDoc('Planilha Orçamentária Analítica', html, false, engineeringConfig?.reportConfig);
 }
 
@@ -588,15 +601,21 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
 
+        // Inject compositionNotes from reportConfig
+        const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
+        for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+            if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+        }
+
         html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
         for (const comp of report.principalCompositions) {
-            html += renderComposition(comp, false);
+            html += renderComposition(comp, false, engineeringConfig?.reportConfig);
         }
 
         if (report.auxiliaryCompositions.length > 0) {
             html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
             for (const comp of report.auxiliaryCompositions) {
-                html += renderComposition(comp, false);
+                html += renderComposition(comp, false, engineeringConfig?.reportConfig);
             }
         }
         

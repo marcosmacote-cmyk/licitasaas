@@ -1467,24 +1467,52 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         background: hasChanges
                             ? 'linear-gradient(135deg, rgba(34,197,94,0.06), rgba(37,99,235,0.04))'
                             : 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(124,58,237,0.03))',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
-                        <div>
-                            <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)' }}>
-                                Custo Unitário do Serviço (S/ BDI)
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)' }}>
+                                    Custo Unitário do Serviço (S/ BDI)
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                                    {compositionItemsCount} insumos · {currentItem.quantity} {currentItem.unit} no orçamento
+                                    {hasChanges && <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 8 }}>✓ Cascade ativo</span>}
+                                </div>
                             </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                {compositionItemsCount} insumos · {currentItem.quantity} {currentItem.unit} no orçamento
-                                {hasChanges && <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 8 }}>✓ Cascade ativo</span>}
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: hasChanges ? '#16a34a' : 'var(--color-primary)' }}>
+                                    {fmt(compositionTotal)}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                    Total: {fmt(compositionTotal * currentItem.quantity)}
+                                </div>
                             </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: hasChanges ? '#16a34a' : 'var(--color-primary)' }}>
-                                {fmt(compositionTotal)}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                Total: {fmt(compositionTotal * currentItem.quantity)}
-                            </div>
+                        {/* Observação da composição (para relatórios) */}
+                        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                            <label style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 3 }}>
+                                Observação (aparece nos relatórios PDF/XLS)
+                            </label>
+                            <textarea
+                                value={engineeringConfig?.reportConfig?.compositionNotes?.[currentItem.code] || ''}
+                                onChange={e => {
+                                    if (!onUpdateItem || !engineeringConfig) return;
+                                    const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [currentItem.code]: e.target.value };
+                                    if (!e.target.value) delete notes[currentItem.code];
+                                    const rc = { ...(engineeringConfig.reportConfig || {}), compositionNotes: notes };
+                                    // Propagate via onUpdateItem — trick: use a special key to signal config change
+                                    (onUpdateItem as any)('__reportConfig__', rc);
+                                }}
+                                placeholder="Ex: Valores ajustados conforme cotação de mercado local..."
+                                style={{
+                                    width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--color-border)', fontSize: '0.78rem',
+                                    background: 'var(--color-bg-base)', color: 'var(--color-text-primary)',
+                                    resize: 'vertical', minHeight: 36, fontFamily: 'inherit',
+                                    outline: 'none',
+                                }}
+                                onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+                                onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                            />
                         </div>
                     </div>
                 )}
