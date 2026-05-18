@@ -1,5 +1,26 @@
 import ExcelJS from 'exceljs';
 import type { EngineeringConfig } from './types';
+import { isGrouper } from './types';
+
+function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+// Replicate groupByChapter from budgetDocGenerator for consistent data
+function groupByChapter(items: any[]) {
+  const map = new Map<string, { items: any[]; total: number; title: string }>();
+  for (const it of items) {
+    const prefix = (it.itemNumber || '1').split('.')[0] || '1';
+    if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
+    const g = map.get(prefix)!;
+    if (isGrouper(it.type)) {
+      const depth = ((it.itemNumber || '').match(/\./g) || []).length;
+      if (depth <= 1 && it.description) g.title = `${prefix} — ${it.description}`;
+      continue;
+    }
+    g.items.push(it);
+    g.total += Number(it.totalPrice) || 0;
+  }
+  return map;
+}
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -36,16 +57,18 @@ async function saveWb(wb: ExcelJS.Workbook, name: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefined, items: any[]) {
+function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefined, _items: any[]) {
   const cfg = engConfig || {} as any;
-  const obra = cfg.obraDescricao || '—';
-  const banks = [...new Set((items || []).map((i: any) => i.sourceName).filter(Boolean))].join(', ') || '—';
+  const obra = cfg.objeto || '—';
+  const banks = cfg.basesConsideradas?.join(', ') || '—';
+  const dataBase = cfg.dataBase || '—';
+  const uf = cfg.ufReferencia || '—';
   const regime = cfg.regimeOneracao || '—';
-  const es = cfg.encargosSociais || {};
+  const es = cfg.encargosSociais || {} as any;
   const horista = es.horista ?? '—';
   const mensalista = es.mensalista ?? '—';
 
-  const addMeta = (label: string, value: string) => {
+  const addMeta = (label: string, value: string, colSpan = 0) => {
     const r = ws.addRow([label, value]);
     r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
     r.getCell(2).font = { size: 9, color: { argb: C.TEXT_DARK } };
@@ -55,8 +78,8 @@ function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefine
     r.height = 16;
   };
   addMeta('Obra', obra);
-  addMeta('Bancos', banks);
-  addMeta('Regime', `${regime}   Encargos: H: ${horista}% / M: ${mensalista}%`);
+  addMeta('Bancos', `${banks}    Data-Base: ${dataBase}    UF: ${uf}`);
+  addMeta('Regime', `${regime}    Encargos Sociais: ${regime} (H: ${horista}% / M: ${mensalista}%)`);
   ws.addRow([]);
 }
 
@@ -109,16 +132,16 @@ function grandRow(ws: ExcelJS.Worksheet, label: string, values: string[], colCou
   }
 }
 
+// BDI tripé — matches PDF renderGlobalTotals exactly
 function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: number) {
-  const totalSemBdi = items.reduce((s: number, i: any) => {
-    if (i.type === 'ETAPA' || i.type === 'SUBETAPA') return s;
-    const qty = Number(i.quantity) || 0;
-    const up  = Number(i.unitCost)  || Number(i.unitPrice) || 0;
-    return s + qty * up;
+  // Same logic as PDF: Sem BDI = unitCost * quantity, Com BDI = totalPrice
+  const billable = items.filter((i: any) => !isGrouper(i.type));
+  const totalComBdi = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
+  const totalSemBdi = billable.reduce((s: number, i: any) => {
+    return s + (Number(i.unitCost) || 0) * (Number(i.quantity) || 0);
   }, 0);
+  const valorBdi = totalComBdi - totalSemBdi;
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
-  const bdiVal  = totalSemBdi * bdiRate;
-  const comBdi  = totalSemBdi + bdiVal;
 
   const mkRow = (label: string, value: string, isGrand = false) => {
     const r = ws.addRow([...Array(colCount - 2).fill(''), label, value]);
@@ -133,8 +156,8 @@ function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: num
   };
   ws.addRow([]);
   mkRow('VALOR GLOBAL SEM BDI', fmt(totalSemBdi));
-  mkRow(`VALOR DO BDI (${(bdiRate * 100).toFixed(2)}%)`, fmt(bdiVal));
-  mkRow('VALOR GLOBAL COM BDI', fmt(comBdi), true);
+  mkRow(`VALOR DO BDI (${(bdiRate * 100).toFixed(2)}%)`, fmt(valorBdi));
+  mkRow('VALOR GLOBAL COM BDI', fmt(totalComBdi), true);
 }
 
 function titleRow(ws: ExcelJS.Worksheet, title: string, colCount: number) {
@@ -159,66 +182,68 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
   r.height = 20;
 }
 
-// ── 1. ORÇAMENTO RESUMIDO ────────────────────────────────────────────────────
+// ── 1. ORÇAMENTO RESUMIDO — mirrors docOrcamentoResumido exactly ─────────────
 export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Resumido', { pageSetup: { paperSize: 9, orientation: 'portrait' } });
-  ws.columns = [
-    { width: 6 }, { width: 40 }, { width: 8 }, { width: 14 }, { width: 8 },
-  ];
+  ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 8 }];
+
+  const billable = items.filter((i: any) => !isGrouper(i.type));
+  const chapters = groupByChapter(items);
+  const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
 
   titleRow(ws, 'ORÇAMENTO RESUMIDO', 5);
+  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const r0 = ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens`]);
+  r0.getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.addRow([]);
   metaRows(ws, engConfig, items);
   headRow(ws, ['Nº', 'ETAPA', 'ITENS', 'VALOR (R$)', '%']);
 
-  const etapas = items.filter(i => i.type === 'ETAPA');
-  const total  = etapas.reduce((s, e) => s + (Number(e.totalPrice) || 0), 0);
   let idx = 0;
-  for (const e of etapas) {
-    const v = Number(e.totalPrice) || 0;
-    const pct = total > 0 ? (v / total * 100) : 0;
-    const children = items.filter(i => i.parentId === e.id && i.type !== 'ETAPA');
-    const r = dataRow(ws, [(e.itemNumber || ''), e.description, children.length, fmt(v), fmtPct(pct)], idx++, [3, 4, 5]);
+  for (const [prefix, ch] of chapters) {
+    const pct = total > 0 ? (ch.total / total * 100) : 0;
+    const r = dataRow(ws, [prefix, ch.title, ch.items.length, fmt(ch.total), fmtPct(pct)], idx++, [3, 4, 5]);
     r.getCell(2).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
   }
 
-  subtotalRow(ws, 'TOTAL GERAL', fmt(total), 5);
+  grandRow(ws, 'TOTAL GERAL', [fmt(total), '100%'], 5);
   bdiRows(ws, items, bdi, 5);
   await saveWb(wb, 'orcamento-resumido.xlsx');
 }
 
-// ── 2. ORÇAMENTO SINTÉTICO ───────────────────────────────────────────────────
+// ── 2. ORÇAMENTO SINTÉTICO — mirrors docOrcamentoSintetico exactly ───────────
 export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Sintético', { pageSetup: { paperSize: 9, orientation: 'portrait' } });
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }];
 
+  const billable = items.filter((i: any) => !isGrouper(i.type));
+  const chapters = groupByChapter(items);
+  const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
+
   titleRow(ws, 'ORÇAMENTO SINTÉTICO', 8);
+  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const r0 = ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens`]);
+  r0.getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.addRow([]);
   metaRows(ws, engConfig, items);
 
-  const etapas = items.filter(i => i.type === 'ETAPA');
-  let grandTotal = 0;
-
-  for (const etapa of etapas) {
-    sectionHeaderRow(ws, `${etapa.itemNumber || ''} — ${etapa.description}`, 8);
+  for (const [, ch] of chapters) {
+    sectionHeaderRow(ws, ch.title, 8);
     headRow(ws, ['ITEM', 'CÓDIGO', 'DESCRIÇÃO', 'UN.', 'QTD.', 'CUSTO UNIT.', 'PREÇO UNIT.', 'TOTAL']);
-    const children = items.filter(i => i.parentId === etapa.id && i.type === 'COMPOSICAO');
-    let etapaTotal = 0;
     let idx = 0;
-    for (const item of children) {
-      const qty       = Number(item.quantity) || 0;
-      const unitCost  = Number(item.unitCost)  || 0;
-      const unitPrice = Number(item.unitPrice) || 0;
-      const total     = Number(item.totalPrice) || qty * unitPrice;
-      etapaTotal += total;
-      dataRow(ws, [item.itemNumber || '', item.code || '', item.description || '', item.unit || '', qty, fmt(unitCost), fmt(unitPrice), fmt(total)], idx++, [5, 6, 7, 8]);
+    for (const it of ch.items) {
+      const qty = Number(it.quantity) || 0;
+      const uc  = Number(it.unitCost) || 0;
+      const up  = Number(it.unitPrice) || 0;
+      const tp  = Number(it.totalPrice) || 0;
+      dataRow(ws, [it.itemNumber || '', it.code || '', it.description || '', it.unit || '', fmtQty(qty), fmt(uc), fmt(up), fmt(tp)], idx++, [5, 6, 7, 8]);
     }
-    grandTotal += etapaTotal;
-    const subLabel = `Subtotal ${etapa.itemNumber || ''} — ${etapa.description}`;
-    subtotalRow(ws, subLabel, fmt(etapaTotal), 8);
+    subtotalRow(ws, `Subtotal ${ch.title}`, fmt(ch.total), 8);
   }
 
-  grandRow(ws, 'TOTAL GERAL', [fmt(grandTotal)], 8);
+  grandRow(ws, 'TOTAL GERAL DO ORÇAMENTO', [fmt(total)], 8);
   bdiRows(ws, items, bdi, 8);
   await saveWb(wb, 'orcamento-sintetico.xlsx');
 }
