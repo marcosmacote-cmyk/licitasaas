@@ -163,17 +163,17 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             if (format === 'excel') {
                 // Fase 3/C1: Excel export
                 switch (docId) {
-                    case 'resumido': xlsOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
-                    case 'sintetico': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
-                    case 'analitico': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break; // Analítico uses Sintético XLS layout
-                    case 'cpu': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break; // CPU falls back to Sintético
-                    case 'abc_servicos': xlsCurvaAbcServicos(items, engineeringConfig); break;
+                    case 'resumido': xlsOrcamentoResumido(items, engineeringConfig, effectiveBdi); break;
+                    case 'sintetico': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
+                    case 'analitico': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
+                    case 'cpu': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
+                    case 'abc_servicos': xlsCurvaAbcServicos(items, engineeringConfig, effectiveBdi); break;
                     case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engineeringConfig); break;
                     case 'cronograma':
-                        if (cronogramaResult) xlsCronograma(cronogramaResult);
+                        if (cronogramaResult) xlsCronograma(cronogramaResult, engineeringConfig);
                         else alert('Configure o cronograma primeiro.');
                         break;
-                    case 'bdi': xlsBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
+                    case 'bdi': xlsBdiEncargos(engineeringConfig, effectiveBdi); break;
                 }
             } else {
                 switch (docId) {
