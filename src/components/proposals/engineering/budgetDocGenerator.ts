@@ -19,39 +19,51 @@ const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 // ═══════════════════════════════════════════════════════════
-// SHARED STYLES
+// SHARED STYLES — FIX D1-D6, B10
 // ═══════════════════════════════════════════════════════════
 const CSS = `
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Segoe UI',Arial,sans-serif; font-size:9px; color:#1a1a2e; padding:20px; }
-h1 { font-size:13px; margin-bottom:2px; color:#1e293b; }
-h2 { font-size:11px; color:#2563eb; margin:14px 0 6px; border-bottom:1px solid #e2e8f0; padding-bottom:3px; }
-.meta { font-size:8px; color:#64748b; margin-bottom:14px; }
+body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; padding:20px; }
+h1 { font-size:14px; margin-bottom:2px; color:#1e293b; text-transform:uppercase; letter-spacing:0.04em; }
+h2 { font-size:11px; color:#2563eb; margin:14px 0 6px; border-bottom:2px solid #2563eb; padding-bottom:3px; }
+.meta { font-size:9px; color:#64748b; margin-bottom:14px; }
 table { width:100%; border-collapse:collapse; margin-bottom:10px; page-break-inside:auto; }
 tr { page-break-inside:avoid; }
-th { background:#f1f5f9; font-size:7.5px; text-transform:uppercase; letter-spacing:.04em; padding:4px 6px; text-align:left; border-bottom:2px solid #cbd5e1; color:#475569; }
-td { padding:3px 6px; border-bottom:1px solid #f1f5f9; font-size:8.5px; }
-.r { text-align:right; }
+thead { display:table-header-group; }
+th { background:#e2e8f0; font-size:8px; text-transform:uppercase; letter-spacing:.04em; padding:5px 6px; text-align:left; border:1px solid #cbd5e1; color:#334155; font-weight:700; }
+td { padding:4px 6px; border:1px solid #e2e8f0; font-size:9px; }
+.r { text-align:right; font-variant-numeric:tabular-nums; }
 .c { text-align:center; }
-.mono { font-family:Consolas,monospace; }
+.mono { font-family:Consolas,'Courier New',monospace; font-variant-numeric:tabular-nums; }
 .bold { font-weight:700; }
-.total { background:#f8fafc; font-weight:700; }
+.total { background:#f1f5f9; font-weight:700; border-top:2px solid #cbd5e1; }
 .grand { background:#1e40af; color:white; font-weight:700; font-size:10px; }
 .abc-a { color:#dc2626; font-weight:700; }
 .abc-b { color:#d97706; font-weight:600; }
 .abc-c { color:#16a34a; }
-.footer { margin-top:12px; font-size:7px; color:#94a3b8; text-align:center; border-top:1px solid #e2e8f0; padding-top:6px; }
+.footer { margin-top:12px; font-size:7.5px; color:#94a3b8; text-align:center; border-top:1px solid #cbd5e1; padding-top:6px; }
 .no-print { text-align:center; margin-top:12px; }
-@media print { .no-print{display:none;} @page{margin:12mm;} }
+.cover { page-break-after:always; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:80vh; text-align:center; }
+.cover h1 { font-size:22px; margin-bottom:8px; }
+.cover .meta { font-size:11px; }
+@media print {
+  .no-print { display:none; }
+  @page { margin:15mm 12mm; size:A4; }
+  @page:first { margin-top:20mm; }
+  body { padding:0; }
+}
 `;
 
-function openDoc(title: string, html: string) {
-    const w = window.open('', '_blank', 'width=900,height=700');
+const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
+
+function openDoc(title: string, html: string, landscape: boolean = false) {
+    const w = window.open('', '_blank', 'width=1000,height=750');
     if (!w) { alert('Habilite pop-ups.'); return; }
-    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${CSS}</style></head><body>
+    const extraCss = landscape ? CSS_LANDSCAPE : '';
+    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${CSS}${extraCss}</style></head><body>
 ${html}
 <div class="footer">LicitaSaaS — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</div>
-<div class="no-print"><button onclick="window.print()" style="padding:6px 20px;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:11px">Imprimir / Salvar PDF</button></div>
+<div class="no-print"><button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Imprimir / Salvar PDF</button></div>
 </body></html>`);
     w.document.close();
 }
@@ -243,11 +255,12 @@ export function docCronograma(result: CronogramaResult) {
     for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentAcumulado[m])}</td>`;
     rows += `<td class="r">100%</td></tr>`;
 
+    // FIX D5: Cronograma uses landscape orientation
     openDoc('Cronograma Físico-Financeiro', `
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable((result as any).engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`);
+<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true);
 }
 
 // ═══════════════════════════════════════════════════════════

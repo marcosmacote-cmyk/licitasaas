@@ -9,6 +9,7 @@
 import { useState, useCallback } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos } from './budgetDocGenerator';
+import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
@@ -157,23 +158,39 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     };
 
     const handleGenerate = async (docId: string, format: 'pdf' | 'excel' = 'pdf') => {
-        setGenerating(docId);
+        setGenerating(docId + (format === 'excel' ? '_xls' : ''));
         try {
-            // TODO: Excel export (Fase 3) — for now all generate PDF
-            switch (docId) {
-                case 'resumido': docOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
-                case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
-                case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engineeringConfig); break;
-                case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engineeringConfig); break;
-                case 'abc_servicos': docCurvaAbcServicos(items, engineeringConfig); break;
-                case 'abc_insumos': docCurvaAbcInsumos(insumos, engineeringConfig); break;
-                case 'cronograma':
-                    if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig } as any);
-                    else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
-                    break;
-                case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
+            if (format === 'excel') {
+                // Fase 3/C1: Excel export
+                switch (docId) {
+                    case 'resumido': xlsOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
+                    case 'sintetico': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
+                    case 'analitico': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break; // Analítico uses Sintético XLS layout
+                    case 'cpu': xlsOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break; // CPU falls back to Sintético
+                    case 'abc_servicos': xlsCurvaAbcServicos(items, engineeringConfig); break;
+                    case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engineeringConfig); break;
+                    case 'cronograma':
+                        if (cronogramaResult) xlsCronograma(cronogramaResult);
+                        else alert('Configure o cronograma primeiro.');
+                        break;
+                    case 'bdi': xlsBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
+                }
+            } else {
+                switch (docId) {
+                    case 'resumido': docOrcamentoResumido(items, effectiveBdi, engineeringConfig); break;
+                    case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engineeringConfig); break;
+                    case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engineeringConfig); break;
+                    case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engineeringConfig); break;
+                    case 'abc_servicos': docCurvaAbcServicos(items, engineeringConfig); break;
+                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engineeringConfig); break;
+                    case 'cronograma':
+                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig } as any);
+                        else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
+                        break;
+                    case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engineeringConfig); break;
+                }
             }
-            markGenerated(docId);
+            markGenerated(docId + (format === 'excel' ? '_xls' : ''));
         } catch (e) { console.error('Erro ao gerar documento:', e); }
         setGenerating(null);
     };
@@ -321,19 +338,21 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                                 {isGenerating ? <Loader2 size={12} className="spin" /> : <Download size={12} />}
                                                 PDF
                                             </button>
-                                            {/* Excel button (placeholder for Fase 3) */}
+                                            {/* FIX A2/C1: Excel export button — now functional */}
                                             <button
-                                                disabled={true}
-                                                title="Exportar Excel (em breve)"
+                                                onClick={() => handleGenerate(doc.id, 'excel')}
+                                                disabled={isGenerating || isDisabled}
+                                                title="Exportar Excel"
                                                 style={{
                                                     padding: '5px 10px', borderRadius: 'var(--radius-sm)',
                                                     border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.05)',
-                                                    color: '#059669', cursor: 'not-allowed',
+                                                    color: '#059669', cursor: isDisabled ? 'not-allowed' : 'pointer',
                                                     display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem',
-                                                    fontWeight: 600, opacity: 0.5,
+                                                    fontWeight: 600, opacity: isDisabled ? 0.5 : 1,
+                                                    transition: 'all 0.15s',
                                                 }}
                                             >
-                                                <FileSpreadsheet size={12} />
+                                                {generating === doc.id + '_xls' ? <Loader2 size={12} className="spin" /> : <FileSpreadsheet size={12} />}
                                                 XLS
                                             </button>
                                         </div>
