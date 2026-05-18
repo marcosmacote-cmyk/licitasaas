@@ -72,7 +72,7 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
         setLoading(true); setError(null);
         Promise.all([
             fetch(`/api/biddings/${biddingId}`, { headers: hdrs() }).then(r => r.ok ? r.json() : null),
-            fetch(`/api/proposals/${proposalId}`, { headers: hdrs() }).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch(`/api/proposals/detail/${proposalId}`, { headers: hdrs() }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]).then(([biddingData, proposalData]) => {
             if (biddingData) setBidding(biddingData);
             if (proposalData) {
