@@ -164,7 +164,7 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
         setIsSaving(true);
         try {
             await fetch(`/api/proposals/${proposalId}`, {
-                method: 'PATCH', headers: hdrs(),
+                method: 'PUT', headers: hdrs(),
                 body: JSON.stringify({ headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, validityDays }),
             });
         } catch { /* best effort */ }
@@ -176,7 +176,7 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
         setIsSavingTemplate(true);
         try {
             await fetch(`/api/companies/${company.id}`, {
-                method: 'PATCH', headers: hdrs(),
+                method: 'PUT', headers: hdrs(),
                 body: JSON.stringify({
                     defaultProposalHeader: headerImage, defaultProposalFooter: footerImage,
                     defaultProposalHeaderHeight: headerImageHeight, defaultProposalFooterHeight: footerImageHeight,
@@ -191,7 +191,7 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
         setIsSaving(true);
         try {
             await fetch(`/api/proposals/${proposalId}`, {
-                method: 'PATCH', headers: hdrs(),
+                method: 'PUT', headers: hdrs(),
                 body: JSON.stringify({ letterContent: contentOverride || letterContent }),
             });
             if (contentOverride) setLetterContent(contentOverride);

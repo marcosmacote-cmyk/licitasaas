@@ -379,7 +379,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
     }, [props.letterContent, effectiveData]);
 
     // ── Salvar carta (envelope v4 com cockpit) ──
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!letterResult) return;
 
         const envelope = {
@@ -392,7 +392,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
 
         const envelopeStr = JSON.stringify(envelope);
         props.setLetterContent(envelopeStr);
-        props.handleSaveLetter(envelopeStr);
+        await props.handleSaveLetter(envelopeStr);
     };
 
     const handleExport = () => {

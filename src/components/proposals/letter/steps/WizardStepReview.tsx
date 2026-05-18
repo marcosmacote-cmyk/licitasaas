@@ -182,7 +182,7 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                     {p.hideExportStep ? (
-                        <button onClick={async () => { w.handleSave(); if (p.onSaveProposal) await p.onSaveProposal(); if (p.onFinish) p.onFinish(); }} disabled={p.isSaving} style={{
+                        <button onClick={async () => { await w.handleSave(); if (p.onSaveProposal) await p.onSaveProposal(); if (p.onFinish) p.onFinish(); }} disabled={p.isSaving} style={{
                             padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
                             background: 'var(--color-primary)', color: 'white', border: 'none',
                             fontWeight: 700, cursor: p.isSaving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8,
@@ -191,7 +191,7 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
                             {p.isSaving ? <Loader2 size={16} className="spin" /> : 'Salvar e Concluir'} <ChevronRight size={16} />
                         </button>
                     ) : (
-                        <button onClick={() => { w.handleSave(); w.setStep('export'); }} disabled={p.isSaving} style={{
+                        <button onClick={async () => { await w.handleSave(); w.setStep('export'); }} disabled={p.isSaving} style={{
                             padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
                             background: 'var(--color-primary)', color: 'white', border: 'none',
                             fontWeight: 700, cursor: p.isSaving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8,

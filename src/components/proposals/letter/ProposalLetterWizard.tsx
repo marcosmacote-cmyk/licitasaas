@@ -34,7 +34,7 @@ export interface ProposalLetterWizardProps {
     isSavingTemplate: boolean;
     letterContent: string;
     setLetterContent: (v: string) => void;
-    handleSaveLetter: (contentOverride?: string) => void;
+    handleSaveLetter: (contentOverride?: string) => Promise<void> | void;
     handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
     isSaving: boolean;
     printLandscape?: boolean;
