@@ -53,9 +53,9 @@ export function calcularCronograma(etapas: CronogramaEtapa[], meses: number): Cr
     return { meses, etapas: etapasResult, mensalTotal, acumulado, percentMensal, percentAcumulado, totalGlobal };
 }
 
-/** Gerar etapas padrão a partir dos itens agrupados pelo prefixo do itemNumber */
+/** FIX B2: Gerar etapas padrão usando nomes reais das ETAPAs do edital */
 export function gerarEtapasPadrao(
-    items: { itemNumber: string; description: string; totalPrice: number }[]
+    items: { itemNumber: string; description: string; totalPrice: number; type?: string }[]
 ): CronogramaEtapa[] {
     const grupoMap = new Map<string, { nome: string; total: number }>();
 
@@ -64,7 +64,19 @@ export function gerarEtapasPadrao(
         if (!grupoMap.has(prefix)) {
             grupoMap.set(prefix, { nome: `Etapa ${prefix}`, total: 0 });
         }
-        grupoMap.get(prefix)!.total += it.totalPrice;
+        const g = grupoMap.get(prefix)!;
+
+        // FIX B2: Use real ETAPA description as the chapter name
+        // Identify top-level groupers: type ETAPA/SUBETAPA with depth <= 1
+        if (it.type === 'ETAPA' || it.type === 'SUBETAPA') {
+            const depth = (it.itemNumber.match(/\./g) || []).length;
+            if (depth <= 1 && it.description) {
+                g.nome = `${prefix} — ${it.description}`;
+            }
+            continue; // Don't count groupers in totals
+        }
+
+        g.total += it.totalPrice;
     }
 
     return Array.from(grupoMap.entries()).map(([key, g]) => ({

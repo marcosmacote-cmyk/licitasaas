@@ -12,9 +12,11 @@ import type { InsumoConsolidado } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig, EncargosSociaisConfig } from './types';
+import { isGrouper } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
+const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 // ═══════════════════════════════════════════════════════════
 // SHARED STYLES
@@ -56,22 +58,34 @@ ${html}
 
 function renderConfigTable(engineeringConfig?: any) {
     if (!engineeringConfig) return '';
+    // FIX B9: Render Data-Base, UF and Regime alongside existing fields
+    const dataBase = engineeringConfig.dataBase || '—';
+    const uf = engineeringConfig.ufReferencia || '—';
+    const regime = engineeringConfig.regimeOneracao || '—';
     return `
 <table style="margin-bottom: 14px; border: 1px solid #e2e8f0;">
   <tr>
-    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Obra</td>
-    <td colspan="3">${engineeringConfig.objeto || '—'}</td>
+    <td style="width: 15%; background: #f8fafc; font-weight: 600;">Obra</td>
+    <td colspan="5">${engineeringConfig.objeto || '—'}</td>
   </tr>
   <tr>
-    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Bancos</td>
-    <td style="width: 30%;">${engineeringConfig.basesConsideradas?.join(', ') || '—'}</td>
-    <td style="width: 20%; background: #f8fafc; font-weight: 600;">Encargos Sociais</td>
-    <td style="width: 30%;">${engineeringConfig.regimeOneracao || '—'} (H: ${engineeringConfig.encargosSociais?.horista || 0}% / M: ${engineeringConfig.encargosSociais?.mensalista || 0}%)</td>
+    <td style="background: #f8fafc; font-weight: 600;">Bancos</td>
+    <td>${engineeringConfig.basesConsideradas?.join(', ') || '—'}</td>
+    <td style="background: #f8fafc; font-weight: 600;">Data-Base</td>
+    <td>${dataBase}</td>
+    <td style="background: #f8fafc; font-weight: 600;">UF</td>
+    <td>${uf}</td>
+  </tr>
+  <tr>
+    <td style="background: #f8fafc; font-weight: 600;">Regime</td>
+    <td>${regime}</td>
+    <td style="background: #f8fafc; font-weight: 600;">Encargos Sociais</td>
+    <td colspan="3">${regime} (H: ${engineeringConfig.encargosSociais?.horista || 0}% / M: ${engineeringConfig.encargosSociais?.mensalista || 0}%)</td>
   </tr>
 </table>`;
 }
 
-// Helper: group items by chapter prefix
+// FIX B1: Group items by chapter prefix, using real ETAPA names from grouper items
 function groupByChapter(items: EngItem[]) {
     const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
     for (const it of items) {
@@ -79,10 +93,16 @@ function groupByChapter(items: EngItem[]) {
         if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
         const g = map.get(prefix)!;
         
-        // If this item is a structural node (e.g. "1", "2.1") and has no valid unit
-        if (!it.unit || it.unit.trim() === '' || it.unit === '-') {
-            if (it.itemNumber === prefix) g.title = `${prefix} — ${it.description}`;
-            continue; // Skip adding this to the items list!
+        // FIX B1: Use isGrouper() to identify structural nodes (ETAPA/SUBETAPA)
+        // and capture their real description as the chapter title.
+        // Matches: "1" | "1.0" | "1.00" | "01" — any top-level grouper for this prefix.
+        if (isGrouper(it.type as any)) {
+            const depth = (it.itemNumber.match(/\./g) || []).length;
+            // Only use top-level ETAPAs (depth 0 or 1) as chapter titles
+            if (depth <= 1 && it.description) {
+                g.title = `${prefix} — ${it.description}`;
+            }
+            continue; // Skip groupers from the items list
         }
 
         g.items.push(it);
@@ -96,7 +116,9 @@ function groupByChapter(items: EngItem[]) {
 // ═══════════════════════════════════════════════════════════
 export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringConfig?: any) {
     const chapters = groupByChapter(items);
-    const total = items.reduce((s, i) => s + i.totalPrice, 0);
+    // FIX B4: Only count billable items (not ETAPAs/SUBETAPAs)
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    const total = billable.reduce((s, i) => s + i.totalPrice, 0);
     let rows = '';
     for (const [prefix, ch] of chapters) {
         const pct = total > 0 ? (ch.total / total * 100) : 0;
@@ -104,7 +126,7 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringC
     }
     openDoc('Orçamento Resumido', `
 <h1>ORÇAMENTO RESUMIDO</h1>
-<div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>
+<div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
@@ -115,15 +137,18 @@ ${renderConfigTable(engineeringConfig)}
 // 2. ORÇAMENTO SINTÉTICO
 // ═══════════════════════════════════════════════════════════
 export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any) {
-    const total = items.reduce((s, i) => s + i.totalPrice, 0);
+    // FIX B4: Only count billable items
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    const total = billable.reduce((s, i) => s + i.totalPrice, 0);
     const chapters = groupByChapter(items);
-    let html = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens</div>${renderConfigTable(engineeringConfig)}`;
+    let html = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
 
     for (const [prefix, ch] of chapters) {
         html += `<h2>${ch.title}</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th><th class="r">Custo Unit.</th><th class="r">Preço Unit.</th><th class="r">Total</th></tr></thead><tbody>`;
         for (const it of ch.items) {
-            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r">${it.quantity}</td><td class="r">${fmt(it.unitCost)}</td><td class="r">${fmt(it.unitPrice)}</td><td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            // FIX B5: Format quantity with locale separators
+            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td><td class="r">${fmt(it.unitCost)}</td><td class="r">${fmt(it.unitPrice)}</td><td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
         }
         html += `<tr class="total"><td colspan="7" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
@@ -135,7 +160,8 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 // 5. CURVA ABC DE SERVIÇOS
 // ═══════════════════════════════════════════════════════════
 export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
-    const validItems = items.filter(it => it.unit && it.unit.trim() !== '' && it.unit !== '-');
+    // FIX B8: Filter using isGrouper instead of unit check
+    const validItems = items.filter(it => !isGrouper(it.type as any));
     const total = validItems.reduce((s, i) => s + i.totalPrice, 0);
     const sorted = [...validItems].sort((a, b) => b.totalPrice - a.totalPrice);
     let accum = 0;
@@ -150,7 +176,7 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
     });
     openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
-<div class="meta">${items.length} serviços · Total: ${fmt(total)}</div>
+<div class="meta">${validItems.length} serviços · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
@@ -349,26 +375,30 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
         </tr>`;
     }
 
+    // FIX B3: Separate intermediate data from TOTAL UNITÁRIO highlight
     ch += `</tbody></table>
     <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
-        <div style="display:flex; justify-content:space-between; margin-bottom: 2px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
             <div style="color:#475569;">
                 MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
                 LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
                 MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
             </div>
             <div style="color:#475569;">
-                Custo Unit. => <b>${fmt(comp.totalPrice || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                Valor com BDI => <b>${fmt(comp.valorComBdi || 0)}</b>
+                Custo Direto => <b>${fmt(comp.totalPrice || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b>
             </div>
         </div>
-        ${showQuantities && comp.proposalQuantity ? `
-        <div style="display:flex; justify-content:flex-end; gap: 20px; color:#1e40af; font-weight:bold; font-size: 8.5px;">
-            <div>Quant. => ${comp.proposalQuantity.toFixed(4)}</div>
-            <div>Preço Total => ${fmt(comp.proposalTotal || 0)}</div>
-        </div>` : ''}
     </div>
+    <div style="background:#1e40af; color:white; padding:6px 10px; font-size:9px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+        <span>CUSTO UNITÁRIO TOTAL (COM BDI)</span>
+        <span style="font-size:10px;">${fmt(comp.valorComBdi || 0)}</span>
+    </div>
+    ${showQuantities && comp.proposalQuantity ? `
+    <div style="background:#eff6ff; padding:5px 10px; font-size:8.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center; color:#1e40af; border:1px solid #bfdbfe; border-top:none;">
+        <span>Quantidade: ${fmtQty(comp.proposalQuantity)}</span>
+        <span style="font-size:9px;">PREÇO TOTAL => ${fmt(comp.proposalTotal || 0)}</span>
+    </div>` : ''}
     </div>`;
     return ch;
 }
@@ -379,15 +409,18 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
 export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any) {
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const total = items.reduce((s, i) => s + i.totalPrice, 0);
+    // FIX B4: Only count billable items
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    const total = billable.reduce((s, i) => s + i.totalPrice, 0);
 
-    let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${items.length} itens · Total: ${fmt(total)}</div>${renderConfigTable(engineeringConfig)}`;
+    let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens · Total: ${fmt(total)}</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
+        // FIX B7: Pass engineeringConfig to backend for proper LS calculation
         const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
             method: 'POST',
             headers: hdrs,
-            body: JSON.stringify({ items, bdi })
+            body: JSON.stringify({ items, bdi, engineeringConfig })
         });
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
@@ -410,13 +443,15 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
     const token = localStorage.getItem('token') || '';
     const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${items.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
+    // FIX B4/B7: Count only billable items and pass engineeringConfig to backend
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${billable.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
         const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
             method: 'POST',
             headers: hdrs,
-            body: JSON.stringify({ items, bdi })
+            body: JSON.stringify({ items, bdi, engineeringConfig })
         });
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
