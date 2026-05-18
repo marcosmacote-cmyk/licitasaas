@@ -7,9 +7,10 @@
  * FIX A5: Carta Proposta integrada ao caderno
  */
 import { useState, useCallback } from 'react';
-import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive } from 'lucide-react';
+import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
+import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
@@ -27,6 +28,7 @@ interface Props {
     proposal?: any;
     company?: any;
     bidding?: any;
+    onConfigChange?: (config: any) => void;
 }
 
 // FIX A1: Grouped document definitions
@@ -77,9 +79,10 @@ const DOC_SECTIONS = [
     },
 ];
 
-export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId, engineeringConfig, proposal, company, bidding }: Props) {
+export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, cronogramaResult, proposalId, engineeringConfig, proposal, company, bidding, onConfigChange }: Props) {
     const [generating, setGenerating] = useState<string | null>(null);
     const [generated, setGenerated] = useState<Record<string, string>>({}); // A4: Track generated docs
+    const [activeTab, setActiveTab] = useState<'docs' | 'config'>('docs');
 
     const billable = items.filter(it => !isGrouper(it.type));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -209,7 +212,45 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            
+
+            {/* ═══ Tab Bar ═══ */}
+            <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--color-border)' }}>
+                {[
+                    { id: 'docs' as const, label: 'Documentos', icon: FileText },
+                    { id: 'config' as const, label: 'Configurar Relatórios', icon: Settings },
+                ].map(tab => {
+                    const TabIcon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                padding: '10px 20px', border: 'none', cursor: 'pointer',
+                                background: isActive ? 'var(--color-bg-surface)' : 'transparent',
+                                borderBottom: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
+                                marginBottom: -2, fontSize: '0.85rem',
+                                fontWeight: isActive ? 700 : 500,
+                                color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                transition: 'all 0.15s',
+                            }}>
+                            <TabIcon size={15} />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* ═══ Config Tab ═══ */}
+            {activeTab === 'config' && (
+                <ReportConfigPanel
+                    config={engineeringConfig?.reportConfig || {}}
+                    onChange={(rc) => onConfigChange?.({ ...engineeringConfig, reportConfig: rc })}
+                    companyName={company?.razaoSocial || company?.nomeFantasia}
+                />
+            )}
+
+            {/* ═══ Documents Tab ═══ */}
+            {activeTab === 'docs' && (<>            
             {/* ═══ Seção Master: Carta Proposta + Caderno Completo ═══ */}
             <div style={{
                 padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)',
@@ -363,6 +404,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     </div>
                 );
             })}
+            </>)}
         </div>
     );
 }

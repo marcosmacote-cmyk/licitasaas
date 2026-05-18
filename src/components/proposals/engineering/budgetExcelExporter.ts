@@ -57,7 +57,7 @@ async function saveWb(wb: ExcelJS.Workbook, name: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function setupPrint(ws: ExcelJS.Worksheet, landscape = false) {
+function setupPrint(ws: ExcelJS.Worksheet, landscape = false, reportConfig?: any) {
   ws.pageSetup = {
     paperSize: 9, // A4
     orientation: landscape ? 'landscape' : 'portrait',
@@ -67,9 +67,27 @@ function setupPrint(ws: ExcelJS.Worksheet, landscape = false) {
     horizontalCentered: true,
     margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
   };
-  ws.headerFooter = {
-    oddFooter: 'LicitaSaaS — &D &T    Página &P de &N',
-  };
+  const rc = reportConfig || {};
+  // Custom header (3 lines max: &L left, &C center, &R right — we center all)
+  const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
+  if (hdrLines.length > 0) {
+    const hdr = hdrLines.map((l: string, i: number) => i === 0 ? `&"Segoe UI,Bold"&10${l}` : `&"Segoe UI"&8${l}`).join('\n');
+    ws.headerFooter = {
+      oddHeader: `&C${hdr}`,
+      oddFooter: buildFooter(rc),
+    };
+  } else {
+    ws.headerFooter = { oddFooter: buildFooter(rc) };
+  }
+}
+
+function buildFooter(rc: any): string {
+  const now = new Date();
+  const d = now.toLocaleDateString('pt-BR');
+  const t = now.toLocaleTimeString('pt-BR');
+  const left = (rc.footerLine1 || `LicitaSaaS — ${d} ${t}`).replace('{data}', d).replace('{hora}', t);
+  const right = (rc.footerLine2 || 'Página &P de &N').replace('{pagina}', '&P').replace('{total}', '&N');
+  return `&L${left}&R${right}`;
 }
 
 function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefined, _items: any[], colCount: number) {
@@ -215,7 +233,7 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
 export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Resumido');
-  setupPrint(ws);
+  setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 8 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -248,7 +266,7 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Sintético');
-  setupPrint(ws);
+  setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -366,7 +384,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
 export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Analítico');
-  setupPrint(ws);
+  setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -416,7 +434,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
 export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Composições');
-  setupPrint(ws);
+  setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -449,7 +467,7 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
 export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Serviços');
-  setupPrint(ws, true);
+  setupPrint(ws, true, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 8 }, { width: 8 }];
 
   titleRow(ws, 'CURVA ABC DE SERVIÇOS', 11);
@@ -479,7 +497,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
 export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('BDI e Encargos');
-  setupPrint(ws);
+  setupPrint(ws, false, engConfig?.reportConfig);
   ws.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
 
   titleRow(ws, 'BDI E ENCARGOS SOCIAIS', 4);
@@ -561,7 +579,7 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Cronograma');
-  setupPrint(ws, true);
+  setupPrint(ws, true, engConfig?.reportConfig);
   const widths = [{ width: 40 }, { width: 14 }];
   for (let m = 0; m < meses; m++) widths.push({ width: 12 });
   widths.push({ width: 14 });
@@ -646,7 +664,7 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
 export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
-  setupPrint(ws, true);
+  setupPrint(ws, true, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
 
   titleRow(ws, 'CURVA ABC DE INSUMOS', 8);

@@ -674,6 +674,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                         proposal={proposal}
                         company={company}
                         bidding={bidding}
+                        onConfigChange={(newConfig) => { setEngineeringConfig(newConfig); setHasUnsavedChanges(true); }}
                     />
                     <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '12px 0', borderTop: '1px solid var(--color-border)' }}>
                         <button className="btn btn-outline" onClick={() => setCurrentStep(4)}

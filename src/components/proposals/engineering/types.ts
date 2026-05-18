@@ -198,6 +198,55 @@ export interface PrecisionConfig {
     casasDecimais: number;
 }
 
+/** Configuração de personalização dos relatórios (PDF/Excel) */
+export interface ReportConfig {
+    // Header
+    headerLine1?: string;
+    headerLine2?: string;
+    headerLine3?: string;
+    logoPosition?: 'left' | 'center' | 'right';
+    logoMaxHeight?: number;
+    // Footer
+    footerLine1?: string;
+    footerLine2?: string;
+    showHeaderOnAllPages?: boolean;
+    // Legal / Assinaturas
+    responsavelTecnico?: string;
+    registroCrea?: string;
+    responsavelLegal?: string;
+    showSignatureLines?: boolean;
+    observacaoGeral?: string;
+    // Display options
+    showCustoUnit?: boolean;
+    showPrecoUnit?: boolean;
+    showBdiTripe?: boolean;
+    showEncargosSociais?: boolean;
+    showCoeficientes?: boolean;
+    showBancoOrigem?: boolean;
+}
+
+export const DEFAULT_REPORT_CONFIG: ReportConfig = {
+    headerLine1: '',
+    headerLine2: '',
+    headerLine3: '',
+    logoPosition: 'left',
+    logoMaxHeight: 50,
+    footerLine1: '',
+    footerLine2: '',
+    showHeaderOnAllPages: true,
+    responsavelTecnico: '',
+    registroCrea: '',
+    responsavelLegal: '',
+    showSignatureLines: false,
+    observacaoGeral: '',
+    showCustoUnit: true,
+    showPrecoUnit: true,
+    showBdiTripe: true,
+    showEncargosSociais: true,
+    showCoeficientes: true,
+    showBancoOrigem: true,
+};
+
 export interface EngineeringConfig {
     objeto: string;
     basesConsideradas: string[];
@@ -213,6 +262,8 @@ export interface EngineeringConfig {
     bdiDiferenciado?: boolean;
     /** BDI para itens de Fornecimento (%). Só aplicado se bdiDiferenciado=true */
     bdiFornecimento?: number;
+    /** Configuração de personalização dos relatórios */
+    reportConfig?: ReportConfig;
     /** Snapshot of AI-extracted config values — used for Config Consistency alerts */
     _aiExtractedRef?: {
         objeto?: string;

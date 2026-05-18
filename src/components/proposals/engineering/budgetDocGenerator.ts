@@ -56,13 +56,45 @@ td { padding:4px 6px; border:1px solid #e2e8f0; font-size:9px; }
 
 const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
 
-function openDoc(title: string, html: string, landscape: boolean = false) {
+function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any) {
     const w = window.open('', '_blank', 'width=1000,height=750');
     if (!w) { alert('Habilite pop-ups.'); return; }
     const extraCss = landscape ? CSS_LANDSCAPE : '';
+    const rc = reportConfig || {};
+    const now = new Date();
+    const dataStr = now.toLocaleDateString('pt-BR');
+    const horaStr = now.toLocaleTimeString('pt-BR');
+
+    // Custom header
+    const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
+    const headerHtml = hdrLines.length > 0
+        ? `<div style="text-align:center;margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
+        : '';
+
+    // Custom footer
+    const footL = (rc.footerLine1 || `LicitaSaaS — ${dataStr} ${horaStr}`).replace('{data}', dataStr).replace('{hora}', horaStr);
+    const footR = (rc.footerLine2 || '').replace('{pagina}', '').replace('{total}', '');
+
+    // Signature lines
+    let sigHtml = '';
+    if (rc.showSignatureLines) {
+        const lines: string[] = [];
+        if (rc.responsavelTecnico) lines.push(`<div style="text-align:center;margin-top:40px;"><div style="border-top:1px solid #334155;width:280px;margin:0 auto;padding-top:4px;font-size:8.5px;font-weight:600;">${rc.responsavelTecnico}${rc.registroCrea ? ` — ${rc.registroCrea}` : ''}</div><div style="font-size:7.5px;color:#64748b;">Responsável Técnico</div></div>`);
+        if (rc.responsavelLegal) lines.push(`<div style="text-align:center;margin-top:30px;"><div style="border-top:1px solid #334155;width:280px;margin:0 auto;padding-top:4px;font-size:8.5px;font-weight:600;">${rc.responsavelLegal}</div><div style="font-size:7.5px;color:#64748b;">Representante Legal</div></div>`);
+        sigHtml = lines.join('');
+    }
+
+    // General observation
+    const obsHtml = rc.observacaoGeral
+        ? `<div style="margin-top:14px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:8px;color:#475569;"><strong>Observação:</strong> ${rc.observacaoGeral}</div>`
+        : '';
+
     w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${CSS}${extraCss}</style></head><body>
+${headerHtml}
 ${html}
-<div class="footer">LicitaSaaS — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</div>
+${obsHtml}
+${sigHtml}
+<div class="footer">${footL}${footR ? `&nbsp;&nbsp;&nbsp;&nbsp;${footR}` : ''}</div>
 <div class="no-print"><button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Imprimir / Salvar PDF</button></div>
 </body></html>`);
     w.document.close();
@@ -157,7 +189,7 @@ ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
-${renderGlobalTotals(billable, bdi)}`);
+${renderGlobalTotals(billable, bdi)}`, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -181,7 +213,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
     }
     html += `<table><tfoot><tr class="grand"><td colspan="7" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
     html += renderGlobalTotals(billable, bdi);
-    openDoc('Orçamento Sintético', html);
+    openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -208,7 +240,7 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -232,7 +264,7 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -279,7 +311,7 @@ export function docCronograma(result: CronogramaResult) {
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable((result as any).engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true);
+<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true, (result as any).engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -411,7 +443,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     }
     esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
 
-    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`);
+    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, false, engConfig?.reportConfig);
 }
 
 // Helper para renderizar Composição no padrão TCU
@@ -533,7 +565,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     }
 
     html += renderGlobalTotals(billable, bdi);
-    openDoc('Planilha Orçamentária Analítica', html);
+    openDoc('Planilha Orçamentária Analítica', html, false, engineeringConfig?.reportConfig);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -572,5 +604,5 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
     }
 
-    openDoc('Caderno de Composições', html);
+    openDoc('Caderno de Composições', html, false, engineeringConfig?.reportConfig);
 }
