@@ -284,45 +284,82 @@ ${renderConfigTable((result as any).engineeringConfig)}
 // FIX BUG-04: Encargos agora são dinâmicos a partir do engineeringConfig
 // ═══════════════════════════════════════════════════════════
 
-/** Gera a tabela de encargos sociais padrão baseada no regime */
+/** Gera a tabela de encargos sociais a partir dos valores reais configurados */
 function buildEncargosSociais(es: EncargosSociaisConfig, regime: string) {
     const isDesonerado = regime === 'DESONERADO';
-    // Grupo A — Encargos Básicos e Obrigatórios
-    // Em regime DESONERADO, INSS patronal (20%) é substituído pela CPRB (inclusa no BDI)
+    // Defaults SINAPI — usados quando os campos individuais não foram configurados
+    const d = {
+        a1_h: isDesonerado ? 0.00 : 20.00, a1_m: isDesonerado ? 0.00 : 20.00,
+        a2_h: 1.50,  a2_m: 1.50,  a3_h: 1.00,  a3_m: 1.00,
+        a4_h: 0.20,  a4_m: 0.20,  a5_h: 0.60,  a5_m: 0.60,
+        a6_h: 2.50,  a6_m: 2.50,  a7_h: 3.00,  a7_m: 3.00,
+        a8_h: 8.00,  a8_m: 8.00,  a9_h: 0.00,  a9_m: 0.00,
+        b1_h: 17.84, b1_m: 0.00,  b2_h: 3.71,  b2_m: 0.00,
+        b3_h: 0.87,  b3_m: 0.67,  b4_h: 10.80, b4_m: 8.33,
+        b5_h: 0.07,  b5_m: 0.06,  b6_h: 0.72,  b6_m: 0.56,
+        b7_h: 1.55,  b7_m: 0.00,  b8_h: 0.11,  b8_m: 0.08,
+        b9_h: 8.71,  b9_m: 6.73,  b10_h: 0.03, b10_m: 0.03,
+        c1_h: 5.40,  c1_m: 4.17,  c2_h: 0.13,  c2_m: 0.10,
+        c3_h: 4.85,  c3_m: 3.75,  c4_h: 3.90,  c4_m: 3.01,
+        c5_h: 0.45,  c5_m: 0.35,
+        d1_h: 0.00,  d1_m: 0.00,  d2_h: 0.00,  d2_m: 0.00,
+    };
+    type DKey = keyof typeof d;
+    const v = (key: DKey): number => {
+        const cfgVal = (es as any)[key];
+        return typeof cfgVal === 'number' ? cfgVal : d[key];
+    };
+
     const grupoA = [
-        { item: 'INSS', pct: isDesonerado ? 0.00 : 20.00 },
-        { item: 'SESI', pct: 1.50 },
-        { item: 'SENAI', pct: 1.00 },
-        { item: 'INCRA', pct: 0.20 },
-        { item: 'SEBRAE', pct: 0.60 },
-        { item: 'Salário Educação', pct: 2.50 },
-        { item: 'Seguro Acidente Trabalho (RAT)', pct: 3.00 },
-        { item: 'FGTS', pct: 8.00 },
+        { cod:'A1', item:'INSS',                                  h:v('a1_h'), m:v('a1_m') },
+        { cod:'A2', item:'SESI',                                  h:v('a2_h'), m:v('a2_m') },
+        { cod:'A3', item:'SENAI',                                 h:v('a3_h'), m:v('a3_m') },
+        { cod:'A4', item:'INCRA',                                 h:v('a4_h'), m:v('a4_m') },
+        { cod:'A5', item:'SEBRAE',                                h:v('a5_h'), m:v('a5_m') },
+        { cod:'A6', item:'Salário Educação',                      h:v('a6_h'), m:v('a6_m') },
+        { cod:'A7', item:'Seguro Contra Acidentes de Trabalho',   h:v('a7_h'), m:v('a7_m') },
+        { cod:'A8', item:'FGTS',                                  h:v('a8_h'), m:v('a8_m') },
+        { cod:'A9', item:'SECONCI',                               h:v('a9_h'), m:v('a9_m') },
     ];
     const grupoB = [
-        { item: 'Férias (indenizadas)', pct: 14.06 },
-        { item: '13º Salário', pct: 10.87 },
-        { item: 'Auxílio Doença', pct: 0.79 },
-        { item: 'Faltas Justificadas', pct: 0.69 },
-        { item: 'Acidente de Trabalho', pct: 0.14 },
-        { item: 'Aviso Prévio (indenizado)', pct: 5.57 },
+        { cod:'B1',  item:'Repouso Semanal Remunerado',           h:v('b1_h'),  m:v('b1_m')  },
+        { cod:'B2',  item:'Feriados',                             h:v('b2_h'),  m:v('b2_m')  },
+        { cod:'B3',  item:'Auxílio Enfermidade',                  h:v('b3_h'),  m:v('b3_m')  },
+        { cod:'B4',  item:'13º Salário',                          h:v('b4_h'),  m:v('b4_m')  },
+        { cod:'B5',  item:'Licença Paternidade',                  h:v('b5_h'),  m:v('b5_m')  },
+        { cod:'B6',  item:'Faltas Justificadas',                  h:v('b6_h'),  m:v('b6_m')  },
+        { cod:'B7',  item:'Dias de Chuvas',                       h:v('b7_h'),  m:v('b7_m')  },
+        { cod:'B8',  item:'Auxílio Acidente de Trabalho',         h:v('b8_h'),  m:v('b8_m')  },
+        { cod:'B9',  item:'Férias Gozadas',                       h:v('b9_h'),  m:v('b9_m')  },
+        { cod:'B10', item:'Salário Maternidade',                  h:v('b10_h'), m:v('b10_m') },
     ];
     const grupoC = [
-        { item: 'Multa Rescisória FGTS', pct: 4.44 },
+        { cod:'C1', item:'Aviso Prévio Indenizado',               h:v('c1_h'), m:v('c1_m') },
+        { cod:'C2', item:'Aviso Prévio Trabalhado',               h:v('c2_h'), m:v('c2_m') },
+        { cod:'C3', item:'Férias Indenizadas',                    h:v('c3_h'), m:v('c3_m') },
+        { cod:'C4', item:'Depósito Rescisão Sem Justa Causa',     h:v('c4_h'), m:v('c4_m') },
+        { cod:'C5', item:'Indenização Adicional',                 h:v('c5_h'), m:v('c5_m') },
     ];
-    const subA = grupoA.reduce((s, i) => s + i.pct, 0);
-    const subB = grupoB.reduce((s, i) => s + i.pct, 0);
+    // D — Reincidências: usa config se disponível, senão recalcula
+    const subAh = grupoA.reduce((s,i) => s+i.h, 0);
+    const subBh = grupoB.reduce((s,i) => s+i.h, 0);
+    const subAm = grupoA.reduce((s,i) => s+i.m, 0);
+    const subBm = grupoB.reduce((s,i) => s+i.m, 0);
     const grupoD = [
-        { item: 'Reincidência Grupo A sobre Grupo B', pct: Math.round(subA * subB / 100 * 100) / 100 },
+        { cod:'D1', item:'Reincidência de Grupo A sobre Grupo B',
+            h: v('d1_h') || Math.round(subAh*subBh/100*100)/100,
+            m: v('d1_m') || Math.round(subAm*subBm/100*100)/100 },
+        { cod:'D2', item:'Reinc. Grupo A s/ Aviso Prévio Trab. e FGTS s/ AP Ind.',
+            h: v('d2_h'), m: v('d2_m') },
     ];
     return {
         horista: es.horista,
         mensalista: es.mensalista,
         groups: [
-            { key: 'grupo_a', label: 'Grupo A — Encargos Básicos e Obrigatórios', items: grupoA },
-            { key: 'grupo_b', label: 'Grupo B — Encargos que recebem incidência de A', items: grupoB },
-            { key: 'grupo_c', label: 'Grupo C — Encargos que não recebem incidência', items: grupoC },
-            { key: 'grupo_d', label: 'Grupo D — Reincidências', items: grupoD },
+            { label:'Grupo A — Encargos Sociais Básicos',   items:grupoA },
+            { label:'Grupo B — Encargos Trabalhistas',       items:grupoB },
+            { label:'Grupo C — Encargos Rescisórios',        items:grupoC },
+            { label:'Grupo D — Reincidências',               items:grupoD },
         ],
     };
 }
@@ -331,22 +368,18 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     const tcu = config.tcu;
     const isTcu = config.mode === 'TCU';
     const regime = engConfig?.regimeOneracao || 'DESONERADO';
-    const esConfig = engConfig?.encargosSociais || { horista: 114.3, mensalista: 47.8 };
+    const esConfig = engConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
 
+    // ── BDI ──
     let bdiHtml = `<h2>Composição do BDI</h2>`;
     if (isTcu) {
         const rows = [
             ['Administração Central (AC)', tcu.adminCentral],
-            ['Seguros (S)', tcu.seguros],
-            ['Garantias (G)', tcu.garantias],
-            ['Riscos (R)', tcu.riscos],
-            ['Despesas Financeiras (DF)', tcu.despFinanceiras],
+            ['Seguros (S)', tcu.seguros], ['Garantias (G)', tcu.garantias],
+            ['Riscos (R)', tcu.riscos], ['Despesas Financeiras (DF)', tcu.despFinanceiras],
             ['Lucro / Remuneração (L)', tcu.lucro],
-            ['PIS', tcu.pis],
-            ['COFINS', tcu.cofins],
-            ['ISS', tcu.iss],
-            ['CSLL', tcu.csll || 0],
-            ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis || 0) + (tcu.cofins || 0) + (tcu.iss || 0) + (tcu.csll || 0)],
+            ['PIS', tcu.pis], ['COFINS', tcu.cofins], ['ISS', tcu.iss], ['CSLL', tcu.csll || 0],
+            ['Tributos (I = PIS+COFINS+ISS+CSLL)', (tcu.pis||0)+(tcu.cofins||0)+(tcu.iss||0)+(tcu.csll||0)],
         ];
         bdiHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Fórmula TCU — Acórdão 2622/2013:<br>BDI = {(1+AC+S+G+R)×(1+DF)×(1+L) / (1−I) − 1} × 100</p>
 <table><thead><tr><th>Componente</th><th class="r">Valor (%)</th></tr></thead><tbody>`;
@@ -356,19 +389,24 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
         bdiHtml += `<table><tbody><tr class="grand"><td>BDI SIMPLIFICADO</td><td class="r">${fmtPct(bdiEfetivo)}</td></tr></tbody></table>`;
     }
 
-    // Encargos Sociais — dinâmicos conforme regime
+    // ── Encargos Sociais — valores reais configurados ──
     const esData = buildEncargosSociais(esConfig, regime);
     let esHtml = `<h2>Encargos Sociais sobre Mão de Obra</h2>`;
-    esHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Regime: <strong>${regime}</strong> | Taxas configuradas: Horista ${esData.horista.toFixed(2)}% · Mensalista ${esData.mensalista.toFixed(2)}%</p>`;
-    let totalES = 0;
+    esHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Regime: <strong>${regime}</strong> | Horista: <strong>${esData.horista.toFixed(2)}%</strong> · Mensalista: <strong>${esData.mensalista.toFixed(2)}%</strong></p>`;
+
+    let totalH = 0, totalM = 0;
     for (const g of esData.groups) {
-        const subtotal = g.items.reduce((s, i) => s + i.pct, 0);
-        totalES += subtotal;
-        esHtml += `<h2 style="font-size:9px;color:#475569">${g.label}</h2><table><thead><tr><th>Descrição</th><th class="r">%</th></tr></thead><tbody>`;
-        for (const i of g.items) esHtml += `<tr><td>${i.item}</td><td class="r">${fmtPct(i.pct)}</td></tr>`;
-        esHtml += `<tr class="total"><td class="r">Subtotal ${g.key.replace('_', ' ').toUpperCase()}</td><td class="r">${fmtPct(subtotal)}</td></tr></tbody></table>`;
+        const subH = g.items.reduce((s,i) => s + (i.h||0), 0);
+        const subM = g.items.reduce((s,i) => s + (i.m||0), 0);
+        totalH += subH; totalM += subM;
+        esHtml += `<h2 style="font-size:9px;color:#475569">${g.label}</h2>
+<table><thead><tr><th>Cód</th><th>Descrição</th><th class="r">Horista %</th><th class="r">Mensalista %</th></tr></thead><tbody>`;
+        for (const i of g.items) {
+            esHtml += `<tr><td class="mono bold">${i.cod}</td><td>${i.item}</td><td class="r">${fmtPct(i.h||0)}</td><td class="r">${fmtPct(i.m||0)}</td></tr>`;
+        }
+        esHtml += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split(' — ')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
     }
-    esHtml += `<table><tfoot><tr class="grand"><td>TOTAL ENCARGOS SOCIAIS (detalhado)</td><td class="r">${fmtPct(totalES)}</td></tr></tfoot></table>`;
+    esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
 
     openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`);
 }
