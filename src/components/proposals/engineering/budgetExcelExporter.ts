@@ -34,6 +34,19 @@ function setColWidths(ws: XLSX.WorkSheet, widths: number[]) {
     ws['!cols'] = widths.map(w => ({ wch: w }));
 }
 
+// Helper: BDI tripé rows for Excel
+function globalTotalRows(billable: EngItem[], bdi: number): any[][] {
+    const totalComBdi = billable.reduce((s, i) => s + i.totalPrice, 0);
+    const totalSemBdi = billable.reduce((s, i) => s + (i.unitCost * i.quantity), 0);
+    const valorBdi = totalComBdi - totalSemBdi;
+    return [
+        [],
+        ['', 'VALOR GLOBAL SEM BDI', totalSemBdi],
+        ['', `VALOR DO BDI (${bdi.toFixed(2)}%)`, valorBdi],
+        ['', 'VALOR GLOBAL COM BDI', totalComBdi],
+    ];
+}
+
 // Group items by chapter prefix (mirrors budgetDocGenerator logic)
 function groupByChapter(items: EngItem[]) {
     const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
@@ -72,6 +85,7 @@ export function xlsOrcamentoResumido(items: EngItem[], bdi: number, ec?: Enginee
         rows.push([prefix, ch.title, ch.items.length, ch.total, pct / 100]);
     }
     rows.push(['', 'TOTAL GERAL', '', total, 1]);
+    rows.push(...globalTotalRows(billable, bdi));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -104,6 +118,7 @@ export function xlsOrcamentoSintetico(items: EngItem[], bdi: number, ec?: Engine
         rows.push([]);
     }
     rows.push(['', '', '', '', '', '', 'TOTAL GERAL', total]);
+    rows.push(...globalTotalRows(billable, bdi));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);

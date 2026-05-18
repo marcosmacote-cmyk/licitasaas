@@ -97,7 +97,21 @@ function renderConfigTable(engineeringConfig?: any) {
 </table>`;
 }
 
-// FIX B1: Group items by chapter prefix, using real ETAPA names from grouper items
+// Helper: Render the BDI tripé (Sem BDI / Valor do BDI / Com BDI)
+function renderGlobalTotals(billable: EngItem[], bdi: number) {
+    const totalComBdi = billable.reduce((s, i) => s + i.totalPrice, 0);
+    const totalSemBdi = billable.reduce((s, i) => s + (i.unitCost * i.quantity), 0);
+    const valorBdi = totalComBdi - totalSemBdi;
+    return `
+<table style="margin-top:8px;">
+  <tbody>
+    <tr class="total"><td colspan="2" style="text-align:right; padding-right:12px;">VALOR GLOBAL SEM BDI</td><td class="r bold" style="width:180px;">${fmt(totalSemBdi)}</td></tr>
+    <tr class="total"><td colspan="2" style="text-align:right; padding-right:12px;">VALOR DO BDI (${fmtPct(bdi)})</td><td class="r bold" style="width:180px;">${fmt(valorBdi)}</td></tr>
+    <tr class="grand"><td colspan="2" style="text-align:right; padding-right:12px;">VALOR GLOBAL COM BDI</td><td class="r" style="width:180px; font-size:11px;">${fmt(totalComBdi)}</td></tr>
+  </tbody>
+</table>`;
+}
+
 function groupByChapter(items: EngItem[]) {
     const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
     for (const it of items) {
@@ -142,7 +156,8 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringC
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
+${renderGlobalTotals(billable, bdi)}`);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -165,6 +180,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
         html += `<tr class="total"><td colspan="7" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
     html += `<table><tfoot><tr class="grand"><td colspan="7" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
+    html += renderGlobalTotals(billable, bdi);
     openDoc('Orçamento Sintético', html);
 }
 
@@ -462,6 +478,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
     }
 
+    html += renderGlobalTotals(billable, bdi);
     openDoc('Planilha Orçamentária Analítica', html);
 }
 
