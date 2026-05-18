@@ -312,10 +312,8 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px' }}>
                     ← Voltar: Cronograma
                 </button>
-                <button className="btn btn-primary" onClick={onNext}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700 }}>
-                    Próximo: Exportação →
-                </button>
+                {/* Botão Próximo removido: o ProposalLetterWizard possui seu próprio botão "Salvar e Concluir" que salva o estado interno antes de avançar. */}
+                <div />
             </div>
         </div>
     );

@@ -45,9 +45,6 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
                     <button onClick={() => { w.handleGenerate(); }} className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 12px' }}>
                         <RefreshCw size={13} /> Regenerar
                     </button>
-                    <button onClick={w.handleSave} disabled={p.isSaving} className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 12px' }}>
-                        {p.isSaving ? <Loader2 size={13} className="spin" /> : <Save size={13} />} Salvar
-                    </button>
                 </div>
             </div>
 
@@ -184,30 +181,23 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
                     <ChevronLeft size={16} /> Configuração
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <button onClick={w.handleSave} disabled={p.isSaving} style={{
-                        padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-lg)',
-                        background: 'var(--color-success)', color: 'white', border: 'none',
-                        fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                        fontSize: 'var(--text-sm)', opacity: p.isSaving ? 0.6 : 1,
-                    }}>
-                        {p.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
-                        Salvar Carta
-                    </button>
                     {p.hideExportStep ? (
-                        <button onClick={p.onFinish} style={{
+                        <button onClick={() => { w.handleSave(); if (p.onFinish) p.onFinish(); }} disabled={p.isSaving} style={{
                             padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
                             background: 'var(--color-primary)', color: 'white', border: 'none',
-                            fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            fontWeight: 700, cursor: p.isSaving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            opacity: p.isSaving ? 0.7 : 1
                         }}>
-                            Concluir Carta <ChevronRight size={16} />
+                            {p.isSaving ? <Loader2 size={16} className="spin" /> : 'Salvar e Concluir'} <ChevronRight size={16} />
                         </button>
                     ) : (
-                        <button onClick={() => w.setStep('export')} style={{
+                        <button onClick={() => { w.handleSave(); w.setStep('export'); }} disabled={p.isSaving} style={{
                             padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
                             background: 'var(--color-primary)', color: 'white', border: 'none',
-                            fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            fontWeight: 700, cursor: p.isSaving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            opacity: p.isSaving ? 0.7 : 1
                         }}>
-                            Exportar <ChevronRight size={16} />
+                            {p.isSaving ? <Loader2 size={16} className="spin" /> : 'Salvar e Exportar'} <ChevronRight size={16} />
                         </button>
                     )}
                 </div>
