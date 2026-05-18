@@ -246,12 +246,15 @@ export function docCronograma(result: CronogramaResult) {
 
     let rows = '';
     for (const et of etapas) {
-        rows += `<tr><td class="bold">${et.nome}</td><td class="r">${fmt(et.valorTotal)}</td>`;
+        // Etapa % of global total
+        const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal * 100) : 0;
+        rows += `<tr><td class="bold">${et.nome}</td><td class="r">${fmt(et.valorTotal)}<div style="font-size:7px;color:#64748b;">${fmtPct(etPctGlobal)}</div></td>`;
         let etTotal = 0;
         for (let m = 0; m < meses; m++) {
             const v = et.valoresMensais[m] || 0;
+            const pct = et.percentuais?.[m] || 0;
             etTotal += v;
-            rows += `<td class="r">${v > 0 ? fmt(v) : '—'}</td>`;
+            rows += `<td class="r">${v > 0 ? `${fmt(v)}<div style="font-size:7px;color:#64748b;">${fmtPct(pct)}</div>` : '—'}</td>`;
         }
         rows += `<td class="r bold">${fmt(etTotal)}</td></tr>`;
     }

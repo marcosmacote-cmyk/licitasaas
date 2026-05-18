@@ -578,16 +578,31 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   const header = ['ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL'];
   headRow(ws, header);
 
-  // Etapa rows
+  // Etapa rows — two rows per etapa: values + percentages (matching frontend)
   let idx = 0;
   for (const et of etapas) {
+    const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal * 100) : 0;
     const vals = Array.from({ length: meses }, (_, m) => {
       const v = et.valoresMensais?.[m] || 0;
       return v > 0 ? fmt(v) : '—';
     });
     let etTotal = (et.valoresMensais || []).reduce((s: number, v: number) => s + v, 0);
-    const r = dataRow(ws, [et.nome || et.description || '', fmt(et.valorTotal || 0), ...vals, fmt(etTotal)], idx++, Array.from({ length: meses + 2 }, (_, i) => i + 2));
+    const r = dataRow(ws, [et.nome || et.description || '', fmt(et.valorTotal || 0), ...vals, fmt(etTotal)], idx, Array.from({ length: meses + 2 }, (_, i) => i + 2));
     r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+
+    // Percentage sub-row (smaller font, gray)
+    const pctVals = Array.from({ length: meses }, (_, m) => {
+      const pct = et.percentuais?.[m] || 0;
+      return pct > 0 ? fmtPct(pct) : '';
+    });
+    const pctR = ws.addRow(['', fmtPct(etPctGlobal), ...pctVals, '']);
+    pctR.height = 12;
+    for (let i = 1; i <= colCount; i++) {
+      pctR.getCell(i).font = { size: 7, color: { argb: C.TEXT_MID }, italic: true };
+      pctR.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
+      pctR.getCell(i).border = border();
+    }
+    idx++;
   }
 
   // TOTAL MENSAL row
