@@ -1,4 +1,4 @@
-import { Settings, Loader2, Save, ClipboardList, CheckCircle2, RefreshCw, PenTool, FileText, Info, Landmark, Zap, ChevronRight } from 'lucide-react';
+import { Settings, Loader2, Save, ClipboardList, Plus, Trash2, FileSignature, ToggleLeft, ToggleRight, PenTool, Info, Landmark, Zap, ChevronRight } from 'lucide-react';
 import type { ProposalLetterWizardProps } from '../ProposalLetterWizard';
 import type { useProposalWizard } from '../useProposalWizard';
 
@@ -120,44 +120,108 @@ export function WizardStepConfig({ p, w }: { p: ProposalLetterWizardProps, w: Re
                 </div>
             </div>
 
-            {/* Tipo de Proposta */}
+            {/* ── DATA COCKPIT — Dados do Processo ── */}
             <div style={{
-                background: 'rgba(30, 64, 175, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                border: '1px solid rgba(30, 64, 175, 0.15)', marginBottom: 'var(--space-4)',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(139, 92, 246, 0.03))',
+                padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                border: '1px solid rgba(99, 102, 241, 0.15)', marginBottom: 'var(--space-4)',
             }}>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#1E40AF', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <FileText size={14} /> Tipo de Proposta
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#6366F1', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ClipboardList size={14} /> Dados do Processo
+                    <span style={{ fontSize: '0.65rem', fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>
+                        Campos usados diretamente na carta proposta
+                    </span>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                    <button
-                        onClick={() => w.handleSwitchProposalType('INICIAL')}
-                        style={{
-                            flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
-                            fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
-                            background: w.proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-bg-base)',
-                            color: w.proposalType === 'INICIAL' ? '#fff' : 'var(--color-text-secondary)',
-                            border: `2px solid ${w.proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-border)'}`,
-                        }}>
-                        <ClipboardList size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> PROPOSTA DE PREÇOS INICIAL
-                        {w.savedLetterInicial && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: w.proposalType === 'INICIAL' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}><CheckCircle2 size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> salva</span>}
-                    </button>
-                    <button
-                        onClick={() => w.handleSwitchProposalType('READEQUADA')}
-                        disabled={!p.adjustedEnabled}
-                        style={{
-                            flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
-                            fontSize: 'var(--text-sm)', fontWeight: 700, cursor: p.adjustedEnabled ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
-                            background: w.proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-bg-base)',
-                            color: w.proposalType === 'READEQUADA' ? '#fff' : 'var(--color-text-secondary)',
-                            border: `2px solid ${w.proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-border)'}`,
-                            opacity: p.adjustedEnabled ? 1 : 0.4,
-                        }}>
-                        <RefreshCw size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> PROPOSTA DE PREÇOS READEQUADA
-                        {!p.adjustedEnabled && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2 }}>(ative o cenário na planilha)</span>}
-                        {p.adjustedEnabled && w.savedLetterReadequada && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: w.proposalType === 'READEQUADA' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}><CheckCircle2 size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> salva</span>}
-                    </button>
+
+                {/* Rótulo da Proposta */}
+                <div style={{ marginBottom: 'var(--space-3)' }}>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Rótulo / Título da Proposta
+                    </label>
+                    <input type="text"
+                        value={w.cockpit.proposalTitle}
+                        onChange={e => w.updateCockpit({ proposalTitle: e.target.value })}
+                        placeholder="Ex: PROPOSTA DE PREÇOS"
+                        className="prop-input"
+                        style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}
+                    />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                    {/* Prazo de Execução */}
+                    <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Prazo de Execução
+                            {w.cockpit.executionDeadline && w.normalizedData?.execution?.executionDeadline && (
+                                <span style={{
+                                    fontSize: '0.6rem', padding: '1px 6px', borderRadius: '10px',
+                                    background: 'rgba(99,102,241,0.1)', color: '#6366F1', fontWeight: 600,
+                                }}>⚡ IA</span>
+                            )}
+                        </label>
+                        <input type="text"
+                            value={w.cockpit.executionDeadline}
+                            onChange={e => w.updateCockpit({ executionDeadline: e.target.value })}
+                            placeholder="Ex: 180 (cento e oitenta) dias corridos"
+                            className="prop-input" style={{ fontSize: '0.8rem' }}
+                        />
+                    </div>
+
+                    {/* Vigência Contratual */}
+                    <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Vigência Contratual
+                            {w.cockpit.contractDuration && w.normalizedData?.execution?.contractDuration && (
+                                <span style={{
+                                    fontSize: '0.6rem', padding: '1px 6px', borderRadius: '10px',
+                                    background: 'rgba(99,102,241,0.1)', color: '#6366F1', fontWeight: 600,
+                                }}>⚡ IA</span>
+                            )}
+                        </label>
+                        <input type="text"
+                            value={w.cockpit.contractDuration}
+                            onChange={e => w.updateCockpit({ contractDuration: e.target.value })}
+                            placeholder="Ex: 12 (doze) meses"
+                            className="prop-input" style={{ fontSize: '0.8rem' }}
+                        />
+                    </div>
+
+                    {/* Local de Execução */}
+                    <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Local de Execução
+                            {w.cockpit.executionLocation && w.normalizedData?.execution?.executionLocation && (
+                                <span style={{
+                                    fontSize: '0.6rem', padding: '1px 6px', borderRadius: '10px',
+                                    background: 'rgba(99,102,241,0.1)', color: '#6366F1', fontWeight: 600,
+                                }}>⚡ IA</span>
+                            )}
+                        </label>
+                        <input type="text"
+                            value={w.cockpit.executionLocation}
+                            onChange={e => w.updateCockpit({ executionLocation: e.target.value })}
+                            placeholder="Ex: Fortaleza/CE"
+                            className="prop-input" style={{ fontSize: '0.8rem' }}
+                        />
+                    </div>
+
+                    {/* Data do Documento */}
+                    <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                            Data do Documento
+                        </label>
+                        <input type="date"
+                            value={w.cockpit.proposalDate}
+                            onChange={e => w.updateCockpit({ proposalDate: e.target.value })}
+                            className="prop-input" style={{ fontSize: '0.8rem' }}
+                        />
+                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'block' }}>
+                            Padrão: data de geração da carta
+                        </span>
+                    </div>
                 </div>
             </div>
+
 
             {/* Data summary */}
             <div style={{
@@ -171,12 +235,140 @@ export function WizardStepConfig({ p, w }: { p: ProposalLetterWizardProps, w: Re
                     <div><strong>Empresa:</strong> {p.company.razaoSocial}</div>
                     <div><strong>CNPJ:</strong> {p.company.cnpj}</div>
                     <div><strong>Processo:</strong> {p.bidding.modality} — {p.bidding.title?.substring(0, 60)}</div>
-                    <div><strong>Valor:</strong> {(w.proposalType === 'READEQUADA' && p.adjustedEnabled ? (p.adjustedTotal || p.totalValue) : p.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        {w.proposalType === 'READEQUADA' && p.adjustedEnabled && <span style={{ color: '#B45309', fontWeight: 600 }}> (readequada)</span>}
-                    </div>
+                    <div><strong>Valor:</strong> {p.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                     <div><strong>Itens:</strong> {p.items.length}</div>
-                    <div><strong>BDI:</strong> {w.proposalType === 'READEQUADA' && p.adjustedEnabled ? (p.adjustedBdi ?? p.bdi) : p.bdi}% | <strong>Desconto:</strong> {w.proposalType === 'READEQUADA' && p.adjustedEnabled ? (p.adjustedDiscount ?? p.discount) : p.discount}%</div>
+                    <div><strong>BDI:</strong> {p.bdi}% | <strong>Desconto:</strong> {p.discount}%</div>
                 </div>
+            </div>
+
+            {/* ── DECLARAÇÕES INLINE ── */}
+            <div style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04), rgba(234, 88, 12, 0.03))',
+                padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                border: '1px solid rgba(245, 158, 11, 0.15)', marginBottom: 'var(--space-4)',
+            }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#D97706', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FileSignature size={14} /> Declarações na Carta
+                    <span style={{ fontSize: '0.65rem', fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>
+                        {w.declarations.filter(d => d.enabled).length}/{w.declarations.length} ativas
+                    </span>
+                </div>
+
+                {w.declarations.length === 0 && (
+                    <div style={{
+                        padding: 'var(--space-3)', textAlign: 'center',
+                        fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)',
+                        borderRadius: 'var(--radius-md)', background: 'rgba(245,158,11,0.04)',
+                        border: '1px dashed rgba(245,158,11,0.2)',
+                    }}>
+                        Nenhuma declaração exigida encontrada no edital.
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    {w.declarations.map(decl => (
+                        <div key={decl.id} style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)',
+                            padding: 'var(--space-2) var(--space-3)',
+                            borderRadius: 'var(--radius-md)',
+                            background: decl.enabled ? 'rgba(245,158,11,0.06)' : 'var(--color-bg-body)',
+                            border: `1px solid ${decl.enabled ? 'rgba(245,158,11,0.2)' : 'var(--color-border)'}`,
+                            transition: 'all 0.15s',
+                        }}>
+                            {/* Toggle */}
+                            <button
+                                type="button"
+                                onClick={() => w.toggleDeclaration(decl.id)}
+                                style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    padding: '2px 0', flexShrink: 0, marginTop: 1,
+                                    color: decl.enabled ? '#D97706' : 'var(--color-text-tertiary)',
+                                }}
+                                title={decl.enabled ? 'Desativar' : 'Ativar'}
+                            >
+                                {decl.enabled
+                                    ? <ToggleRight size={20} />
+                                    : <ToggleLeft size={20} />
+                                }
+                            </button>
+
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                {/* Título editável */}
+                                <input
+                                    type="text"
+                                    value={decl.title}
+                                    onChange={e => w.updateDeclaration(decl.id, { title: e.target.value })}
+                                    style={{
+                                        background: 'transparent', border: 'none', outline: 'none',
+                                        fontSize: '0.78rem', fontWeight: 600, width: '100%',
+                                        color: decl.enabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                        textTransform: 'uppercase',
+                                    }}
+                                    placeholder="Título da declaração"
+                                />
+
+                                {/* Content preview/edit quando ativa */}
+                                {decl.enabled && (
+                                    <textarea
+                                        value={decl.content}
+                                        onChange={e => w.updateDeclaration(decl.id, { content: e.target.value })}
+                                        placeholder="Texto da declaração (opcional — se vazio, será marcado para edição na revisão)"
+                                        style={{
+                                            width: '100%', minHeight: 44, resize: 'vertical',
+                                            fontSize: '0.72rem', lineHeight: 1.5,
+                                            marginTop: 'var(--space-1)',
+                                            border: '1px solid rgba(245,158,11,0.15)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            padding: 'var(--space-1) var(--space-2)',
+                                            background: 'rgba(255,255,255,0.5)',
+                                            color: 'var(--color-text-secondary)',
+                                        }}
+                                    />
+                                )}
+
+                                {/* Source badge */}
+                                <span style={{
+                                    fontSize: '0.58rem', fontWeight: 600,
+                                    color: decl.source === 'edital' ? '#6366F1' : 'var(--color-text-tertiary)',
+                                    display: 'inline-flex', alignItems: 'center', gap: 2,
+                                    marginTop: 1,
+                                }}>
+                                    {decl.source === 'edital' ? '⚡ Edital' : '✏️ Manual'}
+                                </span>
+                            </div>
+
+                            {/* Remove — apenas manuais */}
+                            {decl.source === 'manual' && (
+                                <button
+                                    type="button"
+                                    onClick={() => w.removeDeclaration(decl.id)}
+                                    className="icon-btn"
+                                    style={{ padding: 2, color: 'var(--color-danger)', flexShrink: 0 }}
+                                    title="Remover declaração"
+                                >
+                                    <Trash2 size={13} />
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Add manual */}
+                <button
+                    type="button"
+                    onClick={() => w.addManualDeclaration()}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        marginTop: 'var(--space-2)', padding: '6px 12px',
+                        fontSize: '0.72rem', fontWeight: 600,
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px dashed rgba(245,158,11,0.3)',
+                        background: 'transparent', cursor: 'pointer',
+                        color: '#D97706', transition: 'all 0.15s',
+                    }}
+                >
+                    <Plus size={13} /> Adicionar Declaração
+                </button>
             </div>
 
             {/* Dados Bancários */}

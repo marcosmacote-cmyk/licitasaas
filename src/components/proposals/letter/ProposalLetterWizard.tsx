@@ -47,10 +47,6 @@ export interface ProposalLetterWizardProps {
     setSigCompany: (v: { razaoSocial: string; cnpj: string }) => void;
     bankData: { bank: string; agency: string; account: string; accountType: string; pix: string };
     setBankData: (v: { bank: string; agency: string; account: string; accountType: string; pix: string }) => void;
-    adjustedEnabled?: boolean;
-    adjustedBdi?: number;
-    adjustedDiscount?: number;
-    adjustedTotal?: number;
 }
 
 const STEPS = [

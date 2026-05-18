@@ -8,7 +8,7 @@
 
 import { numberToWords, currencyToWords } from './utils/numberToWords';
 import type {
-    ProposalLetterData, LetterBlock, ProposalLetterResult,
+    ProposalLetterData, LetterBlock, ProposalLetterResult, ProposalDeclaration,
 } from './types';
 import { LetterBlockType } from './types';
 import { TextSanitizer } from './TextSanitizer';
@@ -38,6 +38,7 @@ export class ProposalLetterBuilder {
     private data: ProposalLetterData;
     private overrides: Map<string, string> = new Map();
     private aiBlocks: Map<string, string> = new Map();
+    private extraDeclarations: ProposalDeclaration[] = [];
 
     constructor(data: ProposalLetterData) {
         this.data = data;
@@ -62,6 +63,14 @@ export class ProposalLetterBuilder {
     }
 
     /**
+     * Define declarações inline que serão adicionadas como blocos extras.
+     */
+    setDeclarations(declarations: ProposalDeclaration[]): this {
+        this.extraDeclarations = declarations.filter(d => d.enabled);
+        return this;
+    }
+
+    /**
      * Monta todos os blocos e retorna o resultado completo.
      */
     build(): ProposalLetterResult {
@@ -72,6 +81,7 @@ export class ProposalLetterBuilder {
             this.buildQualificationBlock(),
             this.buildObjectBlock(),
             this.buildCommercialDeclarationBlock(),
+            ...this.buildDeclarationBlocks(),
             this.buildPricingSummaryBlock(),
             this.buildValidityBlock(),
             this.buildProposalConditionsBlock(),
@@ -113,13 +123,11 @@ export class ProposalLetterBuilder {
     // ════════════════════════════════════════
 
     private buildTitleBlock(): LetterBlock {
-        const proposalType = (this.data.meta as any).proposalType || 'INICIAL';
-        const title = proposalType === 'READEQUADA'
-            ? 'PROPOSTA DE PREÇOS READEQUADA'
-            : 'PROPOSTA DE PREÇOS INICIAL';
+        const customTitle = (this.data.meta as any).customTitle;
+        const title = (customTitle && customTitle.trim()) || 'PROPOSTA DE PREÇOS';
 
         return this.createBlock(LetterBlockType.TITLE, 'Título da Proposta',
-            title, { required: true, editable: false });
+            title, { required: true, editable: true });
     }
 
     private buildRecipientBlock(): LetterBlock {
@@ -234,6 +242,25 @@ export class ProposalLetterBuilder {
 
         return this.createBlock(LetterBlockType.COMMERCIAL, 'Declarações Essenciais',
             content, { required: true, editable: true });
+    }
+
+    /**
+     * Blocos de declarações extras (inline na carta).
+     * Cada declaração habilitada pelo usuário gera um bloco independente.
+     */
+    private buildDeclarationBlocks(): LetterBlock[] {
+        if (this.extraDeclarations.length === 0) return [];
+        return this.extraDeclarations.map((decl, i) => {
+            const body = decl.content?.trim()
+                || `[Conteúdo da declaração "${decl.title}" — edite aqui ou gere via IA no módulo Declarações]`;
+            return this.createBlock(
+                LetterBlockType.DECLARATION_EXTRA,
+                decl.title || `Declaração Extra ${i + 1}`,
+                `${decl.title}\n\n${body}`,
+                { required: false, editable: true },
+                `${LetterBlockType.DECLARATION_EXTRA}_${decl.id}`,
+            );
+        });
     }
 
     /**
@@ -566,13 +593,14 @@ export class ProposalLetterBuilder {
             editable?: boolean;
             aiGenerated?: boolean;
             visible?: boolean;
-        } = {}
+        } = {},
+        customId?: string,
     ): LetterBlock {
         const isRequired = opts.required ?? true;
         const isEmpty = !content.trim();
 
         return {
-            id: type,
+            id: customId || type,
             type,
             label,
             required: isRequired,

@@ -21,6 +21,7 @@ export const LetterBlockType = {
     BANKING:              'bankingBlock',
     CLOSING:              'closingBlock',
     SIGNATURE:            'signatureBlock',
+    DECLARATION_EXTRA:    'declarationExtraBlock',
 } as const;
 
 export type LetterBlockType = typeof LetterBlockType[keyof typeof LetterBlockType];
@@ -143,6 +144,17 @@ export interface ProposalItemSummary {
     multiplier: number;
     unitPrice: number;
     totalPrice: number;
+}
+
+// ── Declaração inline na carta ──
+
+export interface ProposalDeclaration {
+    id: string;
+    title: string;          // "DECLARAÇÃO DE VISITA TÉCNICA"
+    content: string;        // Texto da declaração (editável pelo usuário)
+    source: 'edital' | 'manual';   // De onde veio
+    editalClause?: string;  // referência ao edital
+    enabled: boolean;       // se o usuário a ativou na carta
 }
 
 // ── Validation ──
