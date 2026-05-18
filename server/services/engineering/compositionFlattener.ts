@@ -22,6 +22,7 @@ export interface FlattenedComposition {
   totalPrice: number;
   items: FlattenedItem[];
   isAuxiliary: boolean;
+  itemNumbers: string[]; // Budget item numbers linked to this composition
   
   // Footer calculation fields
   totalMoSemLs: number;
@@ -66,17 +67,21 @@ export class CompositionFlattener {
 
     const principalCompositions: FlattenedComposition[] = [];
 
-    // Aggregate quantities by code
-    const aggregatedItems = new Map<string, { code: string, sourceName: string, quantity: number }>();
+    // Aggregate quantities by code, preserving all itemNumbers
+    const aggregatedItems = new Map<string, { code: string, sourceName: string, quantity: number, itemNumbers: string[] }>();
     for (const pItem of proposalItems) {
       if (!pItem.code || pItem.code === 'N/A') continue;
       const codeStr = pItem.code.toUpperCase();
       const qty = typeof pItem.quantity === 'number' ? pItem.quantity : 1;
+      const itemNum = (pItem as any).itemNumber || '';
       
       if (aggregatedItems.has(codeStr)) {
         aggregatedItems.get(codeStr)!.quantity += qty;
+        if (itemNum && !aggregatedItems.get(codeStr)!.itemNumbers.includes(itemNum)) {
+          aggregatedItems.get(codeStr)!.itemNumbers.push(itemNum);
+        }
       } else {
-        aggregatedItems.set(codeStr, { code: pItem.code, sourceName: pItem.sourceName || 'PROPRIA', quantity: qty });
+        aggregatedItems.set(codeStr, { code: pItem.code, sourceName: pItem.sourceName || 'PROPRIA', quantity: qty, itemNumbers: itemNum ? [itemNum] : [] });
       }
     }
 
@@ -133,6 +138,7 @@ export class CompositionFlattener {
       if (flattened) {
         flattened.proposalQuantity = agg.quantity;
         flattened.proposalTotal = agg.quantity * flattened.valorComBdi;
+        flattened.itemNumbers = agg.itemNumbers;
         principalCompositions.push(flattened);
       }
     }
@@ -242,6 +248,7 @@ export class CompositionFlattener {
       totalPrice: composition.totalPrice,
       items: flattenedItems,
       isAuxiliary,
+      itemNumbers: [], // populated by flattenProposal for principals
       totalMoSemLs,
       totalLs,
       totalMoComLs,

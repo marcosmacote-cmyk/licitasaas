@@ -377,6 +377,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
 function renderComposition(comp: any, showQuantities: boolean = false) {
     let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
+            ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
             <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
             <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
         </div>
@@ -455,13 +456,24 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
 
-        // FIX B6: Group compositions by etapa/chapter
+        // FIX B6: Group compositions by etapa/chapter, using itemNumbers[0] for routing
         const chapters = groupByChapter(items);
         const compMap = new Map<string, any[]>();
         for (const comp of report.principalCompositions) {
-            const prefix = (comp.itemNumber || '').split('.')[0] || '?';
+            // Use first linked itemNumber to determine the chapter
+            const firstItemNum = (comp.itemNumbers?.[0] || '');
+            const prefix = firstItemNum.split('.')[0] || '?';
             if (!compMap.has(prefix)) compMap.set(prefix, []);
             compMap.get(prefix)!.push(comp);
+        }
+
+        // Sort each chapter's compositions by their first itemNumber (budget order)
+        for (const [, chComps] of compMap) {
+            chComps.sort((a: any, b: any) => {
+                const na = a.itemNumbers?.[0] || '';
+                const nb = b.itemNumbers?.[0] || '';
+                return na.localeCompare(nb, 'pt-BR', { numeric: true });
+            });
         }
 
         for (const [prefix, chapterComps] of compMap) {
