@@ -92,13 +92,14 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
 
     const footer = (
         <>
-            <Button variant="outline" onClick={onClose} size="lg">
+            <Button type="button" variant="outline" onClick={onClose} size="lg">
                 Cancelar
             </Button>
             <Button
+                type="submit"
+                form="document-form"
                 variant="primary"
                 size="lg"
-                onClick={handleSubmit}
                 style={{
                     background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
                     boxShadow: 'var(--shadow-md)',
@@ -118,7 +119,7 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
             maxWidth="650px"
             footer={footer}
         >
-            <form onSubmit={handleSubmit}>
+            <form id="document-form" onSubmit={handleSubmit}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                     {/* Nome do Documento */}

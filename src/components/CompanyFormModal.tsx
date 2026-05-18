@@ -114,8 +114,8 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
     const footer = (
         <>
-            <Button variant="outline" onClick={onClose} size="lg">Cancelar</Button>
-            <Button variant="primary" size="lg" icon={<Save size={18} />} onClick={handleSubmit}
+            <Button type="button" variant="outline" onClick={onClose} size="lg">Cancelar</Button>
+            <Button type="submit" form="company-form" variant="primary" size="lg" icon={<Save size={18} />}
                 style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))', boxShadow: 'var(--shadow-md)' }}>
                 Salvar Empresa
             </Button>

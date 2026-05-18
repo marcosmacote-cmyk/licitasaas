@@ -33,14 +33,15 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
 
     const footer = (
         <>
-            <Button variant="outline" onClick={onClose} size="lg">
+            <Button type="button" variant="outline" onClick={onClose} size="lg">
                 Cancelar
             </Button>
             <Button
+                type="submit"
+                form="credential-form"
                 variant="primary"
                 size="lg"
                 icon={<Save size={18} />}
-                onClick={handleSubmit}
                 style={{
                     background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
                     boxShadow: 'var(--shadow-md)',
@@ -60,7 +61,7 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
             maxWidth="550px"
             footer={footer}
         >
-            <form onSubmit={handleSubmit}>
+            <form id="credential-form" onSubmit={handleSubmit}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
 
                     <FormField label="Plataforma / Sistema" required fullWidth>
