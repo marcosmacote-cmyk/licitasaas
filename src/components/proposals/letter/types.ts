@@ -65,13 +65,30 @@ export interface ProposalLetterData {
         qualification: string;
         contactName: string;
         contactCpf: string;
+        contactCargo?: string;
+        contactRg?: string;
+        contactRgOrgao?: string;
+        contactNacionalidade?: string;
+        contactEstadoCivil?: string;
         technicalResponsible?: string;
         technicalRegistration?: string;
+        techTitle?: string;
+        techCpf?: string;
         address?: string;
+        bairro?: string;
+        cep?: string;
         city: string;
         state: string;
         phone?: string;
         email?: string;
+        inscricaoEstadual?: string;
+        inscricaoMunicipal?: string;
+        nomeFantasia?: string;
+        bankName?: string;
+        bankAgency?: string;
+        bankAccount?: string;
+        bankAccountType?: string;
+        bankPix?: string;
     };
 
     object: {

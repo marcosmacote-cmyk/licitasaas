@@ -55,24 +55,57 @@ model CompanyProfile {
   isHeadquarters              Boolean @default(false)
   cnpj                        String  @unique
   razaoSocial                 String
-  qualification               String? // New field for company and representative qualification
-  technicalQualification      String? // Technical responsible (CREA/CAU) qualification
-  contactName                 String?
-  contactCpf                  String? // CPF do Sócio Administrador / Representante Legal
-  contactEmail                String?
-  contactPhone                String?
-  address                     String? // Endereço Completo
+  nomeFantasia                String? // Nome fantasia da empresa
+  inscricaoEstadual           String? // Inscrição Estadual
+  inscricaoMunicipal          String? // Inscrição Municipal
+
+  // ── Endereço Estruturado ──
+  address                     String? // Logradouro + Nº
+  bairro                      String? // Bairro
   city                        String? // Cidade Sede
   state                       String? // UF (sigla)
+  cep                         String? // CEP
+
+  // ── Representante Legal / Administrador ──
+  contactName                 String? // Nome completo
+  contactCpf                  String? // CPF
+  contactRg                   String? // RG
+  contactRgOrgao              String? // Órgão emissor do RG (ex: SSP/CE)
+  contactCargo                String? // Cargo (ex: Sócio-Administrador)
+  contactNacionalidade        String? // Nacionalidade (ex: brasileiro)
+  contactEstadoCivil          String? // Estado civil (ex: casado)
+  contactEmail                String?
+  contactPhone                String?
+
+  // ── Responsável Técnico (estruturado) ──
+  techName                    String? // Nome do RT
+  techCpf                     String? // CPF do RT
+  techRegistration            String? // CREA-CE 12345 ou CAU A12345-6
+  techTitle                   String? // Engenheiro Civil, Arquiteto
+  techNacionalidade           String? // Nacionalidade do RT
+  techEstadoCivil             String? // Estado civil do RT
+
+  // ── Dados Bancários (promovidos de defaultSignatureConfig.bankData) ──
+  bankName                    String? // Nome do banco
+  bankAgency                  String? // Agência
+  bankAccount                 String? // Conta
+  bankAccountType             String? @default("Conta Corrente") // Corrente | Poupança
+  bankPix                     String? // Chave PIX
+
+  // ── Qualificação Legada (mantido para retrocompatibilidade) ──
+  qualification               String? // Texto livre legado — fallback
+  technicalQualification      String? // Texto livre legado — fallback
+
+  // ── Timbrado e Config ──
   defaultProposalHeader       String? // Base64 image
   defaultProposalFooter       String? // Base64 image
   defaultProposalHeaderHeight Int?    @default(80)
   defaultProposalFooterHeight Int?    @default(60)
   defaultLetterContent        String? // Default letter template content
-  defaultSignatureConfig      String? // JSON: { sigLegal, sigTech, sigCompany, bankData, signatureMode, validityDays }
+  defaultSignatureConfig      String? // LEGADO — migrar para campos acima
 
   // ── AI Learning & Company Profile ──
-  strengths                Json? // Arra de strings (pontos fortes)
+  strengths                Json? // Array de strings (pontos fortes)
   knownWeaknesses          Json? // Array de strings (fragilidades)
   technicalAssets          Json? // JSON com certificados, atestados, artCatRrt
   documentaryAssets        Json? // Backup dos ultimos documentos parseados

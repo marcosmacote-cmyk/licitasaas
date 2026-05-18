@@ -121,13 +121,36 @@ export class LetterDataNormalizer {
             qualification: company.qualification || '',
             contactName: company.contactName || '',
             contactCpf: company.contactCpf || '',
-            technicalResponsible: company.technicalQualification ? this.extractTechName(company.technicalQualification) : undefined,
-            technicalRegistration: company.technicalQualification ? this.extractTechRegistration(company.technicalQualification) : undefined,
+            contactCargo: (company as any).contactCargo || undefined,
+            contactRg: (company as any).contactRg || undefined,
+            contactRgOrgao: (company as any).contactRgOrgao || undefined,
+            contactNacionalidade: (company as any).contactNacionalidade || undefined,
+            contactEstadoCivil: (company as any).contactEstadoCivil || undefined,
+            // RT: priorizar campos estruturados, fallback para regex do legado
+            technicalResponsible: (company as any).techName
+                || (company.technicalQualification ? this.extractTechName(company.technicalQualification) : undefined),
+            technicalRegistration: (company as any).techRegistration
+                || (company.technicalQualification ? this.extractTechRegistration(company.technicalQualification) : undefined),
+            techTitle: (company as any).techTitle || undefined,
+            techCpf: (company as any).techCpf || undefined,
+            // Endereço
             address: company.address,
+            bairro: (company as any).bairro || undefined,
+            cep: (company as any).cep || undefined,
             city: company.city || derived.city,
             state: company.state || derived.state,
             phone: company.contactPhone,
             email: company.contactEmail,
+            // Inscrições
+            inscricaoEstadual: (company as any).inscricaoEstadual || undefined,
+            inscricaoMunicipal: (company as any).inscricaoMunicipal || undefined,
+            nomeFantasia: (company as any).nomeFantasia || undefined,
+            // Bancário: priorizar campos reais, fallback JSON legado
+            bankName: (company as any).bankName || undefined,
+            bankAgency: (company as any).bankAgency || undefined,
+            bankAccount: (company as any).bankAccount || undefined,
+            bankAccountType: (company as any).bankAccountType || undefined,
+            bankPix: (company as any).bankPix || undefined,
         };
     }
 

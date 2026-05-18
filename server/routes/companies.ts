@@ -168,8 +168,18 @@ router.put('/companies/:id', authenticateToken, async (req: any, res) => {
             return res.status(404).json({ error: 'Company not found or unauthorized' });
         }
 
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state, defaultSignatureConfig, strengths, knownWeaknesses } = req.body;
+        const {
+            razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification,
+            contactName, contactEmail, contactPhone, contactCpf, address, city, state,
+            defaultSignatureConfig, strengths, knownWeaknesses,
+            // ── Novos campos v2 ──
+            nomeFantasia, inscricaoEstadual, inscricaoMunicipal, bairro, cep,
+            contactRg, contactRgOrgao, contactCargo, contactNacionalidade, contactEstadoCivil,
+            techName, techCpf, techRegistration, techTitle, techNacionalidade, techEstadoCivil,
+            bankName, bankAgency, bankAccount, bankAccountType, bankPix,
+        } = req.body;
         const safeData: any = {};
+        // Campos originais
         if (razaoSocial !== undefined) safeData.razaoSocial = razaoSocial;
         if (cnpj !== undefined) safeData.cnpj = cnpj;
         if (isHeadquarters !== undefined) safeData.isHeadquarters = isHeadquarters;
@@ -185,6 +195,28 @@ router.put('/companies/:id', authenticateToken, async (req: any, res) => {
         if (defaultSignatureConfig !== undefined) safeData.defaultSignatureConfig = defaultSignatureConfig;
         if (strengths !== undefined) safeData.strengths = strengths;
         if (knownWeaknesses !== undefined) safeData.knownWeaknesses = knownWeaknesses;
+        // Novos campos v2
+        if (nomeFantasia !== undefined) safeData.nomeFantasia = nomeFantasia;
+        if (inscricaoEstadual !== undefined) safeData.inscricaoEstadual = inscricaoEstadual;
+        if (inscricaoMunicipal !== undefined) safeData.inscricaoMunicipal = inscricaoMunicipal;
+        if (bairro !== undefined) safeData.bairro = bairro;
+        if (cep !== undefined) safeData.cep = cep;
+        if (contactRg !== undefined) safeData.contactRg = contactRg;
+        if (contactRgOrgao !== undefined) safeData.contactRgOrgao = contactRgOrgao;
+        if (contactCargo !== undefined) safeData.contactCargo = contactCargo;
+        if (contactNacionalidade !== undefined) safeData.contactNacionalidade = contactNacionalidade;
+        if (contactEstadoCivil !== undefined) safeData.contactEstadoCivil = contactEstadoCivil;
+        if (techName !== undefined) safeData.techName = techName;
+        if (techCpf !== undefined) safeData.techCpf = techCpf;
+        if (techRegistration !== undefined) safeData.techRegistration = techRegistration;
+        if (techTitle !== undefined) safeData.techTitle = techTitle;
+        if (techNacionalidade !== undefined) safeData.techNacionalidade = techNacionalidade;
+        if (techEstadoCivil !== undefined) safeData.techEstadoCivil = techEstadoCivil;
+        if (bankName !== undefined) safeData.bankName = bankName;
+        if (bankAgency !== undefined) safeData.bankAgency = bankAgency;
+        if (bankAccount !== undefined) safeData.bankAccount = bankAccount;
+        if (bankAccountType !== undefined) safeData.bankAccountType = bankAccountType;
+        if (bankPix !== undefined) safeData.bankPix = bankPix;
 
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },

@@ -87,24 +87,50 @@ export interface CompanyProfile {
     cnpj: string;
     razaoSocial: string;
     isHeadquarters: boolean;
-    qualification?: string;
-    technicalQualification?: string;
-    contactName?: string;
-    contactCpf?: string;
-    contactEmail?: string;
-    contactPhone?: string;
+    nomeFantasia?: string;
+    inscricaoEstadual?: string;
+    inscricaoMunicipal?: string;
+    // Endereço
     address?: string;
+    bairro?: string;
     city?: string;
     state?: string;
+    cep?: string;
+    // Representante Legal
+    contactName?: string;
+    contactCpf?: string;
+    contactRg?: string;
+    contactRgOrgao?: string;
+    contactCargo?: string;
+    contactNacionalidade?: string;
+    contactEstadoCivil?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    // Responsável Técnico
+    techName?: string;
+    techCpf?: string;
+    techRegistration?: string;
+    techTitle?: string;
+    techNacionalidade?: string;
+    techEstadoCivil?: string;
+    // Dados Bancários
+    bankName?: string;
+    bankAgency?: string;
+    bankAccount?: string;
+    bankAccountType?: string;
+    bankPix?: string;
+    // Legado
+    qualification?: string;
+    technicalQualification?: string;
     name?: string; // Alias for razaoSocial used in some components
-    documents?: CompanyDocument[]; // Nested documents from backend
-    credentials?: CompanyCredential[]; // Nested credentials from backend
+    documents?: CompanyDocument[];
+    credentials?: CompanyCredential[];
     defaultProposalHeader?: string;
     defaultProposalFooter?: string;
     defaultProposalHeaderHeight?: number;
     defaultProposalFooterHeight?: number;
     defaultLetterContent?: string;
-    defaultSignatureConfig?: string; // JSON: { sigLegal, sigTech, sigCompany, bankData, signatureMode, validityDays }
+    defaultSignatureConfig?: string; // LEGADO — JSON
     strengths?: string[];
     knownWeaknesses?: string[];
 }
