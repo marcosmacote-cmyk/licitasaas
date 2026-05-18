@@ -26,6 +26,7 @@ interface Props {
     onPrev: () => void;
     onNext: () => void;
     onSaveProposal?: () => Promise<void>;
+    onLetterSaved?: () => void;
 }
 
 /** Adapta EngItem[] → ProposalItem[] (formato esperado pelo ProposalLetterWizard) */
@@ -45,7 +46,7 @@ function adaptItems(items: EngItem[], proposalId: string): ProposalItem[] {
     }));
 }
 
-export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, total, engineeringConfig, onPrev, onNext, onSaveProposal }: Props) {
+export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, total, engineeringConfig, onPrev, onNext, onSaveProposal, onLetterSaved }: Props) {
     const [bidding, setBidding] = useState<BiddingProcess | null>(null);
     const [company, setCompany] = useState<CompanyProfile | null>(null);
     const [proposal, setProposal] = useState<PriceProposal | null>(null);
@@ -195,9 +196,11 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                 body: JSON.stringify({ letterContent: contentOverride || letterContent }),
             });
             if (contentOverride) setLetterContent(contentOverride);
+            // FIX STEP4-CHECK: Notify parent that letter was saved
+            onLetterSaved?.();
         } catch { /* best effort */ }
         finally { setIsSaving(false); }
-    }, [proposalId, letterContent]);
+    }, [proposalId, letterContent, onLetterSaved]);
 
     const handlePrintProposal = useCallback((type: 'FULL' | 'LETTER' | 'SPREADSHEET') => {
         window.print();

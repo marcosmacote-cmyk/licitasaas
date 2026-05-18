@@ -65,6 +65,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // FIX F1.3: Insumos consolidados para BudgetDocsPanel
     const [consolidatedInsumos, setConsolidatedInsumos] = useState<InsumoConsolidado[]>([]);
 
+    // FIX STEP4-CHECK: Track whether the letter has been generated/saved
+    const [isLetterSaved, setIsLetterSaved] = useState(false);
+
     // UI state
     const [currentStep, setCurrentStep] = useState(1);
     const [isExtractingBdi, setIsExtractingBdi] = useState(false);
@@ -82,7 +85,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
         config: !!(engineeringConfig.ufReferencia || engineeringConfig.basesConsideradas.length > 0),
         budget: items.length > 0,
         cronograma: !!cronogramaData,
-        carta: false, // TODO: track letter generation
+        carta: isLetterSaved,
     };
 
     // ══════════════════════════════════════════
@@ -113,6 +116,8 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
         setEngineeringConfig({ ...DEFAULT_ENGINEERING_CONFIG });
         setCurrentStep(1);
         setSaveMsg(null);
+        // FIX STEP4-CHECK: Initialize letter state from the proposal prop
+        setIsLetterSaved(!!(proposal?.letterContent));
 
         fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
             .then(r => r.json()).then(data => {
@@ -609,6 +614,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     onPrev={() => setCurrentStep(3)}
                     onNext={() => setCurrentStep(5)}
                     onSaveProposal={handleSave}
+                    onLetterSaved={() => setIsLetterSaved(true)}
                 />
             )}
 
@@ -624,6 +630,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                             { label: 'BDI configurado', ok: effectiveBdi > 0, blocker: false, detail: effectiveBdi > 0 ? `${effectiveBdi.toFixed(2)}%` : '0%' },
                             { label: 'Preços unitários', ok: billable.every(it => it.unitCost > 0), blocker: false, detail: (() => { const z = billable.filter(it => it.unitCost <= 0).length; return z > 0 ? `${z} sem preço` : 'Todos preenchidos'; })() },
                             { label: 'Encargos Sociais', ok: (engineeringConfig.encargosSociais?.horista || 0) > 0, blocker: false, detail: (engineeringConfig.encargosSociais?.horista || 0) > 0 ? `H: ${engineeringConfig.encargosSociais?.horista?.toFixed(1)}% / M: ${engineeringConfig.encargosSociais?.mensalista?.toFixed(1)}%` : 'Não configurado' },
+                            { label: 'Carta Proposta', ok: isLetterSaved, blocker: false, detail: isLetterSaved ? 'Salva' : 'Não gerada' },
                             { label: 'Cronograma', ok: !!(cronogramaData && cronogramaData.etapas.some((e: any) => e.percentuais.some((p: number) => p > 0))), blocker: false, detail: cronogramaData?.etapas?.some((e: any) => e.percentuais.some((p: number) => p > 0)) ? `${cronogramaData.meses} meses` : 'Vazio' },
                         ];
                         const hasBlocker = checks.some(c => c.blocker);
