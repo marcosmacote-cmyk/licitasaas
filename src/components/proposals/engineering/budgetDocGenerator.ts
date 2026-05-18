@@ -404,7 +404,8 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
         </tr>`;
     }
 
-    // FIX B3: Separate intermediate data from TOTAL UNITÁRIO highlight
+    // Composition footer: CUSTO UNITÁRIO TOTAL is the primary highlight (sem BDI)
+    // Preço com BDI is secondary info below
     ch += `</tbody></table>
     <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
         <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
@@ -413,15 +414,15 @@ function renderComposition(comp: any, showQuantities: boolean = false) {
                 LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
                 MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
             </div>
-            <div style="color:#475569;">
-                Custo Direto => <b>${fmt(comp.totalPrice || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b>
-            </div>
         </div>
     </div>
-    <div style="background:#1e40af; color:white; padding:6px 10px; font-size:9px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
-        <span>CUSTO UNITÁRIO TOTAL (COM BDI)</span>
-        <span style="font-size:10px;">${fmt(comp.valorComBdi || 0)}</span>
+    <div style="background:#1e40af; color:white; padding:7px 10px; font-size:9.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+        <span>CUSTO UNITÁRIO TOTAL</span>
+        <span style="font-size:11px;">${fmt(comp.totalPrice || 0)}</span>
+    </div>
+    <div style="background:#f1f5f9; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0; border-top:none;">
+        <span style="color:#475569;">Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b></span>
+        <span style="color:#1e40af; font-weight:700; font-size:8.5px;">Preço Unitário (com BDI) => ${fmt(comp.valorComBdi || 0)}</span>
     </div>
     ${showQuantities && comp.proposalQuantity ? `
     <div style="background:#eff6ff; padding:5px 10px; font-size:8.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center; color:#1e40af; border:1px solid #bfdbfe; border-top:none;">
