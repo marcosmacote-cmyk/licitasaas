@@ -469,7 +469,7 @@ export class ProposalLetterBuilder {
                 '___________________________________',
                 parsed.name,
                 cpf ? `CPF: ${cpf}` : '',
-                sig.legalRepresentative.role || 'Representante Legal',
+                sig.legalRepresentative.role || company.contactCargo || 'Representante Legal',
                 parsedRazao.razao.toUpperCase(),
                 companyCnpj ? `CNPJ: ${companyCnpj}` : '',
             ].filter(Boolean);
@@ -494,7 +494,7 @@ export class ProposalLetterBuilder {
                 techName,
             ];
             if (techReg) techLines.push(techReg);
-            techLines.push(sig.technicalRepresentative?.role || 'Responsável Técnico');
+            techLines.push(sig.technicalRepresentative?.role || company.techTitle || 'Responsável Técnico');
             techLines.push(parsedRazao.razao.toUpperCase());
             if (companyCnpj) techLines.push(`CNPJ: ${companyCnpj}`);
             sections.push(techLines.join('\n'));
@@ -546,19 +546,46 @@ export class ProposalLetterBuilder {
         parts.push(c.razaoSocial || '[Razão Social]');
         parts.push(`inscrita no CNPJ sob o nº ${c.cnpj || '[CNPJ]'}`);
 
-        if (c.address) {
-            parts.push(`com sede em ${c.address}`);
-        } else if (c.city && c.state) {
-            parts.push(`com sede em ${c.city}/${c.state}`);
+        // Inscrições (opcionais)
+        if (c.inscricaoEstadual) parts.push(`Inscrição Estadual nº ${c.inscricaoEstadual}`);
+        if (c.inscricaoMunicipal) parts.push(`Inscrição Municipal nº ${c.inscricaoMunicipal}`);
+
+        // Endereço estruturado
+        const addrParts: string[] = [];
+        if (c.address) addrParts.push(c.address);
+        if (c.bairro) addrParts.push(c.bairro);
+        if (c.city && c.state) addrParts.push(`${c.city}/${c.state}`);
+        else if (c.city) addrParts.push(c.city);
+        if (c.cep) addrParts.push(`CEP ${c.cep}`);
+
+        if (addrParts.length > 0) {
+            parts.push(`com sede na ${addrParts.join(', ')}`);
         }
 
-        // Representante legal com conectivos naturais
+        // Contato
+        if (c.phone) parts.push(`telefone ${c.phone}`);
+        if (c.email) parts.push(`e-mail ${c.email}`);
+
+        // Representante legal com dados estruturados
         if (c.contactName) {
-            let repText = `neste ato representada por ${c.contactName}`;
-            if (c.contactCpf) {
-                repText += `, portador(a) do CPF nº ${c.contactCpf}`;
+            const repParts: string[] = [];
+            repParts.push(`neste ato representada por ${c.contactName}`);
+
+            // Qualificação pessoal: nacionalidade, estado civil, cargo
+            const qualPessoal: string[] = [];
+            if (c.contactNacionalidade) qualPessoal.push(c.contactNacionalidade);
+            if (c.contactEstadoCivil) qualPessoal.push(c.contactEstadoCivil);
+            if (c.contactCargo) qualPessoal.push(c.contactCargo);
+            if (qualPessoal.length > 0) repParts.push(qualPessoal.join(', '));
+
+            if (c.contactCpf) repParts.push(`portador(a) do CPF nº ${c.contactCpf}`);
+            if (c.contactRg && c.contactRgOrgao) {
+                repParts.push(`RG nº ${c.contactRg} ${c.contactRgOrgao}`);
+            } else if (c.contactRg) {
+                repParts.push(`RG nº ${c.contactRg}`);
             }
-            parts.push(repText);
+
+            parts.push(repParts.join(', '));
         }
 
         return parts.join(', ') + ',';

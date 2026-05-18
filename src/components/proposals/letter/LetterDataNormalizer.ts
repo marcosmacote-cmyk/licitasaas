@@ -54,7 +54,7 @@ export class LetterDataNormalizer {
             pricing: this.normalizePricing(items, totalValue, input),
             commercial: this.normalizeCommercial(input, contractual, proposalAnalysis),
             execution: this.normalizeExecution(contractual, processId, bidding),
-            banking: input.bankingData || {},
+            banking: this.normalizeBanking(company, input.bankingData),
             signature: this.normalizeSignature(company, input),
             meta: {
                 proposalId: proposal.id,
@@ -270,6 +270,51 @@ export class LetterDataNormalizer {
         };
     }
 
+    /**
+     * Normaliza dados bancários: prioriza campos estruturados do CompanyProfile,
+     * com override manual do bankingData (cockpit do wizard).
+     */
+    private normalizeBanking(
+        company: CompanyProfile,
+        bankingOverride?: ProposalLetterData['banking']
+    ): ProposalLetterData['banking'] {
+        // Fonte primária: campos reais do CompanyProfile
+        const co = company as any;
+        const fromProfile: ProposalLetterData['banking'] = {
+            bank: co.bankName || undefined,
+            agency: co.bankAgency || undefined,
+            account: co.bankAccount || undefined,
+            accountType: co.bankAccountType || undefined,
+            pix: co.bankPix || undefined,
+        };
+
+        // Fallback legado: parsear defaultSignatureConfig.bankData
+        let fromLegacy: ProposalLetterData['banking'] = {};
+        if (!fromProfile.bank && company.defaultSignatureConfig) {
+            try {
+                const sig = JSON.parse(company.defaultSignatureConfig);
+                if (sig.bankData) {
+                    fromLegacy = {
+                        bank: sig.bankData.bank || undefined,
+                        agency: sig.bankData.agency || undefined,
+                        account: sig.bankData.account || undefined,
+                        accountType: sig.bankData.accountType || undefined,
+                        pix: sig.bankData.pix || undefined,
+                    };
+                }
+            } catch { /* ignore */ }
+        }
+
+        // Override manual do wizard tem prioridade final
+        return {
+            bank: bankingOverride?.bank || fromProfile.bank || fromLegacy.bank,
+            agency: bankingOverride?.agency || fromProfile.agency || fromLegacy.agency,
+            account: bankingOverride?.account || fromProfile.account || fromLegacy.account,
+            accountType: bankingOverride?.accountType || fromProfile.accountType || fromLegacy.accountType,
+            pix: bankingOverride?.pix || fromProfile.pix || fromLegacy.pix,
+        };
+    }
+
     private normalizeSignature(
         company: CompanyProfile,
         input: NormalizerInput
@@ -299,18 +344,26 @@ export class LetterDataNormalizer {
             }
         }
 
+        const co = company as any;
+        const cargo = co.contactCargo || 'Representante Legal';
+
+        // RT: priorizar campos estruturados, fallback regex do legado
+        const techName = co.techName || (company.technicalQualification ? this.extractTechName(company.technicalQualification) : '');
+        const techReg = co.techRegistration || (company.technicalQualification ? this.extractTechRegistration(company.technicalQualification) : '');
+        const hasTech = !!(techName || techReg || company.technicalQualification);
+
         return {
             mode: (input.signatureMode || input.proposal.signatureMode || 'LEGAL') as 'LEGAL' | 'TECH' | 'BOTH',
             localDate,
             legalRepresentative: {
                 name: contactName,
                 cpf: contactCpf,
-                role: 'Representante Legal',
+                role: cargo,
             },
-            technicalRepresentative: company.technicalQualification ? {
-                name: this.extractTechName(company.technicalQualification),
-                registration: this.extractTechRegistration(company.technicalQualification),
-                role: 'Responsável Técnico',
+            technicalRepresentative: hasTech ? {
+                name: techName || 'Responsável Técnico',
+                registration: techReg,
+                role: co.techTitle || 'Responsável Técnico',
             } : undefined,
         };
     }
