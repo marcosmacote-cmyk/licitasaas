@@ -49,6 +49,7 @@ export interface ProposalLetterWizardProps {
     setBankData: (v: { bank: string; agency: string; account: string; accountType: string; pix: string }) => void;
     hideExportStep?: boolean;
     onFinish?: () => void;
+    onSaveProposal?: () => Promise<void>;
 }
 
 const BASE_STEPS = [

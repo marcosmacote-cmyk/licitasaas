@@ -25,6 +25,7 @@ interface Props {
     engineeringConfig: EngineeringConfig;
     onPrev: () => void;
     onNext: () => void;
+    onSaveProposal?: () => Promise<void>;
 }
 
 /** Adapta EngItem[] → ProposalItem[] (formato esperado pelo ProposalLetterWizard) */
@@ -44,7 +45,7 @@ function adaptItems(items: EngItem[], proposalId: string): ProposalItem[] {
     }));
 }
 
-export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, total, engineeringConfig, onPrev, onNext }: Props) {
+export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, total, engineeringConfig, onPrev, onNext, onSaveProposal }: Props) {
     const [bidding, setBidding] = useState<BiddingProcess | null>(null);
     const [company, setCompany] = useState<CompanyProfile | null>(null);
     const [proposal, setProposal] = useState<PriceProposal | null>(null);
@@ -301,6 +302,7 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                 setBankData={setBankData}
                 hideExportStep={true}
                 onFinish={onNext}
+                onSaveProposal={onSaveProposal}
             />
 
             {/* Step navigation */}

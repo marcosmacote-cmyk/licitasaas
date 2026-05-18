@@ -608,6 +608,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     engineeringConfig={engineeringConfig}
                     onPrev={() => setCurrentStep(3)}
                     onNext={() => setCurrentStep(5)}
+                    onSaveProposal={handleSave}
                 />
             )}
 
