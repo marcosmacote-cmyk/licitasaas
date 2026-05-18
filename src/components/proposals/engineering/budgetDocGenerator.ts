@@ -438,8 +438,24 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
         const report = await res.json();
 
+        // FIX B6: Group compositions by etapa/chapter
+        const chapters = groupByChapter(items);
+        const compMap = new Map<string, any[]>();
         for (const comp of report.principalCompositions) {
-            html += renderComposition(comp, true);
+            const prefix = (comp.itemNumber || '').split('.')[0] || '?';
+            if (!compMap.has(prefix)) compMap.set(prefix, []);
+            compMap.get(prefix)!.push(comp);
+        }
+
+        for (const [prefix, chapterComps] of compMap) {
+            const ch = chapters.get(prefix);
+            const chTitle = ch ? ch.title : `Etapa ${prefix}`;
+            const chTotal = chapterComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
+            html += `<h2 style="margin-top:20px;">${chTitle}</h2>`;
+            for (const comp of chapterComps) {
+                html += renderComposition(comp, true);
+            }
+            html += `<div style="background:#f1f5f9; padding:6px 10px; font-weight:700; font-size:9px; text-align:right; border:1px solid #cbd5e1; margin-bottom:16px;">Subtotal ${chTitle}: ${fmt(chTotal)}</div>`;
         }
         
     } catch (e: any) {
