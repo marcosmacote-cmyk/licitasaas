@@ -57,7 +57,22 @@ async function saveWb(wb: ExcelJS.Workbook, name: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefined, _items: any[]) {
+function setupPrint(ws: ExcelJS.Worksheet, landscape = false) {
+  ws.pageSetup = {
+    paperSize: 9, // A4
+    orientation: landscape ? 'landscape' : 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0, // auto pages vertically
+    horizontalCentered: true,
+    margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
+  };
+  ws.headerFooter = {
+    oddFooter: 'LicitaSaaS — &D &T    Página &P de &N',
+  };
+}
+
+function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefined, _items: any[], colCount: number) {
   const cfg = engConfig || {} as any;
   const obra = cfg.objeto || '—';
   const banks = cfg.basesConsideradas?.join(', ') || '—';
@@ -68,13 +83,18 @@ function metaRows(ws: ExcelJS.Worksheet, engConfig: EngineeringConfig | undefine
   const horista = es.horista ?? '—';
   const mensalista = es.mensalista ?? '—';
 
-  const addMeta = (label: string, value: string, colSpan = 0) => {
-    const r = ws.addRow([label, value]);
+  const addMeta = (label: string, value: string) => {
+    const rn = ws.rowCount + 1;
+    const r = ws.addRow([label, value, ...Array(Math.max(0, colCount - 2)).fill('')]);
+    // Merge value cell across all remaining columns
+    if (colCount > 2) ws.mergeCells(rn, 2, rn, colCount);
     r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
     r.getCell(2).font = { size: 9, color: { argb: C.TEXT_DARK } };
-    r.getCell(1).fill = fill(C.GRAY_SUB);
-    r.getCell(2).fill = fill(C.GRAY_SUB);
-    for (let c = 1; c <= 2; c++) r.getCell(c).border = border();
+    r.getCell(2).alignment = { vertical: 'middle', wrapText: true };
+    for (let c = 1; c <= colCount; c++) {
+      r.getCell(c).fill = fill(C.GRAY_SUB);
+      r.getCell(c).border = border();
+    }
     r.height = 16;
   };
   addMeta('Obra', obra);
@@ -108,7 +128,10 @@ function dataRow(ws: ExcelJS.Worksheet, vals: (string | number)[], idx: number, 
 }
 
 function subtotalRow(ws: ExcelJS.Worksheet, label: string, value: string, colCount: number) {
-  const r = ws.addRow([...Array(colCount - 2).fill(''), label, value]);
+  const rn = ws.rowCount + 1;
+  const r = ws.addRow([label, ...Array(Math.max(0, colCount - 2)).fill(''), value]);
+  // Merge label across all columns except the last (value)
+  if (colCount > 2) ws.mergeCells(rn, 1, rn, colCount - 1);
   r.height = 16;
   for (let i = 1; i <= colCount; i++) {
     const c = r.getCell(i);
@@ -121,7 +144,11 @@ function subtotalRow(ws: ExcelJS.Worksheet, label: string, value: string, colCou
 }
 
 function grandRow(ws: ExcelJS.Worksheet, label: string, values: string[], colCount: number) {
-  const row = ws.addRow([...Array(colCount - values.length - 1).fill(''), label, ...values]);
+  const rn = ws.rowCount + 1;
+  const row = ws.addRow([label, ...Array(Math.max(0, colCount - values.length - 1)).fill(''), ...values]);
+  // Merge label across columns before the value columns
+  const labelEnd = colCount - values.length;
+  if (labelEnd > 1) ws.mergeCells(rn, 1, rn, labelEnd);
   row.height = 20;
   for (let i = 1; i <= colCount; i++) {
     const c = row.getCell(i);
@@ -144,7 +171,9 @@ function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: num
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
 
   const mkRow = (label: string, value: string, isGrand = false) => {
-    const r = ws.addRow([...Array(colCount - 2).fill(''), label, value]);
+    const rn = ws.rowCount + 1;
+    const r = ws.addRow([label, ...Array(Math.max(0, colCount - 2)).fill(''), value]);
+    if (colCount > 2) ws.mergeCells(rn, 1, rn, colCount - 1);
     r.height = isGrand ? 20 : 16;
     for (let i = 1; i <= colCount; i++) {
       const c = r.getCell(i);
@@ -185,7 +214,8 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
 // ── 1. ORÇAMENTO RESUMIDO — mirrors docOrcamentoResumido exactly ─────────────
 export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Orçamento Resumido', { pageSetup: { paperSize: 9, orientation: 'portrait' } });
+  const ws = wb.addWorksheet('Orçamento Resumido');
+  setupPrint(ws);
   ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 8 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -194,10 +224,12 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 
   titleRow(ws, 'ORÇAMENTO RESUMIDO', 5);
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const rn0 = ws.rowCount + 1;
   const r0 = ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens`]);
+  ws.mergeCells(rn0, 1, rn0, 5);
   r0.getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
   ws.addRow([]);
-  metaRows(ws, engConfig, items);
+  metaRows(ws, engConfig, items, 5);
   headRow(ws, ['Nº', 'ETAPA', 'ITENS', 'VALOR (R$)', '%']);
 
   let idx = 0;
@@ -215,7 +247,8 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 // ── 2. ORÇAMENTO SINTÉTICO — mirrors docOrcamentoSintetico exactly ───────────
 export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Orçamento Sintético', { pageSetup: { paperSize: 9, orientation: 'portrait' } });
+  const ws = wb.addWorksheet('Orçamento Sintético');
+  setupPrint(ws);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }];
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -224,10 +257,12 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
 
   titleRow(ws, 'ORÇAMENTO SINTÉTICO', 8);
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const rn0 = ws.rowCount + 1;
   const r0 = ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens`]);
+  ws.mergeCells(rn0, 1, rn0, 8);
   r0.getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
   ws.addRow([]);
-  metaRows(ws, engConfig, items);
+  metaRows(ws, engConfig, items, 8);
 
   for (const [, ch] of chapters) {
     sectionHeaderRow(ws, ch.title, 8);
@@ -251,11 +286,12 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
 // ── 3. CURVA ABC SERVIÇOS ────────────────────────────────────────────────────
 export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('ABC Serviços', { pageSetup: { paperSize: 9, orientation: 'landscape' } });
+  const ws = wb.addWorksheet('ABC Serviços');
+  setupPrint(ws, true);
   ws.columns = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 8 }, { width: 8 }];
 
   titleRow(ws, 'CURVA ABC DE SERVIÇOS', 11);
-  metaRows(ws, engConfig, items);
+  metaRows(ws, engConfig, items, 11);
   headRow(ws, ['Nº', 'CÓDIGO', 'BANCO', 'DESCRIÇÃO', 'UN.', 'QTD.', 'CUSTO UNIT.', 'PREÇO UNIT.', 'TOTAL', '% ITEM', '% ACUM.']);
 
   const svcs = items.filter(i => i.type === 'COMPOSICAO' || (!['ETAPA','SUBETAPA'].includes(i.type) && i.code));
@@ -280,7 +316,8 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
 // ── 4. BDI E ENCARGOS SOCIAIS ────────────────────────────────────────────────
 export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('BDI e Encargos', { pageSetup: { paperSize: 9, orientation: 'portrait' } });
+  const ws = wb.addWorksheet('BDI e Encargos');
+  setupPrint(ws);
   ws.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
 
   titleRow(ws, 'BDI E ENCARGOS SOCIAIS', 4);
@@ -362,14 +399,15 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   const colCount = 3 + meses + 1;
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Cronograma', { pageSetup: { paperSize: 9, orientation: 'landscape' } });
+  const ws = wb.addWorksheet('Cronograma');
+  setupPrint(ws, true);
   const widths = [{ width: 6 }, { width: 40 }, { width: 14 }];
   for (let m = 0; m < meses; m++) widths.push({ width: 10 });
   widths.push({ width: 12 });
   ws.columns = widths;
 
   titleRow(ws, 'CRONOGRAMA FÍSICO-FINANCEIRO', colCount);
-  metaRows(ws, engConfig, etapas);
+  metaRows(ws, engConfig, etapas, colCount);
 
   const header = ['Nº', 'ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL %'];
   headRow(ws, header);
@@ -393,11 +431,12 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
 // ── 6. CURVA ABC INSUMOS ─────────────────────────────────────────────────────
 export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined) {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('ABC Insumos', { pageSetup: { paperSize: 9, orientation: 'landscape' } });
+  const ws = wb.addWorksheet('ABC Insumos');
+  setupPrint(ws, true);
   ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
 
   titleRow(ws, 'CURVA ABC DE INSUMOS', 8);
-  metaRows(ws, engConfig, insumos);
+  metaRows(ws, engConfig, insumos, 8);
   headRow(ws, ['Nº', 'CÓDIGO', 'CATEGORIA', 'DESCRIÇÃO', 'UN.', 'CUSTO TOTAL', '% ITEM', '% ACUM.']);
 
   const list = [...(insumos || [])].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
