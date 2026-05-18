@@ -283,6 +283,168 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
   await saveWb(wb, 'orcamento-sintetico.xlsx');
 }
 
+// Helper: fetch analytical report from backend (same API as PDF)
+async function fetchAnalyticalReport(proposalId: string, items: any[], bdi: number, engConfig: any) {
+  const token = localStorage.getItem('token') || '';
+  const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, bdi, engineeringConfig: engConfig }),
+  });
+  if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+  return res.json();
+}
+
+// Helper: render one composition as Excel rows
+function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
+  // Header row for the composition
+  const rn = ws.rowCount + 1;
+  const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
+  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', `Banco: ${comp.sourceName || ''}`, `Unidade: ${comp.unit || ''}`]);
+  ws.mergeCells(rn, 1, rn, 5);
+  hdr.height = 18;
+  for (let i = 1; i <= 7; i++) {
+    hdr.getCell(i).fill = fill(C.GRAY_SUB);
+    hdr.getCell(i).border = border();
+    hdr.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
+  }
+
+  // Insumos header
+  headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Total']);
+
+  // Insumos data
+  (comp.items || []).forEach((ci: any, idx: number) => {
+    let tipo = 'Comp. Auxiliar';
+    if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
+    else if (ci.type === 'MATERIAL') tipo = 'Material';
+    else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
+    else if (ci.type === 'SERVICO') tipo = 'Serviço';
+    dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', ci.coefficient?.toFixed(4) || '', fmt(ci.totalCost || 0)], idx, [6, 7]);
+  });
+
+  // Footer: Custo Unitário Total
+  const costRn = ws.rowCount + 1;
+  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', fmt(comp.totalPrice || 0)]);
+  ws.mergeCells(costRn, 1, costRn, 6);
+  costRow.height = 18;
+  for (let i = 1; i <= 7; i++) {
+    costRow.getCell(i).fill = fill(C.BLUE_MED);
+    costRow.getCell(i).border = border(C.BLUE_MED);
+    costRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
+    costRow.getCell(i).alignment = { horizontal: i === 7 ? 'right' : 'left', vertical: 'middle' };
+  }
+
+  // BDI + Preço com BDI
+  if (comp.valorBdi != null) {
+    const bdiRn = ws.rowCount + 1;
+    const bdiRow = ws.addRow([`Valor do BDI: ${fmt(comp.valorBdi)}    |    Preço Unitário (com BDI): ${fmt(comp.valorComBdi || 0)}`, '', '', '', '', '', '']);
+    ws.mergeCells(bdiRn, 1, bdiRn, 7);
+    bdiRow.getCell(1).fill = fill(C.GRAY_SUB);
+    bdiRow.getCell(1).border = border();
+    bdiRow.getCell(1).font = { size: 8, color: { argb: C.TEXT_MID } };
+    bdiRow.height = 14;
+  }
+
+  // Quantity + Total (for analytical)
+  if (showQty && comp.proposalQuantity) {
+    const qRn = ws.rowCount + 1;
+    const qRow = ws.addRow([`Quantidade: ${fmtQty(comp.proposalQuantity)}`, '', '', '', '', 'PREÇO TOTAL =>', fmt(comp.proposalTotal || 0)]);
+    ws.mergeCells(qRn, 1, qRn, 5);
+    qRow.height = 16;
+    for (let i = 1; i <= 7; i++) {
+      qRow.getCell(i).fill = fill(C.BLUE_LIGHT);
+      qRow.getCell(i).border = border(C.BLUE_MED);
+      qRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_DARK } };
+      qRow.getCell(i).alignment = { horizontal: i >= 6 ? 'right' : 'left', vertical: 'middle' };
+    }
+  }
+
+  ws.addRow([]); // spacing
+}
+
+// ── 2B. ORÇAMENTO ANALÍTICO — mirrors docOrcamentoAnalitico ──────────────────
+export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Orçamento Analítico');
+  setupPrint(ws);
+  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
+
+  const billable = items.filter((i: any) => !isGrouper(i.type));
+  const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
+  const chapters = groupByChapter(items);
+
+  titleRow(ws, 'PLANILHA ORÇAMENTÁRIA ANALÍTICA', 7);
+  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const rn0 = ws.rowCount + 1;
+  ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens · Total: ${fmt(total)}`]);
+  ws.mergeCells(rn0, 1, rn0, 7);
+  ws.getRow(rn0).getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.addRow([]);
+  metaRows(ws, engConfig, items, 7);
+
+  try {
+    const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
+
+    // Group compositions by chapter
+    const compMap = new Map<string, any[]>();
+    for (const comp of report.principalCompositions) {
+      const prefix = (comp.itemNumbers?.[0] || '').split('.')[0] || '?';
+      if (!compMap.has(prefix)) compMap.set(prefix, []);
+      compMap.get(prefix)!.push(comp);
+    }
+    for (const [, chComps] of compMap) {
+      chComps.sort((a: any, b: any) => (a.itemNumbers?.[0] || '').localeCompare(b.itemNumbers?.[0] || '', 'pt-BR', { numeric: true }));
+    }
+
+    for (const [prefix, chComps] of compMap) {
+      const ch = chapters.get(prefix);
+      const chTitle = ch ? ch.title : `Etapa ${prefix}`;
+      sectionHeaderRow(ws, chTitle, 7);
+      for (const comp of chComps) renderCompXls(ws, comp, true);
+      const chTotal = chComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
+      subtotalRow(ws, `Subtotal ${chTitle}`, fmt(chTotal), 7);
+    }
+  } catch (e: any) {
+    ws.addRow([`Erro: ${e.message}`]);
+  }
+
+  bdiRows(ws, items, bdi, 7);
+  await saveWb(wb, 'orcamento-analitico.xlsx');
+}
+
+// ── 2C. CADERNO DE COMPOSIÇÕES (CPU) — mirrors docCpuBatch ───────────────────
+export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Composições');
+  setupPrint(ws);
+  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
+
+  const billable = items.filter((i: any) => !isGrouper(i.type));
+  titleRow(ws, 'CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS', 7);
+  const rn0 = ws.rowCount + 1;
+  ws.addRow([`${billable.length} serviços`]);
+  ws.mergeCells(rn0, 1, rn0, 7);
+  ws.getRow(rn0).getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.addRow([]);
+  metaRows(ws, engConfig, items, 7);
+
+  try {
+    const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
+
+    sectionHeaderRow(ws, 'Composições Principais', 7);
+    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false);
+
+    if (report.auxiliaryCompositions?.length > 0) {
+      sectionHeaderRow(ws, 'Composições Auxiliares', 7);
+      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false);
+    }
+  } catch (e: any) {
+    ws.addRow([`Erro: ${e.message}`]);
+  }
+
+  await saveWb(wb, 'composicoes-cpu.xlsx');
+}
+
 // ── 3. CURVA ABC SERVIÇOS ────────────────────────────────────────────────────
 export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number) {
   const wb = new ExcelJS.Workbook();
@@ -392,36 +554,73 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
   await saveWb(wb, 'bdi-encargos.xlsx');
 }
 
-// ── 5. CRONOGRAMA FÍSICO-FINANCEIRO ─────────────────────────────────────────
+// ── 5. CRONOGRAMA FÍSICO-FINANCEIRO — mirrors docCronograma exactly ──────────
 export async function xlsCronograma(result: any, engConfig: EngineeringConfig | undefined) {
-  const etapas  = result?.etapas || result?.items?.filter((i: any) => i.type === 'ETAPA') || [];
-  const meses   = Math.max(result?.meses || 3, etapas.length > 0 ? Math.max(...etapas.map((e: any) => e.meses || 1)) : 3);
-  const colCount = 3 + meses + 1;
+  const { meses, etapas, mensalTotal, percentMensal, percentAcumulado, totalGlobal } = result;
+  const colCount = 2 + meses + 1; // Etapa | Valor | Mês1..N | Total
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Cronograma');
   setupPrint(ws, true);
-  const widths = [{ width: 6 }, { width: 40 }, { width: 14 }];
-  for (let m = 0; m < meses; m++) widths.push({ width: 10 });
-  widths.push({ width: 12 });
+  const widths = [{ width: 40 }, { width: 14 }];
+  for (let m = 0; m < meses; m++) widths.push({ width: 12 });
+  widths.push({ width: 14 });
   ws.columns = widths;
 
   titleRow(ws, 'CRONOGRAMA FÍSICO-FINANCEIRO', colCount);
-  metaRows(ws, engConfig, etapas, colCount);
+  const rn0 = ws.rowCount + 1;
+  ws.addRow([`${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}`]);
+  ws.mergeCells(rn0, 1, rn0, colCount);
+  ws.getRow(rn0).getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.addRow([]);
+  metaRows(ws, engConfig || (result as any).engineeringConfig, etapas, colCount);
 
-  const header = ['Nº', 'ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL %'];
+  const header = ['ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL'];
   headRow(ws, header);
 
-  const totalGlobal = etapas.reduce((s: number, e: any) => s + (Number(e.totalPrice) || 0), 0);
+  // Etapa rows
   let idx = 0;
-  for (const e of etapas) {
-    const v    = Number(e.totalPrice) || 0;
-    const pct  = totalGlobal > 0 ? v / totalGlobal * 100 : 0;
-    const dist = Array.from({ length: meses }, (_, m) => {
-      if (!e.meses) return m === 0 ? fmt(v) : '';
-      return m < e.meses ? fmt(v / e.meses) : '';
+  for (const et of etapas) {
+    const vals = Array.from({ length: meses }, (_, m) => {
+      const v = et.valoresMensais?.[m] || 0;
+      return v > 0 ? fmt(v) : '—';
     });
-    dataRow(ws, [e.itemNumber || '', e.description || '', fmt(v), ...dist, fmtPct(pct)], idx++, Array.from({ length: meses + 2 }, (_, i) => i + 3));
+    let etTotal = (et.valoresMensais || []).reduce((s: number, v: number) => s + v, 0);
+    const r = dataRow(ws, [et.nome || et.description || '', fmt(et.valorTotal || 0), ...vals, fmt(etTotal)], idx++, Array.from({ length: meses + 2 }, (_, i) => i + 2));
+    r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+  }
+
+  // TOTAL MENSAL row
+  const tmVals = Array.from({ length: meses }, (_, m) => fmt(mensalTotal?.[m] || 0));
+  const tmRow = ws.addRow(['TOTAL MENSAL', '', ...tmVals, fmt(totalGlobal)]);
+  tmRow.height = 16;
+  for (let i = 1; i <= colCount; i++) {
+    tmRow.getCell(i).fill = fill(C.GRAY_SUB);
+    tmRow.getCell(i).border = border();
+    tmRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+    tmRow.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
+  }
+
+  // % MENSAL row
+  const pmVals = Array.from({ length: meses }, (_, m) => fmtPct(percentMensal?.[m] || 0));
+  const pmRow = ws.addRow(['% MENSAL', '', ...pmVals, '100%']);
+  pmRow.height = 16;
+  for (let i = 1; i <= colCount; i++) {
+    pmRow.getCell(i).fill = fill(C.GRAY_ROW);
+    pmRow.getCell(i).border = border();
+    pmRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
+    pmRow.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
+  }
+
+  // % ACUMULADO row
+  const paVals = Array.from({ length: meses }, (_, m) => fmtPct(percentAcumulado?.[m] || 0));
+  const paRow = ws.addRow(['% ACUMULADO', '', ...paVals, '100%']);
+  paRow.height = 16;
+  for (let i = 1; i <= colCount; i++) {
+    paRow.getCell(i).fill = fill(C.GRAY_ROW);
+    paRow.getCell(i).border = border();
+    paRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
+    paRow.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
   }
 
   grandRow(ws, 'TOTAL GERAL', [fmt(totalGlobal), ...Array(meses).fill(''), '100,00%'], colCount);

@@ -9,7 +9,7 @@
 import { useState, useCallback } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos } from './budgetDocGenerator';
-import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
+import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
@@ -165,8 +165,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 switch (docId) {
                     case 'resumido': xlsOrcamentoResumido(items, engineeringConfig, effectiveBdi); break;
                     case 'sintetico': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
-                    case 'analitico': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
-                    case 'cpu': xlsOrcamentoSintetico(items, engineeringConfig, effectiveBdi); break;
+                    case 'analitico': await xlsOrcamentoAnalitico(proposalId, items, engineeringConfig, effectiveBdi); break;
+                    case 'cpu': await xlsCpuBatch(proposalId, items, engineeringConfig, effectiveBdi); break;
                     case 'abc_servicos': xlsCurvaAbcServicos(items, engineeringConfig, effectiveBdi); break;
                     case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engineeringConfig); break;
                     case 'cronograma':
