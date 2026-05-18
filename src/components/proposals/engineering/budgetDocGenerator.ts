@@ -22,7 +22,7 @@ const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits:
 // SHARED STYLES — FIX D1-D6, B10
 // ═══════════════════════════════════════════════════════════
 const CSS = `
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
 body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; padding:20px; }
 h1 { font-size:14px; margin-bottom:2px; color:#1e293b; text-transform:uppercase; letter-spacing:0.04em; }
 h2 { font-size:11px; color:#2563eb; margin:14px 0 6px; border-bottom:2px solid #2563eb; padding-bottom:3px; }
