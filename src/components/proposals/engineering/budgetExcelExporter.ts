@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
-import type { EngineeringConfig } from './types';
-import { isGrouper } from './types';
+import type { EngineeringConfig, ColorPalette } from './types';
+import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -22,13 +22,47 @@ function groupByChapter(items: any[]) {
   return map;
 }
 
-// ── Palette ──────────────────────────────────────────────────────────────────
-const C = {
-  BLUE_DARK : 'FF1E40AF', BLUE_MED  : 'FF2563EB', BLUE_LIGHT: 'FFEFF6FF',
-  GRAY_HEAD : 'FFE2E8F0', GRAY_SUB  : 'FFF1F5F9', GRAY_ROW  : 'FFF8FAFC',
-  WHITE     : 'FFFFFFFF', TEXT_DARK : 'FF1E293B', TEXT_MID  : 'FF475569',
-  BORDER    : 'FFCBD5E1', GREEN     : 'FF16A34A', AMBER     : 'FFD97706', RED: 'FFDC2626',
-};
+/** Convert CSS hex (#1e40af) to ARGB (FF1E40AF) for ExcelJS */
+function hexToArgb(hex: string): string {
+  const clean = hex.replace('#', '').toUpperCase();
+  return `FF${clean.padStart(6, '0')}`;
+}
+
+/** Lighten a hex color by a given amount (0-1) for subtle backgrounds */
+function lightenHex(hex: string, amount: number = 0.9): string {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  const lr = Math.round(r + (255 - r) * amount);
+  const lg = Math.round(g + (255 - g) * amount);
+  const lb = Math.round(b + (255 - b) * amount);
+  return `FF${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`.toUpperCase();
+}
+
+/** Resolve a paleta de cores do reportConfig */
+function resolvePalette(engConfig?: EngineeringConfig): ColorPalette {
+  return { ...DEFAULT_COLOR_PALETTE, ...(engConfig?.reportConfig?.colorPalette || {}) };
+}
+
+/** Build ExcelJS color palette from user config */
+function buildExcelColors(palette: ColorPalette) {
+  return {
+    BLUE_DARK : hexToArgb(palette.primary),
+    BLUE_MED  : hexToArgb(palette.accent),
+    BLUE_LIGHT: lightenHex(palette.accent, 0.88),
+    ETAPA_BG  : hexToArgb(palette.etapaBg),
+    COMP_BG   : hexToArgb(palette.composicaoBg),
+    INSUMO_BG : hexToArgb(palette.insumoBg),
+    SUB_BG    : hexToArgb(palette.subtotalBg),
+    GRAY_HEAD : 'FFE2E8F0', GRAY_SUB  : 'FFF1F5F9', GRAY_ROW  : 'FFF8FAFC',
+    WHITE     : 'FFFFFFFF', TEXT_DARK : 'FF1E293B', TEXT_MID  : 'FF475569',
+    BORDER    : 'FFCBD5E1', GREEN     : 'FF16A34A', AMBER     : 'FFD97706', RED: 'FFDC2626',
+  };
+}
+
+// ── Default static palette (used when no engConfig is available) ──
+const C = buildExcelColors(DEFAULT_COLOR_PALETTE);
 
 const border = (color = C.BORDER): Partial<ExcelJS.Borders> => ({
   top   : { style: 'thin', color: { argb: color } },
@@ -305,43 +339,115 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
   return saveWb(wb, 'orcamento-resumido.xlsx', returnBuffer);
 }
 
-// ── 2. ORÇAMENTO SINTÉTICO — mirrors docOrcamentoSintetico exactly ───────────
+// ── 2. ORÇAMENTO SINTÉTICO — with Base column, toggles & formulas ────────────
 export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  const rc = engConfig?.reportConfig || {} as any;
+  const showCU = rc.showCustoUnit !== false;
+  const showPU = rc.showPrecoUnit !== false;
+  const p = resolvePalette(engConfig);
+  const pc = buildExcelColors(p);
+
+  // Dynamic column set: ITEM | CÓDIGO | BASE | DESCRIÇÃO | UN. | QTD. | [CU] | [PU] | TOTAL
+  const headers: string[] = ['ITEM', 'CÓDIGO', 'BASE', 'DESCRIÇÃO', 'UN.', 'QTD.'];
+  const widths: { width: number }[] = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }];
+  if (showCU) { headers.push('CUSTO UNIT.'); widths.push({ width: 14 }); }
+  if (showPU) { headers.push('PREÇO UNIT.'); widths.push({ width: 14 }); }
+  headers.push('TOTAL');
+  widths.push({ width: 16 });
+  const colCount = headers.length;
+  const totalColIdx = colCount; // 1-indexed
+
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Sintético');
-  setupPrint(ws, false, engConfig?.reportConfig);
-  ws.columns = [{ width: 6 }, { width: 8 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }];
-  logoRow(wb, ws, 8, engConfig?.reportConfig);
+  setupPrint(ws, false, rc);
+  ws.columns = widths;
+  logoRow(wb, ws, colCount, rc);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const chapters = groupByChapter(items);
   const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
 
-  titleRow(ws, 'ORÇAMENTO SINTÉTICO', 8);
+  titleRow(ws, 'ORÇAMENTO SINTÉTICO', colCount);
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
   const rn0 = ws.rowCount + 1;
   const r0 = ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens`]);
-  ws.mergeCells(rn0, 1, rn0, 8);
-  r0.getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
+  ws.mergeCells(rn0, 1, rn0, colCount);
+  r0.getCell(1).font = { size: 9, color: { argb: pc.TEXT_MID } };
   ws.addRow([]);
-  metaRows(ws, engConfig, items, 8);
+  metaRows(ws, engConfig, items, colCount);
+
+  const subtotalRowNums: number[] = [];
 
   for (const [, ch] of chapters) {
-    sectionHeaderRow(ws, ch.title, 8);
-    headRow(ws, ['ITEM', 'CÓDIGO', 'DESCRIÇÃO', 'UN.', 'QTD.', 'CUSTO UNIT.', 'PREÇO UNIT.', 'TOTAL']);
+    sectionHeaderRow(ws, ch.title, colCount);
+    headRow(ws, headers);
+    const firstDataRow = ws.rowCount + 1;
     let idx = 0;
     for (const it of ch.items) {
       const qty = Number(it.quantity) || 0;
       const uc  = Number(it.unitCost) || 0;
       const up  = Number(it.unitPrice) || 0;
       const tp  = Number(it.totalPrice) || 0;
-      dataRow(ws, [it.itemNumber || '', it.code || '', it.description || '', it.unit || '', fmtQty(qty), fmt(uc), fmt(up), fmt(tp)], idx++, [5, 6, 7, 8]);
+      const vals: (string | number)[] = [it.itemNumber || '', it.code || '', it.sourceName || '—', it.description || '', it.unit || '', qty];
+      if (showCU) vals.push(uc);
+      if (showPU) vals.push(up);
+      vals.push(tp);
+      const r = dataRow(ws, vals, idx++, Array.from({ length: colCount - 5 }, (_, i) => 6 + i));
+      // Apply number format to numeric cells
+      const qtyCol = 6;
+      r.getCell(qtyCol).numFmt = '#,##0.00';
+      let ci = qtyCol + 1;
+      if (showCU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
+      if (showPU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
+      r.getCell(totalColIdx).numFmt = '#,##0.00';
     }
-    subtotalRow(ws, `Subtotal ${ch.title}`, fmt(ch.total), 8);
+    const lastDataRow = ws.rowCount;
+    // Subtotal with SUM formula
+    const stRn = ws.rowCount + 1;
+    const stRow = ws.addRow([`Subtotal ${ch.title}`, ...Array(colCount - 2).fill(''), '']);
+    ws.mergeCells(stRn, 1, stRn, colCount - 1);
+    stRow.height = 16;
+    // SUM formula for total column
+    const totalColLetter = String.fromCharCode(64 + totalColIdx);
+    if (firstDataRow <= lastDataRow) {
+      stRow.getCell(totalColIdx).value = { formula: `SUM(${totalColLetter}${firstDataRow}:${totalColLetter}${lastDataRow})` } as any;
+    } else {
+      stRow.getCell(totalColIdx).value = 0;
+    }
+    stRow.getCell(totalColIdx).numFmt = '#,##0.00';
+    for (let i = 1; i <= colCount; i++) {
+      const c = stRow.getCell(i);
+      c.fill = fill(pc.SUB_BG);
+      c.border = border(pc.BORDER);
+      c.font = { bold: true, size: 9, color: { argb: pc.TEXT_DARK } };
+      c.alignment = { horizontal: 'right', vertical: 'middle' };
+    }
+    subtotalRowNums.push(stRn);
+    ws.addRow([]);
   }
 
-  grandRow(ws, 'TOTAL GERAL DO ORÇAMENTO', [fmt(total)], 8);
-  bdiRows(ws, items, bdi, 8);
+  // Grand total with SUM of subtotals
+  const gRn = ws.rowCount + 1;
+  const gRow = ws.addRow(['TOTAL GERAL DO ORÇAMENTO', ...Array(colCount - 2).fill(''), '']);
+  if (colCount > 2) ws.mergeCells(gRn, 1, gRn, colCount - 1);
+  const totalColLetter = String.fromCharCode(64 + totalColIdx);
+  if (subtotalRowNums.length > 0) {
+    const sumRefs = subtotalRowNums.map(rn => `${totalColLetter}${rn}`).join('+');
+    gRow.getCell(totalColIdx).value = { formula: sumRefs } as any;
+  } else {
+    gRow.getCell(totalColIdx).value = total;
+  }
+  gRow.getCell(totalColIdx).numFmt = '#,##0.00';
+  gRow.height = 20;
+  for (let i = 1; i <= colCount; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(pc.BLUE_DARK);
+    c.border = border(pc.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: pc.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
+  bdiRows(ws, items, bdi, colCount);
   return saveWb(wb, 'orcamento-sintetico.xlsx', returnBuffer);
 }
 

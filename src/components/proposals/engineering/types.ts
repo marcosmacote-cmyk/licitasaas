@@ -198,6 +198,31 @@ export interface PrecisionConfig {
     casasDecimais: number;
 }
 
+/** Paleta de cores configurável para relatórios PDF/Excel */
+export interface ColorPalette {
+    /** Cor primária — headers de tabela, totais gerais */
+    primary: string;
+    /** Cor de destaque — seções, badges, etapas */
+    accent: string;
+    /** Cor de fundo de etapas */
+    etapaBg: string;
+    /** Cor de fundo de composições */
+    composicaoBg: string;
+    /** Cor de fundo de insumos */
+    insumoBg: string;
+    /** Cor de fundo de subtotais */
+    subtotalBg: string;
+}
+
+export const DEFAULT_COLOR_PALETTE: ColorPalette = {
+    primary: '#1e40af',
+    accent: '#2563eb',
+    etapaBg: '#eff6ff',
+    composicaoBg: '#f1f5f9',
+    insumoBg: '#fafaf9',
+    subtotalBg: '#f1f5f9',
+};
+
 /** Configuração de personalização dos relatórios (PDF/Excel) */
 export interface ReportConfig {
     // Header
@@ -229,6 +254,8 @@ export interface ReportConfig {
     showEncargosSociais?: boolean;
     showCoeficientes?: boolean;
     showBancoOrigem?: boolean;
+    /** Paleta de cores para relatórios. Se não definido, usa DEFAULT_COLOR_PALETTE. */
+    colorPalette?: Partial<ColorPalette>;
     /** Observações por composição (chave = código). Exibido nos relatórios PDF/XLS. */
     compositionNotes?: Record<string, string>;
     /** Logo da empresa em Base64 (data:image/...). Populado em runtime, não persistido. */
@@ -255,6 +282,7 @@ export const DEFAULT_REPORT_CONFIG: ReportConfig = {
     showEncargosSociais: true,
     showCoeficientes: true,
     showBancoOrigem: true,
+    colorPalette: { ...DEFAULT_COLOR_PALETTE },
 };
 
 export interface EngineeringConfig {

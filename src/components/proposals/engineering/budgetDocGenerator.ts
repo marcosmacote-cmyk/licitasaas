@@ -11,21 +11,27 @@ import type { BdiConfig, BdiTcuParams } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
-import type { EngItem, EngineeringConfig, EncargosSociaisConfig } from './types';
-import { isGrouper } from './types';
+import type { EngItem, EngineeringConfig, EncargosSociaisConfig, ColorPalette } from './types';
+import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
+/** Resolve a paleta de cores: user overrides > defaults */
+function resolvePalette(reportConfig?: any): ColorPalette {
+    return { ...DEFAULT_COLOR_PALETTE, ...(reportConfig?.colorPalette || {}) };
+}
+
 // ═══════════════════════════════════════════════════════════
-// SHARED STYLES — FIX D1-D6, B10
+// DYNAMIC CSS — reads from user color palette
 // ═══════════════════════════════════════════════════════════
-const CSS = `
+function buildCSS(palette: ColorPalette): string {
+    return `
 * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
 body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; margin:0; padding:0; }
 h1 { font-size:14px; margin-bottom:2px; color:#1e293b; text-transform:uppercase; letter-spacing:0.04em; }
-h2 { font-size:11px; color:#2563eb; margin:14px 0 6px; border-bottom:2px solid #2563eb; padding-bottom:3px; }
+h2 { font-size:11px; color:${palette.accent}; margin:14px 0 6px; border-bottom:2px solid ${palette.accent}; padding-bottom:3px; }
 .meta { font-size:9px; color:#64748b; margin-bottom:14px; }
 table { width:100%; border-collapse:collapse; margin-bottom:10px; page-break-inside:auto; }
 tr { page-break-inside:avoid; }
@@ -36,8 +42,8 @@ td { padding:4px 6px; border:1px solid #e2e8f0; font-size:9px; }
 .c { text-align:center; }
 .mono { font-family:Consolas,'Courier New',monospace; font-variant-numeric:tabular-nums; }
 .bold { font-weight:700; }
-.total { background:#f1f5f9; font-weight:700; border-top:2px solid #cbd5e1; }
-.grand { background:#1e40af; color:white; font-weight:700; font-size:10px; }
+.total { background:${palette.subtotalBg}; font-weight:700; border-top:2px solid #cbd5e1; }
+.grand { background:${palette.primary}; color:white; font-weight:700; font-size:10px; }
 .abc-a { color:#dc2626; font-weight:700; }
 .abc-b { color:#d97706; font-weight:600; }
 .abc-c { color:#16a34a; }
@@ -59,6 +65,7 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
   body { padding:0; }
 }
 `;
+}
 
 const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
 const CSS_PORTRAIT = `@media print { @page { size:A4 portrait; } }`;
@@ -68,6 +75,8 @@ export type DocMode = 'view' | 'download' | 'blob';
 /** Build a complete standalone HTML document string with embedded CSS */
 function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): string {
     const pageCss = landscape ? CSS_LANDSCAPE : CSS_PORTRAIT;
+    const palette = resolvePalette(reportConfig);
+    const css = buildCSS(palette);
     const rc = reportConfig || {};
     const now = new Date();
     const dataStr = now.toLocaleDateString('pt-BR');
@@ -144,7 +153,7 @@ function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = 
         : '';
 
     // ── Assemble full HTML with table-trick for repeating header/footer ──
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${pageCss}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${css}${pageCss}
 @media print { @page { margin:${Math.max(topMargin + 5, 15)}px 12mm ${Math.max(bottomMargin + 5, 15)}px 12mm; } }</style></head><body>
 ${fixedHeaderHtml}
 ${fixedFooterHtml}

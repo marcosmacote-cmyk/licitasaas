@@ -4,9 +4,9 @@
  * Permite customizar cabeçalhos, rodapés, campos legais e
  * opções de exibição dos relatórios PDF/Excel de engenharia.
  */
-import { Settings, FileText, Stamp, Eye, EyeOff, Image as ImageIcon } from 'lucide-react';
-import type { ReportConfig } from './types';
-import { DEFAULT_REPORT_CONFIG } from './types';
+import { Settings, FileText, Stamp, Eye, EyeOff, Image as ImageIcon, Palette, RotateCcw } from 'lucide-react';
+import type { ReportConfig, ColorPalette } from './types';
+import { DEFAULT_REPORT_CONFIG, DEFAULT_COLOR_PALETTE } from './types';
 
 interface Props {
     config: ReportConfig;
@@ -342,6 +342,59 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                         <Toggle label="Coeficientes no Analítico" checked={c.showCoeficientes !== false} onChange={v => set('showCoeficientes', v)} />
                         <Toggle label="Coluna Banco de Origem" checked={c.showBancoOrigem !== false} onChange={v => set('showBancoOrigem', v)} />
                     </div>
+                </div>
+            </div>
+
+            {/* ═══ PALETA DE CORES ═══ */}
+            <div style={S.section}>
+                <div style={S.sectionHeader}>
+                    <Palette size={16} color="var(--color-primary)" />
+                    Paleta de Cores dos Relatórios
+                </div>
+                <div style={S.sectionBody}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                        {([
+                            { key: 'primary', label: 'Cor Primária', hint: 'Headers de tabela, totais gerais' },
+                            { key: 'accent', label: 'Cor de Destaque', hint: 'Seções, badges, etapas' },
+                            { key: 'etapaBg', label: 'Fundo de Etapas', hint: 'Fundo dos títulos de etapa' },
+                            { key: 'composicaoBg', label: 'Fundo Composições', hint: 'Fundo do header de composição' },
+                            { key: 'insumoBg', label: 'Fundo Insumos', hint: 'Fundo dos itens de insumo' },
+                            { key: 'subtotalBg', label: 'Fundo Subtotais', hint: 'Fundo das linhas de subtotal' },
+                        ] as { key: keyof ColorPalette; label: string; hint: string }[]).map(({ key, label, hint }) => {
+                            const palette = { ...DEFAULT_COLOR_PALETTE, ...c.colorPalette };
+                            return (
+                                <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <label style={S.label}>{label}</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <input
+                                            type="color"
+                                            value={palette[key]}
+                                            onChange={e => set('colorPalette', { ...palette, [key]: e.target.value })}
+                                            style={{ width: 36, height: 28, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', padding: 2 }}
+                                        />
+                                        <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: 'var(--color-text-tertiary)' }}>{palette[key]}</span>
+                                    </div>
+                                    <span style={S.hint}>{hint}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {/* Preview strip */}
+                    <div style={{ marginTop: 12, display: 'flex', gap: 0, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                        {(['primary', 'accent', 'etapaBg', 'composicaoBg', 'insumoBg', 'subtotalBg'] as (keyof ColorPalette)[]).map(k => {
+                            const palette = { ...DEFAULT_COLOR_PALETTE, ...c.colorPalette };
+                            return <div key={k} style={{ flex: 1, height: 18, background: palette[k] }} title={k} />;
+                        })}
+                    </div>
+                    {/* Reset button */}
+                    <button
+                        type="button"
+                        onClick={() => set('colorPalette', { ...DEFAULT_COLOR_PALETTE })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}
+                    >
+                        <RotateCcw size={12} />
+                        Restaurar cores padrão
+                    </button>
                 </div>
             </div>
         </div>
