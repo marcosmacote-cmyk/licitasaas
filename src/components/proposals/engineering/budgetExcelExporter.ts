@@ -512,17 +512,17 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
-  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', `Banco: ${comp.sourceName || ''}`, `Unidade: ${comp.unit || ''}`]);
-  ws.mergeCells(rn, 1, rn, 5);
+  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', '', `Banco: ${comp.sourceName || ''}`, `Unidade: ${comp.unit || ''}`]);
+  ws.mergeCells(rn, 1, rn, 6);
   hdr.height = 18;
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 8; i++) {
     hdr.getCell(i).fill = fill(C.GRAY_SUB);
     hdr.getCell(i).border = border();
     hdr.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
   }
 
   // Insumos header
-  headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Total']);
+  headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
 
   // Insumos data
   (comp.items || []).forEach((ci: any, idx: number) => {
@@ -531,26 +531,34 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
     else if (ci.type === 'MATERIAL') tipo = 'Material';
     else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
     else if (ci.type === 'SERVICO') tipo = 'Serviço';
-    dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', ci.coefficient?.toFixed(4) || '', fmt(ci.totalCost || 0)], idx, [6, 7]);
+    const coef = Number(ci.coefficient) || 0;
+    const up = Number(ci.unitPrice) || 0;
+    const tp = Number(ci.totalPrice) || 0;
+    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coef, up, tp], idx, [6, 7, 8]);
+    r.getCell(6).numFmt = '#,##0.0000';
+    r.getCell(7).numFmt = '#,##0.00';
+    r.getCell(8).numFmt = '#,##0.00';
   });
 
   // Footer: Custo Unitário Total
   const costRn = ws.rowCount + 1;
-  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', fmt(comp.totalPrice || 0)]);
-  ws.mergeCells(costRn, 1, costRn, 6);
+  const totalPriceVal = Number(comp.totalPrice) || 0;
+  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', totalPriceVal]);
+  ws.mergeCells(costRn, 1, costRn, 7);
+  costRow.getCell(8).numFmt = '#,##0.00';
   costRow.height = 18;
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 8; i++) {
     costRow.getCell(i).fill = fill(C.BLUE_MED);
     costRow.getCell(i).border = border(C.BLUE_MED);
     costRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
-    costRow.getCell(i).alignment = { horizontal: i === 7 ? 'right' : 'left', vertical: 'middle' };
+    costRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
   }
 
   // BDI + Preço com BDI
   if (comp.valorBdi != null) {
     const bdiRn = ws.rowCount + 1;
-    const bdiRow = ws.addRow([`Valor do BDI: ${fmt(comp.valorBdi)}    |    Preço Unitário (com BDI): ${fmt(comp.valorComBdi || 0)}`, '', '', '', '', '', '']);
-    ws.mergeCells(bdiRn, 1, bdiRn, 7);
+    const bdiRow = ws.addRow([`Valor do BDI: ${fmt(comp.valorBdi)}    |    Preço Unitário (com BDI): ${fmt(comp.valorComBdi || 0)}`, '', '', '', '', '', '', '']);
+    ws.mergeCells(bdiRn, 1, bdiRn, 8);
     bdiRow.getCell(1).fill = fill(C.GRAY_SUB);
     bdiRow.getCell(1).border = border();
     bdiRow.getCell(1).font = { size: 8, color: { argb: C.TEXT_MID } };
@@ -560,14 +568,16 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
   // Quantity + Total (for analytical)
   if (showQty && comp.proposalQuantity) {
     const qRn = ws.rowCount + 1;
-    const qRow = ws.addRow([`Quantidade: ${fmtQty(comp.proposalQuantity)}`, '', '', '', '', 'PREÇO TOTAL =>', fmt(comp.proposalTotal || 0)]);
-    ws.mergeCells(qRn, 1, qRn, 5);
+    const proposalTotalVal = Number(comp.proposalTotal) || 0;
+    const qRow = ws.addRow([`Quantidade: ${fmtQty(comp.proposalQuantity)}`, '', '', '', '', '', 'PREÇO TOTAL =>', proposalTotalVal]);
+    ws.mergeCells(qRn, 1, qRn, 6);
+    qRow.getCell(8).numFmt = '#,##0.00';
     qRow.height = 16;
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 8; i++) {
       qRow.getCell(i).fill = fill(C.BLUE_LIGHT);
       qRow.getCell(i).border = border(C.BLUE_MED);
       qRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_DARK } };
-      qRow.getCell(i).alignment = { horizontal: i >= 6 ? 'right' : 'left', vertical: 'middle' };
+      qRow.getCell(i).alignment = { horizontal: i >= 7 ? 'right' : 'left', vertical: 'middle' };
     }
   }
 
@@ -575,7 +585,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
   if (comp.observacao) {
     const obsRn = ws.rowCount + 1;
     const obsRow = ws.addRow([`Obs: ${comp.observacao}`]);
-    ws.mergeCells(obsRn, 1, obsRn, 7);
+    ws.mergeCells(obsRn, 1, obsRn, 8);
     obsRow.height = 14;
     obsRow.getCell(1).fill = fill('FEFCE8');
     obsRow.getCell(1).border = border('FDE68A');
@@ -590,21 +600,21 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Analítico');
   setupPrint(ws, false, engConfig?.reportConfig);
-  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
-  logoRow(wb, ws, 7, engConfig?.reportConfig);
+  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 14 }, { width: 16 }];
+  logoRow(wb, ws, 8, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const total = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
   const chapters = groupByChapter(items);
 
-  titleRow(ws, 'PLANILHA ORÇAMENTÁRIA ANALÍTICA', 7);
+  titleRow(ws, 'PLANILHA ORÇAMENTÁRIA ANALÍTICA', 8);
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
   const rn0 = ws.rowCount + 1;
   ws.addRow([`BDI: ${(bdiRate * 100).toFixed(2)}% · ${billable.length} itens · Total: ${fmt(total)}`]);
-  ws.mergeCells(rn0, 1, rn0, 7);
+  ws.mergeCells(rn0, 1, rn0, 8);
   ws.getRow(rn0).getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
   ws.addRow([]);
-  metaRows(ws, engConfig, items, 7);
+  metaRows(ws, engConfig, items, 8);
 
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
@@ -629,16 +639,16 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
     for (const [prefix, chComps] of compMap) {
       const ch = chapters.get(prefix);
       const chTitle = ch ? ch.title : `Etapa ${prefix}`;
-      sectionHeaderRow(ws, chTitle, 7);
+      sectionHeaderRow(ws, chTitle, 8);
       for (const comp of chComps) renderCompXls(ws, comp, true);
       const chTotal = chComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
-      subtotalRow(ws, `Subtotal ${chTitle}`, fmt(chTotal), 7);
+      subtotalRow(ws, `Subtotal ${chTitle}`, fmt(chTotal), 8);
     }
   } catch (e: any) {
     ws.addRow([`Erro: ${e.message}`]);
   }
 
-  bdiRows(ws, items, bdi, 7);
+  bdiRows(ws, items, bdi, 8);
   return saveWb(wb, 'orcamento-analitico.xlsx', returnBuffer);
 }
 
@@ -647,17 +657,17 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Composições');
   setupPrint(ws, false, engConfig?.reportConfig);
-  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 16 }];
-  logoRow(wb, ws, 7, engConfig?.reportConfig);
+  ws.columns = [{ width: 12 }, { width: 10 }, { width: 10 }, { width: 38 }, { width: 7 }, { width: 12 }, { width: 14 }, { width: 16 }];
+  logoRow(wb, ws, 8, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
-  titleRow(ws, 'CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS', 7);
+  titleRow(ws, 'CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS', 8);
   const rn0 = ws.rowCount + 1;
   ws.addRow([`${billable.length} serviços`]);
-  ws.mergeCells(rn0, 1, rn0, 7);
+  ws.mergeCells(rn0, 1, rn0, 8);
   ws.getRow(rn0).getCell(1).font = { size: 9, color: { argb: C.TEXT_MID } };
   ws.addRow([]);
-  metaRows(ws, engConfig, items, 7);
+  metaRows(ws, engConfig, items, 8);
 
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
@@ -668,11 +678,11 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
       if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
     }
 
-    sectionHeaderRow(ws, 'Composições Principais', 7);
+    sectionHeaderRow(ws, 'Composições Principais', 8);
     for (const comp of report.principalCompositions) renderCompXls(ws, comp, false);
 
     if (report.auxiliaryCompositions?.length > 0) {
-      sectionHeaderRow(ws, 'Composições Auxiliares', 7);
+      sectionHeaderRow(ws, 'Composições Auxiliares', 8);
       for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false);
     }
   } catch (e: any) {
