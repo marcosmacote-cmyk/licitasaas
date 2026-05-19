@@ -167,7 +167,7 @@ function headRow(ws: ExcelJS.Worksheet, cols: string[]) {
   });
 }
 
-function dataRow(ws: ExcelJS.Worksheet, vals: (string | number)[], idx: number, rightCols: number[]) {
+function dataRow(ws: ExcelJS.Worksheet, vals: any[], idx: number, rightCols: number[]) {
   const r = ws.addRow(vals);
   const bg = idx % 2 === 0 ? C.WHITE : C.GRAY_ROW;
   r.height = 15;
@@ -414,10 +414,15 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       const uc  = Number(it.unitCost) || 0;
       const up  = Number(it.unitPrice) || 0;
       const tp  = Number(it.totalPrice) || 0;
-      const vals: (string | number)[] = [it.itemNumber || '', it.code || '', it.sourceName || '—', it.description || '', it.unit || '', qty];
+      const vals: any[] = [it.itemNumber || '', it.code || '', it.sourceName || '—', it.description || '', it.unit || '', qty];
       if (showCU) vals.push(uc);
       if (showPU) vals.push(up);
-      vals.push(tp);
+      if (engConfig?.reportConfig?.exportExcelWithFormulas && qty > 0 && up > 0 && showPU) {
+         const puColLetter = String.fromCharCode(64 + totalColIdx - 1);
+         vals.push({ formula: `F${ws.rowCount + 1}*${puColLetter}${ws.rowCount + 1}` });
+      } else {
+         vals.push(tp);
+      }
       const r = dataRow(ws, vals, idx++, Array.from({ length: colCount - 5 }, (_, i) => 6 + i));
       // Apply number format to numeric cells
       const qtyCol = 6;

@@ -341,6 +341,7 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                         <Toggle label="Tabela Encargos Sociais" checked={c.showEncargosSociais !== false} onChange={v => set('showEncargosSociais', v)} />
                         <Toggle label="Coeficientes no Analítico" checked={c.showCoeficientes !== false} onChange={v => set('showCoeficientes', v)} />
                         <Toggle label="Coluna Banco de Origem" checked={c.showBancoOrigem !== false} onChange={v => set('showBancoOrigem', v)} />
+                        <Toggle label="Exportar planilhas Excel com fórmulas dinâmicas nas linhas" checked={c.exportExcelWithFormulas === true} onChange={v => set('exportExcelWithFormulas', v)} />
                     </div>
                 </div>
             </div>

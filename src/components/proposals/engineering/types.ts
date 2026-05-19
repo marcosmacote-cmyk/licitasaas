@@ -254,6 +254,7 @@ export interface ReportConfig {
     showEncargosSociais?: boolean;
     showCoeficientes?: boolean;
     showBancoOrigem?: boolean;
+    exportExcelWithFormulas?: boolean;
     /** Paleta de cores para relatórios. Se não definido, usa DEFAULT_COLOR_PALETTE. */
     colorPalette?: Partial<ColorPalette>;
     /** Observações por composição (chave = código). Exibido nos relatórios PDF/XLS. */
@@ -282,6 +283,7 @@ export const DEFAULT_REPORT_CONFIG: ReportConfig = {
     showEncargosSociais: true,
     showCoeficientes: true,
     showBancoOrigem: true,
+    exportExcelWithFormulas: false,
     colorPalette: { ...DEFAULT_COLOR_PALETTE },
 };
 
