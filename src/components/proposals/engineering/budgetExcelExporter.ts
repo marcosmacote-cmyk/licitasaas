@@ -5,6 +5,19 @@ import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // Replicate groupByChapter from budgetDocGenerator for consistent data
+
+function applyPrecision(formulaStr: string, engConfig?: EngineeringConfig): string {
+    if (!engConfig?.precision) return formulaStr;
+    const tipo = engConfig.precision.tipo;
+    const casasDecimais = typeof engConfig.precision.casasDecimais === 'number' ? engConfig.precision.casasDecimais : 2;
+    if (tipo === 'ROUND') {
+        return `ROUND(${formulaStr}, ${casasDecimais})`;
+    } else if (tipo === 'TRUNCATE') {
+        return `TRUNC(${formulaStr}, ${casasDecimais})`;
+    }
+    return formulaStr;
+}
+
 function groupByChapter(items: any[]) {
   const map = new Map<string, { items: any[]; total: number; title: string }>();
   for (const it of items) {
@@ -419,7 +432,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       if (showPU) vals.push(up);
       if (engConfig?.reportConfig?.exportExcelWithFormulas && qty > 0 && up > 0 && showPU) {
          const puColLetter = String.fromCharCode(64 + totalColIdx - 1);
-         vals.push({ formula: `F${ws.rowCount + 1}*${puColLetter}${ws.rowCount + 1}` });
+         vals.push({ formula: applyPrecision(`F${ws.rowCount + 1}*${puColLetter}${ws.rowCount + 1}`, engConfig) });
       } else {
          vals.push(tp);
       }
