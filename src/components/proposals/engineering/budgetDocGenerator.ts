@@ -413,9 +413,9 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
 <h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
+<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════

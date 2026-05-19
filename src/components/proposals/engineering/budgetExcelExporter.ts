@@ -972,12 +972,12 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, true, engConfig?.reportConfig);
-  ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
+  ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 10 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
   logoRow(wb, ws, 8, engConfig?.reportConfig);
 
   titleRow(ws, 'CURVA ABC DE INSUMOS', 8);
   metaRows(ws, engConfig, insumos, 8);
-  headRow(ws, ['Nº', 'CÓDIGO', 'CATEGORIA', 'DESCRIÇÃO', 'UN.', 'CUSTO TOTAL', '% ITEM', '% ACUM.']);
+  headRow(ws, ['Nº', 'CÓDIGO', 'CATEGORIA', 'DESCRIÇÃO', 'BASE', 'UN.', 'CUSTO TOTAL', '% ITEM', '% ACUM.']);
 
   const list = [...(insumos || [])].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
   const total = list.reduce((s, i) => s + (Number(i.custoTotal) || 0), 0);
@@ -987,30 +987,30 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
     const pct = total > 0 ? v / total : 0;
     acum += pct;
     const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
-    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.unidade || '', v, pct, acum], idx, [6, 7, 8]);
-    r.getCell(6).numFmt = '#,##0.00';
-    r.getCell(7).numFmt = '0.00%';
+    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.sourceName || '', item.unidade || '', v, pct, acum], idx, [7, 8, 9]);
+    r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '0.00%';
-    r.getCell(7).font = { bold: true, size: 9, color: { argb: cls } };
+    r.getCell(9).numFmt = '0.00%';
     r.getCell(8).font = { bold: true, size: 9, color: { argb: cls } };
+    r.getCell(9).font = { bold: true, size: 9, color: { argb: cls } };
   });
 
   // Grand total with SUM formula
   const firstData = ws.rowCount - list.length + 1;
   const lastData = ws.rowCount;
   const gRn = ws.rowCount + 1;
-  const gRow = ws.addRow(['TOTAL', '', '', '', '', '', 1, '']);
-  ws.mergeCells(gRn, 1, gRn, 5);
+  const gRow = ws.addRow(['TOTAL', '', '', '', '', '', '', 1, '']);
+  ws.mergeCells(gRn, 1, gRn, 6);
   if (list.length > 0) {
-    gRow.getCell(6).value = { formula: `SUM(F${firstData}:F${lastData})` } as any;
+    gRow.getCell(7).value = { formula: `SUM(G${firstData}:G${lastData})` } as any;
   } else {
-    gRow.getCell(6).value = total;
+    gRow.getCell(7).value = total;
   }
-  gRow.getCell(6).numFmt = '#,##0.00';
-  gRow.getCell(7).value = 1;
-  gRow.getCell(7).numFmt = '0.00%';
+  gRow.getCell(7).numFmt = '#,##0.00';
+  gRow.getCell(8).value = 1;
+  gRow.getCell(8).numFmt = '0.00%';
   gRow.height = 20;
-  for (let i = 1; i <= 8; i++) {
+  for (let i = 1; i <= 9; i++) {
     const c = gRow.getCell(i);
     c.fill = fill(C.BLUE_DARK);
     c.border = border(C.BLUE_DARK);
