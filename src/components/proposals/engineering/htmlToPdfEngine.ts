@@ -228,29 +228,26 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
         const sectionDoc = sectionFrame.contentDocument!;
 
         try {
-            const bodyScrollH = Math.max(
-                sectionDoc.body.scrollHeight,
-                sectionDoc.documentElement.scrollHeight,
-                0
-            );
+            const wrapperEl = sectionDoc.querySelector('.content-wrapper') as HTMLElement || sectionDoc.body;
+            const contentHeight = Math.max(wrapperEl.offsetHeight, wrapperEl.scrollHeight, 0);
 
-            if (bodyScrollH < 25) {
+            if (contentHeight < 25) {
                 document.body.removeChild(sectionFrame);
                 continue;
             }
 
-            sectionFrame.style.height = `${bodyScrollH + 300}px`;
+            sectionFrame.style.height = `${contentHeight + 100}px`;
             await new Promise(r => setTimeout(r, 200));
 
             // Dynamic scale based on section height to completely prevent white-canvas browser limits
             let sectionScale = scale;
-            if (bodyScrollH > 16000) {
+            if (contentHeight > 16000) {
                 sectionScale = 1.0;
-            } else if (bodyScrollH > 8000) {
+            } else if (contentHeight > 8000) {
                 sectionScale = 1.25;
             }
 
-            const sectionCanvas = await captureToCanvas(sectionDoc.body, renderWidthPx, sectionScale);
+            const sectionCanvas = await captureToCanvas(wrapperEl, renderWidthPx, sectionScale);
 
             const bodyImgTotalMm = (sectionCanvas.height / sectionCanvas.width) * contentWidthMm;
             const pxPerMm = sectionCanvas.height / bodyImgTotalMm;
