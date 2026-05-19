@@ -156,65 +156,114 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
             windowWidth: renderWidthPx,
         });
 
-        // ── 6. Compor PDF multi-página ──
+        // ── 6. Smart page composition with row-boundary detection ──
         const pdf = new jsPDF({
             orientation: isLandscape ? 'l' : 'p',
             unit: 'mm',
             format: 'a4',
         });
 
-        // Body image total height in mm
         const bodyImgTotalMm = (bodyCanvas.height / bodyCanvas.width) * contentWidthMm;
-        // Reduce usable height by a small safety buffer to prevent content bleeding into footer
-        const safeBodyHeightMm = bodyHeightMm - 1;
-        // Overlap between pages (mm) to guarantee no content is lost at slice boundaries
-        const overlapMm = 3;
-        // Pixels per mm for the body canvas
         const pxPerMm = bodyCanvas.height / bodyImgTotalMm;
+        const safeBodyHeightMm = bodyHeightMm - 2; // safety buffer
+        const maxSlicePx = Math.floor(safeBodyHeightMm * pxPerMm);
 
-        // Calculate page count with overlap
-        const effectiveSlice = safeBodyHeightMm - overlapMm;
-        const totalPages = Math.max(1, Math.ceil((bodyImgTotalMm - overlapMm) / effectiveSlice));
+        // ── Row-boundary scanner ──
+        // Scans the canvas for horizontal rows that are "safe" to break at
+        // (white/light-gray uniform rows indicating gaps between table rows)
+        const canvasWidth = bodyCanvas.width;
+        const canvasHeight = bodyCanvas.height;
+        const imgData = bodyCanvas.getContext('2d')!.getImageData(0, 0, canvasWidth, canvasHeight);
+        const pixels = imgData.data;
 
-        // Pre-cache header/footer data URLs (avoid re-encoding per page)
+        /**
+         * Check if a horizontal pixel row is a "safe break" point.
+         * A safe row is one where the vast majority of pixels are white/very light
+         * (indicating whitespace between table rows, not mid-text).
+         * We sample every 4th pixel across the row for performance.
+         */
+        function isRowSafe(y: number): boolean {
+            if (y < 0 || y >= canvasHeight) return false;
+            let lightPixels = 0;
+            const sampleStep = 4;
+            const totalSamples = Math.floor(canvasWidth / sampleStep);
+            for (let x = 0; x < canvasWidth; x += sampleStep) {
+                const idx = (y * canvasWidth + x) * 4;
+                const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+                // Consider pixel "light" if all channels > 230 (near-white)
+                if (r > 230 && g > 230 && b > 230) lightPixels++;
+            }
+            // Safe if >90% of sampled pixels are light
+            return (lightPixels / totalSamples) > 0.90;
+        }
+
+        /**
+         * Find the best safe break point at or before targetY.
+         * Searches backwards from targetY up to `searchRange` pixels.
+         * A safe break needs at least 2 consecutive safe rows for reliability.
+         */
+        function findSafeBreak(targetY: number, searchRange: number = 200): number {
+            const clampedTarget = Math.min(targetY, canvasHeight - 1);
+            // Search backwards for a safe row
+            for (let y = clampedTarget; y > clampedTarget - searchRange && y > 0; y--) {
+                if (isRowSafe(y) && isRowSafe(y - 1)) {
+                    return y;
+                }
+            }
+            // No safe break found — fallback to target (will cut through content)
+            return clampedTarget;
+        }
+
+        // ── Build page break positions ──
+        const breakPositions: number[] = [0]; // start of first page
+        let currentY = 0;
+
+        while (currentY < canvasHeight) {
+            const idealEnd = currentY + maxSlicePx;
+            if (idealEnd >= canvasHeight) {
+                // Last page — no need to find break
+                break;
+            }
+            // Find nearest safe row boundary at or before the ideal cut point
+            const safeBreakY = findSafeBreak(idealEnd);
+            breakPositions.push(safeBreakY);
+            currentY = safeBreakY;
+        }
+
+        const totalPages = breakPositions.length;
+
+        // Pre-cache header/footer data URLs
         const hdrData = headerCanvas ? headerCanvas.toDataURL('image/png') : null;
         const ftrData = footerCanvas ? footerCanvas.toDataURL('image/png') : null;
 
         for (let page = 0; page < totalPages; page++) {
             if (page > 0) pdf.addPage();
 
-            // ── Draw header on this page ──
+            // ── Draw header ──
             if (hdrData) {
                 pdf.addImage(hdrData, 'PNG', marginX, marginY, contentWidthMm, headerHeightMm);
             }
 
-            // ── Draw body slice for this page ──
-            // Each page starts `overlapMm` earlier than the strict boundary (except page 0)
-            const sliceStartMm = page === 0 ? 0 : (page * effectiveSlice);
-            const remainingMm = bodyImgTotalMm - sliceStartMm;
-            const sliceHeightMm = Math.min(safeBodyHeightMm, remainingMm);
+            // ── Draw body slice ──
+            const sliceStartPx = breakPositions[page];
+            const sliceEndPx = page < totalPages - 1 ? breakPositions[page + 1] : canvasHeight;
+            const sliceHeightPx = sliceEndPx - sliceStartPx;
 
-            if (sliceHeightMm > 0) {
-                // Source coordinates in canvas pixels — use ceil to never truncate
-                const srcY = Math.floor(sliceStartMm * pxPerMm);
-                const srcH = Math.ceil(sliceHeightMm * pxPerMm);
-                const clampedSrcH = Math.min(srcH, bodyCanvas.height - srcY);
-
-                // Create slice canvas
+            if (sliceHeightPx > 0) {
                 const sliceCanvas = document.createElement('canvas');
-                sliceCanvas.width = bodyCanvas.width;
-                sliceCanvas.height = Math.max(1, clampedSrcH);
+                sliceCanvas.width = canvasWidth;
+                sliceCanvas.height = sliceHeightPx;
                 const ctx = sliceCanvas.getContext('2d')!;
                 ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-                ctx.drawImage(bodyCanvas, 0, srcY, bodyCanvas.width, clampedSrcH, 0, 0, bodyCanvas.width, sliceCanvas.height);
+                ctx.fillRect(0, 0, canvasWidth, sliceHeightPx);
+                ctx.drawImage(bodyCanvas, 0, sliceStartPx, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
 
                 const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-                const renderedSliceMm = (sliceCanvas.height / sliceCanvas.width) * contentWidthMm;
-                pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, renderedSliceMm);
+                const sliceHeightMm = (sliceHeightPx / canvasWidth) * contentWidthMm;
+                pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, sliceHeightMm);
             }
 
-            // ── Draw footer on this page ──
+            // ── Draw footer ──
             if (ftrData) {
                 const footerY = pageHeightMm - marginY - footerHeightMm;
                 pdf.addImage(ftrData, 'PNG', marginX, footerY, contentWidthMm, footerHeightMm);
