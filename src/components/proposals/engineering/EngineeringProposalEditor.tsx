@@ -12,6 +12,8 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { applyPrecision } from './precisionEngine';
+import { calcularCronograma } from './cronogramaEngine';
+import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
 import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
 import * as XLSX from 'xlsx';
@@ -493,6 +495,42 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // FIX ARQ-04: Cronograma data persisted in parent state to survive tab switches
     const [cronogramaData, setCronogramaData] = useState<{ meses: number; etapas: any[] } | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Consolidated insumos and cronograma results for BudgetDocsPanel
+    const [consolidatedInsumos, setConsolidatedInsumos] = useState<InsumoConsolidado[]>([]);
+
+    const cronogramaResult = useMemo(() => {
+        if (!cronogramaData || !cronogramaData.etapas || cronogramaData.etapas.length === 0) return null;
+        return calcularCronograma(cronogramaData.etapas, cronogramaData.meses);
+    }, [cronogramaData]);
+
+    const insumosLoadedRef = useRef(false);
+    useEffect(() => {
+        if (items.length === 0 || insumosLoadedRef.current) return;
+        insumosLoadedRef.current = true;
+
+        const loadInsumos = async () => {
+            try {
+                const payload = items
+                    .filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                    .map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
+                if (payload.length === 0) return;
+
+                const res = await fetch('/api/engineering/insumos-hub-resolve', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: payload }),
+                });
+                const data = await res.json();
+                if (data.insumos && data.insumos.length > 0) {
+                    setConsolidatedInsumos(data.insumos);
+                }
+            } catch (e) {
+                console.error('[Editor] Insumo consolidation failed:', e);
+            }
+        };
+        loadInsumos();
+    }, [items]);
 
     const effectiveBdi = bdiConfig.bdiGlobal;
     
@@ -1947,7 +1985,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             )}
 
             {activeTab === 'caderno' && (
-                <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={[]} cronogramaResult={null} proposalId={proposalId} engineeringConfig={engineeringConfig} />
+                <BudgetDocsPanel items={items} bdiConfig={bdiConfig} effectiveBdi={effectiveBdi} insumos={consolidatedInsumos} cronogramaResult={cronogramaResult} proposalId={proposalId} engineeringConfig={engineeringConfig} />
             )}
 
             {/* Tab Content: Planilha */}

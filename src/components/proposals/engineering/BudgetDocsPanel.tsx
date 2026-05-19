@@ -6,7 +6,7 @@
  * FIX A3: Botão "Exportar Caderno Completo"
  * FIX A5: Carta Proposta integrada ao caderno
  */
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings, Eye, TrendingUp, Hash } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta } from './budgetDocGenerator';
 import type { PropostaSectionId, DocMode } from './budgetDocGenerator';
@@ -14,7 +14,7 @@ import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xls
 import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
-import type { CronogramaResult } from './cronogramaEngine';
+import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig } from './types';
 import { isGrouper } from './types';
 
@@ -87,6 +87,61 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     const [showPropostaModal, setShowPropostaModal] = useState(false);
     const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['resumido', 'sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi']);
     const [includeCartaProposta, setIncludeCartaProposta] = useState(true);
+
+    const [localInsumos, setLocalInsumos] = useState<InsumoConsolidado[]>(insumos || []);
+    const [localCronogramaResult, setLocalCronogramaResult] = useState<CronogramaResult | null>(cronogramaResult);
+
+    // Sync with props when props have valid data
+    useEffect(() => {
+        if (insumos && insumos.length > 0) {
+            setLocalInsumos(insumos);
+        }
+    }, [insumos]);
+
+    useEffect(() => {
+        if (cronogramaResult) {
+            setLocalCronogramaResult(cronogramaResult);
+        }
+    }, [cronogramaResult]);
+
+    // Fallback resolution for insumos if empty but we have items
+    const insumosLoadedRef = useRef(false);
+    useEffect(() => {
+        if (localInsumos.length === 0 && items && items.length > 0 && !insumosLoadedRef.current) {
+            insumosLoadedRef.current = true;
+            const loadInsumos = async () => {
+                try {
+                    const payload = items
+                        .filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                        .map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
+                    if (payload.length === 0) return;
+
+                    const res = await fetch('/api/engineering/insumos-hub-resolve', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: payload }),
+                    });
+                    const data = await res.json();
+                    if (data.insumos && data.insumos.length > 0) {
+                        setLocalInsumos(data.insumos);
+                    }
+                } catch (e) {
+                    console.error('[BudgetDocsPanel] Local insumo fallback consolidation failed:', e);
+                }
+            };
+            loadInsumos();
+        }
+    }, [localInsumos.length, items]);
+
+    // Fallback resolution for cronograma if null but we have engineeringConfig
+    useEffect(() => {
+        if (!localCronogramaResult && engineeringConfig) {
+            const savedCronData = (engineeringConfig as any).cronogramaData;
+            if (savedCronData && savedCronData.etapas && savedCronData.etapas.length > 0) {
+                setLocalCronogramaResult(calcularCronograma(savedCronData.etapas, savedCronData.meses));
+            }
+        }
+    }, [localCronogramaResult, engineeringConfig]);
 
     const billable = items.filter(it => !isGrouper(it.type));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -190,9 +245,9 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     case 'analitico': await xlsOrcamentoAnalitico(proposalId, items, engConfigWithLogo, effectiveBdi); break;
                     case 'cpu': await xlsCpuBatch(proposalId, items, engConfigWithLogo, effectiveBdi); break;
                     case 'abc_servicos': xlsCurvaAbcServicos(items, engConfigWithLogo, effectiveBdi); break;
-                    case 'abc_insumos': xlsCurvaAbcInsumos(insumos, engConfigWithLogo); break;
+                    case 'abc_insumos': xlsCurvaAbcInsumos(localInsumos, engConfigWithLogo); break;
                     case 'cronograma':
-                        if (cronogramaResult) xlsCronograma(cronogramaResult, engConfigWithLogo);
+                        if (localCronogramaResult) xlsCronograma(localCronogramaResult, engConfigWithLogo);
                         else alert('Configure o cronograma primeiro.');
                         break;
                     case 'bdi': xlsBdiEncargos(engConfigWithLogo, effectiveBdi); break;
@@ -204,9 +259,9 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
                     case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
                     case 'abc_servicos': docCurvaAbcServicos(items, engConfigWithLogo, mode); break;
-                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engConfigWithLogo, mode); break;
+                    case 'abc_insumos': docCurvaAbcInsumos(localInsumos, engConfigWithLogo, mode); break;
                     case 'cronograma':
-                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig: engConfigWithLogo } as any, mode);
+                        if (localCronogramaResult) docCronograma({ ...localCronogramaResult, engineeringConfig: engConfigWithLogo } as any, mode);
                         else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
                         break;
                     case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engConfigWithLogo, mode); break;
@@ -234,11 +289,11 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'abc-servicos.xlsx',          gen: () => xlsCurvaAbcServicos(items, ec, effectiveBdi, true) },
                 { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, true) },
             ];
-            if (insumos.length > 0) {
-                excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(insumos, ec, true) });
+            if (localInsumos.length > 0) {
+                excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(localInsumos, ec, true) });
             }
-            if (cronogramaResult) {
-                excelFiles.push({ name: 'cronograma.xlsx', gen: () => xlsCronograma(cronogramaResult, ec, true) });
+            if (localCronogramaResult) {
+                excelFiles.push({ name: 'cronograma.xlsx', gen: () => xlsCronograma(localCronogramaResult, ec, true) });
             }
 
             for (const f of excelFiles) {
@@ -257,11 +312,11 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'abc-servicos.pdf',          gen: () => docCurvaAbcServicos(items, ec, 'blob') as any },
                 { name: 'bdi-encargos.pdf',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') as any },
             ];
-            if (insumos.length > 0) {
-                pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(insumos, ec, 'blob') as any });
+            if (localInsumos.length > 0) {
+                pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(localInsumos, ec, 'blob') as any });
             }
-            if (cronogramaResult) {
-                pdfFiles.push({ name: 'cronograma.pdf', gen: () => docCronograma({ ...cronogramaResult, engineeringConfig: ec } as any, 'blob') as any });
+            if (localCronogramaResult) {
+                pdfFiles.push({ name: 'cronograma.pdf', gen: () => docCronograma({ ...localCronogramaResult, engineeringConfig: ec } as any, 'blob') as any });
             }
 
             for (const f of pdfFiles) {
@@ -320,8 +375,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             }
             await docPropostaCompleta({
                 sections: propostaSections,
-                items, bdi: effectiveBdi, insumos,
-                cronogramaResult,
+                items, bdi: effectiveBdi, insumos: localInsumos,
+                cronogramaResult: localCronogramaResult,
                 bdiConfig,
                 proposalId,
                 engineeringConfig: engConfigWithLogo,
@@ -392,7 +447,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Caderno de Orçamento</h3>
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                                9 documentos · {billable.length} itens · {insumos.length} insumos · Total: {fmt(total)}
+                                9 documentos · {billable.length} itens · {localInsumos.length} insumos · Total: {fmt(total)}
                             </span>
                         </div>
                     </div>
@@ -474,7 +529,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                             {section.docs.map(doc => {
                                 const Icon = doc.icon;
                                 const isGenerating = generating === doc.id;
-                                const isDisabled = doc.id === 'abc_insumos' && insumos.length === 0;
+                                const isDisabled = doc.id === 'abc_insumos' && localInsumos.length === 0;
                                 const wasGenerated = generated[doc.id];
 
                                 return (
@@ -596,8 +651,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                 { id: 'analitico', label: 'Orçamento Analítico', desc: 'Composições detalhadas com insumos', icon: <ClipboardList size={18} color="#7c3aed" /> },
                                 { id: 'cpu', label: 'Composições de Custo (CPU)', desc: 'Caderno completo de composições unitárias', icon: <Calculator size={18} color="#c026d3" /> },
                                 { id: 'abc_servicos', label: 'Curva ABC de Serviços', desc: 'Ranking Pareto dos serviços', icon: <TrendingUp size={18} color="#059669" /> },
-                                { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${insumos.length} insumos classificados`, icon: <Package size={18} color="#d97706" />, disabled: insumos.length === 0 },
-                                { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: <Calendar size={18} color="#0284c7" />, disabled: !cronogramaResult },
+                                { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${localInsumos.length} insumos classificados`, icon: <Package size={18} color="#d97706" />, disabled: localInsumos.length === 0 },
+                                { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: <Calendar size={18} color="#0284c7" />, disabled: !localCronogramaResult },
                                 { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Composição detalhada do BDI', icon: <Hash size={18} color="#dc2626" /> },
                             ] as { id: string; label: string; desc: string; icon: React.ReactNode; disabled?: boolean }[]).map(item => {
                                 const isCarta = item.id === '_carta';

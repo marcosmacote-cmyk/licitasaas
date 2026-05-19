@@ -349,6 +349,21 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
         }
     }
 
+    // ── 4.5. Add dynamic page numbering (1/X format) ──
+    const totalPages = pdf.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 116, 139); // Slate-500
+        const pageText = `${i}/${totalPages}`;
+        
+        const xPos = pageWidthMm - marginX - 12;
+        const yPos = pageHeightMm - marginY - 6;
+        
+        pdf.text(pageText, xPos, yPos, { align: 'right' });
+    }
+
     // ── 5. Output PDF ──
     if (options.output === 'blob') {
         return pdf.output('blob');
