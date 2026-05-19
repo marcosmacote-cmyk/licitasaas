@@ -178,7 +178,7 @@ ${sigHtml}
  * - 'download': generates native PDF via jsPDF+html2canvas (direct download, no print dialog)
  * - 'blob': returns Blob for ZIP packaging (HTML format for maximum compatibility)
  */
-function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any, mode: DocMode = 'download'): Blob | void | Promise<void> {
+function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any, mode: DocMode = 'download'): Blob | void | Promise<Blob | void> {
     const fullHtml = buildFullHtmlDoc(title, html, landscape, reportConfig);
     
     if (mode === 'blob') {
