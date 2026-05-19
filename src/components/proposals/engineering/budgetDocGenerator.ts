@@ -56,9 +56,10 @@ td { padding:4px 6px; border:1px solid #e2e8f0; font-size:9px; }
 
 const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
 
-function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any) {
-    const w = window.open('', '_blank', 'width=1000,height=750');
-    if (!w) { alert('Habilite pop-ups.'); return; }
+export type DocMode = 'view' | 'download' | 'blob';
+
+/** Build a complete standalone HTML document string with embedded CSS */
+function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): string {
     const extraCss = landscape ? CSS_LANDSCAPE : '';
     const rc = reportConfig || {};
     const now = new Date();
@@ -114,16 +115,85 @@ function openDoc(title: string, html: string, landscape: boolean = false, report
         ? `<div style="margin-top:14px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:8px;color:#475569;"><strong>Observação:</strong> ${rc.observacaoGeral}</div>`
         : '';
 
-    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${CSS}${extraCss}</style></head><body>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${extraCss}</style></head><body>
 ${headerHtml}
-${html}
+${bodyHtml}
 ${obsHtml}
 ${sigHtml}
 ${footerImgHtml}
 <div class="footer">${footL}${footR ? `&nbsp;&nbsp;&nbsp;&nbsp;${footR}` : ''}</div>
 <div class="no-print"><button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Imprimir / Salvar PDF</button></div>
-</body></html>`);
+</body></html>`;
+}
+
+/** Download an HTML document as a .html file */
+function downloadHtmlFile(title: string, fullHtml: string) {
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+/** Get a Blob of the full HTML document (for ZIP packaging) */
+function getDocBlob(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): Blob {
+    const fullHtml = buildFullHtmlDoc(title, bodyHtml, landscape, reportConfig);
+    return new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+}
+
+/**
+ * Unified document output — supports 3 modes:
+ * - 'view': opens in new window (legacy behavior)
+ * - 'download': downloads as .html file (no print dialog)
+ * - 'blob': returns Blob for ZIP packaging
+ */
+function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any, mode: DocMode = 'view'): Blob | void {
+    const fullHtml = buildFullHtmlDoc(title, html, landscape, reportConfig);
+    
+    if (mode === 'blob') {
+        return new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+    }
+    
+    if (mode === 'download') {
+        downloadHtmlFile(title, fullHtml);
+        return;
+    }
+    
+    // mode === 'view' — open in new window
+    const w = window.open('', '_blank', 'width=1000,height=750');
+    if (!w) { alert('Habilite pop-ups.'); return; }
+    w.document.write(fullHtml);
     w.document.close();
+}
+
+// ═══════════════════════════════════════════════════════════
+// API Cache — avoids duplicate analytical-report calls for Analítico + CPU
+// ═══════════════════════════════════════════════════════════
+const _analyticalCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 60_000; // 60s
+
+async function fetchAnalyticalReport(proposalId: string, items: any[], bdi: number, engineeringConfig: any): Promise<any> {
+    const key = proposalId;
+    const cached = _analyticalCache.get(key);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
+
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, bdi, engineeringConfig }),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
+    const data = await res.json();
+    _analyticalCache.set(key, { data, ts: Date.now() });
+    return data;
+}
+
+/** Invalidate analytical cache (call when items change) */
+export function invalidateAnalyticalCache(proposalId?: string) {
+    if (proposalId) _analyticalCache.delete(proposalId);
+    else _analyticalCache.clear();
 }
 
 function renderConfigTable(engineeringConfig?: any) {
@@ -199,7 +269,7 @@ function groupByChapter(items: EngItem[]) {
 // ═══════════════════════════════════════════════════════════
 // 1. ORÇAMENTO RESUMIDO
 // ═══════════════════════════════════════════════════════════
-export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringConfig?: any) {
+export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
     const chapters = groupByChapter(items);
     // FIX B4: Only count billable items (not ETAPAs/SUBETAPAs)
     const billable = items.filter(i => !isGrouper(i.type as any));
@@ -209,20 +279,20 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringC
         const pct = total > 0 ? (ch.total / total * 100) : 0;
         rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
     }
-    openDoc('Orçamento Resumido', `
+    return openDoc('Orçamento Resumido', `
 <h1>ORÇAMENTO RESUMIDO</h1>
 <div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
-${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, false, engineeringConfig?.reportConfig);
+${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 2. ORÇAMENTO SINTÉTICO
 // ═══════════════════════════════════════════════════════════
-export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any) {
+export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
     const rc = engineeringConfig?.reportConfig || {};
     const showCU = rc.showCustoUnit !== false;
     const showPU = rc.showPrecoUnit !== false;
@@ -243,13 +313,13 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
     }
     html += `<table><tfoot><tr class="grand"><td colspan="${5 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
     html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
-    openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig);
+    return openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 5. CURVA ABC DE SERVIÇOS
 // ═══════════════════════════════════════════════════════════
-export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
+export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, mode: DocMode = 'download') {
     // FIX B8: Filter using isGrouper instead of unit check
     const validItems = items.filter(it => !isGrouper(it.type as any));
     const total = validItems.reduce((s, i) => s + i.totalPrice, 0);
@@ -264,19 +334,19 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any) {
         const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
         rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
-    openDoc('Curva ABC de Serviços', `
+    return openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${validItems.length} serviços · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig);
+<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 6. CURVA ABC DE INSUMOS
 // ═══════════════════════════════════════════════════════════
-export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConfig?: any) {
+export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConfig?: any, mode: DocMode = 'download') {
     const total = insumos.reduce((s, i) => s + i.custoTotal, 0);
     const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
     let accum = 0;
@@ -288,19 +358,19 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
         const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
         rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
-    openDoc('Curva ABC de Insumos', `
+    return openDoc('Curva ABC de Insumos', `
 <h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig);
+<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 7. CRONOGRAMA FÍSICO-FINANCEIRO
 // ═══════════════════════════════════════════════════════════
-export function docCronograma(result: CronogramaResult) {
+export function docCronograma(result: CronogramaResult, mode: DocMode = 'download') {
     const { meses, etapas, mensalTotal, acumulado, percentMensal, percentAcumulado, totalGlobal } = result;
     let headerCols = '<th>Etapa</th><th class="r">Valor</th>';
     for (let m = 0; m < meses; m++) headerCols += `<th class="r">Mês ${m+1}</th>`;
@@ -337,11 +407,11 @@ export function docCronograma(result: CronogramaResult) {
     rows += `<td class="r">100%</td></tr>`;
 
     // FIX D5: Cronograma uses landscape orientation
-    openDoc('Cronograma Físico-Financeiro', `
+    return openDoc('Cronograma Físico-Financeiro', `
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable((result as any).engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true, (result as any).engineeringConfig?.reportConfig);
+<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true, (result as any).engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -492,7 +562,7 @@ BDI = { ${(p1*p2*p3/p4).toFixed(4)} − 1 } × 100<br>
     return h;
 }
 
-export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?: EngineeringConfig) {
+export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?: EngineeringConfig, mode: DocMode = 'download') {
     const tcu = config.tcu;
     const isTcu = config.mode === 'TCU';
     const regime = engConfig?.regimeOneracao || 'DESONERADO';
@@ -520,7 +590,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     }
     esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
 
-    openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, false, engConfig?.reportConfig);
+    return openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, false, engConfig?.reportConfig, mode);
 }
 
 // Helper para renderizar Composição no padrão TCU
@@ -590,9 +660,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
 // ═══════════════════════════════════════════════════════════
 // 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard - Only Principals)
 // ═══════════════════════════════════════════════════════════
-export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any) {
-    const token = localStorage.getItem('token') || '';
-    const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
     // FIX B4: Only count billable items
     const billable = items.filter(i => !isGrouper(i.type as any));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -600,14 +668,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     let html = `<h1>PLANILHA ORÇAMENTÁRIA ANALÍTICA</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens · Total: ${fmt(total)}</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
-        // FIX B7: Pass engineeringConfig to backend for proper LS calculation
-        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
-            method: 'POST',
-            headers: hdrs,
-            body: JSON.stringify({ items, bdi, engineeringConfig })
-        });
-        if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
-        const report = await res.json();
+        const report = await fetchAnalyticalReport(proposalId, items, bdi, engineeringConfig);
 
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
@@ -651,28 +712,19 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     }
 
     html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
-    openDoc('Planilha Orçamentária Analítica', html, false, engineeringConfig?.reportConfig);
+    return openDoc('Planilha Orçamentária Analítica', html, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
 // 4. CPU — COMPOSIÇÕES DE CUSTOS UNITÁRIOS (batch)
 // ═══════════════════════════════════════════════════════════
-export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any) {
-    const token = localStorage.getItem('token') || '';
-    const hdrs = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
+export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
     // FIX B4/B7: Count only billable items and pass engineeringConfig to backend
     const billable = items.filter(i => !isGrouper(i.type as any));
     let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${billable.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
 
     try {
-        const res = await fetch(`/api/engineering/proposals/${proposalId}/analytical-report`, { 
-            method: 'POST',
-            headers: hdrs,
-            body: JSON.stringify({ items, bdi, engineeringConfig })
-        });
-        if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
-        const report = await res.json();
+        const report = await fetchAnalyticalReport(proposalId, items, bdi, engineeringConfig);
 
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
@@ -696,7 +748,7 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
     }
 
-    openDoc('Caderno de Composições', html, false, engineeringConfig?.reportConfig);
+    return openDoc('Caderno de Composições', html, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -716,6 +768,8 @@ export interface PropostaCompletaParams {
     engineeringConfig?: EngineeringConfig;
     /** Pre-rendered Carta Proposta HTML (from LetterPdfExporter.buildHtml) */
     cartaHtml?: string;
+    /** Output mode: view, download, or blob */
+    mode?: DocMode;
 }
 
 export async function docPropostaCompleta(params: PropostaCompletaParams) {
@@ -936,5 +990,5 @@ ${renderConfigTable(engineeringConfig)}
 
     // Combine with page breaks
     const combined = parts.map((p, i) => i === 0 ? p : `<div style="page-break-before:always;"></div>${p}`).join('\n');
-    openDoc('Proposta Completa', combined, false, rc);
+    return openDoc('Proposta Completa', combined, false, rc, params.mode || 'download');
 }

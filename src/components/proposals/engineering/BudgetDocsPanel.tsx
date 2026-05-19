@@ -7,9 +7,9 @@
  * FIX A5: Carta Proposta integrada ao caderno
  */
 import { useState, useCallback, useMemo } from 'react';
-import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings } from 'lucide-react';
+import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings, Eye } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta } from './budgetDocGenerator';
-import type { PropostaSectionId } from './budgetDocGenerator';
+import type { PropostaSectionId, DocMode } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
 import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
@@ -178,9 +178,10 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
         setGenerated(prev => ({ ...prev, [docId]: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }));
     };
 
-    const handleGenerate = async (docId: string, format: 'pdf' | 'excel' = 'pdf') => {
-        setGenerating(docId + (format === 'excel' ? '_xls' : ''));
+    const handleGenerate = async (docId: string, format: 'pdf' | 'excel' | 'view' = 'pdf') => {
+        setGenerating(docId + (format === 'excel' ? '_xls' : format === 'view' ? '_view' : ''));
         try {
+            const mode = format === 'view' ? 'view' as const : 'download' as const;
             if (format === 'excel') {
                 // Fase 3/C1: Excel export
                 switch (docId) {
@@ -198,17 +199,17 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 }
             } else {
                 switch (docId) {
-                    case 'resumido': docOrcamentoResumido(items, effectiveBdi, engConfigWithLogo); break;
-                    case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engConfigWithLogo); break;
-                    case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engConfigWithLogo); break;
-                    case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engConfigWithLogo); break;
-                    case 'abc_servicos': docCurvaAbcServicos(items, engConfigWithLogo); break;
-                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engConfigWithLogo); break;
+                    case 'resumido': docOrcamentoResumido(items, effectiveBdi, engConfigWithLogo, mode); break;
+                    case 'sintetico': docOrcamentoSintetico(items, effectiveBdi, engConfigWithLogo, mode); break;
+                    case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
+                    case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
+                    case 'abc_servicos': docCurvaAbcServicos(items, engConfigWithLogo, mode); break;
+                    case 'abc_insumos': docCurvaAbcInsumos(insumos, engConfigWithLogo, mode); break;
                     case 'cronograma':
-                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig: engConfigWithLogo } as any);
+                        if (cronogramaResult) docCronograma({ ...cronogramaResult, engineeringConfig: engConfigWithLogo } as any, mode);
                         else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
                         break;
-                    case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engConfigWithLogo); break;
+                    case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engConfigWithLogo, mode); break;
                 }
             }
             markGenerated(docId + (format === 'excel' ? '_xls' : ''));
@@ -216,7 +217,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
         setGenerating(null);
     };
 
-    // FIX A3: Generate ZIP with all PDFs + Excel files
+    // FIX A3: Generate ZIP with all HTML + Excel files (no windows opened)
     const handleExportAll = async () => {
         setGenerating('all');
         try {
@@ -247,12 +248,27 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 } catch (e) { console.warn(`ZIP: falha ao gerar ${f.name}`, e); }
             }
 
-            // ── Generate individual PDFs (open in new window for user to print/save) ──
-            const pdfDocs = DOC_SECTIONS.flatMap(s => s.docs.map(d => d.id));
-            for (const docId of pdfDocs) {
-                if (docId === 'abc_insumos' && insumos.length === 0) continue;
-                if (docId === 'cronograma' && !cronogramaResult) continue;
-                await handleGenerate(docId);
+            // ── HTML report files (using 'blob' mode — no windows opened) ──
+            const htmlFiles: { name: string; gen: () => Blob | void | Promise<Blob | void> }[] = [
+                { name: 'orcamento-resumido.html',   gen: () => docOrcamentoResumido(items, effectiveBdi, ec, 'blob') },
+                { name: 'orcamento-sintetico.html',  gen: () => docOrcamentoSintetico(items, effectiveBdi, ec, 'blob') },
+                { name: 'orcamento-analitico.html',   gen: () => docOrcamentoAnalitico(proposalId, items, effectiveBdi, ec, 'blob') },
+                { name: 'composicoes-cpu.html',       gen: () => docCpuBatch(proposalId, items, effectiveBdi, ec, 'blob') },
+                { name: 'abc-servicos.html',          gen: () => docCurvaAbcServicos(items, ec, 'blob') },
+                { name: 'bdi-encargos.html',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') },
+            ];
+            if (insumos.length > 0) {
+                htmlFiles.push({ name: 'abc-insumos.html', gen: () => docCurvaAbcInsumos(insumos, ec, 'blob') });
+            }
+            if (cronogramaResult) {
+                htmlFiles.push({ name: 'cronograma.html', gen: () => docCronograma({ ...cronogramaResult, engineeringConfig: ec } as any, 'blob') });
+            }
+
+            for (const f of htmlFiles) {
+                try {
+                    const blob = await f.gen();
+                    if (blob) zip.file(f.name, blob);
+                } catch (e) { console.warn(`ZIP: falha ao gerar ${f.name}`, e); }
             }
 
             // ── Download ZIP ──
@@ -490,24 +506,39 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                                 {doc.desc}
                                             </div>
                                         </div>
-                                        {/* FIX A2: Multi-format export buttons */}
+                                        {/* Multi-format export buttons: Baixar | Visualizar | XLS */}
                                         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                                             <button
                                                 onClick={() => handleGenerate(doc.id, 'pdf')}
                                                 disabled={isGenerating || isDisabled}
-                                                title="Exportar PDF"
+                                                title="Baixar arquivo HTML"
                                                 style={{
-                                                    padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                                                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
                                                     border: `1px solid ${doc.color}40`, background: `${doc.color}08`,
                                                     color: doc.color, cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                                    display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.72rem',
+                                                    display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem',
                                                     fontWeight: 600, transition: 'all 0.15s',
                                                 }}
                                             >
                                                 {isGenerating ? <Loader2 size={12} className="spin" /> : <Download size={12} />}
-                                                PDF
+                                                Baixar
                                             </button>
-                                            {/* FIX A2/C1: Excel export button — now functional */}
+                                            <button
+                                                onClick={() => handleGenerate(doc.id, 'view')}
+                                                disabled={isGenerating || isDisabled}
+                                                title="Visualizar em nova janela"
+                                                style={{
+                                                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                                                    border: `1px solid rgba(100,116,139,0.3)`, background: 'rgba(100,116,139,0.05)',
+                                                    color: '#64748b', cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem',
+                                                    fontWeight: 600, transition: 'all 0.15s',
+                                                }}
+                                            >
+                                                {generating === doc.id + '_view' ? <Loader2 size={12} className="spin" /> : <Eye size={12} />}
+                                                Ver
+                                            </button>
+                                            {/* Excel export */}
                                             <button
                                                 onClick={() => handleGenerate(doc.id, 'excel')}
                                                 disabled={isGenerating || isDisabled}
