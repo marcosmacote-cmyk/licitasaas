@@ -336,14 +336,14 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 
     for (const [prefix, ch] of chapters) {
         html += `<h2>${ch.title}</h2>
-<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
-        const colSpan = 5 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
+<table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
+        const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
         for (const it of ch.items) {
-            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
         }
         html += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
-    html += `<table><tfoot><tr class="grand"><td colspan="${5 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
+    html += `<table><tfoot><tr class="grand"><td colspan="${6 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
     html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
     return openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig, mode);
 }
@@ -364,15 +364,15 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, m
         const pctAccum = total > 0 ? (accum / total * 100) : 0;
         const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
         const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${validItems.length} serviços · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
+<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -839,14 +839,14 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
         let h = `<h1>ORÇAMENTO SINTÉTICO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
         for (const [prefix, ch] of chapters) {
             h += `<h2>${ch.title}</h2>
-<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
-            const colSpan = 5 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
+<table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
+            const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
             for (const it of ch.items) {
-                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
             }
             h += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
         }
-        h += `<table><tfoot><tr class="grand"><td colspan="${5 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
+        h += `<table><tfoot><tr class="grand"><td colspan="${6 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
         h += renderGlobalTotals(billable, bdi, rc);
         parts.push(h);
     }
@@ -932,14 +932,14 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             const pctAccum = svTotal > 0 ? (accum / svTotal * 100) : 0;
             const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
             const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${validItems.length} serviços · Total: ${fmt(svTotal)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="5">TOTAL</td><td class="r">${fmt(svTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(svTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
     }
 
     // ── Curva ABC de Insumos ──
