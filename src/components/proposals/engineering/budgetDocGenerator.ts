@@ -23,7 +23,7 @@ const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits:
 // ═══════════════════════════════════════════════════════════
 const CSS = `
 * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
-body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; padding:20px; }
+body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; margin:0; padding:0; }
 h1 { font-size:14px; margin-bottom:2px; color:#1e293b; text-transform:uppercase; letter-spacing:0.04em; }
 h2 { font-size:11px; color:#2563eb; margin:14px 0 6px; border-bottom:2px solid #2563eb; padding-bottom:3px; }
 .meta { font-size:9px; color:#64748b; margin-bottom:14px; }
@@ -41,67 +41,95 @@ td { padding:4px 6px; border:1px solid #e2e8f0; font-size:9px; }
 .abc-a { color:#dc2626; font-weight:700; }
 .abc-b { color:#d97706; font-weight:600; }
 .abc-c { color:#16a34a; }
-.footer { margin-top:12px; font-size:7.5px; color:#94a3b8; text-align:center; border-top:1px solid #cbd5e1; padding-top:6px; }
-.no-print { text-align:center; margin-top:12px; }
 .cover { page-break-after:always; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:80vh; text-align:center; }
 .cover h1 { font-size:22px; margin-bottom:8px; }
 .cover .meta { font-size:11px; }
+.fixed-header { position:fixed; top:0; left:0; right:0; text-align:center; background:#fff; z-index:100; padding:0; }
+.fixed-header img { max-width:100%; height:auto; display:block; margin:0 auto; }
+.fixed-footer { position:fixed; bottom:0; left:0; right:0; text-align:center; background:#fff; z-index:100; padding:0; }
+.fixed-footer img { max-width:100%; height:auto; display:block; margin:0 auto; }
+table.print-wrapper { width:100%; border:none; border-collapse:collapse; }
+table.print-wrapper > thead > tr > td { border:none; padding:0; }
+table.print-wrapper > tfoot > tr > td { border:none; padding:0; }
+table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:top; }
+.content-wrapper { padding:2px 15px; }
+.no-print { text-align:center; margin-top:12px; }
 @media print {
   .no-print { display:none; }
-  @page { margin:15mm 12mm; size:A4; }
-  @page:first { margin-top:20mm; }
   body { padding:0; }
 }
 `;
 
 const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
+const CSS_PORTRAIT = `@media print { @page { size:A4 portrait; } }`;
 
 export type DocMode = 'view' | 'download' | 'blob';
 
 /** Build a complete standalone HTML document string with embedded CSS */
 function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): string {
-    const extraCss = landscape ? CSS_LANDSCAPE : '';
+    const pageCss = landscape ? CSS_LANDSCAPE : CSS_PORTRAIT;
     const rc = reportConfig || {};
     const now = new Date();
     const dataStr = now.toLocaleDateString('pt-BR');
     const horaStr = now.toLocaleTimeString('pt-BR');
 
-    // Header image (timbrado) — takes priority over logo + text
+    // ── Fixed Header (repeats on every printed page via position:fixed) ──
     const headerImgB64 = rc.headerImageBase64 || '';
     const headerImgH = rc.headerImageHeight || 80;
+    let fixedHeaderContent = '';
+    let topMargin = 20; // base margin when no header
 
-    let headerHtml = '';
     if (headerImgB64) {
-        headerHtml = `<div style="text-align:center;margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;"><img src="${headerImgB64}" style="max-height:${headerImgH}px;max-width:100%;object-fit:contain;" /></div>`;
+        fixedHeaderContent = `<img src="${headerImgB64}" alt="Cabeçalho" style="max-height:${headerImgH}px;max-width:100%;object-fit:contain;" />`;
+        topMargin = headerImgH + 16;
     } else {
-        // Logo + text lines fallback
         const logoBase64 = rc.logoBase64 || '';
         const logoPos = rc.logoPosition || 'left';
         const logoMaxH = rc.logoMaxHeight || 50;
         const logoHtml = logoBase64
-            ? `<div style="text-align:${logoPos};margin-bottom:6px;"><img src="${logoBase64}" style="max-height:${logoMaxH}px;max-width:90%;object-fit:contain;" /></div>`
+            ? `<div style="text-align:${logoPos};margin-bottom:4px;"><img src="${logoBase64}" style="max-height:${logoMaxH}px;max-width:90%;object-fit:contain;" /></div>`
             : '';
         const hdrLines = [rc.headerLine1, rc.headerLine2, rc.headerLine3].filter(Boolean);
         const headerTextHtml = hdrLines.length > 0
-            ? `<div style="text-align:center;margin-bottom:4px;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:2px;">${l}</div>`).join('')}</div>`
+            ? `<div style="text-align:center;">${hdrLines.map((l: string, i: number) => `<div style="font-size:${i === 0 ? '11px' : '8.5px'};font-weight:${i === 0 ? '700' : '400'};color:#334155;margin-bottom:1px;">${l}</div>`).join('')}</div>`
             : '';
         if (logoHtml || headerTextHtml) {
-            headerHtml = `<div style="margin-bottom:12px;border-bottom:1px solid #cbd5e1;padding-bottom:8px;">${logoHtml}${headerTextHtml}</div>`;
+            fixedHeaderContent = `${logoHtml}${headerTextHtml}`;
+            topMargin = (logoBase64 ? logoMaxH : 0) + (hdrLines.length * 14) + 16;
         }
     }
 
-    // Footer image
-    const footerImgB64 = rc.footerImageBase64 || '';
-    const footerImgH = rc.footerImageHeight || 60;
-    const footerImgHtml = footerImgB64
-        ? `<div style="text-align:center;margin-top:12px;border-top:1px solid #cbd5e1;padding-top:8px;"><img src="${footerImgB64}" style="max-height:${footerImgH}px;max-width:100%;object-fit:contain;" /></div>`
+    const fixedHeaderHtml = fixedHeaderContent
+        ? `<div class="fixed-header" style="border-bottom:1px solid #cbd5e1;padding:6px 15px 4px;">${fixedHeaderContent}</div>`
         : '';
 
-    // Custom footer text
-    const footL = (rc.footerLine1 || `LicitaSaaS — ${dataStr} ${horaStr}`).replace('{data}', dataStr).replace('{hora}', horaStr);
-    const footR = (rc.footerLine2 || '').replace('{pagina}', '').replace('{total}', '');
+    // ── Fixed Footer (repeats on every printed page via position:fixed) ──
+    const footerImgB64 = rc.footerImageBase64 || '';
+    const footerImgH = rc.footerImageHeight || 60;
+    let fixedFooterContent = '';
+    let bottomMargin = 15; // base margin when no footer
 
-    // Signature lines
+    // Footer text lines — ONLY user-defined, no auto-generated notes
+    const footL = rc.footerLine1 ? rc.footerLine1.replace('{data}', dataStr).replace('{hora}', horaStr) : '';
+    const footR = rc.footerLine2 ? rc.footerLine2.replace('{pagina}', '').replace('{total}', '') : '';
+    const hasFooterText = footL || footR;
+
+    if (footerImgB64) {
+        fixedFooterContent = `<img src="${footerImgB64}" alt="Rodapé" style="max-height:${footerImgH}px;max-width:100%;object-fit:contain;" />`;
+        if (hasFooterText) {
+            fixedFooterContent += `<div style="font-size:7.5px;color:#64748b;margin-top:3px;display:flex;justify-content:space-between;padding:0 4px;"><span>${footL}</span><span>${footR}</span></div>`;
+        }
+        bottomMargin = footerImgH + (hasFooterText ? 20 : 10);
+    } else if (hasFooterText) {
+        fixedFooterContent = `<div style="font-size:8px;color:#64748b;display:flex;justify-content:space-between;padding:0 4px;"><span>${footL}</span><span>${footR}</span></div>`;
+        bottomMargin = 25;
+    }
+
+    const fixedFooterHtml = fixedFooterContent
+        ? `<div class="fixed-footer" style="border-top:1px solid #cbd5e1;padding:4px 15px 6px;">${fixedFooterContent}</div>`
+        : '';
+
+    // ── Signature lines (end of document, not repeated) ──
     let sigHtml = '';
     if (rc.showSignatureLines) {
         const lines: string[] = [];
@@ -110,45 +138,38 @@ function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = 
         sigHtml = lines.join('');
     }
 
-    // General observation
+    // ── General observation (end of document) ──
     const obsHtml = rc.observacaoGeral
         ? `<div style="margin-top:14px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:8px;color:#475569;"><strong>Observação:</strong> ${rc.observacaoGeral}</div>`
         : '';
 
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${extraCss}</style></head><body>
-${headerHtml}
+    // ── Assemble full HTML with table-trick for repeating header/footer ──
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${pageCss}
+@media print { @page { margin:${Math.max(topMargin + 5, 15)}px 12mm ${Math.max(bottomMargin + 5, 15)}px 12mm; } }</style></head><body>
+${fixedHeaderHtml}
+${fixedFooterHtml}
+<table class="print-wrapper">
+<thead><tr><td style="height:${topMargin}px;"></td></tr></thead>
+<tfoot><tr><td style="height:${bottomMargin}px;"></td></tr></tfoot>
+<tbody><tr><td>
+<div class="content-wrapper">
 ${bodyHtml}
 ${obsHtml}
 ${sigHtml}
-${footerImgHtml}
-<div class="footer">${footL}${footR ? `&nbsp;&nbsp;&nbsp;&nbsp;${footR}` : ''}</div>
-<div class="no-print"><button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Imprimir / Salvar PDF</button></div>
+</div>
+</td></tr></tbody>
+</table>
+<div class="no-print" style="padding:20px;"><button onclick="window.print()" style="padding:10px 28px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px">Salvar como PDF</button></div>
 </body></html>`;
-}
-
-/** Download an HTML document as a .html file */
-function downloadHtmlFile(title: string, fullHtml: string) {
-    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-}
-
-/** Get a Blob of the full HTML document (for ZIP packaging) */
-function getDocBlob(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): Blob {
-    const fullHtml = buildFullHtmlDoc(title, bodyHtml, landscape, reportConfig);
-    return new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
 }
 
 /**
  * Unified document output — supports 3 modes:
- * - 'view': opens in new window (legacy behavior)
- * - 'download': downloads as .html file (no print dialog)
- * - 'blob': returns Blob for ZIP packaging
+ * - 'view': opens in new window for preview
+ * - 'download': generates native PDF via jsPDF+html2canvas (direct download, no print dialog)
+ * - 'blob': returns Blob for ZIP packaging (HTML format for maximum compatibility)
  */
-function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any, mode: DocMode = 'view'): Blob | void {
+function openDoc(title: string, html: string, landscape: boolean = false, reportConfig?: any, mode: DocMode = 'download'): Blob | void | Promise<void> {
     const fullHtml = buildFullHtmlDoc(title, html, landscape, reportConfig);
     
     if (mode === 'blob') {
@@ -156,13 +177,24 @@ function openDoc(title: string, html: string, landscape: boolean = false, report
     }
     
     if (mode === 'download') {
-        downloadHtmlFile(title, fullHtml);
-        return;
+        // Native PDF generation — direct download, no print dialog
+        return import('./htmlToPdfEngine').then(({ htmlToPdf }) =>
+            htmlToPdf({
+                html: fullHtml,
+                filename: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                orientation: landscape ? 'landscape' : 'portrait',
+            })
+        ).catch(e => {
+            console.error('Erro ao gerar PDF:', e);
+            // Fallback: open in new window
+            const w = window.open('', '_blank', 'width=1000,height=750');
+            if (w) { w.document.write(fullHtml); w.document.close(); }
+        });
     }
     
-    // mode === 'view' — open in new window
+    // mode === 'view' — open in new window for preview
     const w = window.open('', '_blank', 'width=1000,height=750');
-    if (!w) { alert('Habilite pop-ups.'); return; }
+    if (!w) { alert('Habilite pop-ups para visualizar.'); return; }
     w.document.write(fullHtml);
     w.document.close();
 }

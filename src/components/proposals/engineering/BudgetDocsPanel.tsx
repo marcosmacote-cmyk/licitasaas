@@ -511,7 +511,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                             <button
                                                 onClick={() => handleGenerate(doc.id, 'pdf')}
                                                 disabled={isGenerating || isDisabled}
-                                                title="Baixar arquivo HTML"
+                                                title="Baixar PDF"
                                                 style={{
                                                     padding: '5px 10px', borderRadius: 'var(--radius-sm)',
                                                     border: `1px solid ${doc.color}40`, background: `${doc.color}08`,
@@ -521,7 +521,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                                 }}
                                             >
                                                 {isGenerating ? <Loader2 size={12} className="spin" /> : <Download size={12} />}
-                                                Baixar
+                                                PDF
                                             </button>
                                             <button
                                                 onClick={() => handleGenerate(doc.id, 'view')}
