@@ -231,8 +231,14 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
             const bodyScrollH = Math.max(
                 sectionDoc.body.scrollHeight,
                 sectionDoc.documentElement.scrollHeight,
-                1000
+                0
             );
+
+            if (bodyScrollH < 25) {
+                document.body.removeChild(sectionFrame);
+                continue;
+            }
+
             sectionFrame.style.height = `${bodyScrollH + 300}px`;
             await new Promise(r => setTimeout(r, 200));
 
@@ -286,10 +292,20 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
 
             while (currentY < canvasHeight) {
                 const idealEnd = currentY + maxSlicePx;
-                if (idealEnd >= canvasHeight) break;
+                // Tolerância de 60px para evitar criar uma página extra com uma fatia minúscula no final
+                if (idealEnd + 60 >= canvasHeight) break;
+                
                 const safeBreakY = findSafeBreak(idealEnd);
-                breakPositions.push(safeBreakY);
-                currentY = safeBreakY;
+                
+                // Se a quebra de página recuou demais (menos de 100px de progresso), força o avanço
+                if (safeBreakY - currentY < 100) {
+                    const forcedEnd = Math.min(idealEnd, canvasHeight);
+                    breakPositions.push(forcedEnd);
+                    currentY = forcedEnd;
+                } else {
+                    breakPositions.push(safeBreakY);
+                    currentY = safeBreakY;
+                }
             }
 
             const totalSectionPages = breakPositions.length;
