@@ -165,44 +165,57 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
 
         // Body image total height in mm
         const bodyImgTotalMm = (bodyCanvas.height / bodyCanvas.width) * contentWidthMm;
-        const totalPages = Math.max(1, Math.ceil(bodyImgTotalMm / bodyHeightMm));
+        // Reduce usable height by a small safety buffer to prevent content bleeding into footer
+        const safeBodyHeightMm = bodyHeightMm - 1;
+        // Overlap between pages (mm) to guarantee no content is lost at slice boundaries
+        const overlapMm = 3;
+        // Pixels per mm for the body canvas
+        const pxPerMm = bodyCanvas.height / bodyImgTotalMm;
+
+        // Calculate page count with overlap
+        const effectiveSlice = safeBodyHeightMm - overlapMm;
+        const totalPages = Math.max(1, Math.ceil((bodyImgTotalMm - overlapMm) / effectiveSlice));
+
+        // Pre-cache header/footer data URLs (avoid re-encoding per page)
+        const hdrData = headerCanvas ? headerCanvas.toDataURL('image/png') : null;
+        const ftrData = footerCanvas ? footerCanvas.toDataURL('image/png') : null;
 
         for (let page = 0; page < totalPages; page++) {
             if (page > 0) pdf.addPage();
 
             // ── Draw header on this page ──
-            if (headerCanvas) {
-                const hdrData = headerCanvas.toDataURL('image/png');
+            if (hdrData) {
                 pdf.addImage(hdrData, 'PNG', marginX, marginY, contentWidthMm, headerHeightMm);
             }
 
             // ── Draw body slice for this page ──
-            const sliceStartMm = page * bodyHeightMm;
-            const sliceHeightMm = Math.min(bodyHeightMm, bodyImgTotalMm - sliceStartMm);
+            // Each page starts `overlapMm` earlier than the strict boundary (except page 0)
+            const sliceStartMm = page === 0 ? 0 : (page * effectiveSlice);
+            const remainingMm = bodyImgTotalMm - sliceStartMm;
+            const sliceHeightMm = Math.min(safeBodyHeightMm, remainingMm);
 
             if (sliceHeightMm > 0) {
-                // Source coordinates in canvas pixels
-                const srcY = (sliceStartMm / bodyImgTotalMm) * bodyCanvas.height;
-                const srcH = (sliceHeightMm / bodyImgTotalMm) * bodyCanvas.height;
-                const actualSrcH = Math.min(srcH, bodyCanvas.height - srcY);
+                // Source coordinates in canvas pixels — use ceil to never truncate
+                const srcY = Math.floor(sliceStartMm * pxPerMm);
+                const srcH = Math.ceil(sliceHeightMm * pxPerMm);
+                const clampedSrcH = Math.min(srcH, bodyCanvas.height - srcY);
 
                 // Create slice canvas
                 const sliceCanvas = document.createElement('canvas');
                 sliceCanvas.width = bodyCanvas.width;
-                sliceCanvas.height = Math.max(1, Math.round(actualSrcH));
+                sliceCanvas.height = Math.max(1, clampedSrcH);
                 const ctx = sliceCanvas.getContext('2d')!;
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-                ctx.drawImage(bodyCanvas, 0, srcY, bodyCanvas.width, actualSrcH, 0, 0, bodyCanvas.width, sliceCanvas.height);
+                ctx.drawImage(bodyCanvas, 0, srcY, bodyCanvas.width, clampedSrcH, 0, 0, bodyCanvas.width, sliceCanvas.height);
 
                 const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-                const actualSliceMm = (sliceCanvas.height / sliceCanvas.width) * contentWidthMm;
-                pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, actualSliceMm);
+                const renderedSliceMm = (sliceCanvas.height / sliceCanvas.width) * contentWidthMm;
+                pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, renderedSliceMm);
             }
 
             // ── Draw footer on this page ──
-            if (footerCanvas) {
-                const ftrData = footerCanvas.toDataURL('image/png');
+            if (ftrData) {
                 const footerY = pageHeightMm - marginY - footerHeightMm;
                 pdf.addImage(ftrData, 'PNG', marginX, footerY, contentWidthMm, footerHeightMm);
             }
