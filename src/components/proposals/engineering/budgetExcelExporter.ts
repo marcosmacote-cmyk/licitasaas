@@ -305,12 +305,12 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
   r.height = 20;
 }
 
-// ── 1. ORÇAMENTO RESUMIDO — mirrors docOrcamentoResumido exactly ─────────────
+// ── 1. ORÇAMENTO RESUMIDO — with numeric values & formulas ───────────────────
 export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Resumido');
   setupPrint(ws, false, engConfig?.reportConfig);
-  ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 8 }];
+  ws.columns = [{ width: 6 }, { width: 40 }, { width: 8 }, { width: 16 }, { width: 10 }];
   logoRow(wb, ws, 5, engConfig?.reportConfig);
 
   const billable = items.filter((i: any) => !isGrouper(i.type));
@@ -327,14 +327,40 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
   metaRows(ws, engConfig, items, 5);
   headRow(ws, ['Nº', 'ETAPA', 'ITENS', 'VALOR (R$)', '%']);
 
+  const dataRowNums: number[] = [];
   let idx = 0;
   for (const [prefix, ch] of chapters) {
-    const pct = total > 0 ? (ch.total / total * 100) : 0;
-    const r = dataRow(ws, [prefix, ch.title, ch.items.length, fmt(ch.total), fmtPct(pct)], idx++, [3, 4, 5]);
+    const r = dataRow(ws, [prefix, ch.title, ch.items.length, ch.total, 0], idx++, [3, 4, 5]);
     r.getCell(2).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+    r.getCell(4).numFmt = '#,##0.00';
+    // % formula: D(row)/totalCell * 100
+    const rn = ws.rowCount;
+    dataRowNums.push(rn);
+    r.getCell(5).numFmt = '0.00%';
+    r.getCell(5).value = total > 0 ? ch.total / total : 0;
   }
 
-  grandRow(ws, 'TOTAL GERAL', [fmt(total), '100%'], 5);
+  // Grand total with SUM formula
+  const gRn = ws.rowCount + 1;
+  const gRow = ws.addRow(['TOTAL GERAL', '', '', '', '']);
+  ws.mergeCells(gRn, 1, gRn, 3);
+  if (dataRowNums.length > 0) {
+    gRow.getCell(4).value = { formula: `SUM(D${dataRowNums[0]}:D${dataRowNums[dataRowNums.length - 1]})` } as any;
+  } else {
+    gRow.getCell(4).value = total;
+  }
+  gRow.getCell(4).numFmt = '#,##0.00';
+  gRow.getCell(5).value = 1;
+  gRow.getCell(5).numFmt = '0.00%';
+  gRow.height = 20;
+  for (let i = 1; i <= 5; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(C.BLUE_DARK);
+    c.border = border(C.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
   bdiRows(ws, items, bdi, 5);
   return saveWb(wb, 'orcamento-resumido.xlsx', returnBuffer);
 }
@@ -638,34 +664,84 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
   return saveWb(wb, 'composicoes-cpu.xlsx', returnBuffer);
 }
 
-// ── 3. CURVA ABC SERVIÇOS ────────────────────────────────────────────────────
+// ── 3. CURVA ABC SERVIÇOS — with numeric values & formulas ───────────────────
 export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  const rc = engConfig?.reportConfig || {} as any;
+  const showCU = rc.showCustoUnit !== false;
+  const showPU = rc.showPrecoUnit !== false;
+
+  const headers: string[] = ['Nº', 'CÓDIGO', 'BANCO', 'DESCRIÇÃO', 'UN.', 'QTD.'];
+  const widths: { width: number }[] = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }];
+  if (showCU) { headers.push('CUSTO UNIT.'); widths.push({ width: 14 }); }
+  if (showPU) { headers.push('PREÇO UNIT.'); widths.push({ width: 14 }); }
+  headers.push('TOTAL', '% ITEM', '% ACUM.');
+  widths.push({ width: 16 }, { width: 10 }, { width: 10 });
+  const colCount = headers.length;
+
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Serviços');
-  setupPrint(ws, true, engConfig?.reportConfig);
-  ws.columns = [{ width: 6 }, { width: 8 }, { width: 10 }, { width: 42 }, { width: 7 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 8 }, { width: 8 }];
-  logoRow(wb, ws, 11, engConfig?.reportConfig);
+  setupPrint(ws, true, rc);
+  ws.columns = widths;
+  logoRow(wb, ws, colCount, rc);
 
-  titleRow(ws, 'CURVA ABC DE SERVIÇOS', 11);
-  metaRows(ws, engConfig, items, 11);
-  headRow(ws, ['Nº', 'CÓDIGO', 'BANCO', 'DESCRIÇÃO', 'UN.', 'QTD.', 'CUSTO UNIT.', 'PREÇO UNIT.', 'TOTAL', '% ITEM', '% ACUM.']);
+  titleRow(ws, 'CURVA ABC DE SERVIÇOS', colCount);
+  metaRows(ws, engConfig, items, colCount);
+  headRow(ws, headers);
 
   const svcs = items.filter(i => i.type === 'COMPOSICAO' || (!['ETAPA','SUBETAPA'].includes(i.type) && i.code));
   const total = svcs.reduce((s, i) => s + (Number(i.totalPrice) || 0), 0);
   const sorted = [...svcs].sort((a, b) => (Number(b.totalPrice) || 0) - (Number(a.totalPrice) || 0));
+
+  const totalColIdx = colCount - 2; // TOTAL is 3rd from end
+  const pctColIdx = colCount - 1;
+  const acumColIdx = colCount;
   let acum = 0;
+
   sorted.forEach((item, idx) => {
-    const v   = Number(item.totalPrice) || 0;
-    const pct = total > 0 ? v / total * 100 : 0;
+    const v = Number(item.totalPrice) || 0;
+    const pct = total > 0 ? v / total : 0;
     acum += pct;
-    const cls = acum <= 50 ? C.RED : acum <= 80 ? C.AMBER : C.GREEN;
-    const r = dataRow(ws, [idx + 1, item.code || '', item.sourceName || '', item.description || '', item.unit || '', Number(item.quantity) || 0, fmt(Number(item.unitCost) || 0), fmt(Number(item.unitPrice) || 0), fmt(v), fmtPct(pct), fmtPct(acum)], idx, [6, 7, 8, 9, 10, 11]);
-    r.getCell(10).font = { bold: true, size: 9, color: { argb: cls } };
-    r.getCell(11).font = { bold: true, size: 9, color: { argb: cls } };
+    const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
+
+    const vals: (string | number)[] = [idx + 1, item.code || '', item.sourceName || '', item.description || '', item.unit || '', Number(item.quantity) || 0];
+    if (showCU) vals.push(Number(item.unitCost) || 0);
+    if (showPU) vals.push(Number(item.unitPrice) || 0);
+    vals.push(v, pct, acum);
+
+    const r = dataRow(ws, vals, idx, Array.from({ length: colCount - 4 }, (_, i) => 6 + i));
+    // Number formats
+    r.getCell(6).numFmt = '#,##0.00'; // QTD
+    let ci = 7;
+    if (showCU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
+    if (showPU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
+    r.getCell(totalColIdx).numFmt = '#,##0.00';
+    r.getCell(pctColIdx).numFmt = '0.00%';
+    r.getCell(acumColIdx).numFmt = '0.00%';
+    r.getCell(pctColIdx).font = { bold: true, size: 9, color: { argb: cls } };
+    r.getCell(acumColIdx).font = { bold: true, size: 9, color: { argb: cls } };
   });
 
-  grandRow(ws, 'TOTAL', [fmt(total), '100,00%', ''], 11);
-  bdiRows(ws, items, bdi, 11);
+  // Grand total
+  const firstData = ws.rowCount - sorted.length + 1;
+  const lastData = ws.rowCount;
+  const gRn = ws.rowCount + 1;
+  const tLetter = String.fromCharCode(64 + totalColIdx);
+  const gRow = ws.addRow(['TOTAL', ...Array(colCount - 4).fill(''), '', 1, '']);
+  ws.mergeCells(gRn, 1, gRn, totalColIdx - 1);
+  gRow.getCell(totalColIdx).value = { formula: `SUM(${tLetter}${firstData}:${tLetter}${lastData})` } as any;
+  gRow.getCell(totalColIdx).numFmt = '#,##0.00';
+  gRow.getCell(pctColIdx).value = 1;
+  gRow.getCell(pctColIdx).numFmt = '0.00%';
+  gRow.height = 20;
+  for (let i = 1; i <= colCount; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(C.BLUE_DARK);
+    c.border = border(C.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
+  bdiRows(ws, items, bdi, colCount);
   return saveWb(wb, 'abc-servicos.xlsx', returnBuffer);
 }
 
@@ -716,7 +792,7 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
   ];
 
   headRow(ws, ['CÓD', 'DESCRIÇÃO', 'HORISTA %', 'MENSALISTA %']);
-  let totalH = 0, totalM = 0;
+  const subtotalRowNums: number[] = [];
 
   for (const g of groups) {
     const secRow = ws.addRow([g.label]);
@@ -726,15 +802,23 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
     secRow.getCell(1).border = border(C.BLUE_MED);
     secRow.height = 16;
 
-    let subH = 0, subM = 0;
+    const firstItemRow = ws.rowCount + 1;
     g.items.forEach(([cod, desc, key], idx) => {
       const h = v(`${key}_h`), m = v(`${key}_m`);
-      subH += h; subM += m;
-      const r = dataRow(ws, [cod, desc, fmtPct(h), fmtPct(m)], idx, [3, 4]);
+      const r = dataRow(ws, [cod, desc, h / 100, m / 100], idx, [3, 4]);
       r.getCell(1).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
+      r.getCell(3).numFmt = '0.00%';
+      r.getCell(4).numFmt = '0.00%';
     });
-    totalH += subH; totalM += subM;
-    const sr = ws.addRow(['', `Subtotal ${g.label.split(' — ')[0]}`, fmtPct(subH), fmtPct(subM)]);
+    const lastItemRow = ws.rowCount;
+
+    // Subtotal with SUM formula
+    const stRn = ws.rowCount + 1;
+    const sr = ws.addRow(['', `Subtotal ${g.label.split(' — ')[0]}`, '', '']);
+    sr.getCell(3).value = { formula: `SUM(C${firstItemRow}:C${lastItemRow})` } as any;
+    sr.getCell(4).value = { formula: `SUM(D${firstItemRow}:D${lastItemRow})` } as any;
+    sr.getCell(3).numFmt = '0.00%';
+    sr.getCell(4).numFmt = '0.00%';
     sr.height = 16;
     for (let i = 1; i <= 4; i++) {
       sr.getCell(i).fill = fill(C.GRAY_SUB);
@@ -742,17 +826,38 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
       sr.getCell(i).border = border();
       sr.getCell(i).alignment = { horizontal: i >= 3 ? 'right' : 'left' };
     }
+    subtotalRowNums.push(stRn);
     ws.addRow([]);
   }
 
-  grandRow(ws, 'A + B + C + D =', [fmtPct(totalH), fmtPct(totalM)], 4);
+  // Grand total with SUM of subtotals
+  const gRn = ws.rowCount + 1;
+  const gRow = ws.addRow(['A + B + C + D =', '', '', '']);
+  ws.mergeCells(gRn, 1, gRn, 2);
+  if (subtotalRowNums.length > 0) {
+    const hRefs = subtotalRowNums.map(rn => `C${rn}`).join('+');
+    const mRefs = subtotalRowNums.map(rn => `D${rn}`).join('+');
+    gRow.getCell(3).value = { formula: hRefs } as any;
+    gRow.getCell(4).value = { formula: mRefs } as any;
+  }
+  gRow.getCell(3).numFmt = '0.00%';
+  gRow.getCell(4).numFmt = '0.00%';
+  gRow.height = 20;
+  for (let i = 1; i <= 4; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(C.BLUE_DARK);
+    c.border = border(C.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
   return saveWb(wb, 'bdi-encargos.xlsx', returnBuffer);
 }
 
-// ── 5. CRONOGRAMA FÍSICO-FINANCEIRO — mirrors docCronograma exactly ──────────
+// ── 5. CRONOGRAMA FÍSICO-FINANCEIRO — with numeric values & formulas ─────────
 export async function xlsCronograma(result: any, engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
   const { meses, etapas, mensalTotal, percentMensal, percentAcumulado, totalGlobal } = result;
-  const colCount = 2 + meses + 1; // Etapa | Valor | Mês1..N | Total
+  const colCount = 2 + meses + 1;
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Cronograma');
@@ -774,37 +879,47 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   const header = ['ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL'];
   headRow(ws, header);
 
-  // Etapa rows — two rows per etapa: values + percentages (matching frontend)
+  const etapaValueRowNums: number[] = [];
   let idx = 0;
   for (const et of etapas) {
-    const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal * 100) : 0;
-    const vals = Array.from({ length: meses }, (_, m) => {
-      const v = et.valoresMensais?.[m] || 0;
-      return v > 0 ? fmt(v) : '—';
-    });
-    let etTotal = (et.valoresMensais || []).reduce((s: number, v: number) => s + v, 0);
-    const r = dataRow(ws, [et.nome || et.description || '', fmt(et.valorTotal || 0), ...vals, fmt(etTotal)], idx, Array.from({ length: meses + 2 }, (_, i) => i + 2));
+    const vals = Array.from({ length: meses }, (_, m) => et.valoresMensais?.[m] || 0);
+    const etTotal = vals.reduce((s: number, v: number) => s + v, 0);
+    const r = dataRow(ws, [et.nome || et.description || '', et.valorTotal || 0, ...vals, etTotal], idx, Array.from({ length: meses + 2 }, (_, i) => i + 2));
     r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+    // Apply number format to all monetary cells
+    for (let i = 2; i <= colCount; i++) r.getCell(i).numFmt = '#,##0.00';
+    etapaValueRowNums.push(ws.rowCount);
 
-    // Percentage sub-row (smaller font, gray)
+    // Percentage sub-row
     const pctVals = Array.from({ length: meses }, (_, m) => {
       const pct = et.percentuais?.[m] || 0;
-      return pct > 0 ? fmtPct(pct) : '';
+      return pct > 0 ? pct / 100 : '';
     });
-    const pctR = ws.addRow(['', fmtPct(etPctGlobal), ...pctVals, '']);
+    const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal) : 0;
+    const pctR = ws.addRow(['', etPctGlobal, ...pctVals, '']);
     pctR.height = 12;
     for (let i = 1; i <= colCount; i++) {
       pctR.getCell(i).font = { size: 7, color: { argb: C.TEXT_MID }, italic: true };
       pctR.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
       pctR.getCell(i).border = border();
+      if (i >= 2 && pctR.getCell(i).value !== '') pctR.getCell(i).numFmt = '0.00%';
     }
     idx++;
   }
 
-  // TOTAL MENSAL row
-  const tmVals = Array.from({ length: meses }, (_, m) => fmt(mensalTotal?.[m] || 0));
-  const tmRow = ws.addRow(['TOTAL MENSAL', '', ...tmVals, fmt(totalGlobal)]);
+  // TOTAL MENSAL row with SUM formulas
+  const tmRn = ws.rowCount + 1;
+  const tmRow = ws.addRow(['TOTAL MENSAL', '', ...Array(meses).fill(''), '']);
   tmRow.height = 16;
+  // SUM formula per month column
+  for (let col = 2; col <= colCount; col++) {
+    const colLetter = col <= 26 ? String.fromCharCode(64 + col) : `A${String.fromCharCode(64 + col - 26)}`;
+    const refs = etapaValueRowNums.map(rn => `${colLetter}${rn}`).join('+');
+    if (etapaValueRowNums.length > 0) {
+      tmRow.getCell(col).value = { formula: refs } as any;
+    }
+    tmRow.getCell(col).numFmt = '#,##0.00';
+  }
   for (let i = 1; i <= colCount; i++) {
     tmRow.getCell(i).fill = fill(C.GRAY_SUB);
     tmRow.getCell(i).border = border();
@@ -813,32 +928,46 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   // % MENSAL row
-  const pmVals = Array.from({ length: meses }, (_, m) => fmtPct(percentMensal?.[m] || 0));
-  const pmRow = ws.addRow(['% MENSAL', '', ...pmVals, '100%']);
+  const pmRow = ws.addRow(['% MENSAL', '', ...Array.from({ length: meses }, (_, m) => (percentMensal?.[m] || 0) / 100), 1]);
   pmRow.height = 16;
   for (let i = 1; i <= colCount; i++) {
     pmRow.getCell(i).fill = fill(C.GRAY_ROW);
     pmRow.getCell(i).border = border();
     pmRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
     pmRow.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
+    if (i >= 2) pmRow.getCell(i).numFmt = '0.00%';
   }
 
   // % ACUMULADO row
-  const paVals = Array.from({ length: meses }, (_, m) => fmtPct(percentAcumulado?.[m] || 0));
-  const paRow = ws.addRow(['% ACUMULADO', '', ...paVals, '100%']);
+  const paRow = ws.addRow(['% ACUMULADO', '', ...Array.from({ length: meses }, (_, m) => (percentAcumulado?.[m] || 0) / 100), 1]);
   paRow.height = 16;
   for (let i = 1; i <= colCount; i++) {
     paRow.getCell(i).fill = fill(C.GRAY_ROW);
     paRow.getCell(i).border = border();
     paRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_MID } };
     paRow.getCell(i).alignment = { horizontal: i >= 2 ? 'right' : 'left', vertical: 'middle' };
+    if (i >= 2) paRow.getCell(i).numFmt = '0.00%';
   }
 
-  grandRow(ws, 'TOTAL GERAL', [fmt(totalGlobal), ...Array(meses).fill(''), '100,00%'], colCount);
+  // Grand total
+  const gRn = ws.rowCount + 1;
+  const gRow = ws.addRow(['TOTAL GERAL', '', ...Array(meses).fill(''), 1]);
+  ws.mergeCells(gRn, 1, gRn, colCount - 1);
+  gRow.getCell(colCount).value = totalGlobal;
+  gRow.getCell(colCount).numFmt = '#,##0.00';
+  gRow.height = 20;
+  for (let i = 1; i <= colCount; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(C.BLUE_DARK);
+    c.border = border(C.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
   return saveWb(wb, 'cronograma.xlsx', returnBuffer);
 }
 
-// ── 6. CURVA ABC INSUMOS ─────────────────────────────────────────────────────
+// ── 6. CURVA ABC INSUMOS — with numeric values & formulas ────────────────────
 export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
@@ -855,14 +984,39 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   let acum = 0;
   list.forEach((item, idx) => {
     const v = Number(item.custoTotal) || 0;
-    const pct = total > 0 ? v / total * 100 : 0;
+    const pct = total > 0 ? v / total : 0;
     acum += pct;
-    const cls = acum <= 50 ? C.RED : acum <= 80 ? C.AMBER : C.GREEN;
-    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.unidade || '', fmt(v), fmtPct(pct), fmtPct(acum)], idx, [6, 7, 8]);
+    const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
+    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.unidade || '', v, pct, acum], idx, [6, 7, 8]);
+    r.getCell(6).numFmt = '#,##0.00';
+    r.getCell(7).numFmt = '0.00%';
+    r.getCell(8).numFmt = '0.00%';
     r.getCell(7).font = { bold: true, size: 9, color: { argb: cls } };
     r.getCell(8).font = { bold: true, size: 9, color: { argb: cls } };
   });
 
-  grandRow(ws, 'TOTAL', [fmt(total), '100,00%', ''], 8);
+  // Grand total with SUM formula
+  const firstData = ws.rowCount - list.length + 1;
+  const lastData = ws.rowCount;
+  const gRn = ws.rowCount + 1;
+  const gRow = ws.addRow(['TOTAL', '', '', '', '', '', 1, '']);
+  ws.mergeCells(gRn, 1, gRn, 5);
+  if (list.length > 0) {
+    gRow.getCell(6).value = { formula: `SUM(F${firstData}:F${lastData})` } as any;
+  } else {
+    gRow.getCell(6).value = total;
+  }
+  gRow.getCell(6).numFmt = '#,##0.00';
+  gRow.getCell(7).value = 1;
+  gRow.getCell(7).numFmt = '0.00%';
+  gRow.height = 20;
+  for (let i = 1; i <= 8; i++) {
+    const c = gRow.getCell(i);
+    c.fill = fill(C.BLUE_DARK);
+    c.border = border(C.BLUE_DARK);
+    c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+
   return saveWb(wb, 'abc-insumos.xlsx', returnBuffer);
 }
