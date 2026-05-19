@@ -148,13 +148,35 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
             )
         );
 
+        // Expand iframe to fit full content height (critical for large documents like Proposta Completa)
+        const bodyScrollH = iframeDoc.body.scrollHeight || iframeDoc.documentElement.scrollHeight || 2000;
+        iframe.style.height = `${Math.max(bodyScrollH + 200, 2000)}px`;
+        await new Promise(r => setTimeout(r, 150)); // allow reflow
+
         const bodyCanvas = await html2canvas(iframeDoc.body, {
             scale,
             useCORS: true,
             allowTaint: true,
             logging: false,
             windowWidth: renderWidthPx,
+            height: bodyScrollH, // explicitly set capture height
         });
+
+        // ── Diagnostic logging for PDF debugging ──
+        const bodyEl = iframeDoc.body;
+        console.log('[PDF Engine] contentHtml length:', contentHtml.length);
+        console.log('[PDF Engine] iframe body dimensions:', bodyEl.scrollWidth, 'x', bodyEl.scrollHeight);
+        console.log('[PDF Engine] bodyCanvas dimensions:', bodyCanvas.width, 'x', bodyCanvas.height);
+        // Check if canvas has any non-white pixels (sample first 10000 pixels)
+        const diagCtx = bodyCanvas.getContext('2d');
+        if (diagCtx) {
+            const sample = diagCtx.getImageData(0, 0, Math.min(bodyCanvas.width, 200), Math.min(bodyCanvas.height, 200));
+            let nonWhite = 0;
+            for (let i = 0; i < sample.data.length; i += 4) {
+                if (sample.data[i] < 250 || sample.data[i+1] < 250 || sample.data[i+2] < 250) nonWhite++;
+            }
+            console.log('[PDF Engine] Non-white pixels in 200x200 sample:', nonWhite, '/', sample.data.length / 4);
+        }
 
         // ── 6. Smart page composition with row-boundary detection ──
         const pdf = new jsPDF({
