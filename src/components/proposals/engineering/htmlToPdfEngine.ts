@@ -2,9 +2,10 @@
  * htmlToPdfEngine.ts — Converte HTML para PDF nativo via jsPDF + html2canvas
  * 
  * Estratégia: Usa DOM parsing (não regex) para extrair header/footer do HTML.
- * Captura o corpo em um iframe SEPARADO e fresco, compõe cada página
- * do PDF com header no topo e footer na base via jsPDF.
- * Download direto, sem janela de impressão.
+ * Captura o corpo em um iframe SEPARADO e fresco para cada seção individual,
+ * evitando estouro de tamanho de canvas no navegador.
+ * Compõe cada página do PDF com header no topo e footer na base via jsPDF.
+ * Download direto ou retorno de Blob para ZIP.
  */
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -18,12 +19,15 @@ export interface HtmlToPdfOptions {
     orientation?: 'portrait' | 'landscape';
     /** Escala de renderização (default: 2 para alta resolução) */
     scale?: number;
+    /** Modo de saída: 'download' para baixar o arquivo ou 'blob' para retornar o Blob do PDF */
+    output?: 'download' | 'blob';
 }
 
 /** Helper: create a hidden iframe, write HTML, wait for load */
 async function createIframe(width: number, htmlContent: string): Promise<HTMLIFrameElement> {
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${width}px;height:2000px;border:none;opacity:0;pointer-events:none;`;
+    // IMPORTANTE: Não usamos opacity 0 para evitar que o motor do Chrome desative renderização de sub-camadas
+    iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${width}px;height:2000px;border:none;pointer-events:none;`;
     document.body.appendChild(iframe);
 
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -62,10 +66,10 @@ async function captureToCanvas(
 }
 
 /**
- * Converte HTML completo em PDF e faz download direto.
- * Extrai header/footer via DOM parsing, captura conteúdo, compõe PDF multi-página.
+ * Converte HTML completo em PDF e faz download direto ou retorna o Blob.
+ * Extrai header/footer via DOM parsing, captura conteúdo de cada seção em iframes individuais.
  */
-export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
+export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void> {
     const { html, filename, orientation = 'portrait', scale = 2 } = options;
 
     // ── 1. Parse HTML via DOM to extract header, footer, content ──
@@ -83,6 +87,7 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
     if (footerEl) footerEl.remove();
     const noPrint = parsedDoc.querySelector('.no-print');
     if (noPrint) noPrint.remove();
+    
     // Remove spacer thead/tfoot from print-wrapper
     const printWrapper = parsedDoc.querySelector('table.print-wrapper');
     if (printWrapper) {
@@ -91,7 +96,6 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
         if (thead) thead.remove();
         if (tfoot) tfoot.remove();
     }
-    const contentHtml = '<!DOCTYPE html>' + parsedDoc.documentElement.outerHTML;
 
     // ── 2. Setup dimensions (mm) ──
     const isLandscape = orientation === 'landscape';
@@ -121,7 +125,6 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
             if (headerHtml) {
                 const container = helperDoc.createElement('div');
                 container.style.cssText = `width:${renderWidthPx}px;background:#fff;text-align:center;padding:6px 15px 4px;border-bottom:1px solid #cbd5e1;`;
-                // Parse and insert inner content of the fixed-header div
                 const hParsed = new DOMParser().parseFromString(headerHtml, 'text/html');
                 const hEl = hParsed.querySelector('.fixed-header');
                 container.innerHTML = hEl ? hEl.innerHTML : headerHtml;
@@ -166,122 +169,177 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<void> {
     const bodyBottomMm = marginY + footerHeightMm + (footerHeightMm > 0 ? 2 : 0);
     const bodyHeightMm = pageHeightMm - bodyTopMm - bodyBottomMm;
 
-    // ── 4. Capture body content in a FRESH, SEPARATE iframe ──
-    const bodyFrame = await createIframe(renderWidthPx, contentHtml);
-    const bodyDoc = bodyFrame.contentDocument!;
+    // ── 4. Split content-wrapper children into sections ──
+    const contentWrapper = parsedDoc.querySelector('.content-wrapper');
+    if (!contentWrapper) throw new Error('content-wrapper não encontrado no documento.');
 
-    try {
-        // Expand iframe to fit full content
-        const bodyScrollH = Math.max(
-            bodyDoc.body.scrollHeight,
-            bodyDoc.documentElement.scrollHeight,
-            2000
-        );
-        bodyFrame.style.height = `${bodyScrollH + 500}px`;
-        await new Promise(r => setTimeout(r, 200));
+    const sections: HTMLElement[][] = [[]];
+    let currentIdx = 0;
 
-        console.log('[PDF Engine] Content length:', contentHtml.length,
-            '| Body scroll:', bodyScrollH,
-            '| Body children:', bodyDoc.body.children.length);
+    Array.from(contentWrapper.children).forEach((child) => {
+        const htmlChild = child as HTMLElement;
+        const styleAttr = htmlChild.getAttribute('style') || '';
+        const isPageBreak = 
+            htmlChild.style.pageBreakBefore === 'always' || 
+            htmlChild.style.breakBefore === 'page' ||
+            styleAttr.includes('page-break-before:always') ||
+            styleAttr.includes('page-break-before: always') ||
+            styleAttr.includes('break-before:page') ||
+            styleAttr.includes('break-before: page');
 
-        const bodyCanvas = await captureToCanvas(bodyDoc.body, renderWidthPx, scale);
-
-        console.log('[PDF Engine] Canvas:', bodyCanvas.width, 'x', bodyCanvas.height);
-
-        // ── 5. Smart page composition with row-boundary detection ──
-        const pdf = new jsPDF({
-            orientation: isLandscape ? 'l' : 'p',
-            unit: 'mm',
-            format: 'a4',
-        });
-
-        const bodyImgTotalMm = (bodyCanvas.height / bodyCanvas.width) * contentWidthMm;
-        const pxPerMm = bodyCanvas.height / bodyImgTotalMm;
-        const safeBodyHeightMm = bodyHeightMm - 2;
-        const maxSlicePx = Math.floor(safeBodyHeightMm * pxPerMm);
-
-        // ── Row-boundary scanner ──
-        const canvasWidth = bodyCanvas.width;
-        const canvasHeight = bodyCanvas.height;
-        const imgData = bodyCanvas.getContext('2d')!.getImageData(0, 0, canvasWidth, canvasHeight);
-        const pixels = imgData.data;
-
-        function isRowSafe(y: number): boolean {
-            if (y < 0 || y >= canvasHeight) return false;
-            let lightPixels = 0;
-            const sampleStep = 4;
-            const totalSamples = Math.floor(canvasWidth / sampleStep);
-            for (let x = 0; x < canvasWidth; x += sampleStep) {
-                const idx = (y * canvasWidth + x) * 4;
-                const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
-                if (r > 230 && g > 230 && b > 230) lightPixels++;
-            }
-            return (lightPixels / totalSamples) > 0.90;
+        if (isPageBreak) {
+            sections.push([]);
+            currentIdx++;
+        } else {
+            sections[currentIdx].push(htmlChild);
         }
+    });
 
-        function findSafeBreak(targetY: number, searchRange: number = 200): number {
-            const clampedTarget = Math.min(targetY, canvasHeight - 1);
-            for (let y = clampedTarget; y > clampedTarget - searchRange && y > 0; y--) {
-                if (isRowSafe(y) && isRowSafe(y - 1)) {
-                    return y;
+    const activeSections = sections.filter(sec => sec.length > 0);
+    const headHtml = parsedDoc.head.innerHTML;
+
+    // Initialize unified jsPDF document
+    const pdf = new jsPDF({
+        orientation: isLandscape ? 'l' : 'p',
+        unit: 'mm',
+        format: 'a4',
+    });
+
+    const hdrData = headerCanvas ? headerCanvas.toDataURL('image/png') : null;
+    const ftrData = footerCanvas ? footerCanvas.toDataURL('image/png') : null;
+    let isFirstPage = true;
+
+    // Process each section sequentially to keep canvas size small
+    for (let sIdx = 0; sIdx < activeSections.length; sIdx++) {
+        const sectionElements = activeSections[sIdx];
+        const sectionContentHtml = sectionElements.map(el => el.outerHTML).join('\n');
+        
+        const sectionDocHtml = `<!DOCTYPE html><html><head>${headHtml}</head><body>
+            <table class="print-wrapper">
+            <tbody><tr><td>
+            <div class="content-wrapper">
+                ${sectionContentHtml}
+            </div>
+            </td></tr></tbody>
+            </table>
+        </body></html>`;
+
+        const sectionFrame = await createIframe(renderWidthPx, sectionDocHtml);
+        const sectionDoc = sectionFrame.contentDocument!;
+
+        try {
+            const bodyScrollH = Math.max(
+                sectionDoc.body.scrollHeight,
+                sectionDoc.documentElement.scrollHeight,
+                1000
+            );
+            sectionFrame.style.height = `${bodyScrollH + 300}px`;
+            await new Promise(r => setTimeout(r, 200));
+
+            // Dynamic scale based on section height to completely prevent white-canvas browser limits
+            let sectionScale = scale;
+            if (bodyScrollH > 16000) {
+                sectionScale = 1.0;
+            } else if (bodyScrollH > 8000) {
+                sectionScale = 1.25;
+            }
+
+            const sectionCanvas = await captureToCanvas(sectionDoc.body, renderWidthPx, sectionScale);
+
+            const bodyImgTotalMm = (sectionCanvas.height / sectionCanvas.width) * contentWidthMm;
+            const pxPerMm = sectionCanvas.height / bodyImgTotalMm;
+            const safeBodyHeightMm = bodyHeightMm - 2;
+            const maxSlicePx = Math.floor(safeBodyHeightMm * pxPerMm);
+
+            // ── Row-boundary scanner ──
+            const canvasWidth = sectionCanvas.width;
+            const canvasHeight = sectionCanvas.height;
+            const imgData = sectionCanvas.getContext('2d')!.getImageData(0, 0, canvasWidth, canvasHeight);
+            const pixels = imgData.data;
+
+            const isRowSafe = (y: number): boolean => {
+                if (y < 0 || y >= canvasHeight) return false;
+                let lightPixels = 0;
+                const sampleStep = 4;
+                const totalSamples = Math.floor(canvasWidth / sampleStep);
+                for (let x = 0; x < canvasWidth; x += sampleStep) {
+                    const idx = (y * canvasWidth + x) * 4;
+                    const r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
+                    if (r > 230 && g > 230 && b > 230) lightPixels++;
+                }
+                return (lightPixels / totalSamples) > 0.90;
+            };
+
+            const findSafeBreak = (targetY: number, searchRange: number = 200): number => {
+                const clampedTarget = Math.min(targetY, canvasHeight - 1);
+                for (let y = clampedTarget; y > clampedTarget - searchRange && y > 0; y--) {
+                    if (isRowSafe(y) && isRowSafe(y - 1)) {
+                        return y;
+                    }
+                }
+                return clampedTarget;
+            };
+
+            // ── Build page break positions for this section ──
+            const breakPositions: number[] = [0];
+            let currentY = 0;
+
+            while (currentY < canvasHeight) {
+                const idealEnd = currentY + maxSlicePx;
+                if (idealEnd >= canvasHeight) break;
+                const safeBreakY = findSafeBreak(idealEnd);
+                breakPositions.push(safeBreakY);
+                currentY = safeBreakY;
+            }
+
+            const totalSectionPages = breakPositions.length;
+
+            for (let page = 0; page < totalSectionPages; page++) {
+                if (isFirstPage) {
+                    isFirstPage = false;
+                } else {
+                    pdf.addPage();
+                }
+
+                // ── Draw header ──
+                if (hdrData) {
+                    pdf.addImage(hdrData, 'PNG', marginX, marginY, contentWidthMm, headerHeightMm);
+                }
+
+                // ── Draw body slice ──
+                const sliceStartPx = breakPositions[page];
+                const sliceEndPx = page < totalSectionPages - 1 ? breakPositions[page + 1] : canvasHeight;
+                const sliceHeightPx = sliceEndPx - sliceStartPx;
+
+                if (sliceHeightPx > 0) {
+                    const sliceCanvas = document.createElement('canvas');
+                    sliceCanvas.width = canvasWidth;
+                    sliceCanvas.height = sliceHeightPx;
+                    const ctx = sliceCanvas.getContext('2d')!;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvasWidth, sliceHeightPx);
+                    ctx.drawImage(sectionCanvas, 0, sliceStartPx, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
+
+                    const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+                    const sliceHeightMm = (sliceHeightPx / canvasWidth) * contentWidthMm;
+                    pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, sliceHeightMm);
+                }
+
+                // ── Draw footer ──
+                if (ftrData) {
+                    const footerY = pageHeightMm - marginY - footerHeightMm;
+                    pdf.addImage(ftrData, 'PNG', marginX, footerY, contentWidthMm, footerHeightMm);
                 }
             }
-            return clampedTarget;
+        } finally {
+            document.body.removeChild(sectionFrame);
         }
+    }
 
-        // ── Build page break positions ──
-        const breakPositions: number[] = [0];
-        let currentY = 0;
-
-        while (currentY < canvasHeight) {
-            const idealEnd = currentY + maxSlicePx;
-            if (idealEnd >= canvasHeight) break;
-            const safeBreakY = findSafeBreak(idealEnd);
-            breakPositions.push(safeBreakY);
-            currentY = safeBreakY;
-        }
-
-        const totalPages = breakPositions.length;
-        const hdrData = headerCanvas ? headerCanvas.toDataURL('image/png') : null;
-        const ftrData = footerCanvas ? footerCanvas.toDataURL('image/png') : null;
-
-        for (let page = 0; page < totalPages; page++) {
-            if (page > 0) pdf.addPage();
-
-            // ── Draw header ──
-            if (hdrData) {
-                pdf.addImage(hdrData, 'PNG', marginX, marginY, contentWidthMm, headerHeightMm);
-            }
-
-            // ── Draw body slice ──
-            const sliceStartPx = breakPositions[page];
-            const sliceEndPx = page < totalPages - 1 ? breakPositions[page + 1] : canvasHeight;
-            const sliceHeightPx = sliceEndPx - sliceStartPx;
-
-            if (sliceHeightPx > 0) {
-                const sliceCanvas = document.createElement('canvas');
-                sliceCanvas.width = canvasWidth;
-                sliceCanvas.height = sliceHeightPx;
-                const ctx = sliceCanvas.getContext('2d')!;
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvasWidth, sliceHeightPx);
-                ctx.drawImage(bodyCanvas, 0, sliceStartPx, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
-
-                const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-                const sliceHeightMm = (sliceHeightPx / canvasWidth) * contentWidthMm;
-                pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, sliceHeightMm);
-            }
-
-            // ── Draw footer ──
-            if (ftrData) {
-                const footerY = pageHeightMm - marginY - footerHeightMm;
-                pdf.addImage(ftrData, 'PNG', marginX, footerY, contentWidthMm, footerHeightMm);
-            }
-        }
-
-        // ── 6. Download direto ──
+    // ── 5. Output PDF ──
+    if (options.output === 'blob') {
+        return pdf.output('blob');
+    } else {
         pdf.save(`${filename}.pdf`);
-    } finally {
-        document.body.removeChild(bodyFrame);
     }
 }

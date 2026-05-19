@@ -248,23 +248,23 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 } catch (e) { console.warn(`ZIP: falha ao gerar ${f.name}`, e); }
             }
 
-            // ── HTML report files (using 'blob' mode — no windows opened) ──
-            const htmlFiles: { name: string; gen: () => Blob | void | Promise<Blob | void> }[] = [
-                { name: 'orcamento-resumido.html',   gen: () => docOrcamentoResumido(items, effectiveBdi, ec, 'blob') },
-                { name: 'orcamento-sintetico.html',  gen: () => docOrcamentoSintetico(items, effectiveBdi, ec, 'blob') },
-                { name: 'orcamento-analitico.html',   gen: () => docOrcamentoAnalitico(proposalId, items, effectiveBdi, ec, 'blob') },
-                { name: 'composicoes-cpu.html',       gen: () => docCpuBatch(proposalId, items, effectiveBdi, ec, 'blob') },
-                { name: 'abc-servicos.html',          gen: () => docCurvaAbcServicos(items, ec, 'blob') },
-                { name: 'bdi-encargos.html',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') },
+            // ── PDF report files (using 'blob' mode — no windows opened) ──
+            const pdfFiles: { name: string; gen: () => Promise<Blob | void> }[] = [
+                { name: 'orcamento-resumido.pdf',   gen: () => docOrcamentoResumido(items, effectiveBdi, ec, 'blob') as any },
+                { name: 'orcamento-sintetico.pdf',  gen: () => docOrcamentoSintetico(items, effectiveBdi, ec, 'blob') as any },
+                { name: 'orcamento-analitico.pdf',   gen: () => docOrcamentoAnalitico(proposalId, items, effectiveBdi, ec, 'blob') as any },
+                { name: 'composicoes-cpu.pdf',       gen: () => docCpuBatch(proposalId, items, effectiveBdi, ec, 'blob') as any },
+                { name: 'abc-servicos.pdf',          gen: () => docCurvaAbcServicos(items, ec, 'blob') as any },
+                { name: 'bdi-encargos.pdf',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') as any },
             ];
             if (insumos.length > 0) {
-                htmlFiles.push({ name: 'abc-insumos.html', gen: () => docCurvaAbcInsumos(insumos, ec, 'blob') });
+                pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(insumos, ec, 'blob') as any });
             }
             if (cronogramaResult) {
-                htmlFiles.push({ name: 'cronograma.html', gen: () => docCronograma({ ...cronogramaResult, engineeringConfig: ec } as any, 'blob') });
+                pdfFiles.push({ name: 'cronograma.pdf', gen: () => docCronograma({ ...cronogramaResult, engineeringConfig: ec } as any, 'blob') as any });
             }
 
-            for (const f of htmlFiles) {
+            for (const f of pdfFiles) {
                 try {
                     const blob = await f.gen();
                     if (blob) zip.file(f.name, blob);

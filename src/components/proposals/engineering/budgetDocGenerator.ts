@@ -182,7 +182,17 @@ function openDoc(title: string, html: string, landscape: boolean = false, report
     const fullHtml = buildFullHtmlDoc(title, html, landscape, reportConfig);
     
     if (mode === 'blob') {
-        return new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+        return import('./htmlToPdfEngine').then(({ htmlToPdf }) =>
+            htmlToPdf({
+                html: fullHtml,
+                filename: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                orientation: landscape ? 'landscape' : 'portrait',
+                output: 'blob',
+            })
+        ).catch(e => {
+            console.error('Erro ao gerar PDF blob:', e);
+            return new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+        });
     }
     
     if (mode === 'download') {
