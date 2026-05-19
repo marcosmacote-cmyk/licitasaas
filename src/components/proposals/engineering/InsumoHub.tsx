@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText } from 'lucide-react';
+import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText, Microscope, ClipboardList } from 'lucide-react';
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats } from './insumoEngine';
 import { exportHubExcel, exportHubPdf } from './exportEngine';
@@ -359,7 +359,7 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                 <span>Modo</span>
                                 <strong style={{ color: mode === 'compositions' ? '#16a34a' : '#d97706' }}>
-                                    {mode === 'compositions' ? '🔬 Composições' : '📋 Serviços'}
+                                    {mode === 'compositions' ? <><Microscope size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} />Composições</> : <><ClipboardList size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} />Serviços</>}
                                 </strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

@@ -7,7 +7,7 @@
  * FIX A5: Carta Proposta integrada ao caderno
  */
 import { useState, useCallback, useMemo } from 'react';
-import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings, Eye } from 'lucide-react';
+import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings, Eye, TrendingUp, Hash } from 'lucide-react';
 import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta } from './budgetDocGenerator';
 import type { PropostaSectionId, DocMode } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
@@ -590,16 +590,16 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
                             {([
-                                { id: '_carta', label: 'Carta Proposta', desc: 'Carta formal gerada no Passo 4', icon: '📄' },
-                                { id: 'resumido', label: 'Orçamento Resumido', desc: 'Visão geral por etapa com totais', icon: '📑' },
-                                { id: 'sintetico', label: 'Orçamento Sintético', desc: 'Itens agrupados por etapa com totais', icon: '📊' },
-                                { id: 'analitico', label: 'Orçamento Analítico', desc: 'Composições detalhadas com insumos', icon: '📋' },
-                                { id: 'cpu', label: 'Composições de Custo (CPU)', desc: 'Caderno completo de composições unitárias', icon: '🧮' },
-                                { id: 'abc_servicos', label: 'Curva ABC de Serviços', desc: 'Ranking Pareto dos serviços', icon: '📈' },
-                                { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${insumos.length} insumos classificados`, icon: '📦', disabled: insumos.length === 0 },
-                                { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: '📅', disabled: !cronogramaResult },
-                                { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Composição detalhada do BDI', icon: '🔢' },
-                            ] as { id: string; label: string; desc: string; icon: string; disabled?: boolean }[]).map(item => {
+                                { id: '_carta', label: 'Carta Proposta', desc: 'Carta formal gerada no Passo 4', icon: <FileText size={18} color="#6366f1" /> },
+                                { id: 'resumido', label: 'Orçamento Resumido', desc: 'Visão geral por etapa com totais', icon: <Layers size={18} color="#2563eb" /> },
+                                { id: 'sintetico', label: 'Orçamento Sintético', desc: 'Itens agrupados por etapa com totais', icon: <BarChart3 size={18} color="#0891b2" /> },
+                                { id: 'analitico', label: 'Orçamento Analítico', desc: 'Composições detalhadas com insumos', icon: <ClipboardList size={18} color="#7c3aed" /> },
+                                { id: 'cpu', label: 'Composições de Custo (CPU)', desc: 'Caderno completo de composições unitárias', icon: <Calculator size={18} color="#c026d3" /> },
+                                { id: 'abc_servicos', label: 'Curva ABC de Serviços', desc: 'Ranking Pareto dos serviços', icon: <TrendingUp size={18} color="#059669" /> },
+                                { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${insumos.length} insumos classificados`, icon: <Package size={18} color="#d97706" />, disabled: insumos.length === 0 },
+                                { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: <Calendar size={18} color="#0284c7" />, disabled: !cronogramaResult },
+                                { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Composição detalhada do BDI', icon: <Hash size={18} color="#dc2626" /> },
+                            ] as { id: string; label: string; desc: string; icon: React.ReactNode; disabled?: boolean }[]).map(item => {
                                 const isCarta = item.id === '_carta';
                                 const isChecked = isCarta ? includeCartaProposta : propostaSections.includes(item.id as PropostaSectionId);
                                 const isDisabled = item.disabled;
@@ -620,7 +620,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                                 setPropostaSections(prev => prev.includes(sid) ? prev.filter(s => s !== sid) : [...prev, sid]);
                                             }}
                                             style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }} />
-                                        <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.label}</div>
                                             <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>{item.desc}</div>

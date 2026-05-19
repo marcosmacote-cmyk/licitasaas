@@ -7,7 +7,7 @@
  * FIX F1.3: BudgetDocsPanel agora recebe cronogramaResult e insumos reais
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Settings, TableProperties, Calendar, FileText, Package as PackageIcon, Save, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Settings, TableProperties, Calendar, FileText, Package as PackageIcon, Save, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { StepperBar } from './StepperBar';
 import { Step1ConfigPanel } from './steps/Step1ConfigPanel';
 import { Step2BudgetEditor } from './steps/Step2BudgetEditor';
@@ -637,7 +637,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                         return (
                             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: '14px 18px' }}>
                                 <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-tertiary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {hasBlocker ? '❌' : '✅'} Checklist Pré-Exportação
+                                    {hasBlocker ? <XCircle size={13} /> : <CheckCircle2 size={13} />} Checklist Pré-Exportação
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                     {checks.map(c => (
@@ -648,7 +648,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                                             color: c.blocker ? '#dc2626' : c.ok ? '#059669' : '#d97706',
                                             border: `1px solid ${c.blocker ? 'rgba(239,68,68,0.2)' : c.ok ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.2)'}`,
                                         }}>
-                                            <span>{c.blocker ? '❌' : c.ok ? '✅' : '⚠️'}</span>
+                                            <span>{c.blocker ? <XCircle size={12} /> : c.ok ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}</span>
                                             <span>{c.label}</span>
                                             <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>({c.detail})</span>
                                         </div>
@@ -656,7 +656,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                                 </div>
                                 {hasBlocker && (
                                     <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
-                                        ⚠️ Corrija os erros críticos antes de exportar.
+                                        <AlertTriangle size={13} style={{display:'inline',verticalAlign:-2,marginRight:4}} /> Corrija os erros críticos antes de exportar.
                                     </div>
                                 )}
                             </div>

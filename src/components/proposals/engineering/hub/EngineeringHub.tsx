@@ -161,7 +161,7 @@ export function EngineeringHub() {
 
     const handleSyncSinapi = async (force = false) => {
         let body: any = { ufs: ['ALL'], months: 12, includeDesonerado: true, force };
-        let confirmText = 'Iniciar download SINAPI Nacional?\n\n🗺️ Todos os 27 estados do Brasil\n📅 Últimos 12 meses\n🔄 Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.';
+        let confirmText = 'Iniciar download SINAPI Nacional?\n\n• Todos os 27 estados do Brasil\n• Últimos 12 meses\n• Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.';
 
         if (force) {
             const uf = (prompt('UF para reprocessar (ex: PA, CE, SP) ou ALL para todos os estados:', 'PA') || '').trim().toUpperCase();
@@ -180,7 +180,7 @@ export function EngineeringHub() {
                 force: true,
                 targetPeriods: [{ month, year }]
             };
-            confirmText = `Reprocessar SINAPI ${uf} ${dataBase}?\n\n🔄 Onerado + Desonerado\n\nBases existentes ${uf === 'ALL' ? 'de todos os estados nessa data' : 'dessa UF/data'} serão reimportadas para reparar composições analíticas.`;
+            confirmText = `Reprocessar SINAPI ${uf} ${dataBase}?\n\n• Onerado + Desonerado\n\nBases existentes ${uf === 'ALL' ? 'de todos os estados nessa data' : 'dessa UF/data'} serão reimportadas para reparar composições analíticas.`;
         }
 
         if (!confirm(confirmText)) return;
@@ -487,7 +487,7 @@ export function EngineeringHub() {
 
                         <button
                             onClick={async () => {
-                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n🛣️ Sistema de Custos Rodoviários\n🗺️ Todos os 27 estados\n📅 Últimos 12 meses\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
+                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n• Sistema de Custos Rodoviários\n• Todos os 27 estados\n• Últimos 12 meses\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
                                 setSyncingSicro(true);
                                 try {
                                     const res = await fetch('/api/engineering/bases/sync-sicro', {
@@ -495,7 +495,7 @@ export function EngineeringHub() {
                                         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ ufs: ['ALL'], months: 12 })
                                     });
-                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
                                     else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
                                 } catch (err) { alert('Erro de conexão'); }
                                 setSyncingSicro(false);
@@ -515,7 +515,7 @@ export function EngineeringHub() {
 
                         <button
                             onClick={async () => {
-                                if (!confirm('Iniciar download SBC (Informativo SBC)?\n\n🏗️ Banco de Composições Analíticas\n🗺️ 30 regiões/praças do Brasil\n📅 Últimos 12 meses\n\nRequer credenciais SBC configuradas.\nO processo roda em background e pode levar ~30-60 min.')) return;
+                                if (!confirm('Iniciar download SBC (Informativo SBC)?\n\n• Banco de Composições Analíticas\n• 30 regiões/praças do Brasil\n• Últimos 12 meses\n\nRequer credenciais SBC configuradas.\nO processo roda em background e pode levar ~30-60 min.')) return;
                                 setSyncingSbc(true);
                                 try {
                                     const res = await fetch('/api/engineering/bases/sync-sbc', {
@@ -523,7 +523,7 @@ export function EngineeringHub() {
                                         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ regions: ['ALL'], months: 12 })
                                     });
-                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
                                     else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
                                 } catch (err) { alert('Erro de conexão'); }
                                 setSyncingSbc(false);
@@ -543,7 +543,7 @@ export function EngineeringHub() {
 
                         <button
                             onClick={async () => {
-                                if (!confirm('Iniciar download CAERN (RN)?\n\n🏗️ Tabela de Preços da CAERN\n🗺️ Rio Grande do Norte\n📅 Últimos 3 anos\n\nAcesso público — sem credenciais.\nO processo roda em background.')) return;
+                                if (!confirm('Iniciar download CAERN (RN)?\n\n• Tabela de Preços da CAERN\n• Rio Grande do Norte\n• Últimos 3 anos\n\nAcesso público — sem credenciais.\nO processo roda em background.')) return;
                                 setSyncingCaern(true);
                                 try {
                                     const res = await fetch('/api/engineering/bases/sync-caern', {
@@ -551,7 +551,7 @@ export function EngineeringHub() {
                                         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                                         body: JSON.stringify({})
                                     });
-                                    if (res.ok) { const d = await res.json(); alert('✅ ' + d.message); }
+                                    if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
                                     else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
                                 } catch (err) { alert('Erro de conexão'); }
                                 setSyncingCaern(false);

@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide, FolderOpen, Folder } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -884,7 +884,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             transition: 'all 0.1s',
                         }}>
                         <div style={{ fontSize: '0.65rem', fontWeight: 700, color: isGrp ? '#d97706' : (idx === currentIndex ? 'var(--color-primary)' : 'var(--color-text-tertiary)') }}>
-                            {isGrp ? `${item.type === 'ETAPA' ? '📂' : '📁'} ${item.itemNumber}` : `${item.itemNumber} · ${item.code || 'N/A'}`}
+                            {isGrp ? <>{item.type === 'ETAPA' ? <FolderOpen size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{item.itemNumber}</> : `${item.itemNumber} · ${item.code || 'N/A'}`}
                         </div>
                         <div style={{
                             fontSize: '0.72rem', lineHeight: 1.3, marginTop: 2,
@@ -940,7 +940,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ fontSize: '0.65rem', fontWeight: 700, color: isGrouperType(currentItem.type) ? '#d97706' : 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                             {isGrouperType(currentItem.type)
-                                ? `${currentItem.type === 'ETAPA' ? '📂 ETAPA' : '📁 SUBETAPA'} — Agrupador`
+                                ? <>{currentItem.type === 'ETAPA' ? <FolderOpen size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{currentItem.type === 'ETAPA' ? 'ETAPA' : 'SUBETAPA'} — Agrupador</>
                                 : 'CPU — Composição de Preços Unitários'}
                         </div>
                         <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>{currentItem.description}</h3>

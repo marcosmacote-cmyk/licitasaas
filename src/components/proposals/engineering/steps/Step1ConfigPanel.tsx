@@ -3,7 +3,7 @@
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
 import React, { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info, ClipboardList } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
 import { applyPrecision } from '../precisionEngine';
 import type { EngineeringConfig, PrecisionConfig } from '../types';
@@ -902,7 +902,7 @@ export function Step1ConfigPanel({
                         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                                    📋 Planilhas Adicionais de Encargos
+                                    <ClipboardList size={14} style={{display:'inline',verticalAlign:-2,marginRight:4}} /> Planilhas Adicionais de Encargos
                                 </span>
                             </div>
                             <p style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', margin: '0 0 8px', lineHeight: 1.4 }}>

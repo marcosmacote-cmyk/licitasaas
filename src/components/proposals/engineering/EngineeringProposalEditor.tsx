@@ -2526,7 +2526,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             background: isAbove ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
                                             color: isAbove ? '#dc2626' : '#059669',
                                         }}>
-                                            {isAbove ? '⚠️ Acima' : '✅ Abaixo'} do estimado ({pct > 0 ? '+' : ''}{pct.toFixed(1)}%)
+                                            {isAbove ? <><AlertTriangle size={12} style={{display:'inline',verticalAlign:'middle',marginRight:3}} /> Acima</> : <><CheckCircle2 size={12} style={{display:'inline',verticalAlign:'middle',marginRight:3}} /> Abaixo</>} do estimado ({pct > 0 ? '+' : ''}{pct.toFixed(1)}%)
                                         </span>
                                     </div>
                                 </div>
@@ -2558,8 +2558,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </div>
                                     </div>
                                     <div style={{ padding: '0 14px 10px', display: 'flex', gap: 8, justifyContent: 'center' }}>
-                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#059669' }}>✅ {ok} OK</span>
-                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#d97706' }}>⚠️ {div} Div.</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle2 size={11} /> {ok} OK</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={11} /> {div} Div.</span>
                                         <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-tertiary)' }}>— {noMatch} N/D</span>
                                     </div>
                                 </div>
