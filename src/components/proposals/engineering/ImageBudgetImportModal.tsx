@@ -19,6 +19,33 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
     const [error, setError] = useState<string | null>(null);
     const [dragOver, setDragOver] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [progress, setProgress] = useState<number | null>(null);
+
+    const startSimulatedProgress = (setProgress: (p: number | null) => void) => {
+        setProgress(0);
+        let current = 0;
+        const interval = setInterval(() => {
+            if (current < 90) {
+                const increment = current < 50 ? 15 : current < 75 ? 8 : 3;
+                current = Math.min(90, current + increment);
+                setProgress(current);
+            }
+        }, 500);
+        return () => {
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => setProgress(null), 800);
+        };
+    };
+
+    function ProgressBar({ progress, color = 'var(--color-primary)' }: { progress: number | null, color?: string }) {
+        if (progress === null) return null;
+        return (
+            <div style={{ width: '100%', height: 4, background: 'var(--color-bg-base)', borderRadius: 2, overflow: 'hidden', marginTop: 8 }}>
+                <div style={{ width: `${progress}%`, height: '100%', background: color, transition: 'width 0.3s ease' }} />
+            </div>
+        );
+    }
 
     // Auto load initialFile if passed from parent
     useEffect(() => {
@@ -80,6 +107,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
     const extractItems = async (fileToExtract: File) => {
         setIsLoading(true);
         setError(null);
+        const stopProgress = startSimulatedProgress(setProgress);
         try {
             const formData = new FormData();
             formData.append('file', fileToExtract);
@@ -111,6 +139,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
             console.error(err);
             setError(err.message || 'Erro ao processar a imagem. Verifique o tamanho e contraste do print.');
         } finally {
+            stopProgress();
             setIsLoading(false);
         }
     };
@@ -356,11 +385,12 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                                         alignItems: 'center', justifyContent: 'center', gap: 16
                                     }}>
                                         <Loader2 size={36} className="spin" color="var(--color-primary)" />
-                                        <div style={{ textAlign: 'center' }}>
+                                        <div style={{ textAlign: 'center', width: '70%' }}>
                                             <h4 style={{ margin: 0, fontWeight: 700 }}>Processando com Gemini Vision</h4>
-                                            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
+                                            <p style={{ margin: '4px 0 12px', fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
                                                 Identificando estrutura da planilha e auditando preços oficiais...
                                             </p>
+                                            <ProgressBar progress={progress} />
                                         </div>
                                     </div>
                                 ) : error ? (

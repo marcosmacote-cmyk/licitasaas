@@ -272,6 +272,49 @@ export function Step1ConfigPanel({
     const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
     const effectiveBdi = bdiConfig.bdiGlobal;
 
+    // Image paste loading and progress states
+    const [isProcessingConfigImage, setIsProcessingConfigImage] = useState(false);
+    const [isProcessingBdiImage, setIsProcessingBdiImage] = useState(false);
+    const [isProcessingEncargosImage, setIsProcessingEncargosImage] = useState(false);
+    const [isProcessingAdditionalImage, setIsProcessingAdditionalImage] = useState<Record<number, boolean>>({});
+
+    const [configImageProgress, setConfigImageProgress] = useState<number | null>(null);
+    const [bdiImageProgress, setBdiImageProgress] = useState<number | null>(null);
+    const [encargosImageProgress, setEncargosImageProgress] = useState<number | null>(null);
+    const [additionalImageProgress, setAdditionalImageProgress] = useState<Record<number, number | null>>({});
+
+    const startSimulatedProgress = (setProgress: (p: number | null) => void) => {
+        setProgress(0);
+        let current = 0;
+        const interval = setInterval(() => {
+            if (current < 90) {
+                const increment = current < 50 ? 15 : current < 75 ? 8 : 3;
+                current = Math.min(90, current + increment);
+                setProgress(current);
+            }
+        }, 500);
+        return () => {
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => setProgress(null), 800);
+        };
+    };
+
+    const ProgressBar = ({ progress, color = '#3b82f6' }: { progress: number | null; color?: string }) => {
+        if (progress === null) return null;
+        return (
+            <div style={{ width: '100%', height: 4, background: 'var(--color-bg-base)', borderRadius: 2, overflow: 'hidden', marginTop: 6, position: 'relative' }}>
+                <div style={{
+                    width: `${progress}%`,
+                    height: '100%',
+                    background: `linear-gradient(90deg, ${color}, #8b5cf6)`,
+                    transition: progress === 100 ? 'width 0.2s ease-out' : 'width 0.5s cubic-bezier(0.1, 0.8, 0.1, 1)',
+                    borderRadius: 2
+                }} />
+            </div>
+        );
+    };
+
     const updateTcu = (field: keyof BdiTcuParams, val: number) => {
         const nextTcu = { ...bdiConfig.tcu, [field]: val };
         const calculatedBdi = calculateBdiTCU(nextTcu, engineeringConfig.precision);
@@ -325,68 +368,79 @@ export function Step1ConfigPanel({
                             <Wrench size={18} color="var(--color-primary)" />
                             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Dados do Orçamento</h3>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button onClick={async () => {
-                                try {
-                                    const clipItems = await navigator.clipboard.read();
-                                    let imageBlob: Blob | null = null;
-                                    for (const item of clipItems) {
-                                        for (const type of item.types) {
-                                            if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
-                                        }
-                                        if (imageBlob) break;
-                                    }
-                                    if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
-                                    const reader = new FileReader();
-                                    reader.onload = async () => {
-                                        const base64 = (reader.result as string).split(',')[1];
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={async () => {
                                         try {
-                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do Orçamento...</span>);
-                                            const resp = await fetch('/api/engineering/ai-extract-config-image', {
-                                                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-                                                body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type })
-                                            });
-                                            const result = await resp.json();
-                                            if (result.found) {
-                                                const d = result.data || result;
-                                                const updates: any = {};
-                                                if (d.objeto) updates.objeto = d.objeto;
-                                                if (d.uf) updates.ufReferencia = d.uf;
-                                                if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
-                                                if (d.dataBase) updates.dataBase = d.dataBase;
-                                                if (d.dataBasesPorFonte && typeof d.dataBasesPorFonte === 'object') {
-                                                    updates.dataBases = d.dataBasesPorFonte;
-                                                    if (!d.dataBase) updates.dataBase = Object.values(d.dataBasesPorFonte)[0] as string;
+                                            const clipItems = await navigator.clipboard.read();
+                                            let imageBlob: Blob | null = null;
+                                            for (const item of clipItems) {
+                                                for (const type of item.types) {
+                                                    if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
                                                 }
-                                                if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
-                                                // P1: Store AI-extracted snapshot for consistency badges
-                                                updates._aiExtractedRef = {
-                                                    objeto: d.objeto || undefined,
-                                                    ufReferencia: d.uf || undefined,
-                                                    regimeOneracao: d.regime || undefined,
-                                                    dataBase: d.dataBase || undefined,
-                                                    dataBases: d.dataBasesPorFonte || undefined,
-                                                    basesConsideradas: Array.isArray(d.bases) ? d.bases : undefined,
-                                                };
-                                                onConfigChange({ ...engineeringConfig, ...updates });
-                                                setHasUnsavedChanges(true);
-                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas!</span>);
-                                            } else { alert('Não foi possível extrair configurações da imagem.'); setSaveMsg(null); }
-                                            setTimeout(() => setSaveMsg(null), 4000);
-                                        } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
-                                    };
-                                    reader.readAsDataURL(imageBlob);
-                                } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                            }} style={btnGreen}>
-                                <FileImage size={14} /> Colar Imagem
-                            </button>
-                            {onExtractConfig && (
-                                <button style={{ ...btnBlue, cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1 }}
-                                    onClick={onExtractConfig} disabled={isExtractingConfig}>
-                                    {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
-                                </button>
-                            )}
-                        </div>
+                                                if (imageBlob) break;
+                                            }
+                                            if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
+                                            
+                                            setIsProcessingConfigImage(true);
+                                            const stopProgress = startSimulatedProgress(setConfigImageProgress);
+                                            
+                                            const reader = new FileReader();
+                                            reader.onload = async () => {
+                                                const base64 = (reader.result as string).split(',')[1];
+                                                try {
+                                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do Orçamento...</span>);
+                                                    const resp = await fetch('/api/engineering/ai-extract-config-image', {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                        body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type })
+                                                    });
+                                                    const result = await resp.json();
+                                                    if (result.found) {
+                                                        const d = result.data || result;
+                                                        const updates: any = {};
+                                                        if (d.objeto) updates.objeto = d.objeto;
+                                                        if (d.uf) updates.ufReferencia = d.uf;
+                                                        if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
+                                                        if (d.dataBase) updates.dataBase = d.dataBase;
+                                                        if (d.dataBasesPorFonte && typeof d.dataBasesPorFonte === 'object') {
+                                                            updates.dataBases = d.dataBasesPorFonte;
+                                                            if (!d.dataBase) updates.dataBase = Object.values(d.dataBasesPorFonte)[0] as string;
+                                                        }
+                                                        if (d.regime === 'ONERADO' || d.regime === 'DESONERADO') updates.regimeOneracao = d.regime;
+                                                        // P1: Store AI-extracted snapshot for consistency badges
+                                                        updates._aiExtractedRef = {
+                                                            objeto: d.objeto || undefined,
+                                                            ufReferencia: d.uf || undefined,
+                                                            regimeOneracao: d.regime || undefined,
+                                                            dataBase: d.dataBase || undefined,
+                                                            dataBases: d.dataBasesPorFonte || undefined,
+                                                            basesConsideradas: Array.isArray(d.bases) ? d.bases : undefined,
+                                                        };
+                                                        onConfigChange({ ...engineeringConfig, ...updates });
+                                                        setHasUnsavedChanges(true);
+                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Configurações extraídas!</span>);
+                                                    } else { alert('Não foi possível extrair configurações da imagem.'); setSaveMsg(null); }
+                                                    setTimeout(() => setSaveMsg(null), 4000);
+                                                } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                                finally {
+                                                    stopProgress();
+                                                    setIsProcessingConfigImage(false);
+                                                }
+                                            };
+                                            reader.readAsDataURL(imageBlob);
+                                        } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                    }} style={{ ...btnGreen, cursor: isProcessingConfigImage ? 'wait' : 'pointer', opacity: isProcessingConfigImage ? 0.7 : 1 }} disabled={isProcessingConfigImage}>
+                                        {isProcessingConfigImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingConfigImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
+                                    </button>
+                                    {onExtractConfig && (
+                                        <button style={{ ...btnBlue, cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1 }}
+                                            onClick={onExtractConfig} disabled={isExtractingConfig || isProcessingConfigImage}>
+                                            {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                        </button>
+                                    )}
+                                </div>
+                                <ProgressBar progress={configImageProgress} />
+                            </div>
                     </div>
 
                     {/* Objeto */}
@@ -551,59 +605,70 @@ export function Step1ConfigPanel({
                                 <Calculator size={18} color="var(--color-primary)" />
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>BDI — Serviços</h3>
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={async () => {
-                                    try {
-                                        const clipItems = await navigator.clipboard.read();
-                                        let imageBlob: Blob | null = null;
-                                        for (const item of clipItems) {
-                                            for (const type of item.types) {
-                                                if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={async () => {
+                                        try {
+                                            const clipItems = await navigator.clipboard.read();
+                                            let imageBlob: Blob | null = null;
+                                            for (const item of clipItems) {
+                                                for (const type of item.types) {
+                                                    if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                                }
+                                                if (imageBlob) break;
                                             }
-                                            if (imageBlob) break;
-                                        }
-                                        if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
-                                        const reader = new FileReader();
-                                        reader.onload = async () => {
-                                            const base64 = (reader.result as string).split(',')[1];
-                                            try {
-                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do BDI...</span>);
-                                                const resp = await fetch('/api/engineering/ai-extract-bdi-image', {
-                                                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-                                                    body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type, isOnerado: engineeringConfig.regimeOneracao === 'ONERADO' })
-                                                });
-                                                const result = await resp.json();
-                                                if (result.found) {
-                                                    const d = result.data || result;
-                                                    if (d.tcu) {
-                                                        const rawTcu = d.tcu;
-                                                        if (rawTcu.tributos != null && rawTcu.pis == null) {
-                                                            const total = rawTcu.tributos;
-                                                            rawTcu.pis = 0.65;
-                                                            rawTcu.cofins = 3.00;
-                                                            rawTcu.iss = Math.max(0, total - 0.65 - 3.00);
-                                                            delete rawTcu.tributos;
+                                            if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem e tente novamente.'); return; }
+                                            
+                                            setIsProcessingBdiImage(true);
+                                            const stopProgress = startSimulatedProgress(setBdiImageProgress);
+                                            
+                                            const reader = new FileReader();
+                                            reader.onload = async () => {
+                                                const base64 = (reader.result as string).split(',')[1];
+                                                try {
+                                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}><Loader2 size={14} className="spin" /> Lendo imagem do BDI...</span>);
+                                                    const resp = await fetch('/api/engineering/ai-extract-bdi-image', {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                        body: JSON.stringify({ imageBase64: base64, mimeType: imageBlob!.type, isOnerado: engineeringConfig.regimeOneracao === 'ONERADO' })
+                                                    });
+                                                    const result = await resp.json();
+                                                    if (result.found) {
+                                                        const d = result.data || result;
+                                                        if (d.tcu) {
+                                                            const rawTcu = d.tcu;
+                                                            if (rawTcu.tributos != null && rawTcu.pis == null) {
+                                                                const total = rawTcu.tributos;
+                                                                rawTcu.pis = 0.65;
+                                                                rawTcu.cofins = 3.00;
+                                                                rawTcu.iss = Math.max(0, total - 0.65 - 3.00);
+                                                                delete rawTcu.tributos;
+                                                            }
+                                                            const tcu = { ...bdiConfig.tcu, ...rawTcu };
+                                                            onBdiChange({ ...bdiConfig, mode: 'TCU', tcu, bdiGlobal: d.tcu.bdiGlobal || bdiConfig.bdiGlobal });
+                                                            setHasUnsavedChanges(true);
+                                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> BDI extraído!</span>);
                                                         }
-                                                        const tcu = { ...bdiConfig.tcu, ...rawTcu };
-                                                        onBdiChange({ ...bdiConfig, mode: 'TCU', tcu, bdiGlobal: d.tcu.bdiGlobal || bdiConfig.bdiGlobal });
-                                                        setHasUnsavedChanges(true);
-                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> BDI extraído!</span>);
-                                                    }
-                                                } else { alert('Não foi possível extrair BDI da imagem.'); setSaveMsg(null); }
-                                                setTimeout(() => setSaveMsg(null), 4000);
-                                            } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
-                                        };
-                                    reader.readAsDataURL(imageBlob);
-                                } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                            }} style={btnGreen}>
-                                <FileImage size={14} /> Colar Imagem
-                            </button>
-                                {onExtractBdi && (
-                                    <button style={{ ...btnBlue, cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1 }}
-                                        onClick={onExtractBdi} disabled={isExtractingBdi}>
-                                        {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                                    } else { alert('Não foi possível extrair BDI da imagem.'); setSaveMsg(null); }
+                                                    setTimeout(() => setSaveMsg(null), 4000);
+                                                } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                                finally {
+                                                    stopProgress();
+                                                    setIsProcessingBdiImage(false);
+                                                }
+                                            };
+                                            reader.readAsDataURL(imageBlob);
+                                        } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                    }} style={{ ...btnGreen, cursor: isProcessingBdiImage ? 'wait' : 'pointer', opacity: isProcessingBdiImage ? 0.7 : 1 }} disabled={isProcessingBdiImage}>
+                                        {isProcessingBdiImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingBdiImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
                                     </button>
-                                )}
+                                    {onExtractBdi && (
+                                        <button style={{ ...btnBlue, cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1 }}
+                                            onClick={onExtractBdi} disabled={isExtractingBdi || isProcessingBdiImage}>
+                                            {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                        </button>
+                                    )}
+                                </div>
+                                <ProgressBar progress={bdiImageProgress} />
                             </div>
                         </div>
 
@@ -798,75 +863,86 @@ export function Step1ConfigPanel({
                                 <Users size={18} color="#6d28d9" />
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Encargos Sociais</h3>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                {/* Botão de Colar Imagem para o Encargo Principal */}
-                                <button onClick={async () => {
-                                    try {
-                                        const clipItems = await navigator.clipboard.read();
-                                        let imageBlob: Blob | null = null;
-                                        for (const item of clipItems) {
-                                            for (const type of item.types) {
-                                                if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {/* Botão de Colar Imagem para o Encargo Principal */}
+                                    <button onClick={async () => {
+                                        try {
+                                            const clipItems = await navigator.clipboard.read();
+                                            let imageBlob: Blob | null = null;
+                                            for (const item of clipItems) {
+                                                for (const type of item.types) {
+                                                    if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                                }
+                                                if (imageBlob) break;
                                             }
-                                            if (imageBlob) break;
-                                        }
-                                        if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
-                                        const reader = new FileReader();
-                                        reader.onload = async () => {
-                                            const base64 = (reader.result as string).split(',')[1];
-                                            const mimeType = imageBlob!.type;
-                                            try {
-                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
-                                                const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
-                                                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-                                                    body: JSON.stringify({ imageBase64: base64, mimeType, label: 'Principal' })
-                                                });
-                                                const result = await resp.json();
-                                                if (result.found) {
-                                                    const d = result.data || result;
-                                                    const encargosUpdate: any = {
-                                                        ...engineeringConfig.encargosSociais,
-                                                        horista: d.totalHorista || engineeringConfig.encargosSociais?.horista,
-                                                        mensalista: d.totalMensalista || engineeringConfig.encargosSociais?.mensalista,
-                                                        basePrincipal: d.basePrincipal || null,
-                                                        grupoA_horista: d.grupoA_horista || 0, grupoA_mensalista: d.grupoA_mensalista || 0,
-                                                        grupoB_horista: d.grupoB_horista || 0, grupoB_mensalista: d.grupoB_mensalista || 0,
-                                                        grupoC_horista: d.grupoC_horista || 0, grupoC_mensalista: d.grupoC_mensalista || 0,
-                                                        grupoD_horista: d.grupoD_horista || 0, grupoD_mensalista: d.grupoD_mensalista || 0,
-                                                        a1_h: d.a1_h || 0, a1_m: d.a1_m || 0, a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
-                                                        a3_h: d.a3_h || 0, a3_m: d.a3_m || 0, a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
-                                                        a5_h: d.a5_h || 0, a5_m: d.a5_m || 0, a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
-                                                        a7_h: d.a7_h || 0, a7_m: d.a7_m || 0, a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
-                                                        a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
-                                                        b1_h: d.b1_h || 0, b1_m: d.b1_m || 0, b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
-                                                        b3_h: d.b3_h || 0, b3_m: d.b3_m || 0, b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
-                                                        b5_h: d.b5_h || 0, b5_m: d.b5_m || 0, b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
-                                                        b7_h: d.b7_h || 0, b7_m: d.b7_m || 0, b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
-                                                        b9_h: d.b9_h || 0, b9_m: d.b9_m || 0, b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
-                                                        c1_h: d.c1_h || 0, c1_m: d.c1_m || 0, c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
-                                                        c3_h: d.c3_h || 0, c3_m: d.c3_m || 0, c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
-                                                        c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
-                                                        d1_h: d.d1_h || 0, d1_m: d.d1_m || 0, d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
-                                                    };
-                                                    onConfigChange({ ...engineeringConfig, encargosSociais: encargosUpdate });
-                                                    setHasUnsavedChanges(true);
-                                                    setShowEncargosDetail(true); // Auto-open detail
-                                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos da imagem! H={d.totalHorista}% M={d.totalMensalista}%</span>);
-                                                } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
-                                                setTimeout(() => setSaveMsg(null), 4000);
-                                            } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
-                                        };
-                                        reader.readAsDataURL(imageBlob);
-                                    } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                                }} style={btnGreen}>
-                                    <FileImage size={14} /> Colar Imagem
-                                </button>
-                                {onExtractEncargos && (
-                                    <button style={{ ...btnBlue, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.7 : 1 }}
-                                        onClick={onExtractEncargos} disabled={isExtractingEncargos}>
-                                        {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                            if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
+                                            
+                                            setIsProcessingEncargosImage(true);
+                                            const stopProgress = startSimulatedProgress(setEncargosImageProgress);
+                                            
+                                            const reader = new FileReader();
+                                            reader.onload = async () => {
+                                                const base64 = (reader.result as string).split(',')[1];
+                                                const mimeType = imageBlob!.type;
+                                                try {
+                                                    setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
+                                                    const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                        body: JSON.stringify({ imageBase64: base64, mimeType, label: 'Principal' })
+                                                    });
+                                                    const result = await resp.json();
+                                                    if (result.found) {
+                                                        const d = result.data || result;
+                                                        const encargosUpdate: any = {
+                                                            ...engineeringConfig.encargosSociais,
+                                                            horista: d.totalHorista || engineeringConfig.encargosSociais?.horista,
+                                                            mensalista: d.totalMensalista || engineeringConfig.encargosSociais?.mensalista,
+                                                            basePrincipal: d.basePrincipal || null,
+                                                            grupoA_horista: d.grupoA_horista || 0, grupoA_mensalista: d.grupoA_mensalista || 0,
+                                                            grupoB_horista: d.grupoB_horista || 0, grupoB_mensalista: d.grupoB_mensalista || 0,
+                                                            grupoC_horista: d.grupoC_horista || 0, grupoC_mensalista: d.grupoC_mensalista || 0,
+                                                            grupoD_horista: d.grupoD_horista || 0, grupoD_mensalista: d.grupoD_mensalista || 0,
+                                                            a1_h: d.a1_h || 0, a1_m: d.a1_m || 0, a2_h: d.a2_h || 0, a2_m: d.a2_m || 0,
+                                                            a3_h: d.a3_h || 0, a3_m: d.a3_m || 0, a4_h: d.a4_h || 0, a4_m: d.a4_m || 0,
+                                                            a5_h: d.a5_h || 0, a5_m: d.a5_m || 0, a6_h: d.a6_h || 0, a6_m: d.a6_m || 0,
+                                                            a7_h: d.a7_h || 0, a7_m: d.a7_m || 0, a8_h: d.a8_h || 0, a8_m: d.a8_m || 0,
+                                                            a9_h: d.a9_h || 0, a9_m: d.a9_m || 0,
+                                                            b1_h: d.b1_h || 0, b1_m: d.b1_m || 0, b2_h: d.b2_h || 0, b2_m: d.b2_m || 0,
+                                                            b3_h: d.b3_h || 0, b3_m: d.b3_m || 0, b4_h: d.b4_h || 0, b4_m: d.b4_m || 0,
+                                                            b5_h: d.b5_h || 0, b5_m: d.b5_m || 0, b6_h: d.b6_h || 0, b6_m: d.b6_m || 0,
+                                                            b7_h: d.b7_h || 0, b7_m: d.b7_m || 0, b8_h: d.b8_h || 0, b8_m: d.b8_m || 0,
+                                                            b9_h: d.b9_h || 0, b9_m: d.b9_m || 0, b10_h: d.b10_h || 0, b10_m: d.b10_m || 0,
+                                                            c1_h: d.c1_h || 0, c1_m: d.c1_m || 0, c2_h: d.c2_h || 0, c2_m: d.c2_m || 0,
+                                                            c3_h: d.c3_h || 0, c3_m: d.c3_m || 0, c4_h: d.c4_h || 0, c4_m: d.c4_m || 0,
+                                                            c5_h: d.c5_h || 0, c5_m: d.c5_m || 0,
+                                                            d1_h: d.d1_h || 0, d1_m: d.d1_m || 0, d2_h: d.d2_h || 0, d2_m: d.d2_m || 0,
+                                                        };
+                                                        onConfigChange({ ...engineeringConfig, encargosSociais: encargosUpdate });
+                                                        setHasUnsavedChanges(true);
+                                                        setShowEncargosDetail(true); // Auto-open detail
+                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos da imagem! H={d.totalHorista}% M={d.totalMensalista}%</span>);
+                                                    } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
+                                                    setTimeout(() => setSaveMsg(null), 4000);
+                                                } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                                finally {
+                                                    stopProgress();
+                                                    setIsProcessingEncargosImage(false);
+                                                }
+                                            };
+                                            reader.readAsDataURL(imageBlob);
+                                        } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                    }} style={{ ...btnGreen, cursor: isProcessingEncargosImage ? 'wait' : 'pointer', opacity: isProcessingEncargosImage ? 0.7 : 1 }} disabled={isProcessingEncargosImage}>
+                                        {isProcessingEncargosImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingEncargosImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
                                     </button>
-                                )}
+                                    {onExtractEncargos && (
+                                        <button style={{ ...btnBlue, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.7 : 1 }}
+                                            onClick={onExtractEncargos} disabled={isExtractingEncargos || isProcessingEncargosImage}>
+                                            {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
+                                        </button>
+                                    )}
+                                </div>
+                                <ProgressBar progress={encargosImageProgress} color="#6d28d9" />
                             </div>
                         </div>
 
@@ -937,65 +1013,76 @@ export function Step1ConfigPanel({
                                             }}
                                             style={{ ...inputStyle, flex: 1 }} />
                                         {/* Image paste button */}
-                                        <button onClick={async () => {
-                                            try {
-                                                const clipItems = await navigator.clipboard.read();
-                                                let imageBlob: Blob | null = null;
-                                                for (const item of clipItems) {
-                                                    for (const type of item.types) {
-                                                        if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                                            <button onClick={async () => {
+                                                try {
+                                                    const clipItems = await navigator.clipboard.read();
+                                                    let imageBlob: Blob | null = null;
+                                                    for (const item of clipItems) {
+                                                        for (const type of item.types) {
+                                                            if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                                        }
+                                                        if (imageBlob) break;
                                                     }
-                                                    if (imageBlob) break;
-                                                }
-                                                if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
-                                                const reader = new FileReader();
-                                                reader.onload = async () => {
-                                                    const base64 = (reader.result as string).split(',')[1];
-                                                    const mimeType = imageBlob!.type;
-                                                    try {
-                                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
-                                                        const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
-                                                            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-                                                            body: JSON.stringify({ imageBase64: base64, mimeType, label: sheet.label || `Base ${idx + 2}` })
-                                                        });
-                                                        const result = await resp.json();
-                                                        if (result.found) {
-                                                            const d = result.data || result;
-                                                            const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
-                                                            sheets[idx] = { 
-                                                                ...sheets[idx], 
-                                                                ...d, 
-                                                                horista: d.totalHorista || d.horista || sheets[idx].horista,
-                                                                mensalista: d.totalMensalista || d.mensalista || sheets[idx].mensalista,
-                                                                label: sheet.label || d.basePrincipal || `Base ${idx + 2}` 
-                                                            };
-                                                            onConfigChange({ 
-                                                                ...engineeringConfig, 
-                                                                encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets },
-                                                                _aiExtractedEncargosAdicionais: (() => {
-                                                                    const arr = [...((engineeringConfig as any)._aiExtractedEncargosAdicionais || [])];
-                                                                    arr[idx] = { ...d, horista: d.totalHorista || 0, mensalista: d.totalMensalista || 0 };
-                                                                    return arr;
-                                                                })(),
-                                                            } as any);
-                                                            setHasUnsavedChanges(true);
-                                                            // Auto-open detail for this sheet
-                                                            setShowAdicionalDetail(prev => ({ ...prev, [idx]: true }));
-                                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos! H={d.totalHorista}% M={d.totalMensalista}%</span>);
-                                                        } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
-                                                        setTimeout(() => setSaveMsg(null), 4000);
-                                                    } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
-                                                };
-                                                reader.readAsDataURL(imageBlob);
-                                            } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
-                                        }} style={{ ...btnGreen, background: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)' }}>
-                                            <FileImage size={13} /> Colar Imagem
-                                        </button>
+                                                    if (!imageBlob) { alert('Nenhuma imagem no clipboard. Copie uma imagem (PrintScreen/Ctrl+C) e tente novamente.'); return; }
+                                                    
+                                                    setIsProcessingAdditionalImage(prev => ({ ...prev, [idx]: true }));
+                                                    const stopProgress = startSimulatedProgress(p => setAdditionalImageProgress(prev => ({ ...prev, [idx]: p })));
+                                                    
+                                                    const reader = new FileReader();
+                                                    reader.onload = async () => {
+                                                        const base64 = (reader.result as string).split(',')[1];
+                                                        const mimeType = imageBlob!.type;
+                                                        try {
+                                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6d28d9' }}><Loader2 size={14} className="spin" /> Extraindo encargos da imagem...</span>);
+                                                            const resp = await fetch('/api/engineering/ai-extract-encargos-image', {
+                                                                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                                                                body: JSON.stringify({ imageBase64: base64, mimeType, label: sheet.label || `Base ${idx + 2}` })
+                                                            });
+                                                            const result = await resp.json();
+                                                            if (result.found) {
+                                                                const d = result.data || result;
+                                                                const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                                                sheets[idx] = { 
+                                                                    ...sheets[idx], 
+                                                                    ...d, 
+                                                                    horista: d.totalHorista || d.horista || sheets[idx].horista,
+                                                                    mensalista: d.totalMensalista || d.mensalista || sheets[idx].mensalista,
+                                                                    label: sheet.label || d.basePrincipal || `Base ${idx + 2}` 
+                                                                };
+                                                                onConfigChange({ 
+                                                                    ...engineeringConfig, 
+                                                                    encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets },
+                                                                    _aiExtractedEncargosAdicionais: (() => {
+                                                                        const arr = [...((engineeringConfig as any)._aiExtractedEncargosAdicionais || [])];
+                                                                        arr[idx] = { ...d, horista: d.totalHorista || 0, mensalista: d.totalMensalista || 0 };
+                                                                        return arr;
+                                                                    })(),
+                                                                } as any);
+                                                                setHasUnsavedChanges(true);
+                                                                // Auto-open detail for this sheet
+                                                                setShowAdicionalDetail(prev => ({ ...prev, [idx]: true }));
+                                                                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Encargos extraídos! H={d.totalHorista}% M={d.totalMensalista}%</span>);
+                                                            } else { alert('Não foi possível extrair encargos da imagem.'); setSaveMsg(null); }
+                                                            setTimeout(() => setSaveMsg(null), 4000);
+                                                        } catch (err: any) { alert('Erro: ' + err.message); setSaveMsg(null); }
+                                                        finally {
+                                                            stopProgress();
+                                                            setIsProcessingAdditionalImage(prev => ({ ...prev, [idx]: false }));
+                                                        }
+                                                    };
+                                                    reader.readAsDataURL(imageBlob);
+                                                } catch (err: any) { alert('Erro ao ler clipboard: ' + err.message); }
+                                            }} style={{ ...btnGreen, background: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', cursor: isProcessingAdditionalImage[idx] ? 'wait' : 'pointer', opacity: isProcessingAdditionalImage[idx] ? 0.7 : 1 }} disabled={isProcessingAdditionalImage[idx]}>
+                                                {isProcessingAdditionalImage[idx] ? <Loader2 size={13} className="spin" /> : <FileImage size={13} />} {isProcessingAdditionalImage[idx] ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
+                                            </button>
+                                            <ProgressBar progress={additionalImageProgress[idx] ?? null} color="#6d28d9" />
+                                        </div>
                                         <button onClick={() => {
                                             const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                             sheets.splice(idx, 1);
                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
-                                        }} style={{ padding: '7px 8px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}>
+                                        }} style={{ padding: '7px 8px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }} disabled={isProcessingAdditionalImage[idx]}>
                                             <Trash2 size={12} />
                                         </button>
                                     </div>

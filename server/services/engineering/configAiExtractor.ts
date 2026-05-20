@@ -36,13 +36,15 @@ function scoreDocForIntent(doc: any, intent: ExtractionIntent): number {
         if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 55;
         if (/planilh|or[cç]ament|data.?base|sinapi|seinfra|sicro|orse|sicor|siproce|sedop|setop|der/.test(haystack)) score += 28;
         if (/cronograma|bdi|encargo/.test(haystack)) score += 8;
+        if (/anexo/i.test(haystack)) score += 15;
     } else {
-        if (/encargo|leis.?sociais|m[aã]o.?de.?obra|horista|mensalista/.test(haystack)) score += 70;
-        if (/bdi|composi[cç][aã]o|planilh|or[cç]ament/.test(haystack)) score += 22;
+        if (/encargo|leis.?sociais|m[aã]o.?de.?obra|horista|mensalista/.test(haystack)) score += 100;
+        if (/bdi|composi[cç][aã]o/.test(haystack)) score += 40;
+        if (/anexo|complement|detalhament/.test(haystack)) score += 30;
         if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 16;
-        // Encargos can also be inside generic "orçamento" or "anexo" files
-        if (/anexo|complement|detalhament/.test(haystack)) score += 12;
         if (/custo|pre[cç]o|refer[eê]ncia/.test(haystack)) score += 8;
+        // Penalize raw planilhas without BDI/encargos keywords for BDI/encargos intents
+        if (/planilh|quadro/i.test(haystack) && !/encargo|bdi|composi[cç]/i.test(haystack)) score -= 40;
     }
     return score;
 }
@@ -354,10 +356,11 @@ REGRAS PARA DATA BASE — EXTREMAMENTE IMPORTANTE:
   * Frequentemente seguido de "(N DES.)" = não desonerado ou "(DES.)" = desonerado.
 - Formato obrigatório de saída: YYYY-MM (ex: 2025-09, 2024-03)
 
-5. **dataBasesPorFonte**: Se o edital especifica datas-base DIFERENTES para cada tabela,
-   retorne um objeto com TODAS as datas encontradas.
-   Exemplo: { "SINAPI": "2025-09", "SEINFRA": "2025-09", "PROPRIA": "2025-09" }
-   Se todas usam a mesma data, retorne um objeto com cada base mapeada para a mesma data.
+5. **dataBasesPorFonte**: Se o edital especifica datas-base DIFERENTES para cada tabela/base,
+   retorne um objeto com a data-base específica de cada base identificada.
+   Exemplo: { "SINAPI": "2025-09", "SEINFRA": "2025-08", "ORSE": "2025-07" }
+   Analise com muita atenção as datas-base de cada base mencionada, pois elas costumam ser diferentes (ex: SINAPI de setembro e SEINFRA de agosto).
+   Se todas as bases usarem a mesma data, retorne um objeto mapeando cada base para aquela mesma data.
    NUNCA retorne vazio — sempre mapeie cada base à sua data.
 
 6. **regime**: Procure explicitamente se o edital menciona:
@@ -375,7 +378,21 @@ Retorne JSON.`;
             uf: { type: Type.STRING, nullable: true },
             bases: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
             dataBase: { type: Type.STRING, nullable: true },
-            dataBasesPorFonte: { type: Type.OBJECT, nullable: true, properties: {} },
+            dataBasesPorFonte: {
+                type: Type.OBJECT,
+                nullable: true,
+                properties: {
+                    SINAPI: { type: Type.STRING },
+                    SEINFRA: { type: Type.STRING },
+                    ORSE: { type: Type.STRING },
+                    SICRO: { type: Type.STRING },
+                    SBC: { type: Type.STRING },
+                    CAERN: { type: Type.STRING },
+                    "SICOR-MG": { type: Type.STRING },
+                    SICOR: { type: Type.STRING },
+                    PROPRIA: { type: Type.STRING }
+                }
+            },
             regime: { type: Type.STRING, nullable: true },
         },
         required: ['found'] as string[]
@@ -691,7 +708,7 @@ Extraia TODAS as seguintes informações:
 2. **uf**: UF onde a obra será executada (sigla, ex: CE, SP).
 3. **bases**: TODAS as bases/tabelas de custos (SINAPI, SEINFRA, SICRO, ORSE, SBC, PROPRIA, etc.). Retorne array de strings.
 4. **dataBase**: Mês/ano de referência PRINCIPAL (formato YYYY-MM).
-5. **dataBasesPorFonte**: Se houver datas diferentes para bases diferentes, ex: {"SINAPI": "2025-09", "SEINFRA": "2025-08"}.
+5. **dataBasesPorFonte**: Se houver datas diferentes para bases diferentes, ex: {"SINAPI": "2025-09", "SEINFRA": "2025-08", "ORSE": "2025-07"}. Identifique a data-base específica de cada base identificada. Se todas usam a mesma data, retorne todas as bases mapeadas para aquela mesma data.
 6. **regime**: "ONERADO" ou "DESONERADO".
 
 Retorne JSON.`;
@@ -704,7 +721,21 @@ Retorne JSON.`;
             uf: { type: Type.STRING, nullable: true },
             bases: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
             dataBase: { type: Type.STRING, nullable: true },
-            dataBasesPorFonte: { type: Type.OBJECT, nullable: true, properties: {} },
+            dataBasesPorFonte: {
+                type: Type.OBJECT,
+                nullable: true,
+                properties: {
+                    SINAPI: { type: Type.STRING },
+                    SEINFRA: { type: Type.STRING },
+                    ORSE: { type: Type.STRING },
+                    SICRO: { type: Type.STRING },
+                    SBC: { type: Type.STRING },
+                    CAERN: { type: Type.STRING },
+                    "SICOR-MG": { type: Type.STRING },
+                    SICOR: { type: Type.STRING },
+                    PROPRIA: { type: Type.STRING }
+                }
+            },
             regime: { type: Type.STRING, nullable: true },
         },
         required: ['found']

@@ -8,6 +8,26 @@ import { downloadWithRetry } from './downloadUtils';
 
 const prisma = new PrismaClient();
 
+function scoreDocForBdi(doc: any): number {
+    const haystack = `${doc.title || ''} ${doc.purpose || ''}`.toLowerCase();
+    let score = Number(doc.score) || 0;
+    if (/bdi|bonifica|tcu|2622/.test(haystack)) score += 80;
+    if (/encargo|leis.?sociais/.test(haystack)) score += 40;
+    if (/anexo/i.test(haystack)) score += 30;
+    if (/edital|projeto.?b[aá]sico|termo.?refer[eê]ncia/.test(haystack)) score += 20;
+    // Penalize raw planilhas without BDI keywords for BDI intent
+    if (/planilh|quadro/i.test(haystack) && !/bdi|encargo|composi[cç]/i.test(haystack)) score -= 40;
+    return score;
+}
+
+function selectDocsForBdi(arquivos: any[], maxDocs: number) {
+    const classified = classifyEngineeringAttachments(arquivos, { maxDocuments: Math.max(maxDocs, 6), minScore: -50 });
+    return classified.all
+        .map(doc => ({ ...doc, intentScore: scoreDocForBdi(doc) }))
+        .sort((a, b) => b.intentScore - a.intentScore)
+        .slice(0, maxDocs);
+}
+
 type BdiExtractionTarget = 'SERVICOS' | 'FORNECIMENTO' | 'ALL';
 
 export async function extractBdiFromBidding(biddingId: string, target: BdiExtractionTarget = 'ALL'): Promise<any | null> {
@@ -155,10 +175,7 @@ Retorne números sem %.`;
                 const arquivos = Array.isArray(apiRes.data) ? apiRes.data : [];
 
                 if (arquivos.length > 0) {
-                    const classified = classifyEngineeringAttachments(arquivos, { maxDocuments: 3 });
-                    const selectedDocs = classified.selected.length > 0
-                        ? classified.selected
-                        : classified.all.filter(doc => doc.score > -20).slice(0, 3);
+                    const selectedDocs = selectDocsForBdi(arquivos, 5);
 
                     const pdfParts: any[] = [];
                     const MAX_SIZE_KB = 20000; // 20MB — increased for large engineering PDFs
