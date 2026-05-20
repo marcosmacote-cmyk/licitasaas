@@ -68,6 +68,8 @@ export interface EngItem {
     discount?: number;
     /** Fator de multiplicação para ETAPAs/SUBETAPAs. Quando aplicado, multiplica as quantidades dos itens filhos. */
     multiplicationFactor?: number;
+    /** Memória de cálculo serializada em JSON */
+    calculationMemory?: string;
 }
 
 export const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';

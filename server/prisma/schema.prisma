@@ -713,6 +713,7 @@ model EngineeringProposalItem {
   multiplicationFactor Float? // Fator de multiplicação para ETAPAs/SUBETAPAs (cascata de quantidades)
   notes           String?  // Observações/notas do usuário por item
   discount        Float?   // Desconto individual (%) aplicado ao preço unitário
+  calculationMemory String? @db.Text
   sortOrder       Int      @default(0)
   
   proposal        PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)

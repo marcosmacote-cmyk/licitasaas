@@ -414,6 +414,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // Composition drawer
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
     const [compositionEditorIndex, setCompositionEditorIndex] = useState<number | null>(null);
+    const [activeCalcItem, setActiveCalcItem] = useState<EngItem | null>(null);
 
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
@@ -1104,6 +1105,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
                 updated.priceAudit = refreshPriceAudit(updated);
             }
+            return updated;
+        }));
+    };
+
+    const saveCalculationMemory = (itemId: string, calcMemoryJsonStr: string, calculatedQuantity: number) => {
+        setHasUnsavedChanges(true);
+        setItems(prev => prev.map(it => {
+            if (it.id !== itemId) return it;
+            const updated = { ...it, quantity: calculatedQuantity, calculationMemory: calcMemoryJsonStr };
+            updated.priceOrigin = 'MANUAL';
+            const itemBdi = resolveItemBdi(updated);
+            updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+            updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+            updated.priceAudit = refreshPriceAudit(updated);
             return updated;
         }));
     };
@@ -2273,7 +2288,31 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center', padding: '4px' }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('80px'), textAlign: 'right' }} step="0.01" />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                                                <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('72px'), textAlign: 'right' }} step="0.01" />
+                                                {!isGrouper(it.type) && (
+                                                    <button
+                                                        onClick={() => setActiveCalcItem(it)}
+                                                        title="Memória de Cálculo"
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            padding: '2px 4px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            opacity: it.calculationMemory ? 1 : 0.4,
+                                                            color: it.calculationMemory ? '#f59e0b' : 'var(--color-text-secondary)',
+                                                            transition: 'opacity 0.2s, color 0.2s',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                                                        onMouseLeave={e => { if (!it.calculationMemory) e.currentTarget.style.opacity = '0.4'; }}
+                                                    >
+                                                        <Calculator size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
@@ -2933,6 +2972,453 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     engineeringConfig={engineeringConfig}
                 />
             )}
+            {activeCalcItem && (
+                <CalculationMemoryModal
+                    item={activeCalcItem}
+                    onClose={() => setActiveCalcItem(null)}
+                    onSave={(calcMemoryJsonStr, calculatedQuantity) => {
+                        saveCalculationMemory(activeCalcItem.id, calcMemoryJsonStr, calculatedQuantity);
+                        setActiveCalcItem(null);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════
+// CALCULATION MEMORY MODAL & HELPERS
+// ═══════════════════════════════════════════════════════════
+
+const evaluateMathExpression = (expr: string): number => {
+    const clean = expr.replace(/\s+/g, '');
+    if (!clean) return 0;
+    if (!/^[0-9+\-*/().]+$/.test(clean)) {
+        throw new Error('Expressão inválida. Use apenas números e operadores (+, -, *, /).');
+    }
+    // eslint-disable-next-line no-new-func
+    const result = new Function(`return (${clean})`)();
+    if (typeof result !== 'number' || Number.isNaN(result) || !Number.isFinite(result)) {
+        throw new Error('Expressão resultou em um valor inválido.');
+    }
+    return result;
+};
+
+interface CalculationMemoryModalProps {
+    item: EngItem;
+    onClose: () => void;
+    onSave: (calcMemoryJsonStr: string, calculatedQuantity: number) => void;
+}
+
+function CalculationMemoryModal({ item, onClose, onSave }: CalculationMemoryModalProps) {
+    const [mode, setMode] = useState<'SIMPLE' | 'STRUCTURED'>('SIMPLE');
+    const [formula, setFormula] = useState('');
+    const [simpleError, setSimpleError] = useState<string | null>(null);
+    const [rows, setRows] = useState<Array<{
+        id: string;
+        description: string;
+        multiplier: number;
+        length: string;
+        width: string;
+        height: string;
+        subtotal: number;
+    }>>([
+        { id: '1', description: '', multiplier: 1, length: '', width: '', height: '', subtotal: 1 }
+    ]);
+
+    // Load initial values from item.calculationMemory
+    useEffect(() => {
+        if (item.calculationMemory) {
+            try {
+                const parsed = JSON.parse(item.calculationMemory);
+                if (parsed.mode) setMode(parsed.mode);
+                if (parsed.formula) setFormula(parsed.formula);
+                if (Array.isArray(parsed.rows)) {
+                    setRows(parsed.rows);
+                }
+            } catch (e) {
+                console.error("Failed to parse calculation memory:", e);
+            }
+        } else if (item.quantity > 0) {
+            // Seed simple formula with current quantity
+            setFormula(String(item.quantity));
+        }
+    }, [item]);
+
+    // Simple mode real-time evaluation
+    let simpleResult = 0;
+    try {
+        simpleResult = evaluateMathExpression(formula);
+    } catch (err: any) {
+        // Handled below safely
+    }
+
+    // Capture errors dynamically on change
+    useEffect(() => {
+        if (!formula.trim()) {
+            setSimpleError(null);
+            return;
+        }
+        try {
+            evaluateMathExpression(formula);
+            setSimpleError(null);
+        } catch (err: any) {
+            setSimpleError(err.message);
+        }
+    }, [formula]);
+
+    const calculateRowSubtotal = (r: { multiplier: number; length: string; width: string; height: string }) => {
+        const m = Number(r.multiplier) ?? 1;
+        const l = r.length.trim() !== '' ? Number(r.length) : 1;
+        const w = r.width.trim() !== '' ? Number(r.width) : 1;
+        const h = r.height.trim() !== '' ? Number(r.height) : 1;
+        return Number((m * l * w * h).toFixed(4));
+    };
+
+    const handleRowChange = (id: string, field: string, val: any) => {
+        setRows(prev => prev.map(r => {
+            if (r.id !== id) return r;
+            const updated = { ...r, [field]: val };
+            updated.subtotal = calculateRowSubtotal(updated);
+            return updated;
+        }));
+    };
+
+    const addRow = () => {
+        setRows(prev => [
+            ...prev,
+            { id: String(Date.now() + Math.random()), description: '', multiplier: 1, length: '', width: '', height: '', subtotal: 1 }
+        ]);
+    };
+
+    const removeRow = (id: string) => {
+        if (rows.length === 1) {
+            setRows([{ id: '1', description: '', multiplier: 1, length: '', width: '', height: '', subtotal: 1 }]);
+            return;
+        }
+        setRows(prev => prev.filter(r => r.id !== id));
+    };
+
+    const totalStructured = Number(rows.reduce((sum, r) => sum + r.subtotal, 0).toFixed(4));
+
+    const handleApply = () => {
+        if (mode === 'SIMPLE') {
+            try {
+                const finalVal = evaluateMathExpression(formula);
+                const json = JSON.stringify({ mode, formula });
+                onSave(json, finalVal);
+            } catch (err: any) {
+                alert(`Erro na expressão: ${err.message}`);
+            }
+        } else {
+            const finalVal = totalStructured;
+            const json = JSON.stringify({ mode, rows });
+            onSave(json, finalVal);
+        }
+    };
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            animation: 'fadeIn 0.2s ease-out'
+        }}>
+            <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes scaleUp {
+                    from { transform: scale(0.95); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+            `}</style>
+            <div style={{
+                background: 'var(--color-bg-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 16,
+                width: 720, maxWidth: '95vw',
+                maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column',
+                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                overflow: 'hidden',
+                animation: 'scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: '20px 24px',
+                    borderBottom: '1px solid var(--color-border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.05) 0%, rgba(37,99,235,0) 100%)'
+                }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Calculator size={18} color="var(--color-primary)" />
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                                Memória de Cálculo
+                            </h3>
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', marginTop: 4, display: 'block' }}>
+                            {item.itemNumber} {item.code ? `[${item.code}]` : ''} — {item.description}
+                        </span>
+                    </div>
+                    <button onClick={onClose} style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: 6, borderRadius: '50%',
+                        color: 'var(--color-text-tertiary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Tabs */}
+                <div style={{
+                    display: 'flex', gap: 4, padding: '12px 24px 0',
+                    borderBottom: '1px solid var(--color-border)',
+                    background: 'var(--color-bg-surface)'
+                }}>
+                    <button
+                        onClick={() => setMode('SIMPLE')}
+                        style={{
+                            padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
+                            fontSize: '0.85rem', fontWeight: mode === 'SIMPLE' ? 700 : 500,
+                            color: mode === 'SIMPLE' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                            borderBottom: mode === 'SIMPLE' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        Fórmula Simples
+                    </button>
+                    <button
+                        onClick={() => setMode('STRUCTURED')}
+                        style={{
+                            padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
+                            fontSize: '0.85rem', fontWeight: mode === 'STRUCTURED' ? 700 : 500,
+                            color: mode === 'STRUCTURED' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                            borderBottom: mode === 'STRUCTURED' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        Memória Estruturada
+                    </button>
+                </div>
+
+                {/* Body Content */}
+                <div style={{ padding: 24, overflowY: 'auto', flex: 1, minHeight: 250 }}>
+                    {mode === 'SIMPLE' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                                    Digite a expressão matemática:
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formula}
+                                    onChange={e => setFormula(e.target.value)}
+                                    placeholder="Ex: (2 * 3.5) + (4 * 1.25)"
+                                    style={{
+                                        padding: '12px 14px', borderRadius: 8,
+                                        border: '1px solid var(--color-border)',
+                                        background: 'var(--color-bg-base)',
+                                        color: 'var(--color-text-primary)',
+                                        fontSize: '1rem', fontFamily: 'monospace',
+                                        width: '100%', outline: 'none',
+                                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+                                    }}
+                                />
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
+                                    Apenas números e operadores básicos são permitidos: +, -, *, /, ( e ).
+                                </span>
+                            </div>
+
+                            {/* Result Display */}
+                            <div style={{
+                                padding: 16, borderRadius: 10,
+                                background: formula.trim() && simpleError ? 'rgba(239,68,68,0.06)' : 'rgba(37,99,235,0.04)',
+                                border: formula.trim() && simpleError ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(37,99,235,0.15)',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                            }}>
+                                <div>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                                        Resultado Calculado:
+                                    </span>
+                                    {formula.trim() && simpleError ? (
+                                        <div style={{ fontSize: '0.78rem', color: 'var(--color-danger)', marginTop: 4, fontWeight: 500 }}>
+                                            {simpleError}
+                                        </div>
+                                    ) : (
+                                        <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)', marginTop: 2 }}>
+                                            {Number(simpleResult.toFixed(4))}
+                                        </div>
+                                    )}
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 10px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+                                    {item.unit || 'UN'}
+                                </span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', textAlign: 'left' }}>
+                                            <th style={{ padding: '6px 8px', fontWeight: 600 }}>Descrição</th>
+                                            <th style={{ padding: '6px 8px', width: 80, fontWeight: 600, textAlign: 'right' }}>Quant. / Mult.</th>
+                                            <th style={{ padding: '6px 8px', width: 90, fontWeight: 600, textAlign: 'right' }}>Comprim. (m)</th>
+                                            <th style={{ padding: '6px 8px', width: 90, fontWeight: 600, textAlign: 'right' }}>Largura (m)</th>
+                                            <th style={{ padding: '6px 8px', width: 90, fontWeight: 600, textAlign: 'right' }}>Altura (m)</th>
+                                            <th style={{ padding: '6px 8px', width: 100, fontWeight: 600, textAlign: 'right' }}>Subtotal</th>
+                                            <th style={{ padding: '6px 8px', width: 40 }}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rows.map((row) => (
+                                            <tr key={row.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+                                                <td style={{ padding: '6px 4px' }}>
+                                                    <input
+                                                        type="text"
+                                                        value={row.description}
+                                                        onChange={e => handleRowChange(row.id, 'description', e.target.value)}
+                                                        placeholder="Ex: Trecho A, Parede Leste"
+                                                        style={{
+                                                            width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)',
+                                                            borderRadius: 6, fontSize: '0.8rem', background: 'var(--color-bg-base)',
+                                                            color: 'var(--color-text-primary)'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '6px 4px' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={row.multiplier}
+                                                        onChange={e => handleRowChange(row.id, 'multiplier', parseLocaleNumber(e.target.value))}
+                                                        style={{
+                                                            width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)',
+                                                            borderRadius: 6, fontSize: '0.8rem', background: 'var(--color-bg-base)',
+                                                            color: 'var(--color-text-primary)', textAlign: 'right'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '6px 4px' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={row.length}
+                                                        onChange={e => handleRowChange(row.id, 'length', e.target.value)}
+                                                        placeholder="1.00"
+                                                        style={{
+                                                            width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)',
+                                                            borderRadius: 6, fontSize: '0.8rem', background: 'var(--color-bg-base)',
+                                                            color: 'var(--color-text-primary)', textAlign: 'right'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '6px 4px' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={row.width}
+                                                        onChange={e => handleRowChange(row.id, 'width', e.target.value)}
+                                                        placeholder="1.00"
+                                                        style={{
+                                                            width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)',
+                                                            borderRadius: 6, fontSize: '0.8rem', background: 'var(--color-bg-base)',
+                                                            color: 'var(--color-text-primary)', textAlign: 'right'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '6px 4px' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={row.height}
+                                                        onChange={e => handleRowChange(row.id, 'height', e.target.value)}
+                                                        placeholder="1.00"
+                                                        style={{
+                                                            width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)',
+                                                            borderRadius: 6, fontSize: '0.8rem', background: 'var(--color-bg-base)',
+                                                            color: 'var(--color-text-primary)', textAlign: 'right'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '6px 4px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                                    {row.subtotal}
+                                                </td>
+                                                <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                                                    <button
+                                                        onClick={() => removeRow(row.id)}
+                                                        title="Excluir Linha"
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            color: 'var(--color-text-tertiary)',
+                                                            display: 'inline-flex', padding: 4
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.color = 'var(--color-danger)'}
+                                                        onMouseLeave={e => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <button onClick={addRow} className="btn btn-outline" style={{
+                                alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
+                                padding: '6px 12px', fontSize: '0.78rem', borderStyle: 'dashed'
+                            }}>
+                                <Plus size={12} /> Adicionar Linha
+                            </button>
+
+                            {/* Total Display */}
+                            <div style={{
+                                marginTop: 12, padding: 16, borderRadius: 10,
+                                background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.15)',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                            }}>
+                                <div>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                                        Soma dos Subtotais:
+                                    </span>
+                                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)', marginTop: 2 }}>
+                                        {totalStructured}
+                                    </div>
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', padding: '4px 10px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+                                    {item.unit || 'UN'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Actions */}
+                <div style={{
+                    padding: '16px 24px',
+                    borderTop: '1px solid var(--color-border)',
+                    background: 'var(--color-bg-surface)',
+                    display: 'flex', justifyContent: 'flex-end', gap: 12
+                }}>
+                    <button onClick={onClose} className="btn btn-outline" style={{ padding: '8px 16px' }}>
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleApply}
+                        disabled={mode === 'SIMPLE' && (!!simpleError || !formula.trim())}
+                        className="btn btn-primary"
+                        style={{ padding: '8px 20px', fontWeight: 600 }}
+                    >
+                        Aplicar Quantidade
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

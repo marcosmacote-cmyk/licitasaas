@@ -1324,6 +1324,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     multiplicationFactor: item.multiplicationFactor != null ? Number(item.multiplicationFactor) || null : null,
                     notes: item.notes || null,
                     discount: item.discount != null ? Number(item.discount) || null : null,
+                    calculationMemory: item.calculationMemory || null,
                     sortOrder: index,
                 }))
             });
