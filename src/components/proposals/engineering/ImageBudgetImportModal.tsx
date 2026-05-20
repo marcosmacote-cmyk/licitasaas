@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, Loader2, CheckCircle2, AlertTriangle, Image as ImageIcon, Clipboard, ArrowRight } from 'lucide-react';
-import { EngItem, isGrouper } from './types';
+import type { EngItem } from './types';
+import { isGrouper } from './types';
 
 interface ImageBudgetImportModalProps {
     onClose: () => void;
