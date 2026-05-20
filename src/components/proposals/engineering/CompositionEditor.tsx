@@ -65,6 +65,12 @@ const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) 
 
 const isGrouperType = (type?: string) => type === 'ETAPA' || type === 'SUBETAPA';
 
+const VERSION_BASED_BASES = ['SEINFRA', 'SICRO', 'SBC'];
+
+function isVersionBasedBase(name: string): boolean {
+    return VERSION_BASED_BASES.some(vb => name.toUpperCase().includes(vb));
+}
+
 /**
  * STRICT base filter — enforces Step 1 config (name + UF + data-base).
  * Mirrors filterConfigBases from EngineeringProposalEditor.
@@ -183,6 +189,9 @@ const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precisi
 
 export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
+    const currentItem = items[currentIndex];
+    const hasPrev = currentIndex > 0;
+    const hasNext = currentIndex < items.length - 1;
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -230,14 +239,40 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 .then(r => r.json()).then(data => {
                     if (Array.isArray(data)) {
                         setBases(data);
-                        // Auto-select best matching base from config
-                        const filtered = filterBases(data, engineeringConfig);
-                        if (filtered.length > 0) setSelectedBaseId(filtered[0].id);
-                        else if (data.length > 0) setSelectedBaseId(data[0].id);
                     }
                 }).catch(console.error);
         }
-    }, [showSearch, bases.length, engineeringConfig]);
+    }, [showSearch, bases.length]);
+
+    // Auto-select selectedBaseId when search opens or currentItem/bases change
+    useEffect(() => {
+        if (showSearch && bases.length > 0) {
+            const { filtered } = filterBasesWithWarnings(bases, engineeringConfig);
+            
+            // 1. Try to match the current item's own database first
+            const matchedDbId = currentItem?.priceAudit?.matchedDatabaseId;
+            if (matchedDbId && filtered.some(b => b.id === matchedDbId)) {
+                setSelectedBaseId(matchedDbId);
+                return;
+            } 
+
+            // 2. Try to match by current item's sourceName
+            if (currentItem?.sourceName) {
+                const sourceUpper = currentItem.sourceName.toUpperCase();
+                const matchedBySource = filtered.find(b => b.name.toUpperCase().includes(sourceUpper));
+                if (matchedBySource) {
+                    setSelectedBaseId(matchedBySource.id);
+                    return;
+                }
+            }
+
+            // 3. Fallback: Check if the current selectedBaseId is in the filtered list
+            const isCurrentBaseInFiltered = filtered.some(b => b.id === selectedBaseId);
+            if (!isCurrentBaseInFiltered && filtered.length > 0) {
+                setSelectedBaseId(filtered[0].id);
+            }
+        }
+    }, [showSearch, bases, currentItem, engineeringConfig]);
 
     const handleSearch = async () => {
         if (!selectedBaseId || !searchQuery) return;
@@ -321,9 +356,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setSearchResults([]);
     };
 
-    const currentItem = items[currentIndex];
-    const hasPrev = currentIndex > 0;
-    const hasNext = currentIndex < items.length - 1;
+
 
     const loadComposition = useCallback(async (code: string) => {
         if (!code || code === 'N/A') {
@@ -1555,9 +1588,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             {filtered.length === 0
                                                 ? <option value="">Nenhuma base configurada</option>
                                                 : filtered.map(b => {
-                                                    const ref = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
+                                                    const isVersionBased = isVersionBasedBase(b.name);
+                                                    const ref = isVersionBased
+                                                        ? (b.version || 'N/I')
+                                                        : (b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I'));
                                                     const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
-                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} · {ref} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} {isVersionBased ? `v${ref}` : `· ${ref}`} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
                                                 })
                                             }
                                         </select>

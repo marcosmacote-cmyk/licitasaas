@@ -3102,7 +3102,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             setHasUnsavedChanges(true);
                         }
                     }}
-                    engineeringConfig={engineeringConfig}
+                    engineeringConfig={dashConfig}
                 />
             )}
             {activeCalcItem && (
