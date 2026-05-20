@@ -8,9 +8,9 @@
  */
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { FileText, Download, Loader2, BookOpen, BarChart3, Calendar, Calculator, Layers, Package, ClipboardList, FileSpreadsheet, Printer, Archive, Settings, Eye, TrendingUp, Hash } from 'lucide-react';
-import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta } from './budgetDocGenerator';
+import { docOrcamentoResumido, docOrcamentoSintetico, docOrcamentoAnalitico, docCpuBatch, docCurvaAbcServicos, docCurvaAbcInsumos, docCronograma, docBdiEncargos, docPropostaCompleta, docMemoriaCalculo } from './budgetDocGenerator';
 import type { PropostaSectionId, DocMode } from './budgetDocGenerator';
-import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos } from './budgetExcelExporter';
+import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos, xlsMemoriaCalculo } from './budgetExcelExporter';
 import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
 import type { InsumoConsolidado } from './insumoEngine';
@@ -44,6 +44,7 @@ const DOC_SECTIONS = [
             { id: 'resumido', label: 'Orçamento Resumido', desc: 'Totais por etapa/capítulo', icon: ClipboardList, color: '#1e40af' },
             { id: 'sintetico', label: 'Orçamento Sintético', desc: 'Itens com preços, sem composição', icon: FileText, color: '#2563eb' },
             { id: 'analitico', label: 'Orçamento Analítico', desc: 'Itens + composição detalhada de cada serviço', icon: BookOpen, color: '#7c3aed', async: true },
+            { id: 'memoria', label: 'Memória de Cálculo', desc: 'Detalhamento do cálculo da quantidade de cada serviço', icon: Calculator, color: '#f59e0b' },
         ],
     },
     {
@@ -85,7 +86,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     const [generated, setGenerated] = useState<Record<string, string>>({}); // A4: Track generated docs
     const [activeTab, setActiveTab] = useState<'docs' | 'config'>('docs');
     const [showPropostaModal, setShowPropostaModal] = useState(false);
-    const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['resumido', 'sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi']);
+    const [propostaSections, setPropostaSections] = useState<PropostaSectionId[]>(['resumido', 'sintetico', 'analitico', 'cpu', 'abc_servicos', 'abc_insumos', 'cronograma', 'bdi', 'memoria']);
     const [includeCartaProposta, setIncludeCartaProposta] = useState(true);
 
     const [localInsumos, setLocalInsumos] = useState<InsumoConsolidado[]>(insumos || []);
@@ -251,6 +252,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         else alert('Configure o cronograma primeiro.');
                         break;
                     case 'bdi': xlsBdiEncargos(engConfigWithLogo, effectiveBdi); break;
+                    case 'memoria': xlsMemoriaCalculo(items, engConfigWithLogo); break;
                 }
             } else {
                 switch (docId) {
@@ -265,6 +267,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
                         break;
                     case 'bdi': docBdiEncargos(bdiConfig, effectiveBdi, engConfigWithLogo, mode); break;
+                    case 'memoria': docMemoriaCalculo(items, engConfigWithLogo, mode); break;
                 }
             }
             markGenerated(docId + (format === 'excel' ? '_xls' : ''));
@@ -288,6 +291,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'composicoes-cpu.xlsx',       gen: () => xlsCpuBatch(proposalId, items, ec, effectiveBdi, true) },
                 { name: 'abc-servicos.xlsx',          gen: () => xlsCurvaAbcServicos(items, ec, effectiveBdi, true) },
                 { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, true) },
+                { name: 'memoria-calculo.xlsx',       gen: () => xlsMemoriaCalculo(items, ec, true) },
             ];
             if (localInsumos.length > 0) {
                 excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(localInsumos, ec, true) });
@@ -311,6 +315,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'composicoes-cpu.pdf',       gen: () => docCpuBatch(proposalId, items, effectiveBdi, ec, 'blob') as any },
                 { name: 'abc-servicos.pdf',          gen: () => docCurvaAbcServicos(items, ec, 'blob') as any },
                 { name: 'bdi-encargos.pdf',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') as any },
+                { name: 'memoria-calculo.pdf',        gen: () => docMemoriaCalculo(items, ec, 'blob') as any },
             ];
             if (localInsumos.length > 0) {
                 pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(localInsumos, ec, 'blob') as any });
@@ -654,6 +659,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                 { id: 'abc_insumos', label: 'Curva ABC de Insumos', desc: `${localInsumos.length} insumos classificados`, icon: <Package size={18} color="#d97706" />, disabled: localInsumos.length === 0 },
                                 { id: 'cronograma', label: 'Cronograma Físico-Financeiro', desc: 'Distribuição mensal dos valores', icon: <Calendar size={18} color="#0284c7" />, disabled: !localCronogramaResult },
                                 { id: 'bdi', label: 'BDI e Encargos Sociais', desc: 'Composição detalhada do BDI', icon: <Hash size={18} color="#dc2626" /> },
+                                { id: 'memoria', label: 'Memória de Cálculo', desc: 'Detalhamento dos cálculos de quantidade', icon: <Calculator size={18} color="#f59e0b" /> },
                             ] as { id: string; label: string; desc: string; icon: React.ReactNode; disabled?: boolean }[]).map(item => {
                                 const isCarta = item.id === '_carta';
                                 const isChecked = isCarta ? includeCartaProposta : propostaSections.includes(item.id as PropostaSectionId);

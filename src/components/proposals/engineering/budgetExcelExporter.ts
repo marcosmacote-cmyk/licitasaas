@@ -1178,3 +1178,149 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
 
   return saveWb(wb, 'abc-insumos.xlsx', returnBuffer);
 }
+
+// ── 9. MEMÓRIA DE CÁLCULO — dedicated report ──────────────────────────────────
+export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Memória de Cálculo');
+  setupPrint(ws, false, engConfig?.reportConfig);
+  ws.columns = [
+    { width: 10 }, // Item
+    { width: 35 }, // Descrição
+    { width: 8 },  // Unidade
+    { width: 30 }, // Detalhamento da Memória
+    { width: 12 }, // Quant/Mult
+    { width: 12 }, // Comprimento
+    { width: 12 }, // Largura
+    { width: 12 }, // Altura
+    { width: 15 }, // Subtotal
+  ];
+  logoRow(wb, ws, 9, engConfig?.reportConfig);
+  titleRow(ws, 'MEMÓRIA DE CÁLCULO', 9);
+  metaRows(ws, engConfig, items, 9);
+  headRow(ws, ['ITEM', 'DESCRIÇÃO', 'UN', 'DETALHAMENTO DA MEMÓRIA', 'QUANT/MULT', 'COMPR (m)', 'LARG (m)', 'ALT (m)', 'SUBTOTAL']);
+
+  let idx = 0;
+  for (const it of items) {
+    if (isGrouper(it.type)) {
+      ws.addRow([]);
+      const rn = ws.rowCount;
+      ws.mergeCells(rn, 1, rn, 9);
+      const r = ws.lastRow!;
+      r.getCell(1).value = `${it.itemNumber} — ${it.description}`;
+      r.getCell(1).font = { bold: true, size: 10, color: { argb: C.TEXT_DARK } };
+      r.getCell(1).fill = fill(C.GRAY_SUB);
+      r.height = 18;
+      continue;
+    }
+
+    const hasCalc = it.calculationMemory && it.calculationMemory.trim() !== '';
+    let calcObj: any = null;
+    if (hasCalc) {
+      try {
+        calcObj = JSON.parse(it.calculationMemory);
+      } catch (e) {
+        console.error("Erro ao fazer parse da memoria de calculo:", e);
+      }
+    }
+
+    const itemBg = idx % 2 === 0 ? C.WHITE : C.GRAY_ROW;
+    idx++;
+
+    if (!calcObj) {
+      const r = ws.addRow([
+        it.itemNumber,
+        it.description,
+        it.unit || '—',
+        'Quantidade direta (sem memória cadastrada)',
+        1,
+        '—',
+        '—',
+        '—',
+        Number(it.quantity) || 0
+      ]);
+      r.height = 16;
+      for (let i = 1; i <= 9; i++) {
+        const cell = r.getCell(i);
+        cell.fill = fill(itemBg);
+        cell.border = border();
+        cell.font = { size: 9, color: { argb: C.TEXT_DARK } };
+        if (i >= 5) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          if (i === 9 || i === 5) cell.numFmt = '#,##0.00';
+        } else {
+          cell.alignment = { horizontal: i === 3 ? 'center' : 'left', vertical: 'middle', wrapText: true };
+        }
+      }
+    } else if (calcObj.mode === 'SIMPLE') {
+      const r = ws.addRow([
+        it.itemNumber,
+        it.description,
+        it.unit || '—',
+        `Fórmula: ${calcObj.formula}`,
+        1,
+        '—',
+        '—',
+        '—',
+        Number(it.quantity) || 0
+      ]);
+      r.height = 16;
+      for (let i = 1; i <= 9; i++) {
+        const cell = r.getCell(i);
+        cell.fill = fill(itemBg);
+        cell.border = border();
+        cell.font = { size: 9, color: { argb: C.TEXT_DARK } };
+        if (i >= 5) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          if (i === 9 || i === 5) cell.numFmt = '#,##0.00';
+        } else {
+          cell.alignment = { horizontal: i === 3 ? 'center' : 'left', vertical: 'middle', wrapText: true };
+        }
+      }
+    } else if (calcObj.mode === 'STRUCTURED' && Array.isArray(calcObj.rows)) {
+      const startRow = ws.rowCount + 1;
+      const calcRows = calcObj.rows;
+
+      calcRows.forEach((row: any, rIdx: number) => {
+        const r = ws.addRow([
+          rIdx === 0 ? it.itemNumber : '',
+          rIdx === 0 ? it.description : '',
+          rIdx === 0 ? it.unit || '—' : '',
+          row.description || `Linha ${rIdx + 1}`,
+          Number(row.multiplier) || 0,
+          row.length ? Number(row.length) : '—',
+          row.width ? Number(row.width) : '—',
+          row.height ? Number(row.height) : '—',
+          Number(row.subtotal) || 0
+        ]);
+        r.height = 16;
+        for (let i = 1; i <= 9; i++) {
+          const cell = r.getCell(i);
+          cell.fill = fill(itemBg);
+          cell.border = border();
+          cell.font = { size: 9, color: { argb: C.TEXT_DARK } };
+          if (i >= 5) {
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            if (i === 5 || i === 9) cell.numFmt = '#,##0.00';
+            else if (typeof cell.value === 'number') cell.numFmt = '#,##0.00';
+          } else {
+            cell.alignment = { horizontal: i === 3 ? 'center' : 'left', vertical: 'middle', wrapText: true };
+          }
+        }
+      });
+      const endRow = ws.rowCount;
+
+      if (calcRows.length > 1) {
+        ws.mergeCells(startRow, 1, endRow, 1);
+        ws.mergeCells(startRow, 2, endRow, 2);
+        ws.mergeCells(startRow, 3, endRow, 3);
+        ws.getCell(startRow, 1).alignment = { vertical: 'middle', horizontal: 'left' };
+        ws.getCell(startRow, 2).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+        ws.getCell(startRow, 3).alignment = { vertical: 'middle', horizontal: 'center' };
+      }
+    }
+  }
+
+  return saveWb(wb, 'memoria-calculo.xlsx', returnBuffer);
+}
+

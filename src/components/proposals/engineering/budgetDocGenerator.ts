@@ -806,7 +806,7 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
 // 9. PROPOSTA COMPLETA — PDF UNIFICADO
 // Combina múltiplas seções em um único documento.
 // ═══════════════════════════════════════════════════════════
-export type PropostaSectionId = 'resumido' | 'sintetico' | 'analitico' | 'cpu' | 'abc_servicos' | 'abc_insumos' | 'cronograma' | 'bdi';
+export type PropostaSectionId = 'resumido' | 'sintetico' | 'analitico' | 'cpu' | 'abc_servicos' | 'abc_insumos' | 'cronograma' | 'bdi' | 'memoria';
 
 export interface PropostaCompletaParams {
     sections: PropostaSectionId[];
@@ -869,6 +869,72 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
         h += renderGlobalTotals(billable, bdi, rc);
         parts.push(h);
     }
+
+    // ── Memória de Cálculo ──
+    if (sections.includes('memoria')) {
+        let h = `<h1>RELATÓRIO DE MEMÓRIA DE CÁLCULO</h1><div class="meta">${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
+        let rowsHtml = '';
+        for (const it of items) {
+            if (isGrouper(it.type as any)) {
+                if (rowsHtml) {
+                    h += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+                    rowsHtml = '';
+                }
+                h += `<h2>${it.itemNumber} — ${it.description}</h2>`;
+                continue;
+            }
+            const hasCalc = !!(it.calculationMemory && it.calculationMemory.trim() !== '');
+            let calcObj: any = null;
+            if (hasCalc && it.calculationMemory) {
+                try { calcObj = JSON.parse(it.calculationMemory); } catch (e) {}
+            }
+            if (!calcObj) {
+                rowsHtml += `<tr>
+                    <td>${it.itemNumber}</td>
+                    <td>${it.description}</td>
+                    <td class="c">${it.unit || '—'}</td>
+                    <td>Quantidade direta (sem memória cadastrada)</td>
+                    <td class="r">1,00</td>
+                    <td class="r">—</td>
+                    <td class="r">—</td>
+                    <td class="r">—</td>
+                    <td class="r bold">${fmtQty(it.quantity)}</td>
+                </tr>`;
+            } else if (calcObj.mode === 'SIMPLE') {
+                rowsHtml += `<tr>
+                    <td>${it.itemNumber}</td>
+                    <td>${it.description}</td>
+                    <td class="c">${it.unit || '—'}</td>
+                    <td>Fórmula: <code class="mono">${calcObj.formula}</code></td>
+                    <td class="r">1,00</td>
+                    <td class="r">—</td>
+                    <td class="r">—</td>
+                    <td class="r">—</td>
+                    <td class="r bold">${fmtQty(it.quantity)}</td>
+                </tr>`;
+            } else if (calcObj.mode === 'STRUCTURED' && Array.isArray(calcObj.rows)) {
+                const calcRows = calcObj.rows;
+                calcRows.forEach((row: any, rIdx: number) => {
+                    rowsHtml += `<tr>
+                        <td>${rIdx === 0 ? it.itemNumber : ''}</td>
+                        <td>${rIdx === 0 ? it.description : ''}</td>
+                        <td class="c">${rIdx === 0 ? (it.unit || '—') : ''}</td>
+                        <td>${row.description || `Linha ${rIdx + 1}`}</td>
+                        <td class="r">${fmtQty(Number(row.multiplier) || 0)}</td>
+                        <td class="r">${row.length ? fmtQty(Number(row.length)) : '—'}</td>
+                        <td class="r">${row.width ? fmtQty(Number(row.width)) : '—'}</td>
+                        <td class="r">${row.height ? fmtQty(Number(row.height)) : '—'}</td>
+                        <td class="r bold">${fmtQty(Number(row.subtotal) || 0)}</td>
+                    </tr>`;
+                });
+            }
+        }
+        if (rowsHtml) {
+            h += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+        }
+        parts.push(h);
+    }
+
 
     // ── Orçamento Analítico ──
     if (sections.includes('analitico')) {
@@ -1043,3 +1109,81 @@ ${renderConfigTable(engineeringConfig)}
     const combined = parts.map((p, i) => i === 0 ? p : `<div style="page-break-before:always;"></div>${p}`).join('\n');
     return openDoc('Proposta Completa', combined, false, rc, params.mode || 'download');
 }
+
+// ── 9. MEMÓRIA DE CÁLCULO — dedicated HTML/PDF report ─────────────────────────
+export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mode: DocMode = 'download') {
+    const rc = engineeringConfig?.reportConfig || {};
+    const billable = items.filter(i => !isGrouper(i.type as any));
+    let html = `<h1>RELATÓRIO DE MEMÓRIA DE CÁLCULO</h1><div class="meta">${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
+
+    let rowsHtml = '';
+
+    for (const it of items) {
+        if (isGrouper(it.type as any)) {
+            if (rowsHtml) {
+                html += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+                rowsHtml = '';
+            }
+            html += `<h2>${it.itemNumber} — ${it.description}</h2>`;
+            continue;
+        }
+
+        const hasCalc = !!(it.calculationMemory && it.calculationMemory.trim() !== '');
+        let calcObj: any = null;
+        if (hasCalc && it.calculationMemory) {
+            try {
+                calcObj = JSON.parse(it.calculationMemory);
+            } catch (e) {
+                console.error("Erro ao fazer parse da memoria de calculo:", e);
+            }
+        }
+
+        if (!calcObj) {
+            rowsHtml += `<tr>
+                <td style="width: 80px;">${it.itemNumber}</td>
+                <td style="width: 250px;">${it.description}</td>
+                <td class="c" style="width: 40px;">${it.unit || '—'}</td>
+                <td>Quantidade direta (sem memória cadastrada)</td>
+                <td class="r" style="width: 70px;">1,00</td>
+                <td class="r" style="width: 70px;">—</td>
+                <td class="r" style="width: 70px;">—</td>
+                <td class="r" style="width: 70px;">—</td>
+                <td class="r bold" style="width: 90px;">${fmtQty(it.quantity)}</td>
+            </tr>`;
+        } else if (calcObj.mode === 'SIMPLE') {
+            rowsHtml += `<tr>
+                <td>${it.itemNumber}</td>
+                <td>${it.description}</td>
+                <td class="c">${it.unit || '—'}</td>
+                <td>Fórmula: <code class="mono">${calcObj.formula}</code></td>
+                <td class="r">1,00</td>
+                <td class="r">—</td>
+                <td class="r">—</td>
+                <td class="r">—</td>
+                <td class="r bold">${fmtQty(it.quantity)}</td>
+            </tr>`;
+        } else if (calcObj.mode === 'STRUCTURED' && Array.isArray(calcObj.rows)) {
+            const calcRows = calcObj.rows;
+            calcRows.forEach((row: any, rIdx: number) => {
+                rowsHtml += `<tr>
+                    <td>${rIdx === 0 ? it.itemNumber : ''}</td>
+                    <td>${rIdx === 0 ? it.description : ''}</td>
+                    <td class="c">${rIdx === 0 ? (it.unit || '—') : ''}</td>
+                    <td>${row.description || `Linha ${rIdx + 1}`}</td>
+                    <td class="r">${fmtQty(Number(row.multiplier) || 0)}</td>
+                    <td class="r">${row.length ? fmtQty(Number(row.length)) : '—'}</td>
+                    <td class="r">${row.width ? fmtQty(Number(row.width)) : '—'}</td>
+                    <td class="r">${row.height ? fmtQty(Number(row.height)) : '—'}</td>
+                    <td class="r bold">${fmtQty(Number(row.subtotal) || 0)}</td>
+                </tr>`;
+            });
+        }
+    }
+
+    if (rowsHtml) {
+        html += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+    }
+
+    return openDoc('Memória de Cálculo', html, false, rc, mode);
+}
+
