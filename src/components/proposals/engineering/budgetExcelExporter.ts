@@ -18,6 +18,18 @@ function applyPrecision(formulaStr: string, engConfig?: EngineeringConfig): stri
     return formulaStr;
 }
 
+function colToLetter(col: number): string {
+  let temp = col;
+  let letter = '';
+  while (temp > 0) {
+    let modulo = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + modulo) + letter;
+    temp = Math.floor((temp - modulo) / 26);
+  }
+  return letter;
+}
+
+
 function groupByChapter(items: any[]) {
   const map = new Map<string, { items: any[]; total: number; title: string }>();
   for (const it of items) {
@@ -342,21 +354,26 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 
   const dataRowNums: number[] = [];
   let idx = 0;
+  const firstDataRow = ws.rowCount + 1;
+  const gRn = firstDataRow + chapters.size;
   for (const [prefix, ch] of chapters) {
     const r = dataRow(ws, [prefix, ch.title, ch.items.length, ch.total, 0], idx++, [3, 4, 5]);
     r.getCell(2).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
     r.getCell(4).numFmt = '#,##0.00';
-    // % formula: D(row)/totalCell * 100
     const rn = ws.rowCount;
     dataRowNums.push(rn);
     r.getCell(5).numFmt = '0.00%';
-    r.getCell(5).value = total > 0 ? ch.total / total : 0;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      r.getCell(5).value = { formula: `D${rn}/D${gRn}` } as any;
+    } else {
+      r.getCell(5).value = total > 0 ? ch.total / total : 0;
+    }
   }
 
   // Grand total with SUM formula
-  const gRn = ws.rowCount + 1;
+  const totalRowIndex = ws.rowCount + 1;
   const gRow = ws.addRow(['TOTAL GERAL', '', '', '', '']);
-  ws.mergeCells(gRn, 1, gRn, 3);
+  ws.mergeCells(totalRowIndex, 1, totalRowIndex, 3);
   if (dataRowNums.length > 0) {
     gRow.getCell(4).value = { formula: `SUM(D${dataRowNums[0]}:D${dataRowNums[dataRowNums.length - 1]})` } as any;
   } else {
@@ -430,12 +447,17 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       const vals: any[] = [it.itemNumber || '', it.code || '', it.sourceName || '—', it.description || '', it.unit || '', qty];
       if (showCU) vals.push(uc);
       if (showPU) vals.push(up);
-      if (engConfig?.reportConfig?.exportExcelWithFormulas && qty > 0 && up > 0 && showPU) {
-         const puColLetter = String.fromCharCode(64 + totalColIdx - 1);
-         vals.push({ formula: applyPrecision(`F${ws.rowCount + 1}*${puColLetter}${ws.rowCount + 1}`, engConfig) });
-      } else {
-         vals.push(tp);
+      let totalVal: any = tp;
+      if (engConfig?.reportConfig?.exportExcelWithFormulas && qty > 0) {
+        if (showPU && up > 0) {
+          const puColLetter = colToLetter(totalColIdx - 1);
+          totalVal = { formula: applyPrecision(`F${ws.rowCount + 1}*${puColLetter}${ws.rowCount + 1}`, engConfig) };
+        } else if (!showPU && showCU && uc > 0) {
+          const cuColLetter = colToLetter(totalColIdx - 1);
+          totalVal = { formula: applyPrecision(`F${ws.rowCount + 1}*${cuColLetter}${ws.rowCount + 1}`, engConfig) };
+        }
       }
+      vals.push(totalVal);
       const r = dataRow(ws, vals, idx++, Array.from({ length: colCount - 5 }, (_, i) => 6 + i));
       // Apply number format to numeric cells
       const qtyCol = 6;
@@ -508,7 +530,7 @@ async function fetchAnalyticalReport(proposalId: string, items: any[], bdi: numb
 }
 
 // Helper: render one composition as Excel rows
-function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
+function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engConfig?: EngineeringConfig) {
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
@@ -523,6 +545,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
 
   // Insumos header
   headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
+  const firstInsumoRow = ws.rowCount + 1;
 
   // Insumos data
   (comp.items || []).forEach((ci: any, idx: number) => {
@@ -534,16 +557,30 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean) {
     const coef = Number(ci.coefficient) || 0;
     const up = Number(ci.unitPrice) || 0;
     const tp = Number(ci.totalPrice) || 0;
-    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coef, up, tp], idx, [6, 7, 8]);
+    
+    let totalVal: any = tp;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas && coef > 0 && up > 0) {
+      const nextRn = ws.rowCount + 1;
+      totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
+    }
+
+    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coef, up, totalVal], idx, [6, 7, 8]);
     r.getCell(6).numFmt = '#,##0.0000';
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '#,##0.00';
   });
+  const lastInsumoRow = ws.rowCount;
 
   // Footer: Custo Unitário Total
   const costRn = ws.rowCount + 1;
   const totalPriceVal = Number(comp.totalPrice) || 0;
-  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', totalPriceVal]);
+  
+  let costVal: any = totalPriceVal;
+  if (engConfig?.reportConfig?.exportExcelWithFormulas && comp.items?.length > 0) {
+    costVal = { formula: `SUM(H${firstInsumoRow}:H${lastInsumoRow})` };
+  }
+
+  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', costVal]);
   ws.mergeCells(costRn, 1, costRn, 7);
   costRow.getCell(8).numFmt = '#,##0.00';
   costRow.height = 18;
@@ -640,7 +677,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
       const ch = chapters.get(prefix);
       const chTitle = ch ? ch.title : `Etapa ${prefix}`;
       sectionHeaderRow(ws, chTitle, 8);
-      for (const comp of chComps) renderCompXls(ws, comp, true);
+      for (const comp of chComps) renderCompXls(ws, comp, true, engConfig);
       const chTotal = chComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
       subtotalRow(ws, `Subtotal ${chTitle}`, fmt(chTotal), 8);
     }
@@ -679,11 +716,11 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
     }
 
     sectionHeaderRow(ws, 'Composições Principais', 8);
-    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false);
+    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false, engConfig);
 
     if (report.auxiliaryCompositions?.length > 0) {
       sectionHeaderRow(ws, 'Composições Auxiliares', 8);
-      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false);
+      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false, engConfig);
     }
   } catch (e: any) {
     ws.addRow([`Erro: ${e.message}`]);
@@ -725,16 +762,49 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
   const acumColIdx = colCount;
   let acum = 0;
 
+  const firstData = ws.rowCount + 1;
+  const gRn = firstData + sorted.length;
+
   sorted.forEach((item, idx) => {
     const v = Number(item.totalPrice) || 0;
     const pct = total > 0 ? v / total : 0;
     acum += pct;
     const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
 
-    const vals: (string | number)[] = [idx + 1, item.code || '', item.sourceName || '', item.description || '', item.unit || '', Number(item.quantity) || 0];
-    if (showCU) vals.push(Number(item.unitCost) || 0);
-    if (showPU) vals.push(Number(item.unitPrice) || 0);
-    vals.push(v, pct, acum);
+    const qty = Number(item.quantity) || 0;
+    const uc = Number(item.unitCost) || 0;
+    const up = Number(item.unitPrice) || 0;
+
+    let totalVal: any = v;
+    let pctVal: any = pct;
+    let acumVal: any = acum;
+    const rNum = ws.rowCount + 1;
+
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      if (qty > 0) {
+        if (showPU && up > 0) {
+          const puColLetter = colToLetter(totalColIdx - 1);
+          totalVal = { formula: applyPrecision(`F${rNum}*${puColLetter}${rNum}`, engConfig) };
+        } else if (!showPU && showCU && uc > 0) {
+          const cuColLetter = colToLetter(totalColIdx - 1);
+          totalVal = { formula: applyPrecision(`F${rNum}*${cuColLetter}${rNum}`, engConfig) };
+        }
+      }
+      const totalColLetter = colToLetter(totalColIdx);
+      pctVal = { formula: `${totalColLetter}${rNum}/$${totalColLetter}$${gRn}` };
+      const pctColLetter = colToLetter(pctColIdx);
+      const acumColLetter = colToLetter(acumColIdx);
+      if (rNum === firstData) {
+        acumVal = { formula: `${pctColLetter}${rNum}` };
+      } else {
+        acumVal = { formula: `${acumColLetter}${rNum - 1}+${pctColLetter}${rNum}` };
+      }
+    }
+
+    const vals: any[] = [idx + 1, item.code || '', item.sourceName || '', item.description || '', item.unit || '', qty];
+    if (showCU) vals.push(uc);
+    if (showPU) vals.push(up);
+    vals.push(totalVal, pctVal, acumVal);
 
     const r = dataRow(ws, vals, idx, Array.from({ length: colCount - 4 }, (_, i) => 6 + i));
     // Number formats
@@ -750,9 +820,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
   });
 
   // Grand total
-  const firstData = ws.rowCount - sorted.length + 1;
   const lastData = ws.rowCount;
-  const gRn = ws.rowCount + 1;
   const tLetter = String.fromCharCode(64 + totalColIdx);
   const gRow = ws.addRow(['TOTAL', ...Array(colCount - 4).fill(''), '', 1, '']);
   ws.mergeCells(gRn, 1, gRn, totalColIdx - 1);
@@ -907,24 +975,50 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   const header = ['ETAPA', 'VALOR (R$)', ...Array.from({ length: meses }, (_, i) => `Mês ${i + 1}`), 'TOTAL'];
   headRow(ws, header);
 
+  const firstDataRow = ws.rowCount + 1;
+  const tmRn = firstDataRow + 2 * etapas.length;
+  const pmRn = tmRn + 1;
+  const paRn = tmRn + 2;
+  const gRn = tmRn + 3;
+
   const etapaValueRowNums: number[] = [];
   let idx = 0;
   for (const et of etapas) {
     const vals = Array.from({ length: meses }, (_, m) => et.valoresMensais?.[m] || 0);
     const etTotal = vals.reduce((s: number, v: number) => s + v, 0);
-    const r = dataRow(ws, [et.nome || et.description || '', et.valorTotal || 0, ...vals, etTotal], idx, Array.from({ length: meses + 2 }, (_, i) => i + 2));
+
+    let totalVal: any = etTotal;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      const lastMonthCol = 2 + meses;
+      totalVal = { formula: `SUM(C${ws.rowCount + 1}:${colToLetter(lastMonthCol)}${ws.rowCount + 1})` };
+    }
+
+    const r = dataRow(ws, [et.nome || et.description || '', et.valorTotal || 0, ...vals, totalVal], idx, Array.from({ length: meses + 2 }, (_, i) => i + 2));
     r.getCell(1).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
     // Apply number format to all monetary cells
     for (let i = 2; i <= colCount; i++) r.getCell(i).numFmt = '#,##0.00';
-    etapaValueRowNums.push(ws.rowCount);
+
+    const etapaRow = ws.rowCount;
+    etapaValueRowNums.push(etapaRow);
 
     // Percentage sub-row
     const pctVals = Array.from({ length: meses }, (_, m) => {
-      const pct = et.percentuais?.[m] || 0;
-      return pct > 0 ? pct / 100 : '';
+      const col = 3 + m;
+      const colLetter = colToLetter(col);
+      if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+        return { formula: `${colLetter}${etapaRow}/B${etapaRow}` };
+      } else {
+        const pct = et.percentuais?.[m] || 0;
+        return pct > 0 ? pct / 100 : '';
+      }
     });
-    const etPctGlobal = totalGlobal > 0 ? (et.valorTotal / totalGlobal) : 0;
-    const pctR = ws.addRow(['', etPctGlobal, ...pctVals, '']);
+
+    let etPctGlobalVal: any = totalGlobal > 0 ? (et.valorTotal / totalGlobal) : 0;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      etPctGlobalVal = { formula: `B${etapaRow}/${colToLetter(colCount)}${gRn}` };
+    }
+
+    const pctR = ws.addRow(['', etPctGlobalVal, ...pctVals, '']);
     pctR.height = 12;
     for (let i = 1; i <= colCount; i++) {
       pctR.getCell(i).font = { size: 7, color: { argb: C.TEXT_MID }, italic: true };
@@ -936,12 +1030,11 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   // TOTAL MENSAL row with SUM formulas
-  const tmRn = ws.rowCount + 1;
   const tmRow = ws.addRow(['TOTAL MENSAL', '', ...Array(meses).fill(''), '']);
   tmRow.height = 16;
   // SUM formula per month column
   for (let col = 2; col <= colCount; col++) {
-    const colLetter = col <= 26 ? String.fromCharCode(64 + col) : `A${String.fromCharCode(64 + col - 26)}`;
+    const colLetter = colToLetter(col);
     const refs = etapaValueRowNums.map(rn => `${colLetter}${rn}`).join('+');
     if (etapaValueRowNums.length > 0) {
       tmRow.getCell(col).value = { formula: refs } as any;
@@ -956,7 +1049,16 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   // % MENSAL row
-  const pmRow = ws.addRow(['% MENSAL', '', ...Array.from({ length: meses }, (_, m) => (percentMensal?.[m] || 0) / 100), 1]);
+  const pmVals = Array.from({ length: meses }, (_, m) => {
+    const col = 3 + m;
+    const colLetter = colToLetter(col);
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      return { formula: `${colLetter}${tmRn}/${colToLetter(colCount)}${tmRn}` };
+    } else {
+      return (percentMensal?.[m] || 0) / 100;
+    }
+  });
+  const pmRow = ws.addRow(['% MENSAL', '', ...pmVals, 1]);
   pmRow.height = 16;
   for (let i = 1; i <= colCount; i++) {
     pmRow.getCell(i).fill = fill(C.GRAY_ROW);
@@ -967,7 +1069,21 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   // % ACUMULADO row
-  const paRow = ws.addRow(['% ACUMULADO', '', ...Array.from({ length: meses }, (_, m) => (percentAcumulado?.[m] || 0) / 100), 1]);
+  const paVals = Array.from({ length: meses }, (_, m) => {
+    const col = 3 + m;
+    const colLetter = colToLetter(col);
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      if (m === 0) {
+        return { formula: `${colLetter}${pmRn}` };
+      } else {
+        const prevColLetter = colToLetter(col - 1);
+        return { formula: `${prevColLetter}${paRn}+${colLetter}${pmRn}` };
+      }
+    } else {
+      return (percentAcumulado?.[m] || 0) / 100;
+    }
+  });
+  const paRow = ws.addRow(['% ACUMULADO', '', ...paVals, 1]);
   paRow.height = 16;
   for (let i = 1; i <= colCount; i++) {
     paRow.getCell(i).fill = fill(C.GRAY_ROW);
@@ -978,7 +1094,6 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
   }
 
   // Grand total
-  const gRn = ws.rowCount + 1;
   const gRow = ws.addRow(['TOTAL GERAL', '', ...Array(meses).fill(''), 1]);
   ws.mergeCells(gRn, 1, gRn, colCount - 1);
   gRow.getCell(colCount).value = totalGlobal;
@@ -1009,13 +1124,30 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
 
   const list = [...(insumos || [])].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
   const total = list.reduce((s, i) => s + (Number(i.custoTotal) || 0), 0);
+  const firstData = ws.rowCount + 1;
+  const gRn = firstData + list.length;
   let acum = 0;
+
   list.forEach((item, idx) => {
     const v = Number(item.custoTotal) || 0;
     const pct = total > 0 ? v / total : 0;
     acum += pct;
     const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
-    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.sourceName || '', item.unidade || '', v, pct, acum], idx, [7, 8, 9]);
+
+    let pctVal: any = pct;
+    let acumVal: any = acum;
+    const rNum = ws.rowCount + 1;
+
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      pctVal = { formula: `G${rNum}/$G$${gRn}` };
+      if (rNum === firstData) {
+        acumVal = { formula: `H${rNum}` };
+      } else {
+        acumVal = { formula: `I${rNum - 1}+H${rNum}` };
+      }
+    }
+
+    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.sourceName || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '0.00%';
     r.getCell(9).numFmt = '0.00%';
@@ -1024,9 +1156,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   });
 
   // Grand total with SUM formula
-  const firstData = ws.rowCount - list.length + 1;
   const lastData = ws.rowCount;
-  const gRn = ws.rowCount + 1;
   const gRow = ws.addRow(['TOTAL', '', '', '', '', '', '', 1, '']);
   ws.mergeCells(gRn, 1, gRn, 6);
   if (list.length > 0) {
