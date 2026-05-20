@@ -651,8 +651,8 @@ export function Step1ConfigPanel({
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37,99,235,0.12)', paddingTop: 8, marginTop: 4 }}>
-                                <label style={{ ...smallLabelStyle, fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0)).toFixed(2)}%</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                                <label style={{ ...smallLabelStyle, fontWeight: 700, color: 'var(--color-primary)' }}>Tributos (I) = {((bdiConfig.tcu.pis || 0) + (bdiConfig.tcu.cofins || 0) + (bdiConfig.tcu.iss || 0) + (bdiConfig.tcu.csll || 0) + (bdiConfig.tcu.cprb || 0)).toFixed(2)}%</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>PIS (%)</label>
@@ -687,6 +687,15 @@ export function Step1ConfigPanel({
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
                                             onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
+                                            style={inputStyle} step="0.01" />
+                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <label style={smallLabelStyle}>CPRB (%)</label>
+                                            {bdiMatchBadge('cprb', bdiConfig.tcu.cprb || 0, (engineeringConfig as any)._aiExtractedBdi)}
+                                        </div>
+                                        <input type="number" className="form-input" value={bdiConfig.tcu.cprb || 0}
+                                            onChange={e => updateTcu('cprb', parseLocaleNumber(e.target.value))}
                                             style={inputStyle} step="0.01" />
                                     </div>
                                 </div>
@@ -743,8 +752,8 @@ export function Step1ConfigPanel({
                                         </div>
                                     </div>
                                     <div style={{ borderTop: '1px solid rgba(180,83,9,0.15)', paddingTop: 8, marginTop: 4 }}>
-                                        <label style={{ ...smallLabelStyle, fontWeight: 700, color: '#92400e' }}>Tributos (I) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0) + (tcuF.csll || 0)).toFixed(2)}%</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
+                                        <label style={{ ...smallLabelStyle, fontWeight: 700, color: '#92400e' }}>Tributos (I) = {((tcuF.pis || 0) + (tcuF.cofins || 0) + (tcuF.iss || 0) + (tcuF.csll || 0) + (tcuF.cprb || 0)).toFixed(2)}%</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
                                             <div>
                                                 <label style={{ ...smallLabelStyle, color: '#92400e' }}>PIS (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.pis}
@@ -767,6 +776,12 @@ export function Step1ConfigPanel({
                                                 <label style={{ ...smallLabelStyle, color: '#92400e' }}>CSLL (%)</label>
                                                 <input type="number" className="form-input" value={tcuF.csll || 0}
                                                     onChange={e => updateTcuFornecimento('csll', parseLocaleNumber(e.target.value))}
+                                                    style={inputStyle} step="0.01" />
+                                            </div>
+                                            <div>
+                                                <label style={{ ...smallLabelStyle, color: '#92400e' }}>CPRB (%)</label>
+                                                <input type="number" className="form-input" value={tcuF.cprb || 0}
+                                                    onChange={e => updateTcuFornecimento('cprb', parseLocaleNumber(e.target.value))}
                                                     style={inputStyle} step="0.01" />
                                             </div>
                                         </div>

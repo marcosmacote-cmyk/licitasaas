@@ -423,12 +423,14 @@ Retorne JSON.`;
 export async function extractEncargosFromBidding(biddingId: string): Promise<any | null> {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const encargosPrompt = `Você é um engenheiro orçamentista. Analise os documentos e encontre a TABELA DE ENCARGOS SOCIAIS.
+    const encargosPrompt = `Você é um engenheiro orçamentista. Analise os documentos e encontre a TABELA DE ENCARGOS SOCIAIS detalhada.
 
-🚨 REGRA: COPIE os valores EXATOS do documento. Se um item NÃO aparece no documento, retorne 0 para ele.
-NUNCA invente valores. NUNCA use percentuais padrão SINAPI quando o documento não menciona.
+🚨 DIRETRIZES DE CONTROLE E ALUCINAÇÃO (LEIA COM ATENÇÃO):
+1. Você deve retornar found=false se o documento NÃO contém a composição detalhada dos encargos sociais (ou seja, se NÃO apresenta os grupos A, B, C e D destrinchados com os valores de cada item de A1 a D2).
+2. Se o documento contiver apenas os percentuais globais/finais (ex: "Encargos Sociais: Horista = 92.17%, Mensalista = 53.50%") sem a tabela detalhada de grupos, NÃO tente inventar ou preencher os itens individuais com base no SINAPI ou em seu conhecimento. Marque found=false e explique isso no campo "details".
+3. Se e somente se houver uma tabela detalhada com os itens de cada grupo (A1 a D2), marque found=true e copie os valores exatos. Se um item específico da tabela estiver em branco/não mencionado, retorne 0 para ele.
 
-A tabela de encargos tem 4 GRUPOS com colunas HORISTA (%) e MENSALISTA (%):
+A tabela de encargos detalhada tem 4 GRUPOS com colunas HORISTA (%) e MENSALISTA (%):
 
 GRUPO A — Encargos Sociais Básicos:
   A1=INSS, A2=SESI, A3=SENAI, A4=INCRA, A5=SEBRAE, A6=Sal.Educação, A7=SAT/RAT, A8=FGTS, A9=SECONCI
@@ -468,13 +470,11 @@ RETORNE JSON com TODOS estes campos (use 0 para itens não encontrados):
   "c1_h": 5.05, "c1_m": 3.86, "c2_h": 0.11, "c2_m": 0.08,
   "c3_h": 4.88, "c3_m": 4.57, "c4_h": 4.44, "c4_m": 3.55,
   "c5_h": 0.50, "c5_m": 0.38,
-  "d1_h": 9.13, "d1_m": 3.56, "d2_h": 2.40, "d2_m": 1.86
+  "d1_h": 9.13, "d1_m": 3.56, "d2_h": 2.40, "d2_m": 1.86,
+  "details": "Mensagem descritiva explicando o que foi encontrado."
 }
 
-IMPORTANTE: Os valores acima são apenas EXEMPLO de formato. Extraia os valores REAIS do documento.
-
-Retorne found=true se encontrou QUALQUER tabela de encargos sociais no documento (mesmo parcial).
-Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais em nenhum documento.`;
+IMPORTANTE: Os valores acima são apenas EXEMPLO de formato. Extraia os valores REAIS do documento.`;
 
     const enrichResult = (parsed: any) => {
         if (!parsed?.found) return parsed;
@@ -523,6 +523,7 @@ Retorne found=false SOMENTE se não houver NENHUMA menção a encargos sociais e
             c1_h: n, c1_m: n, c2_h: n, c2_m: n, c3_h: n, c3_m: n,
             c4_h: n, c4_m: n, c5_h: n, c5_m: n,
             d1_h: n, d1_m: n, d2_h: n, d2_m: n,
+            details: { type: Type.STRING, nullable: true, description: 'Se found=false, explique o motivo (ex: apenas totais encontrados)' }
         },
         required: ['found', 'totalHorista', 'totalMensalista'] as string[]
     };
@@ -738,6 +739,15 @@ export async function extractBdiFromImage(imageBase64: string, mimeType: string,
     const prompt = `Analise esta imagem de uma TABELA DE BDI (Benefícios e Despesas Indiretas) do edital.
 Você deve extrair os componentes percentuais (%) da fórmula do TCU 2622.
 
+IMPORTANTE SOBRE COMPONENTES:
+- Administração Central deve ser mapeada para "adminCentral".
+- Seguros deve ser mapeada para "seguros".
+- Garantia deve ser mapeada para "garantias".
+- Se houver uma linha combinada "Seguro e Garantia" (ou similar), divida o valor igualmente entre "seguros" e "garantias".
+- Despesas Financeiras deve ser mapeada para "despFinanceiras".
+- Riscos deve ser mapeada para "riscos".
+- Lucro / Remuneração deve ser mapeada para "lucro".
+
 IMPORTANTE SOBRE TRIBUTOS:
 Se os tributos estiverem detalhados, extraia separadamente: PIS, COFINS, ISS e CPRB.
 ${isOnerado ? 'O regime é ONERADO. Extraia também a CSLL (Contribuição Social sobre o Lucro Líquido).' : 'O regime NÃO EXIGE CSLL, mas se a imagem listar ISS, PIS, COFINS, e CPRB, extraia-os.'}
@@ -747,10 +757,11 @@ Retorne JSON:
   "found": true,
   "bdiType": "TCU",
   "tcu": {
-    "admLocal": N,
-    "mobilizacao": N,
+    "adminCentral": N,
+    "seguros": N,
+    "garantias": N,
     "riscos": N,
-    "seguroGarantia": N,
+    "despFinanceiras": N,
     "lucro": N,
     "pis": N,
     "cofins": N,

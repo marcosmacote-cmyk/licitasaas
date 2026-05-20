@@ -47,7 +47,8 @@ FORMATO 1 — Seções agrupadas:
 |       | COFINS                   | 3,00% |   ← cofins=3.00
 |       | ISS                      | 3,00% |   ← iss=3.00
 |       | PIS                      | 0,65% |   ← pis=0.65
-|       | TOTAL                    | 6,65% |
+|       | CPRB                     | 4,50% |   ← cprb=4.50
+|       | TOTAL                    | 11,15% |
 
 FORMATO 2 — Lista simples:
 AC=4.00, S=0.80, G=0.42, R=0.97, DF=0.59, L=6.16, Tributos=5.65%
@@ -57,13 +58,13 @@ AC=4.00, S=0.80, G=0.42, R=0.97, DF=0.59, L=6.16, Tributos=5.65%
 - "Benefício TOTAL" = soma de S+G+L. NÃO confundir com BDI Global.
 
 ⚠️ TRIBUTOS:
-Se o edital detalha (COFINS, ISS, PIS), extraia cada um.
-Se mostra apenas "Tributos (I) = X%" sem subtabela: pis=0.65, cofins=3.00, csll=0, iss=(X-0.65-3.00).
+Se o edital detalha (COFINS, ISS, PIS, CPRB, CSLL), extraia cada um.
+Se mostra apenas "Tributos (I) = X%" sem subtabela e a desoneração for ativa/mencionada no edital, use: pis=0.65, cofins=3.00, cprb=4.50, csll=0, iss=(X-8.15). Se for onerada ou não mencionar CPRB, use: pis=0.65, cofins=3.00, cprb=0, csll=0, iss=(X-3.65).
 
 EXTRAIA OBRIGATORIAMENTE estes campos do documento:
 - adminCentral (AC), seguros (S), garantias (G), riscos (R)
 - despFinanceiras (DF), lucro (L)
-- pis, cofins, iss, csll (0 se não mencionado)
+- pis, cofins, iss, csll, cprb (0 se não mencionado)
 
 REGRAS:
 1. Se encontrou QUALQUER tabela de BDI com componentes, SEMPRE retorne tcu preenchido.
@@ -89,6 +90,7 @@ Retorne números sem %.`;
             cofins: { type: Type.NUMBER, description: 'COFINS — copie o valor EXATO' },
             iss: { type: Type.NUMBER, description: 'ISS — copie o valor EXATO' },
             csll: { type: Type.NUMBER, description: 'CSLL — copie ou 0 se não mencionado' },
+            cprb: { type: Type.NUMBER, description: 'CPRB — copie ou 0 se não mencionado' },
         }
     };
 
@@ -311,11 +313,12 @@ Retorne números sem %.`;
                                             despFinanceiras: { type: Type.NUMBER }, lucro: { type: Type.NUMBER },
                                             pis: { type: Type.NUMBER }, cofins: { type: Type.NUMBER },
                                             iss: { type: Type.NUMBER }, csll: { type: Type.NUMBER },
+                                            cprb: { type: Type.NUMBER },
                                         }
                                     };
                                     const retryPrompt = `O BDI GLOBAL deste edital é ${sanitized.globalBdi}%.
 Agora extraia a COMPOSIÇÃO ANALÍTICA (os componentes individuais que formam esse BDI).
-Procure a tabela com AC (Administração Central), S (Seguros), G (Garantias), R (Riscos), DF (Despesas Financeiras), L (Lucro), e Tributos (PIS, COFINS, ISS).
+Procure a tabela com AC (Administração Central), S (Seguros), G (Garantias), R (Riscos), DF (Despesas Financeiras), L (Lucro), e Tributos (PIS, COFINS, ISS, CPRB, CSLL).
 COPIE os valores EXATOS do documento. Se um campo não aparece, coloque 0.
 NUNCA coloque o BDI total (${sanitized.globalBdi}%) no campo lucro. Lucro é só a margem de lucro.`;
                                     try {

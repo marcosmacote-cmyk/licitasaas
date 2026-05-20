@@ -556,8 +556,8 @@ function buildBdiHtml(tcu: any, isTcu: boolean, bdiEfetivo: number): string {
     if (isTcu) {
         const ac = tcu.adminCentral, s = tcu.seguros, g = tcu.garantias, r = tcu.riscos;
         const df = tcu.despFinanceiras, l = tcu.lucro;
-        const pis = tcu.pis || 0, cofins = tcu.cofins || 0, iss = tcu.iss || 0, csll = tcu.csll || 0;
-        const tribI = pis + cofins + iss + csll;
+        const pis = tcu.pis || 0, cofins = tcu.cofins || 0, iss = tcu.iss || 0, csll = tcu.csll || 0, cprb = tcu.cprb || 0;
+        const tribI = pis + cofins + iss + csll + cprb;
 
         // Formula reference
         h += `<div style="margin-bottom:10px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
@@ -586,7 +586,8 @@ function buildBdiHtml(tcu: any, isTcu: boolean, bdiEfetivo: number): string {
         h += `<tr><td>COFINS (Contribuição p/ Financiamento da Seg. Social)</td><td class="r">${fmtPct(cofins)}</td></tr>`;
         h += `<tr><td>ISS (Imposto Sobre Serviços)</td><td class="r">${fmtPct(iss)}</td></tr>`;
         h += `<tr><td>CSLL (Contribuição Social sobre Lucro Líquido)</td><td class="r">${fmtPct(csll)}</td></tr>`;
-        h += `<tr class="total"><td class="r">Total Tributos (I = PIS + COFINS + ISS + CSLL)</td><td class="r bold">${fmtPct(tribI)}</td></tr>`;
+        h += `<tr><td>CPRB (Contribuição Previdenciária sobre a Receita Bruta)</td><td class="r">${fmtPct(cprb)}</td></tr>`;
+        h += `<tr class="total"><td class="r">Total Tributos (I = PIS + COFINS + ISS + CSLL + CPRB)</td><td class="r bold">${fmtPct(tribI)}</td></tr>`;
         h += `</tbody></table>`;
 
         // Numeric demonstration
