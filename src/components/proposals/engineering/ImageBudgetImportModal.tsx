@@ -85,8 +85,15 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
             formData.append('file', fileToExtract);
             formData.append('engineeringConfig', JSON.stringify(engineeringConfig));
 
+            const token = localStorage.getItem('token');
+            const headers: Record<string, string> = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch('/api/engineering/ai/extract-items-image', {
                 method: 'POST',
+                headers,
                 body: formData,
             });
 
