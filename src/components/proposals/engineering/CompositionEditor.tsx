@@ -86,8 +86,10 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
 
     const allowed: string[] = config?.basesConsideradas || [];
     const uf: string = (config?.ufReferencia || '').toUpperCase();
-    const globalDate: string = config?.dataBase || '';
     const perBaseDates: Record<string, string> = config?.dataBases || {};
+
+    const regime: string = (config?.regimeOneracao || 'ONERADO').toUpperCase();
+    const targetPayrollExemption = regime === 'DESONERADO';
 
     if (allowed.length === 0) return { filtered: allBases, warnings: [] };
 
@@ -106,7 +108,8 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
             continue;
         }
 
-        const targetDate = perBaseDates[baseName] || globalDate;
+        const hasExplicitDate = !!perBaseDates[baseName];
+        const targetDate = perBaseDates[baseName] || '';
         let targetMonth = 0, targetYear = 0;
         if (targetDate) {
             const [y, m] = targetDate.split('-').map(Number);
@@ -116,26 +119,34 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
         const candidates = allBases.filter((b: any) => {
             if (!b.name.toUpperCase().includes(upperName)) return false;
             if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
-            if (targetYear && targetMonth) {
+            if (hasExplicitDate && targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+            }
+            if (typeof b.payrollExemption === 'boolean') {
+                if (b.payrollExemption !== targetPayrollExemption) return false;
             }
             return true;
         });
 
-        if (candidates.length > 0) result.push(...candidates);
-        else {
-            const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+        if (candidates.length > 0) {
+            candidates.sort((a: any, b: any) => {
+                const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
+                const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
+                if (bHasData !== aHasData) return bHasData - aHasData;
+                return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
+            });
+
+            if (!hasExplicitDate && candidates.length > 1) {
+                result.push(candidates[0]);
+            } else {
+                result.push(...candidates);
+            }
+        } else {
+            const datePart = hasExplicitDate && targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
             const ufPart = uf ? ` ${uf}` : '';
             warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Verifique se a base foi importada.`);
         }
     }
-
-    result.sort((a: any, b: any) => {
-        const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
-        const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
-        if (bHasData !== aHasData) return bHasData - aHasData;
-        return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
-    });
 
     return { filtered: result, warnings };
 }
