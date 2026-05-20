@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide, FolderOpen, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -1119,6 +1119,27 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             : <><Calculator size={14} /> Aplicar Fator</>}
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Conversion */}
+                            <div style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
+                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                                    <ArrowRightLeft size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Converter Tipo de Agrupador
+                                </label>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
+                                    {currentItem.type === 'ETAPA' 
+                                        ? 'Esta é uma Etapa principal. Ao converter para Subetapa, ela será aninhada sob a Etapa anterior na hierarquia.'
+                                        : 'Esta é uma Subetapa. Ao converter para Etapa, ela se tornará uma divisão principal de primeiro nível.'}
+                                </div>
+                                <button className="btn btn-outline"
+                                    onClick={() => {
+                                        const newType = currentItem.type === 'ETAPA' ? 'SUBETAPA' : 'ETAPA';
+                                        onUpdateItem(currentItem.id, { type: newType } as any);
+                                    }}
+                                    style={{ padding: '8px 16px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}>
+                                    <RefreshCw size={14} />
+                                    {currentItem.type === 'ETAPA' ? 'Converter em Subetapa' : 'Converter em Etapa'}
+                                </button>
                             </div>
                         </div>
 

@@ -190,6 +190,66 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
         setSuccessMessage(null);
     };
 
+    const handleUpdateItem = (index: number, field: string, value: any) => {
+        setExtractedItems(prev => {
+            const updated = [...prev];
+            const item = { ...updated[index] };
+            
+            const mapField = (f: string) => {
+                if (f === 'itemNumber') return ['itemNumber', 'i'];
+                if (f === 'code') return ['code', 'c'];
+                if (f === 'description') return ['description', 'd'];
+                if (f === 'unit') return ['unit', 'u'];
+                if (f === 'quantity') return ['quantity', 'q'];
+                if (f === 'unitPrice') return ['unitPrice', 'up', 'unitCost', 'uc'];
+                if (f === 'totalPrice') return ['totalPrice', 'tp'];
+                return [f];
+            };
+
+            const targetKeys = mapField(field);
+            targetKeys.forEach(k => {
+                item[k] = value;
+            });
+
+            if (field === 'quantity' || field === 'unitPrice') {
+                const qVal = parseFloat(String(item.quantity ?? item.q ?? 0).replace(',', '.')) || 0;
+                const priceVal = parseFloat(String(item.unitPrice ?? item.up ?? item.unitCost ?? item.uc ?? 0).replace(',', '.')) || 0;
+                const total = qVal * priceVal;
+                
+                if ('totalPrice' in item) item.totalPrice = total;
+                if ('tp' in item) item.tp = total;
+            }
+
+            updated[index] = item;
+            return updated;
+        });
+    };
+
+    const inputStyle: React.CSSProperties = {
+        background: 'transparent',
+        border: '1px solid transparent',
+        color: 'inherit',
+        fontSize: 'inherit',
+        fontFamily: 'inherit',
+        width: '100%',
+        padding: '4px 6px',
+        borderRadius: 4,
+        transition: 'all 0.15s ease',
+        outline: 'none',
+    };
+
+    const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+        e.currentTarget.style.borderColor = 'var(--color-primary)';
+        e.currentTarget.style.background = 'var(--color-bg-base)';
+        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(37,99,235,0.15)';
+    };
+
+    const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        e.currentTarget.style.borderColor = 'transparent';
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.boxShadow = 'none';
+    };
+
     const formatCurrency = (val: number) => {
         return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
@@ -449,38 +509,88 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                                                                 background: isGroup ? 'rgba(37,99,235,0.02)' : 'transparent',
                                                                 fontWeight: isGroup ? 700 : 400
                                                             }}>
-                                                                <td style={{ padding: '8px 10px', color: isGroup ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
-                                                                    {it.itemNumber || it.i}
+                                                                <td style={{ padding: '2px 4px', color: isGroup ? 'var(--color-primary)' : 'var(--color-text-secondary)', width: 80 }}>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={it.itemNumber || it.i || ''}
+                                                                        onChange={e => handleUpdateItem(index, 'itemNumber', e.target.value)}
+                                                                        onFocus={handleInputFocus}
+                                                                        onBlur={handleInputBlur}
+                                                                        style={{ ...inputStyle, fontWeight: isGroup ? 700 : 400, color: isGroup ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}
+                                                                    />
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', color: 'var(--color-text-secondary)' }}>
-                                                                    {!isGroup && (
+                                                                <td style={{ padding: '2px 4px', color: 'var(--color-text-secondary)', width: 140 }}>
+                                                                    {!isGroup ? (
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                                            <span>{it.code || it.c || 'PROPRIA'}</span>
+                                                                            <input
+                                                                                type="text"
+                                                                                value={it.code || it.c || ''}
+                                                                                placeholder="PROPRIA"
+                                                                                onChange={e => handleUpdateItem(index, 'code', e.target.value)}
+                                                                                onFocus={handleInputFocus}
+                                                                                onBlur={handleInputBlur}
+                                                                                style={{ ...inputStyle, width: matchesBase ? '60%' : '100%' }}
+                                                                            />
                                                                             {matchesBase && (
                                                                                 <span style={{
-                                                                                    fontSize: '0.58rem', padding: '1px 4px',
+                                                                                    fontSize: '0.58rem', padding: '2px 4px',
                                                                                     borderRadius: 4, background: '#e0f2fe', color: '#0369a1',
-                                                                                    fontWeight: 700
+                                                                                    fontWeight: 700, flexShrink: 0
                                                                                 }}>
                                                                                     {baseName}
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                    )}
+                                                                    ) : ''}
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', color: 'var(--color-text-primary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.description || it.d}>
-                                                                    {it.description || it.d}
+                                                                <td style={{ padding: '2px 4px', color: 'var(--color-text-primary)' }}>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={it.description || it.d || ''}
+                                                                        onChange={e => handleUpdateItem(index, 'description', e.target.value)}
+                                                                        onFocus={handleInputFocus}
+                                                                        onBlur={handleInputBlur}
+                                                                        style={{ ...inputStyle, fontWeight: isGroup ? 700 : 400 }}
+                                                                        title={it.description || it.d}
+                                                                    />
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                                                    {isGroup ? '' : (it.unit || it.u || 'UN')}
+                                                                <td style={{ padding: '2px 4px', textAlign: 'center', color: 'var(--color-text-secondary)', width: 60 }}>
+                                                                    {!isGroup ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={it.unit || it.u || ''}
+                                                                            onChange={e => handleUpdateItem(index, 'unit', e.target.value)}
+                                                                            onFocus={handleInputFocus}
+                                                                            onBlur={handleInputBlur}
+                                                                            style={{ ...inputStyle, textAlign: 'center' }}
+                                                                        />
+                                                                    ) : ''}
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--color-text-primary)' }}>
-                                                                    {isGroup ? '' : (Number(it.quantity || it.q) || 0).toLocaleString('pt-BR')}
+                                                                <td style={{ padding: '2px 4px', textAlign: 'right', color: 'var(--color-text-primary)', width: 90 }}>
+                                                                    {!isGroup ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={it.quantity ?? it.q ?? ''}
+                                                                            onChange={e => handleUpdateItem(index, 'quantity', e.target.value)}
+                                                                            onFocus={handleInputFocus}
+                                                                            onBlur={handleInputBlur}
+                                                                            style={{ ...inputStyle, textAlign: 'right' }}
+                                                                        />
+                                                                    ) : ''}
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--color-text-primary)' }}>
-                                                                    {isGroup ? '' : formatCurrency(Number(it.unitPrice || it.up || it.unitCost || it.uc || 0))}
+                                                                <td style={{ padding: '2px 4px', textAlign: 'right', color: 'var(--color-text-primary)', width: 110 }}>
+                                                                    {!isGroup ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={it.unitPrice ?? it.up ?? it.unitCost ?? it.uc ?? ''}
+                                                                            onChange={e => handleUpdateItem(index, 'unitPrice', e.target.value)}
+                                                                            onFocus={handleInputFocus}
+                                                                            onBlur={handleInputBlur}
+                                                                            style={{ ...inputStyle, textAlign: 'right' }}
+                                                                        />
+                                                                    ) : ''}
                                                                 </td>
-                                                                <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--color-text-primary)', fontWeight: 600, width: 110 }}>
                                                                     {isGroup ? '' : formatCurrency(Number(it.totalPrice || it.tp || 0))}
                                                                 </td>
                                                             </tr>

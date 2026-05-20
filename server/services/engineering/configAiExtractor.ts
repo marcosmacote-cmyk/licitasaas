@@ -443,9 +443,9 @@ export async function extractEncargosFromBidding(biddingId: string): Promise<any
     const encargosPrompt = `Você é um engenheiro orçamentista. Analise os documentos e encontre a TABELA DE ENCARGOS SOCIAIS detalhada.
 
 🚨 DIRETRIZES DE CONTROLE E ALUCINAÇÃO (LEIA COM ATENÇÃO):
-1. Você deve retornar found=false se o documento NÃO contém a composição detalhada dos encargos sociais (ou seja, se NÃO apresenta os grupos A, B, C e D destrinchados com os valores de cada item de A1 a D2).
-2. Se o documento contiver apenas os percentuais globais/finais (ex: "Encargos Sociais: Horista = 92.17%, Mensalista = 53.50%") sem a tabela detalhada de grupos, NÃO tente inventar ou preencher os itens individuais com base no SINAPI ou em seu conhecimento. Marque found=false e explique isso no campo "details".
-3. Se e somente se houver uma tabela detalhada com os itens de cada grupo (A1 a D2), marque found=true e copie os valores exatos. Se um item específico da tabela estiver em branco/não mencionado, retorne 0 para ele.
+1. Você deve retornar found=true se encontrar QUALQUER tabela, quadro ou lista contendo a composição detalhada ou as alíquotas individuais dos encargos sociais (mesmo que alguns grupos estejam ausentes, ou que a tabela seja parcial/simplificada). Use found=false APENAS se o documento contiver exclusivamente os totais globais/finais (ex: "Encargos Sociais: Horista = 115%") sem nenhum detalhamento ou lista de alíquotas individuais.
+2. Se o documento contiver apenas os percentuais globais/finais sem nenhum detalhamento de itens/alíquotas individuais (ex: sem citar INSS, FGTS, etc. separadamente), marque found=false e explique isso no campo "details".
+3. Se houver qualquer lista/tabela de itens, copie os valores exatos para as chaves correspondentes (A1 a D2). Para qualquer item do schema que não esteja explicitado ou não exista na tabela do documento, retorne 0. Não invente valores.
 
 A tabela de encargos detalhada tem 4 GRUPOS com colunas HORISTA (%) e MENSALISTA (%):
 

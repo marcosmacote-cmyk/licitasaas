@@ -1,10 +1,15 @@
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { extractConfigFromBidding, extractEncargosFromBidding } from '../server/services/engineering/configAiExtractor';
+import { fileURLToPath } from 'url';
+import { extractConfigFromBidding, extractEncargosFromBidding } from '../server/services/engineering/configAiExtractor.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '../server/.env') });
 
+const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 
 async function main() {

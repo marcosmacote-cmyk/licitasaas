@@ -1170,19 +1170,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // Inline edit
     const updateItem = (id: string, field: keyof EngItem, value: any) => {
         setHasUnsavedChanges(true);
-        setItems(prev => prev.map(it => {
-            if (it.id !== id) return it;
-            const updated = { ...it, [field]: value };
-            if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria' || field === 'sourceName' || field === 'code') {
-                if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
-                // FIX BDI-01: Sempre recalcula com BDI do usuário, sem congelar no preço do edital
-                const itemBdi = resolveItemBdi(updated);
-                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
-                updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
-                updated.priceAudit = refreshPriceAudit(updated);
-            }
-            return updated;
-        }));
+        setItems(prev => {
+            const mapped = prev.map(it => {
+                if (it.id !== id) return it;
+                const updated = { ...it, [field]: value };
+                if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria' || field === 'sourceName' || field === 'code') {
+                    if (field === 'unitCost' || field === 'quantity' || field === 'bdiCategoria') updated.priceOrigin = 'MANUAL';
+                    // FIX BDI-01: Sempre recalcula com BDI do usuário, sem congelar no preço do edital
+                    const itemBdi = resolveItemBdi(updated);
+                    updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                    updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                    updated.priceAudit = refreshPriceAudit(updated);
+                }
+                return updated;
+            });
+            return field === 'type' ? renumberItems(mapped) : mapped;
+        });
     };
 
     const saveCalculationMemory = (itemId: string, calcMemoryJsonStr: string, calculatedQuantity: number) => {
@@ -3047,6 +3050,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             setEngineeringConfig((prev: any) => ({ ...prev, reportConfig: updates }));
                             setHasUnsavedChanges(true);
                             return;
+                        }
+                        if (updates.type !== undefined) {
+                            updateItem(itemId, 'type', updates.type);
                         }
                         if (updates.unitCost !== undefined) {
                             updateItem(itemId, 'unitCost', updates.unitCost);
