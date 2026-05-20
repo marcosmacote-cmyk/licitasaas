@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, Pencil, Check, ArrowDownUp, Download, FileText, Save, PlusCircle, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -260,6 +260,20 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [selectedBaseId, setSelectedBaseId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // Hub-style search enhancements
+    const searchDebounceRef = useRef<any>(null);
+    const [searchCoefficients, setSearchCoefficients] = useState<Record<string, number>>({});
+    const [addedItemIds, setAddedItemIds] = useState<Set<string>>(new Set());
+    const [addedCount, setAddedCount] = useState(0);
+    const [showPropriaForm, setShowPropriaForm] = useState(false);
+    const [propriaCode, setPropriaCode] = useState('');
+    const [propriaDesc, setPropriaDesc] = useState('');
+    const [propriaUnit, setPropriaUnit] = useState('UN');
+    const [propriaPrice, setPropriaPrice] = useState('');
+    const [propriaCoef, setPropriaCoef] = useState('1');
+    const [propriaSaving, setPropiaSaving] = useState(false);
 
     // ── Phase 4: Free Mode States ──
     const [showFreeItemModal, setShowFreeItemModal] = useState(false);
@@ -273,8 +287,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     const [showRateioModal, setShowRateioModal] = useState(false);
     const [rateioData, setRateioData] = useState({ prazo: '2', fracao: '100' });
-
-    const [isSearching, setIsSearching] = useState(false);
 
     // Drill-down stack for auxiliary compositions
     const [drillStack, setDrillStack] = useState<{ code: string; description: string }[]>([]);
@@ -325,30 +337,48 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     }, [showSearch, bases, currentItem, engineeringConfig]);
 
-    const handleSearch = async () => {
-        if (!selectedBaseId || !searchQuery) return;
+    const handleSearch = useCallback(async (query?: string) => {
+        const q = query ?? searchQuery;
+        if (!selectedBaseId || !q || q.length < 2) {
+            if (!q) setSearchResults([]);
+            return;
+        }
         setIsSearching(true);
         try {
             let url = '';
             if (searchType === 'item') {
-                const params = new URLSearchParams({ q: searchQuery });
+                const params = new URLSearchParams({ q });
                 if (engineeringConfig?.regimeOneracao) params.append('regime', engineeringConfig.regimeOneracao);
                 const selectedBase = bases.find(b => b.id === selectedBaseId);
                 const effectiveDate = (selectedBase && engineeringConfig?.dataBases?.[selectedBase.name]) || engineeringConfig?.dataBase;
                 if (effectiveDate) params.append('dataBase', effectiveDate);
                 url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
             } else {
-                url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(searchQuery)}`;
+                url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(q)}`;
             }
             const res = await fetch(url, { headers: hdrs() });
             const d = await res.json();
             setSearchResults(searchType === 'item' ? (d.items || []) : (Array.isArray(d) ? d : []));
         } catch { } finally { setIsSearching(false); }
-    };
+    }, [searchQuery, selectedBaseId, bases, engineeringConfig, searchType]);
+
+    // Auto-search: fires when user types 2+ characters, with 350ms debounce
+    useEffect(() => {
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+        if (!showSearch || !searchQuery || searchQuery.length < 2) {
+            if (showSearch && !searchQuery) setSearchResults([]);
+            return;
+        }
+        searchDebounceRef.current = setTimeout(() => {
+            handleSearch(searchQuery);
+        }, 350);
+        return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+    }, [searchQuery, selectedBaseId, searchType, showSearch]);
 
     const addFromSearch = (dbItem: any) => {
         if (!data) return;
         
+        const coef = searchCoefficients[dbItem.id] || 1;
         let typeKey = 'MATERIAL';
         let newItem: any = null;
 
@@ -356,7 +386,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             typeKey = 'AUXILIAR';
             newItem = {
                 id: `temp-${Date.now()}`,
-                coefficient: 1,
+                coefficient: coef,
                 price: Number(dbItem.totalPrice) || 0,
                 auxiliaryComposition: {
                     id: dbItem.id,
@@ -375,7 +405,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
             newItem = {
                 id: `temp-${Date.now()}`,
-                coefficient: 1,
+                coefficient: coef,
                 price: Number(dbItem.price) || 0,
                 item: {
                     id: dbItem.id,
@@ -402,9 +432,61 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
         }
 
-        setShowSearch(false);
-        setSearchQuery('');
-        setSearchResults([]);
+        // Flash feedback — keep modal open for adding more items
+        setAddedItemIds(prev => new Set(prev).add(dbItem.id));
+        setAddedCount(c => c + 1);
+        setTimeout(() => setAddedItemIds(prev => { const next = new Set(prev); next.delete(dbItem.id); return next; }), 1500);
+    };
+
+    // Reset search session state when modal closes
+    const closeSearchModal = () => {
+        setShowSearch(false); setSearchQuery(''); setSearchResults([]);
+        setSearchCoefficients({}); setAddedItemIds(new Set()); setAddedCount(0);
+        setShowPropriaForm(false); setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaCoef('1');
+    };
+
+    // Create proprietary item in PROPRIA database and add to composition
+    const handleCreatePropria = async () => {
+        if (!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || !data) return;
+        setPropiaSaving(true);
+        try {
+            const res = await fetch('/api/engineering/propria/create', {
+                method: 'POST', headers: hdrs(),
+                body: JSON.stringify({
+                    code: propriaCode.trim(),
+                    description: propriaDesc.trim(),
+                    unit: propriaUnit.trim() || 'UN',
+                    price: parseFloat(propriaPrice.replace(',', '.')) || 0,
+                    recordKind: searchType === 'composition' ? 'COMPOSICAO' : 'INSUMO',
+                }),
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || 'Erro ao criar item');
+
+            const price = Number(result.item.price) || 0;
+            const coef = parseFloat(propriaCoef.replace(',', '.')) || 1;
+            const typeKey = searchType === 'composition' ? 'AUXILIAR' : 'MATERIAL';
+            const newItem = searchType === 'composition' ? {
+                id: `temp-${Date.now()}`, coefficient: coef, price,
+                auxiliaryComposition: { id: result.item.id, code: result.item.code, description: result.item.description, unit: result.item.unit, totalPrice: price }
+            } : {
+                id: `temp-${Date.now()}`, coefficient: coef, price,
+                item: { id: result.item.id, code: result.item.code, description: result.item.description, unit: result.item.unit, type: 'MATERIAL', price }
+            };
+
+            const updated = { ...data, groups: { ...data.groups } };
+            if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
+            updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
+            updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+            updated.totalDirect = updated.totalPrice;
+            setData(updated);
+            setHasChanges(true);
+            if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+
+            setAddedCount(c => c + 1);
+            setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaCoef('1');
+        } catch (e: any) { alert(e.message || 'Erro ao criar item'); }
+        finally { setPropiaSaving(false); }
     };
 
 
@@ -1622,38 +1704,90 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
                 )}
             </div>
-            {/* Search Modal */}
+            {/* ═══ HUB DE INSERÇÃO MODAL (padronizado com Planilha Orçamentária) ═══ */}
             {showSearch && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 860, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                        {/* ── Header ── */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0 }}>{searchType === 'item' ? 'Buscar Insumo' : 'Buscar Composição Auxiliar'}</h3>
-                            <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <Database size={20} color="var(--color-primary)" />
+                                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Hub de Inserção</h3>
+                                {addedCount > 0 && (
+                                    <span style={{ padding: '2px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.12)', color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}>
+                                        {addedCount} {addedCount === 1 ? 'item adicionado' : 'itens adicionados'}
+                                    </span>
+                                )}
+                            </div>
+                            <button onClick={closeSearchModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
+
+                        {/* ── Type Selector Tabs ── */}
+                        <div style={{ display: 'flex', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
+                            {([{ type: 'composition' as const, label: 'Composições', icon: Layers, color: '#7c3aed' }, { type: 'item' as const, label: 'Insumos', icon: Package, color: '#0ea5e9' }]).map(tab => {
+                                const isActive = searchType === tab.type;
+                                const Icon = tab.icon;
+                                return (
+                                    <button key={tab.type}
+                                        onClick={() => { setSearchType(tab.type); setSearchResults([]); setSearchQuery(''); }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
+                                            borderRadius: 'var(--radius-md)',
+                                            border: isActive ? `2px solid ${tab.color}` : '1px solid var(--color-border)',
+                                            background: isActive ? `${tab.color}12` : 'var(--color-bg-base)',
+                                            cursor: 'pointer', fontSize: '0.78rem', fontWeight: isActive ? 700 : 600,
+                                            color: isActive ? tab.color : 'var(--color-text-secondary)',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        <Icon size={14} />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* ── Search Bar ── */}
                         {(() => {
                             const { filtered, warnings } = filterBasesWithWarnings(bases, engineeringConfig);
+                            const isCurrentBaseInFiltered = filtered.some((b: any) => b.id === selectedBaseId);
+                            if (!isCurrentBaseInFiltered && filtered.length > 0) {
+                                setTimeout(() => setSelectedBaseId(filtered[0].id), 0);
+                            }
                             return (
                                 <>
                                     <div style={{ display: 'flex', gap: 8 }}>
-                                        <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                        <select className="form-select" value={isCurrentBaseInFiltered ? selectedBaseId : (filtered[0]?.id || '')} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
                                             {filtered.length === 0
                                                 ? <option value="">Nenhuma base configurada</option>
                                                 : filtered.map(b => {
-                                                    const isVersionBased = isVersionBasedBase(b.name);
-                                                    const ref = isVersionBased
+                                                    const vb = isVersionBasedBase(b.name);
+                                                    const ref = vb
                                                         ? (b.version || 'N/I')
                                                         : (b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I'));
                                                     const totalRecords = (b.itemCount || 0) + (b.compositionCount || 0);
-                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} {isVersionBased ? `v${ref}` : `· ${ref}`} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
+                                                    return <option key={b.id} value={b.id}>{b.name} {b.uf || ''} {vb ? `v${ref}` : `· ${ref}`} · {totalRecords.toLocaleString('pt-BR')} registros</option>;
                                                 })
                                             }
                                         </select>
-                                        <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
-                                        <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
+                                        <div style={{ flex: 1, position: 'relative' }}>
+                                            <input type="text" className="form-input"
+                                                placeholder={`Buscar ${searchType === 'composition' ? 'composição' : 'insumo'} por código ou descrição...`}
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                                autoFocus
+                                                style={{ width: '100%', paddingRight: isSearching ? 36 : 12 }} />
+                                            {isSearching && (
+                                                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                                                    <Loader2 size={16} className="spin" color="var(--color-primary)" />
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     {warnings.length > 0 && (
                                         <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                            <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                                            <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
                                             <div style={{ fontSize: '0.78rem', color: '#92400e' }}>
                                                 {warnings.map((w, i) => <div key={i}>{w}</div>)}
                                             </div>
@@ -1662,29 +1796,106 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </>
                             );
                         })()}
+
+                        {/* ── Criar Próprio (inline form) ── */}
+                        <div style={{ borderRadius: 8, border: `1px solid ${showPropriaForm ? (searchType === 'composition' ? '#7c3aed40' : '#0ea5e940') : 'var(--color-border)'}`, overflow: 'hidden', transition: 'all 0.2s' }}>
+                            <button onClick={() => setShowPropriaForm(p => !p)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: showPropriaForm ? (searchType === 'composition' ? '#7c3aed08' : '#0ea5e908') : 'var(--color-bg-base)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: searchType === 'composition' ? '#7c3aed' : '#0ea5e9', textAlign: 'left' as const }}>
+                                <Plus size={14} />
+                                Criar {searchType === 'composition' ? 'Composição' : 'Insumo'} Própri{searchType === 'composition' ? 'a' : 'o'}
+                                <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>
+                                    {showPropriaForm ? 'Recolher' : 'Salva no banco PROPRIA e adiciona à composição'}
+                                </span>
+                            </button>
+                            {showPropriaForm && (
+                                <div style={{ padding: '10px 12px', display: 'flex', gap: 6, alignItems: 'flex-end', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-surface)' }}>
+                                    <div style={{ flex: '0 0 100px' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Código *</label>
+                                        <input type="text" className="form-input" placeholder="CP-001" value={propriaCode} onChange={e => setPropriaCode(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px' }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Descrição *</label>
+                                        <input type="text" className="form-input" placeholder="Descrição do item próprio..." value={propriaDesc} onChange={e => setPropriaDesc(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px' }} />
+                                    </div>
+                                    <div style={{ flex: '0 0 65px' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Unid.</label>
+                                        <input type="text" className="form-input" value={propriaUnit} onChange={e => setPropriaUnit(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'center' }} />
+                                    </div>
+                                    <div style={{ flex: '0 0 100px' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Valor Unit. *</label>
+                                        <input type="text" className="form-input" placeholder="0,00" value={propriaPrice} onChange={e => setPropriaPrice(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'right' }} />
+                                    </div>
+                                    <div style={{ flex: '0 0 65px' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 2 }}>Coef.</label>
+                                        <input type="text" className="form-input" value={propriaCoef} onChange={e => setPropriaCoef(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.78rem', padding: '5px 8px', textAlign: 'center', fontWeight: 600 }}
+                                            onKeyDown={e => e.key === 'Enter' && handleCreatePropria()} />
+                                    </div>
+                                    <button className="btn btn-primary" disabled={!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || propriaSaving}
+                                        onClick={handleCreatePropria}
+                                        style={{ padding: '5px 12px', fontSize: '0.75rem', whiteSpace: 'nowrap', height: 30 }}>
+                                        {propriaSaving ? <Loader2 size={14} className="spin" /> : <><CheckCircle2 size={13} style={{ marginRight: 3 }} /> Criar e Adicionar</>}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── Search Results Table ── */}
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead><tr style={{ background: 'var(--color-bg-base)' }}>
-                                    {['Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>)}
+                                    {['Tipo','Código','Descrição','Unid.','Preço','Coef.',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 4 ? 'right' : (i === 5 ? 'center' : 'left') }}>{h}</th>)}
                                 </tr></thead>
                                 <tbody>
-                                    {searchResults.map(r => (
-                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                    {searchResults.map(r => {
+                                        const wasAdded = addedItemIds.has(r.id);
+                                        const isComp = searchType === 'composition';
+                                        return (
+                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)', background: wasAdded ? 'rgba(16,185,129,0.08)' : undefined, transition: 'background 0.3s' }}>
+                                            <td style={{ padding: 8, color: 'var(--color-text-tertiary)', fontWeight: 700 }}>{isComp ? 'Comp.' : 'Insumo'}</td>
                                             <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
                                             <td style={{ padding: 8 }}>{r.description}</td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>
-                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(searchType === 'composition' ? r.totalPrice : r.price) || 0)}</td>
+                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(isComp ? r.totalPrice : r.price) || 0)}</td>
+                                            <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                                <input type="number" min="0.0001" step="0.01"
+                                                    value={searchCoefficients[r.id] ?? 1}
+                                                    onChange={e => setSearchCoefficients(prev => ({ ...prev, [r.id]: parseFloat(e.target.value) || 1 }))}
+                                                    style={{ width: 60, textAlign: 'center', padding: '4px 4px', fontSize: '0.78rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-base)', outline: 'none' }} />
+                                            </td>
                                             <td style={{ padding: 8, textAlign: 'center' }}>
-                                                <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
+                                                {wasAdded ? (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#059669', fontWeight: 700, fontSize: '0.72rem' }}>
+                                                        <CheckCircle2 size={14} /> Adicionado
+                                                    </span>
+                                                ) : (
+                                                    <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
+                                                )}
                                             </td>
                                         </tr>
-                                    ))}
-                                    {searchResults.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite uma busca para começar.'}
+                                        );
+                                    })}
+                                    {searchResults.length === 0 && <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                                        {searchQuery ? 'Nenhum resultado encontrado.' : `Busque ${searchType === 'composition' ? 'composição' : 'insumo'} por código ou descrição acima.`}
                                     </td></tr>}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* ── Footer with close button ── */}
+                        {addedCount > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>
+                                    <CheckCircle2 size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} color="#059669" />
+                                    {addedCount} {addedCount === 1 ? 'item adicionado' : 'itens adicionados'} à composição
+                                </span>
+                                <button className="btn btn-primary" onClick={closeSearchModal} style={{ padding: '6px 16px', fontSize: '0.8rem' }}>Concluir</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
