@@ -38,7 +38,7 @@ export function SmartCpuDropzone({ onExtract, isExtracting }: Props) {
         }
     };
 
-    const handlePaste = async (e: ClipboardEvent) => {
+    const handlePaste = React.useCallback(async (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;
         for (const item of Array.from(items)) {
@@ -50,7 +50,7 @@ export function SmartCpuDropzone({ onExtract, isExtracting }: Props) {
                 }
             }
         }
-    };
+    }, [onExtract]);
 
     React.useEffect(() => {
         window.addEventListener('paste', handlePaste);

@@ -430,6 +430,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 return;
             }
 
+            // Prevent intercepting when composition editor is open
+            if (compositionEditorIndex !== null) {
+                return;
+            }
+
             const items = e.clipboardData?.items;
             if (!items) return;
             for (let i = 0; i < items.length; i++) {
@@ -450,12 +455,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         return () => {
             window.removeEventListener('paste', handleGlobalPaste);
         };
-    }, []);
+    }, [compositionEditorIndex]);
 
     // Global drag-and-drop listener to auto-open Image extraction modal
     useEffect(() => {
         const handleDragOver = (e: DragEvent) => {
             e.preventDefault();
+            if (compositionEditorIndex !== null) return;
             if (e.dataTransfer?.types.includes('Files')) {
                 setGlobalDragOver(true);
             }
@@ -463,6 +469,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
         const handleDragLeave = (e: DragEvent) => {
             e.preventDefault();
+            if (compositionEditorIndex !== null) return;
             if (e.clientX === 0 && e.clientY === 0) {
                 setGlobalDragOver(false);
             }
@@ -470,6 +477,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
         const handleDrop = (e: DragEvent) => {
             e.preventDefault();
+            if (compositionEditorIndex !== null) return;
             setGlobalDragOver(false);
             const files = e.dataTransfer?.files;
             if (files && files.length > 0) {
@@ -490,7 +498,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             window.removeEventListener('dragleave', handleDragLeave);
             window.removeEventListener('drop', handleDrop);
         };
-    }, []);
+    }, [compositionEditorIndex]);
 
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 

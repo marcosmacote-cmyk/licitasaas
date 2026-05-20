@@ -799,7 +799,12 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             // Create new items — SEC-02: use authenticated tenantId
             const tenantId = req.user?.tenantId || composition.tenantId;
-            const basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId } });
+            let basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId } });
+            if (!basePropria) {
+                basePropria = await tx.engineeringDatabase.create({
+                    data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
+                });
+            }
 
             for (const item of flatItems) {
                 let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
@@ -808,33 +813,53 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 
                 // Dynamically create AI-extracted proprietary inputs
                 if (!isAux && itemId && itemId.startsWith('new-')) {
-                    const newItem = await tx.engineeringItem.create({
-                        data: {
-                            databaseId: basePropria?.id || null,
-                            code: item.item.code || `AI-${Date.now()}`,
-                            description: item.item.description || 'Novo Insumo Próprio (IA)',
-                            unit: item.item.unit || 'UN',
-                            type: item.item.type || 'MATERIAL',
-                            price: item.item.price || 0,
-                            tenantId: tenantId
+                    const itemCode = item.item.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    
+                    let existingItem = await tx.engineeringItem.findFirst({
+                        where: {
+                            databaseId: basePropria.id,
+                            code: itemCode
                         }
                     });
-                    itemId = newItem.id;
+
+                    if (!existingItem) {
+                        existingItem = await tx.engineeringItem.create({
+                            data: {
+                                databaseId: basePropria.id,
+                                code: itemCode,
+                                description: item.item.description || 'Novo Insumo Próprio (IA)',
+                                unit: item.item.unit || 'UN',
+                                type: item.item.type || 'MATERIAL',
+                                price: item.item.price || 0
+                            }
+                        });
+                    }
+                    itemId = existingItem.id;
                 }
 
                 // Dynamically create AI-extracted auxiliary compositions
                 if (isAux && auxId && auxId.startsWith('new-')) {
-                    const newAux = await tx.engineeringComposition.create({
-                        data: {
-                            databaseId: basePropria?.id || null,
-                            code: item.auxiliaryComposition.code || `AI-COMP-${Date.now()}`,
-                            description: item.auxiliaryComposition.description || 'Nova Composição Auxiliar Própria (IA)',
-                            unit: item.auxiliaryComposition.unit || 'UN',
-                            totalPrice: item.auxiliaryComposition.totalPrice || 0,
-                            tenantId: tenantId
+                    const auxCode = item.auxiliaryComposition.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    
+                    let existingAux = await tx.engineeringComposition.findFirst({
+                        where: {
+                            databaseId: basePropria.id,
+                            code: auxCode
                         }
                     });
-                    auxId = newAux.id;
+
+                    if (!existingAux) {
+                        existingAux = await tx.engineeringComposition.create({
+                            data: {
+                                databaseId: basePropria.id,
+                                code: auxCode,
+                                description: item.auxiliaryComposition.description || 'Nova Composição Auxiliar Própria (IA)',
+                                unit: item.auxiliaryComposition.unit || 'UN',
+                                totalPrice: item.auxiliaryComposition.totalPrice || 0
+                            }
+                        });
+                    }
+                    auxId = existingAux.id;
                 }
                 
                 await tx.engineeringCompositionItem.create({
