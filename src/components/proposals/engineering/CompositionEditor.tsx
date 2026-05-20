@@ -108,15 +108,19 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
             continue;
         }
 
-        const hasExplicitDate = !!perBaseDates[baseName];
-        const targetDate = perBaseDates[baseName] || '';
+        // Version-based bases (SEINFRA, SICRO, SBC) use version identifiers, not monthly dates.
+        // NEVER apply date filtering to these bases, even if dataBases has stale AI-extracted entries.
+        const isVersionBased = VERSION_BASED_BASES.some(vb => upperName.includes(vb));
+        const hasExplicitDate = !isVersionBased && !!perBaseDates[baseName];
+        const targetDate = hasExplicitDate ? (perBaseDates[baseName] || '') : '';
         let targetMonth = 0, targetYear = 0;
         if (targetDate) {
             const [y, m] = targetDate.split('-').map(Number);
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
-        const candidates = allBases.filter((b: any) => {
+        // Step 1: Try strict match (name + UF + date + regime)
+        let candidates = allBases.filter((b: any) => {
             if (!b.name.toUpperCase().includes(upperName)) return false;
             if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
             if (hasExplicitDate && targetYear && targetMonth) {
@@ -128,8 +132,43 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
             return true;
         });
 
+        // Step 2: If strict match found no results, relax regime filter.
+        // Many regional bases (ORSE, CAERN, SBC) only have one import (onerado OR desonerado),
+        // not both versions. Showing the available version is better than showing nothing.
+        if (candidates.length === 0) {
+            candidates = allBases.filter((b: any) => {
+                if (!b.name.toUpperCase().includes(upperName)) return false;
+                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasExplicitDate && targetYear && targetMonth) {
+                    if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+                }
+                // Skip regime filter in this relaxed pass
+                return true;
+            });
+        }
+
+        // Step 3: If still no results AND we were filtering by explicit date, try without date too.
+        // This catches cases where the configured date hasn't been imported yet.
+        if (candidates.length === 0 && hasExplicitDate) {
+            candidates = allBases.filter((b: any) => {
+                if (!b.name.toUpperCase().includes(upperName)) return false;
+                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                return true;
+            });
+            if (candidates.length > 0) {
+                const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+                const ufPart = uf ? ` ${uf}` : '';
+                warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Exibindo versão mais recente disponível.`);
+            }
+        }
+
         if (candidates.length > 0) {
             candidates.sort((a: any, b: any) => {
+                // Prefer matching regime
+                const aRegime = typeof a.payrollExemption === 'boolean' && a.payrollExemption === targetPayrollExemption ? 1 : 0;
+                const bRegime = typeof b.payrollExemption === 'boolean' && b.payrollExemption === targetPayrollExemption ? 1 : 0;
+                if (bRegime !== aRegime) return bRegime - aRegime;
+                // Then prefer bases with actual data
                 const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
                 const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
                 if (bHasData !== aHasData) return bHasData - aHasData;
@@ -150,6 +189,7 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
 
     return { filtered: result, warnings };
 }
+
 
 const getLineCoefficient = (ci: any) => asNumber(ci?.coefficient);
 

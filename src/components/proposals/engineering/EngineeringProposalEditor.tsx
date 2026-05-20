@@ -152,13 +152,11 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
 
     const allowed: string[] = config?.basesConsideradas || [];
     const uf: string = (config?.ufReferencia || '').toUpperCase();
-    const globalDate: string = config?.dataBase || ''; // "2025-09"
-    const perBaseDates: Record<string, string> = config?.dataBases || {}; // { SINAPI: "2025-09", ORSE: "2025-09" }
+    const perBaseDates: Record<string, string> = config?.dataBases || {};
 
     // Regime de encargos: ONERADO → payrollExemption=false, DESONERADO → payrollExemption=true
-    // Default matches DEFAULT_ENGINEERING_CONFIG.regimeOneracao = 'ONERADO'
     const regime: string = (config?.regimeOneracao || 'ONERADO').toUpperCase();
-    const targetPayrollExemption = regime === 'DESONERADO'; // true=desonerado, false=onerado
+    const targetPayrollExemption = regime === 'DESONERADO';
 
     // If no bases configured, show nothing (strict mode)
     if (allowed.length === 0) {
@@ -184,12 +182,11 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             continue;
         }
 
-        // Get the target date for this base
-        // FIX: Only apply strict date filtering when the base has an EXPLICIT entry in perBaseDates.
-        // The global `dataBase` was meant for SINAPI but was incorrectly applied to ALL bases (SEINFRA, ORSE, etc.)
-        // causing them to be filtered out when they don't share the same monthly cadence.
-        const hasExplicitDate = !!perBaseDates[baseName];
-        const targetDate = perBaseDates[baseName] || ''; // Only use per-base date, NOT global fallback
+        // Version-based bases (SEINFRA, SICRO, SBC) use version identifiers, not monthly dates.
+        // NEVER apply date filtering to these bases, even if dataBases has stale AI-extracted entries.
+        const isVersionBased = VERSION_BASED_BASES.some(vb => upperName.includes(vb));
+        const hasExplicitDate = !isVersionBased && !!perBaseDates[baseName];
+        const targetDate = hasExplicitDate ? (perBaseDates[baseName] || '') : '';
         let targetMonth = 0;
         let targetYear = 0;
         if (targetDate) {
@@ -197,29 +194,61 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
-        // Find matching bases: name + UF + date (if explicit) + REGIME (multi-factor compliance)
-        const candidates = allBases.filter(b => {
-            // Must match base name
+        // Step 1: Try strict match (name + UF + date + regime)
+        let candidates = allBases.filter(b => {
             if (!b.name.toUpperCase().includes(upperName)) return false;
-            // Must match UF if configured
             if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
-            // Must match date ONLY if this base has an explicit date configured
             if (hasExplicitDate && targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
             }
-            // Must match regime de encargos (payrollExemption)
-            // Only filter if the base has the field defined (PROPRIA bases may not have it)
             if (typeof b.payrollExemption === 'boolean') {
                 if (b.payrollExemption !== targetPayrollExemption) return false;
             }
             return true;
         });
 
+        // Step 2: If strict match found no results, relax regime filter.
+        // Many regional bases (ORSE, CAERN, SBC) only have one import (onerado OR desonerado),
+        // not both versions. Showing the available version is better than showing nothing.
+        if (candidates.length === 0) {
+            candidates = allBases.filter(b => {
+                if (!b.name.toUpperCase().includes(upperName)) return false;
+                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasExplicitDate && targetYear && targetMonth) {
+                    if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
+                }
+                // Skip regime filter in this relaxed pass
+                return true;
+            });
+        }
+
+        // Step 3: If still no results AND we were filtering by explicit date, try without date too.
+        // This catches cases where the configured date hasn't been imported yet.
+        if (candidates.length === 0 && hasExplicitDate) {
+            candidates = allBases.filter(b => {
+                if (!b.name.toUpperCase().includes(upperName)) return false;
+                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                return true;
+            });
+            if (candidates.length > 0) {
+                const datePart = targetYear && targetMonth ? ` ${String(targetMonth).padStart(2, '0')}/${targetYear}` : '';
+                const ufPart = uf ? ` ${uf}` : '';
+                warnings.push(`Base "${baseName}${ufPart}${datePart}" não encontrada. Exibindo versão mais recente disponível.`);
+            }
+        }
+
         if (candidates.length > 0) {
-            // If multiple candidates (no date filter applied), pick most recent
-            candidates.sort((a: any, b: any) =>
-                (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0)
-            );
+            candidates.sort((a: any, b: any) => {
+                // Prefer matching regime
+                const aRegime = typeof a.payrollExemption === 'boolean' && a.payrollExemption === targetPayrollExemption ? 1 : 0;
+                const bRegime = typeof b.payrollExemption === 'boolean' && b.payrollExemption === targetPayrollExemption ? 1 : 0;
+                if (bRegime !== aRegime) return bRegime - aRegime;
+                // Then prefer bases with data
+                const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
+                const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
+                if (bHasData !== aHasData) return bHasData - aHasData;
+                return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
+            });
             // If no explicit date, only include the most recent version to avoid duplicates
             if (!hasExplicitDate && candidates.length > 1) {
                 result.push(candidates[0]);
@@ -234,16 +263,9 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
         }
     }
 
-    // Sort: bases with data first, then by recency
-    result.sort((a: any, b: any) => {
-        const aHasData = ((a.itemCount || 0) + (a.compositionCount || 0)) > 0 ? 1 : 0;
-        const bHasData = ((b.itemCount || 0) + (b.compositionCount || 0)) > 0 ? 1 : 0;
-        if (bHasData !== aHasData) return bHasData - aHasData;
-        return (b.referenceYear || 0) - (a.referenceYear || 0) || (b.referenceMonth || 0) - (a.referenceMonth || 0);
-    });
-
     return { filtered: result, warnings };
 }
+
 
 /**
  * Auto-select the best matching base from the filtered list.
