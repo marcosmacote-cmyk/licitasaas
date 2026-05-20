@@ -1555,10 +1555,15 @@ router.post('/ai-populate', async (req: any, res: any) => {
         let extractionText = textChunk;
 
         if (biddingId) {
-            const bidding = await prisma.biddingProcess.findUnique({
-                where: { id: biddingId },
+            const bidding = await prisma.biddingProcess.findFirst({
+                where: { id: biddingId, tenantId: req.user?.tenantId },
                 include: { aiAnalysis: true }
             });
+
+            if (!bidding) {
+                console.warn(`[Engineering AI-Populate] ⚠️ BiddingProcess ${biddingId} not found or tenant mismatch`);
+                return res.status(404).json({ error: 'Processo licitatório não encontrado' });
+            }
 
             // ═══════════════════════════════════════════════════
             // PASSO 1: Tentar usar dados de engenharia pré-extraídos (Etapa 1.5)
@@ -1637,11 +1642,17 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 // FIX DOC-03: Limpar cache de empty_extraction/quarantine para permitir nova tentativa
                 // O schemaV2 está na tabela AiAnalysis (não BiddingProcess!)
                 try {
-                    const aiAnalysis = await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } });
+                    const aiAnalysis = await prisma.aiAnalysis.findFirst({
+                        where: {
+                            biddingProcessId: biddingId,
+                            biddingProcess: { tenantId: req.user?.tenantId }
+                        }
+                    });
                     if (aiAnalysis?.schemaV2) {
                         const schema = aiAnalysis.schemaV2 as any;
                         delete schema._engineeringExtractionMeta;
                         delete schema._engineeringBudgetItems;
+                        delete schema._engineeringBudgetItemsQuarantine; // Limpa também a quarentena!
                         delete schema._engineeringValidation;
                         // FIX CACHE-01: Also clear V2 itens_licitados to prevent stale fallback
                         if (schema.proposal_analysis?.itens_licitados) {
@@ -1649,7 +1660,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                             console.log(`[Engineering AI-Populate] 🧹 Também limpou itens_licitados V2 do cache`);
                         }
                         await prisma.aiAnalysis.update({
-                            where: { biddingProcessId: biddingId },
+                            where: { id: aiAnalysis.id },
                             data: { schemaV2: schema }
                         });
                         console.log(`[Engineering AI-Populate] 🧹 Cache de extração limpo para ${biddingId}`);
@@ -1724,7 +1735,12 @@ router.post('/ai-populate', async (req: any, res: any) => {
             // that may have been written by a concurrent/previous job.
             // ═══════════════════════════════════════════════════
             const freshAiAnalysis = !forceRefresh
-                ? await prisma.aiAnalysis.findUnique({ where: { biddingProcessId: biddingId } })
+                ? await prisma.aiAnalysis.findFirst({
+                    where: {
+                        biddingProcessId: biddingId,
+                        biddingProcess: { tenantId: req.user?.tenantId }
+                    }
+                })
                 : null;
             const freshSchema = freshAiAnalysis?.schemaV2 as any;
             const freshBudgetItems = freshSchema?._engineeringBudgetItems;
@@ -1938,6 +1954,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                     biddingId,
                     proposalId,
                     pdfUrls,
+                    forceRefresh: Boolean(forceRefresh),
                     documentSelection: {
                         total: classifiedDocs.summary.total,
                         selected: selectedDocs.length,

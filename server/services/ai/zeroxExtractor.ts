@@ -150,6 +150,8 @@ export interface ZeroxConfig {
     temperature?: number;
     /** Timeout in ms (default: 30000, use 180000 for scanned PDFs) */
     timeoutMs?: number;
+    /** Force refresh, bypassing cache (default: false) */
+    forceRefresh?: boolean;
 }
 
 /**
@@ -187,7 +189,14 @@ export async function extractMarkdownFromPdf(
     config?: ZeroxConfig
 ): Promise<ZeroxExtractionResult | null> {
     // 1. Check cache first
-    const cached = getCachedMarkdown(pdfBuffer);
+    if (config?.forceRefresh) {
+        const key = getCacheKey(pdfBuffer);
+        if (markdownCache.has(key)) {
+            logger.info(`[ZeroxExtractor] 🧹 forceRefresh=true: Invalidando cache Zerox para ${key} ("${fileName}")`);
+            markdownCache.delete(key);
+        }
+    }
+    const cached = config?.forceRefresh ? null : getCachedMarkdown(pdfBuffer);
     if (cached) {
         return {
             markdown: cached.markdown,

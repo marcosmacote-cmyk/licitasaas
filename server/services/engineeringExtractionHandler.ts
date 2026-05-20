@@ -78,7 +78,7 @@ function collectSourceRowIdsFromItems(items: any[]): Set<string> {
  * Main handler — registered as 'engineering_extraction' in the job worker.
  */
 export async function engineeringExtractionHandler(job: any): Promise<any> {
-    const { biddingId, pdfUrls, documentSelection, proposalId } = job.input;
+    const { biddingId, pdfUrls, documentSelection, proposalId, forceRefresh } = job.input;
     const tenantId = job.tenantId;
 
     logger.info(`[Engineering-BG] 🏗️ Starting extraction for bidding ${biddingId} (${pdfUrls?.length || 0} PDF URLs)`);
@@ -396,8 +396,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     if (rawPdfBuffers.length === 0) {
         logger.info(`[Engineering-BG] 📄 No PDFs from URLs, trying PNCP attachments from DB...`);
         try {
-            const bidding = await prisma.biddingProcess.findUnique({
-                where: { id: biddingId },
+            const bidding = await prisma.biddingProcess.findFirst({
+                where: { id: biddingId, tenantId },
                 include: { aiAnalysis: true }
             });
             const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
@@ -697,6 +697,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         // Real-world 10MB scanned PDFs with 18-20 pages consistently exceed 180s
                         // due to per-page vision OCR overhead (Gemini Vision ~8-15s/page × 20 pages).
                         timeoutMs: hasScannedPdfs ? 300_000 : 30_000, // 5min for scanned, 30s for text
+                        forceRefresh: Boolean(forceRefresh),
                     }
                 );
 
@@ -1860,7 +1861,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
         // Persistir diagnóstico no schemaV2 para o frontend ler
         try {
-            await mergeEngineeringResults(biddingId, [], undefined, {
+            await mergeEngineeringResults(biddingId, tenantId, [], undefined, {
                 ...diagnostics,
                 status: 'empty_extraction',
                 extractedAt: new Date().toISOString(),
@@ -1918,8 +1919,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // Fetch the estimated value from the bidding for reconciliation
     let estimatedValue: number | null = null;
     try {
-        const biddingForValue = await prisma.biddingProcess.findUnique({
-            where: { id: biddingId },
+        const biddingForValue = await prisma.biddingProcess.findFirst({
+            where: { id: biddingId, tenantId },
             select: { estimatedValue: true },
         });
         estimatedValue = biddingForValue?.estimatedValue || null;
@@ -1948,7 +1949,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     });
 
     // ── Step 4: Merge into schemaV2 (include validation report) ──
-    await mergeEngineeringResults(biddingId, engItems, validationReport, {
+    await mergeEngineeringResults(biddingId, tenantId, engItems, validationReport, {
         pageTargetingUsed: targetingUsed,
         zeroxFallbackUsed,
         zeroxFallback: zeroxFallbackMeta,
@@ -2004,8 +2005,8 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
     // ── Step 5: Auto-benchmark (if this bidding matches a known case) ──
     let benchmarkResult: any = null;
     try {
-        const biddingMeta = await prisma.biddingProcess.findUnique({
-            where: { id: biddingId },
+        const biddingMeta = await prisma.biddingProcess.findFirst({
+            where: { id: biddingId, tenantId },
             include: { aiAnalysis: true },
         });
         const schemaV2 = biddingMeta?.aiAnalysis?.schemaV2 as any;
@@ -2075,12 +2076,13 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
  */
 async function mergeEngineeringResults(
     biddingId: string,
+    tenantId: string,
     engItems: any[],
     validationReport?: EngineeringValidationReport,
     extractionMeta?: Record<string, any>
 ): Promise<void> {
-    const bidding = await prisma.biddingProcess.findUnique({
-        where: { id: biddingId },
+    const bidding = await prisma.biddingProcess.findFirst({
+        where: { id: biddingId, tenantId },
         include: { aiAnalysis: true }
     });
 
