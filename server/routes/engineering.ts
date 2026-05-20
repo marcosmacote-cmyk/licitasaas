@@ -3499,6 +3499,7 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 
 import { extractCompositionFromImage } from '../services/ai/engineering/compositionExtractor';
+import { extractItemsFromImage } from '../services/ai/engineering/budgetItemsImageExtractor';
 const aiUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any, res: any) => {
@@ -3513,6 +3514,22 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
         res.json(result);
     } catch (e: any) {
         console.error('[AI Extract Composition] Error:', e);
+        res.status(500).json({ error: 'Falha na extração por IA', details: e.message });
+    }
+});
+
+router.post('/ai/extract-items-image', aiUpload.single('file'), async (req: any, res: any) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        }
+
+        const engineeringConfig = req.body.engineeringConfig ? JSON.parse(req.body.engineeringConfig) : undefined;
+        const result = await extractItemsFromImage(req.file.buffer, req.file.mimetype, engineeringConfig, req.user?.tenantId);
+        
+        res.json(result);
+    } catch (e: any) {
+        console.error('[AI Extract Items Image] Error:', e);
         res.status(500).json({ error: 'Falha na extração por IA', details: e.message });
     }
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings, Image } from 'lucide-react';
 import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -17,6 +17,7 @@ import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
 import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
 import * as XLSX from 'xlsx';
+import { ImageBudgetImportModal } from './ImageBudgetImportModal';
 
 // ── Renumeração hierárquica automática ──
 function renumberItems(items: EngItem[]): EngItem[] {
@@ -415,6 +416,81 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
     const [compositionEditorIndex, setCompositionEditorIndex] = useState<number | null>(null);
     const [activeCalcItem, setActiveCalcItem] = useState<EngItem | null>(null);
+
+    // Continuous AI Image Budget Import states
+    const [showImageImportModal, setShowImageImportModal] = useState(false);
+    const [globalDragOver, setGlobalDragOver] = useState(false);
+    const [initialImportFile, setInitialImportFile] = useState<File | null>(null);
+
+    // Global paste listener to auto-open Image extraction modal
+    useEffect(() => {
+        const handleGlobalPaste = (e: ClipboardEvent) => {
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                return;
+            }
+
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        setInitialImportFile(file);
+                        setShowImageImportModal(true);
+                        break;
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('paste', handleGlobalPaste);
+        return () => {
+            window.removeEventListener('paste', handleGlobalPaste);
+        };
+    }, []);
+
+    // Global drag-and-drop listener to auto-open Image extraction modal
+    useEffect(() => {
+        const handleDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            if (e.dataTransfer?.types.includes('Files')) {
+                setGlobalDragOver(true);
+            }
+        };
+
+        const handleDragLeave = (e: DragEvent) => {
+            e.preventDefault();
+            if (e.clientX === 0 && e.clientY === 0) {
+                setGlobalDragOver(false);
+            }
+        };
+
+        const handleDrop = (e: DragEvent) => {
+            e.preventDefault();
+            setGlobalDragOver(false);
+            const files = e.dataTransfer?.files;
+            if (files && files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    setInitialImportFile(file);
+                    setShowImageImportModal(true);
+                }
+            }
+        };
+
+        window.addEventListener('dragover', handleDragOver);
+        window.addEventListener('dragleave', handleDragLeave);
+        window.addEventListener('drop', handleDrop);
+
+        return () => {
+            window.removeEventListener('dragover', handleDragOver);
+            window.removeEventListener('dragleave', handleDragLeave);
+            window.removeEventListener('drop', handleDrop);
+        };
+    }, []);
 
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
@@ -1613,6 +1689,42 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         reader.readAsArrayBuffer(file);
     };
 
+    const handleImportFromImage = (extracted: any[]) => {
+        const imported: EngItem[] = extracted.map((it, idx) => {
+            const isGroup = isGrouper(it.type || it.t);
+            const qty = Number(it.quantity || it.q) || 0;
+            const uc = Number(it.unitCost || it.uc) || 0;
+            const up = Number(it.unitPrice || it.up || it.unitCost || it.uc || 0);
+            const tp = Number(it.totalPrice || it.tp || 0);
+
+            return {
+                id: `img-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+                itemNumber: it.itemNumber || it.i || '',
+                code: isGroup ? '' : (it.code || it.c || 'N/A'),
+                sourceName: isGroup ? '' : (it.sourceName || it.s || 'PROPRIA'),
+                description: it.description || it.d || '',
+                unit: isGroup ? '' : (it.unit || it.u || 'UN'),
+                quantity: isGroup ? 0 : qty,
+                unitCost: isGroup ? 0 : uc,
+                unitPrice: isGroup ? 0 : (up > 0 ? up : applyBdi(uc, effectiveBdi, engineeringConfig.precision)),
+                totalPrice: isGroup ? 0 : (tp > 0 ? tp : applyPrecision(qty * up, engineeringConfig)),
+                priceOrigin: isGroup ? undefined : (it.priceAudit ? 'BASE' : 'MANUAL'),
+                officialUnitCost: isGroup ? undefined : (it.officialUnitCost || it.priceAudit?.matchedUnitCost || uc || undefined),
+                officialUnitPrice: isGroup ? undefined : (it.officialUnitPrice || up || undefined),
+                officialTotalPrice: isGroup ? undefined : (it.officialTotalPrice || tp || undefined),
+                priceAudit: it.priceAudit,
+                type: it.type || it.t || 'COMPOSICAO'
+            };
+        });
+
+        setItems(prev => renumberItems([...prev, ...imported]));
+        setHasUnsavedChanges(true);
+
+        const etapas = imported.filter(i => i.type === 'ETAPA').length;
+        const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {imported.length} itens adicionados do Print ({etapas} etapas, {comps} composições)</span>);
+    };
+
     // Excel Export — native .xlsx via SheetJS
     const handleExportExcel = () => {
         const wb = XLSX.utils.book_new();
@@ -1739,6 +1851,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
                                     <div><div>Extrair Itens do Edital</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Popula a planilha com itens do edital</div></div>
+                                </button>
+                                <button onClick={() => { setShowImageImportModal(true); setShowAIMenu(false); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    <Image size={14} color="var(--color-primary)" />
+                                    <div><div>Importar de Print / Imagem</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Extrai itens arrastando ou colando imagem (IA)</div></div>
                                 </button>
                             </div>
                         </>)}
@@ -2981,6 +3100,38 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         setActiveCalcItem(null);
                     }}
                 />
+            )}
+            {showImageImportModal && (
+                <ImageBudgetImportModal
+                    onClose={() => {
+                        setShowImageImportModal(false);
+                        setInitialImportFile(null);
+                    }}
+                    onImport={handleImportFromImage}
+                    engineeringConfig={dashConfig}
+                    initialFile={initialImportFile}
+                    onClearInitialFile={() => setInitialImportFile(null)}
+                />
+            )}
+            {globalDragOver && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 9999,
+                    background: 'rgba(37,99,235,0.15)',
+                    backdropFilter: 'blur(4px)',
+                    border: '4px dashed var(--color-primary)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    pointerEvents: 'none'
+                }}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', padding: '24px 40px', borderRadius: 16,
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12
+                    }}>
+                        <Upload size={48} color="var(--color-primary)" />
+                        <h3 style={{ margin: 0, fontWeight: 700, color: 'var(--color-text-primary)' }}>Solte a imagem aqui</h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>A IA vai extrair todos os itens do print.</p>
+                    </div>
+                </div>
             )}
         </div>
     );
