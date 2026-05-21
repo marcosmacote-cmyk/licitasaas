@@ -1050,7 +1050,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             transition: 'all 0.1s',
                         }}>
                         <div style={{ fontSize: '0.65rem', fontWeight: 700, color: isGrp ? '#d97706' : (idx === currentIndex ? 'var(--color-primary)' : 'var(--color-text-tertiary)') }}>
-                            {isGrp ? <>{item.type === 'ETAPA' ? <FolderOpen size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{item.itemNumber}</> : `${item.itemNumber} · ${item.code || 'N/A'}`}
+                            {isGrp ? <>{item.type === 'ETAPA' ? <FolderOpen size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={12} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{item.itemNumber}</> : `${item.itemNumber} · ${item.code || 'N/A'} · ${item.sourceName || ''}`}
                         </div>
                         <div style={{
                             fontSize: '0.72rem', lineHeight: 1.3, marginTop: 2,
@@ -1535,9 +1535,19 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 </button>
                                                                             )}
                                                                         </div>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
                                                                             {itemData?.code && (
                                                                                 <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
+                                                                            )}
+                                                                            {data?.database?.name && (
+                                                                                <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: `${meta.color}10`, color: meta.color, border: `1px solid ${meta.color}25` }}>
+                                                                                    {data.database.name}
+                                                                                </span>
+                                                                            )}
+                                                                            {!data?.database?.name && currentItem?.sourceName && (
+                                                                                <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: 'rgba(100,116,139,0.08)', color: 'var(--color-text-tertiary)', border: '1px solid rgba(100,116,139,0.15)' }}>
+                                                                                    {currentItem.sourceName}
+                                                                                </span>
                                                                             )}
                                                                             {itemData?.isNew && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Novo Insumo Próprio</span>
