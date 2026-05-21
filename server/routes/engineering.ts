@@ -802,10 +802,27 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
-            // Update total price and description
+            // Update total price, description, and code (code may differ between AI and budget)
+            const newCode = composition.code || existing.code;
+            
+            // If code is changing, check for unique constraint collision
+            if (newCode !== existing.code) {
+                const conflicting = await tx.engineeringComposition.findFirst({
+                    where: { databaseId: existing.databaseId, code: newCode, id: { not: id } },
+                    include: { items: { select: { id: true } } }
+                });
+                if (conflicting) {
+                    // Merge: delete the conflicting empty shell (usually created by budget extraction)
+                    await tx.engineeringCompositionItem.deleteMany({ where: { compositionId: conflicting.id } });
+                    await tx.engineeringComposition.delete({ where: { id: conflicting.id } });
+                    logger.info(`[CompositionSave] 🔄 Merged: deleted conflicting shell code=${newCode} id=${conflicting.id} (had ${conflicting.items.length} items)`);
+                }
+            }
+            
             await tx.engineeringComposition.update({
                 where: { id },
                 data: {
+                    code: newCode,
                     totalPrice: composition.totalPrice,
                     description: composition.description,
                     unit: composition.unit,
