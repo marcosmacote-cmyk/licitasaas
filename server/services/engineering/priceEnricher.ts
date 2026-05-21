@@ -14,7 +14,7 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { normalizeCode, buildCodeVariants } from './codeNormalizer';
+import { normalizeCode, buildCodeVariants, buildFuzzyCodeNeighbors } from './codeNormalizer';
 
 // ── Types ──
 export type EngineeringPriceAuditStatus = 'OK' | 'DIVERGENT' | 'SEM_MATCH' | 'BASE_INCOMPATIVEL' | 'BASE_INDISPONIVEL';
@@ -79,6 +79,29 @@ function normalizeSourceName(sourceName: string): string {
     const source = String(sourceName || '').trim().toUpperCase();
     if (source === 'SICOR-MG' || source === 'SICOR MG' || source === 'DER-MG' || source === 'DER MG') return 'SICOR';
     return source;
+}
+
+/**
+ * Dice coefficient bigram similarity for description comparison.
+ * Used for fuzzy code neighbor validation.
+ */
+function getDescriptionSimilarity(str1: string, str2: string): number {
+    const s1 = String(str1 || '').trim().toLowerCase();
+    const s2 = String(str2 || '').trim().toLowerCase();
+    if (s1 === s2) return 1.0;
+    if (s1.length < 2 || s2.length < 2) return 0.0;
+    const bigrams1: string[] = [];
+    for (let i = 0; i < s1.length - 1; i++) bigrams1.push(s1.substring(i, i + 2));
+    const bigrams2: string[] = [];
+    for (let i = 0; i < s2.length - 1; i++) bigrams2.push(s2.substring(i, i + 2));
+    const map2 = new Map<string, number>();
+    for (const b of bigrams2) map2.set(b, (map2.get(b) || 0) + 1);
+    let intersection = 0;
+    for (const b of bigrams1) {
+        const count = map2.get(b) || 0;
+        if (count > 0) { intersection++; map2.set(b, count - 1); }
+    }
+    return (2.0 * intersection) / (bigrams1.length + bigrams2.length);
 }
 
 function normalizeUf(value?: string | null): string {
@@ -319,7 +342,7 @@ async function semanticFallbackMatch(
             FROM "EngineeringComposition" c
             INNER JOIN "EngineeringDatabase" d ON d.id = c."databaseId"
             WHERE c.description % ${item.description}
-              AND similarity(c.description, ${item.description}) > 0.78
+              AND similarity(c.description, ${item.description}) > 0.55
               ${accessFilter}
               ${sourceFilter}
             ORDER BY sim DESC LIMIT 5
@@ -330,7 +353,7 @@ async function semanticFallbackMatch(
             FROM "EngineeringItem" i
             INNER JOIN "EngineeringDatabase" d ON d.id = i."databaseId"
             WHERE i.description % ${item.description}
-              AND similarity(i.description, ${item.description}) > 0.78
+              AND similarity(i.description, ${item.description}) > 0.55
               ${accessFilter}
               ${sourceFilter}
             ORDER BY sim DESC LIMIT 5
@@ -375,7 +398,7 @@ async function semanticFallbackMatch(
             best.warnings.push(`Match sugerido por similaridade de descrição (${confidence}%) — exige revisão manual`);
             best.matchMethod = 'description_similarity';
             best.confidence = confidence;
-            return confidence >= 78 ? best : null;
+            return confidence >= 60 ? best : null;
         }
     } catch (e: any) {
         // If the error is about pg_trgm, cache it so we don't retry
@@ -464,7 +487,32 @@ export async function enrichWithOfficialPrices(
                 if (c) candidates.push(...c);
             }
         }
-        const best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
+        let best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
+
+        // Strategy 1.5: Fuzzy Code Neighbors + Description Confirmation
+        // When AI/OCR gets a digit wrong (e.g., 100862 vs 100861), try neighboring codes
+        if (!best && item.code && item.description) {
+            const fuzzyNeighbors = buildFuzzyCodeNeighbors(item.code, item.sourceName || item.source);
+            const fuzzyPool: any[] = [];
+            for (const neighbor of fuzzyNeighbors) {
+                const c = byCode.get(neighbor.toLowerCase());
+                if (c) fuzzyPool.push(...c);
+            }
+            if (fuzzyPool.length > 0) {
+                let bestFuzzy: { candidate: any; sim: number } | null = null;
+                for (const candidate of fuzzyPool) {
+                    const sim = getDescriptionSimilarity(item.description, candidate.description);
+                    if (sim >= 0.60 && (!bestFuzzy || sim > bestFuzzy.sim)) {
+                        bestFuzzy = { candidate, sim };
+                    }
+                }
+                if (bestFuzzy) {
+                    const scored = buildCandidateScore(bestFuzzy.candidate, item.sourceName || item.source || '', engineeringConfig, targetDate);
+                    best = { candidate: bestFuzzy.candidate, score: scored.score, warnings: scored.warnings };
+                    console.log(`[PriceEnricher] ✅ FUZZY CODE "${item.code}" → corrected to "${bestFuzzy.candidate.code}" sim=${bestFuzzy.sim.toFixed(2)}`);
+                }
+            }
+        }
 
         if (!best) {
             unmatchedItems.push(item);

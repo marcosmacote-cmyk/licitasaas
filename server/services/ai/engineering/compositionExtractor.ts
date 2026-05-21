@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { fallbackToOpenAiV2 } from '../openai.service';
-import { buildCodeVariants, normalizeCode } from '../../engineering/codeNormalizer';
+import { buildCodeVariants, normalizeCode, buildFuzzyCodeNeighbors } from '../../engineering/codeNormalizer';
 import {
     buildCandidateScore,
     chooseBestCandidate,
@@ -253,13 +253,15 @@ export async function extractCompositionFromImage(
     
     for (const item of validItems) {
         if (item.code) {
-            const base = buildCodeVariants(item.code);
-            allCodeVariants.push(...base);
-            // Also add source-specific variants
-            const sources = [item.source, ...configuredBases].filter(Boolean);
-            for (const src of sources) {
+            const itemSource = String(item.source || '').toUpperCase().trim();
+            // Always pass source for proper SEINFRA I/C cross-variants
+            allCodeVariants.push(...buildCodeVariants(item.code, itemSource));
+            // Also add source-specific variants for all configured bases
+            for (const src of configuredBases) {
                 allCodeVariants.push(...buildCodeVariants(item.code, src));
             }
+            // Add fuzzy neighbors for Strategy 1.5
+            allCodeVariants.push(...buildFuzzyCodeNeighbors(item.code, itemSource));
         }
     }
     const uniqueCodes = [...new Set(allCodeVariants)];
@@ -286,14 +288,14 @@ export async function extractCompositionFromImage(
     const byCode = new Map<string, any[]>();
     for (const dbItem of dbItems) {
         const candidate = { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 };
-        for (const keyVariant of buildCodeVariants(dbItem.code)) {
+        for (const keyVariant of buildCodeVariants(dbItem.code, dbItem.database?.name)) {
             const key = keyVariant.toLowerCase();
             byCode.set(key, [...(byCode.get(key) || []), candidate]);
         }
     }
     for (const dbComp of dbComps) {
         const candidate = { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 };
-        for (const keyVariant of buildCodeVariants(dbComp.code)) {
+        for (const keyVariant of buildCodeVariants(dbComp.code, dbComp.database?.name)) {
             const key = keyVariant.toLowerCase();
             byCode.set(key, [...(byCode.get(key) || []), candidate]);
         }
@@ -320,9 +322,9 @@ export async function extractCompositionFromImage(
             const codeLower = normalizeOfficialCode(item.code, item.source).toLowerCase();
             const candidates = byCode.get(codeLower) || [];
             
-            // Also try raw code variants
+            // Also try raw code variants with source
             if (candidates.length === 0) {
-                const variants = buildCodeVariants(item.code);
+                const variants = buildCodeVariants(item.code, extractedSource);
                 for (const v of variants) {
                     const c = byCode.get(v.toLowerCase());
                     if (c) candidates.push(...c);
@@ -350,6 +352,33 @@ export async function extractCompositionFromImage(
                     } else {
                         logger.warn(`[AI Match] ❌ CODE Match Discarded for "${item.code}" due to low description similarity (${similarity.toFixed(2)} < 0.25). Extracted: "${item.description}", DB: "${best.candidate.description}"`);
                     }
+                }
+            }
+        }
+
+        // Strategy 1.5: Fuzzy Code Neighbors + Description Confirmation
+        // When AI/OCR gets a digit wrong (e.g., 100862 vs 100861), try neighboring codes
+        if (!bestCandidate && item.code && item.description) {
+            const fuzzyNeighbors = buildFuzzyCodeNeighbors(item.code, extractedSource);
+            const fuzzyPool: any[] = [];
+            for (const neighbor of fuzzyNeighbors) {
+                const c = byCode.get(neighbor.toLowerCase());
+                if (c) fuzzyPool.push(...c);
+            }
+            if (fuzzyPool.length > 0) {
+                // Score all fuzzy candidates and pick the one with best description match
+                let bestFuzzy: { candidate: any; sim: number } | null = null;
+                for (const candidate of fuzzyPool) {
+                    const sim = getStringSimilarity(item.description, candidate.description);
+                    if (sim >= 0.60 && (!bestFuzzy || sim > bestFuzzy.sim)) {
+                        bestFuzzy = { candidate, sim };
+                    }
+                }
+                if (bestFuzzy) {
+                    bestCandidate = bestFuzzy.candidate;
+                    matchedDb = bestCandidate.database;
+                    foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
+                    logger.info(`[AI Match] ✅ FUZZY CODE "${item.code}" → corrected to "${bestCandidate.code}" in ${matchedDb?.name} (${foundInTable}) sim=${bestFuzzy.sim.toFixed(2)}`);
                 }
             }
         }
@@ -413,7 +442,7 @@ export async function extractCompositionFromImage(
                         });
                     }
 
-                    if (fullRecord && simScore >= 0.5) {
+                    if (fullRecord && simScore >= 0.55) {
                         bestCandidate = {
                             ...fullRecord,
                             matchType: topMatch.matchType,
@@ -421,9 +450,11 @@ export async function extractCompositionFromImage(
                         };
                         matchedDb = fullRecord.database;
                         foundInTable = topMatch.matchType === 'COMPOSICAO' ? 'composition' : 'item';
-                        logger.info(`[AI Match] ✅ DESC "${item.description.substring(0, 40)}" → ${matchedDb?.name} code=${fullRecord.code} sim=${(simScore * 100).toFixed(0)}%`);
+                        // Log with code correction info
+                        const codeInfo = item.code ? ` (AI code "${item.code}" → DB code "${fullRecord.code}")` : '';
+                        logger.info(`[AI Match] ✅ DESC "${item.description.substring(0, 40)}" → ${matchedDb?.name} code=${fullRecord.code} sim=${(simScore * 100).toFixed(0)}%${codeInfo}`);
                     } else if (allSim.length > 0) {
-                        logger.info(`[AI Match] ⚠️ DESC "${item.description.substring(0, 40)}" → best sim=${(simScore * 100).toFixed(0)}% (below threshold)`);
+                        logger.info(`[AI Match] ⚠️ DESC "${item.description.substring(0, 40)}" → best sim=${(simScore * 100).toFixed(0)}% (below 55% threshold)`);
                     }
                 }
             } catch (e: any) {

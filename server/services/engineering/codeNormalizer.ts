@@ -159,3 +159,48 @@ export function validateCodeFormat(code: string, source: string): string | null 
             return null; // Unknown bases: no format validation
     }
 }
+
+/**
+ * Generate "neighbor" codes for fuzzy matching when AI/OCR gets a digit wrong.
+ * For a code like "100862", generates: 100861, 100863, 100860, 100864.
+ * For "I7396" → I7395, I7397, I7394, I7398.
+ * For "C2667" → C2666, C2668, C2665, C2669.
+ * 
+ * Used by Strategy 1.5: fuzzy code + description confirmation.
+ */
+export function buildFuzzyCodeNeighbors(code: string, source?: string): string[] {
+    const clean = String(code || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (!clean || clean === 'N/A') return [];
+
+    const neighbors: Set<string> = new Set();
+    
+    // Extract prefix and numeric part
+    const match = clean.match(/^([A-Z]?)(\d{3,7})(.*)$/i);
+    if (!match) return [];
+    
+    const prefix = match[1] || '';
+    const digits = match[2];
+    const suffix = match[3] || '';
+    const num = parseInt(digits, 10);
+    
+    if (isNaN(num)) return [];
+    
+    // Generate ±1 and ±2 neighbors
+    for (const offset of [-2, -1, 1, 2]) {
+        const neighbor = num + offset;
+        if (neighbor < 0) continue;
+        const padded = String(neighbor).padStart(digits.length, '0');
+        const full = `${prefix}${padded}${suffix}`;
+        neighbors.add(full);
+        
+        // Also add variants for this neighbor using buildCodeVariants
+        for (const variant of buildCodeVariants(full, source)) {
+            neighbors.add(variant);
+        }
+    }
+    
+    // Remove the original code itself and its direct variants
+    neighbors.delete(clean);
+    
+    return Array.from(neighbors).filter(Boolean);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCode, buildCodeVariants, validateCodeFormat } from './codeNormalizer';
+import { normalizeCode, buildCodeVariants, validateCodeFormat, buildFuzzyCodeNeighbors } from './codeNormalizer';
 
 describe('normalizeCode', () => {
     it('strips leading zeros from SINAPI codes', () => {
@@ -115,5 +115,49 @@ describe('validateCodeFormat', () => {
 
     it('returns null for unknown bases', () => {
         expect(validateCodeFormat('XYZ-123', 'CUSTOM_BASE')).toBeNull();
+    });
+});
+
+describe('buildFuzzyCodeNeighbors', () => {
+    it('generates ±1 and ±2 neighbors for SINAPI numeric codes', () => {
+        const neighbors = buildFuzzyCodeNeighbors('100862', 'SINAPI');
+        expect(neighbors).toContain('100861');
+        expect(neighbors).toContain('100863');
+        expect(neighbors).toContain('100860');
+        expect(neighbors).toContain('100864');
+        // Should NOT contain the original
+        expect(neighbors).not.toContain('100862');
+    });
+
+    it('generates neighbors for SEINFRA I-prefix codes', () => {
+        const neighbors = buildFuzzyCodeNeighbors('I7396', 'SEINFRA');
+        expect(neighbors).toContain('I7395');
+        expect(neighbors).toContain('I7397');
+        expect(neighbors).toContain('I7394');
+        expect(neighbors).toContain('I7398');
+    });
+
+    it('generates neighbors for SEINFRA C-prefix codes', () => {
+        const neighbors = buildFuzzyCodeNeighbors('C2667', 'SEINFRA');
+        expect(neighbors).toContain('C2666');
+        expect(neighbors).toContain('C2668');
+        expect(neighbors).toContain('C2665');
+        expect(neighbors).toContain('C2669');
+    });
+
+    it('returns empty array for empty/N/A codes', () => {
+        expect(buildFuzzyCodeNeighbors('')).toEqual([]);
+        expect(buildFuzzyCodeNeighbors('N/A')).toEqual([]);
+    });
+
+    it('returns empty array for non-numeric codes', () => {
+        expect(buildFuzzyCodeNeighbors('ABCDEF')).toEqual([]);
+    });
+
+    it('generates cross-variants for SEINFRA neighbors', () => {
+        const neighbors = buildFuzzyCodeNeighbors('I7396', 'SEINFRA');
+        // Should also contain C-prefix variants of the neighbors
+        expect(neighbors).toContain('C7395');
+        expect(neighbors).toContain('C7397');
     });
 });
