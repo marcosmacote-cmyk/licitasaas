@@ -38,6 +38,12 @@ describe('normalizeCode', () => {
         expect(normalizeCode('1234', 'ORSE')).toBe('1234/ORSE');
     });
 
+    it('normalizes ORSE codes with I prefix (PDF formatting artifact)', () => {
+        expect(normalizeCode('I09783', 'ORSE')).toBe('9783/ORSE');
+        expect(normalizeCode('I04342S', 'ORSE')).toBe('4342/ORSE');
+        expect(normalizeCode('I1234', 'ORSE')).toBe('1234/ORSE');
+    });
+
     it('handles empty and N/A codes gracefully', () => {
         expect(normalizeCode('', 'SINAPI')).toBe('');
         expect(normalizeCode('N/A', 'SINAPI')).toBe('N/A');

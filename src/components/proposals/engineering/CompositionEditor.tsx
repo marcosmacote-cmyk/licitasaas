@@ -1546,12 +1546,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             {itemData?.code && (
                                                                                 <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
                                                                             )}
-                                                                            {data?.database?.name && (
+                                                                            {/* Show the item's own matched database, falling back to composition database, then sourceName */}
+                                                                            {(ci._matchedDatabase || data?.database?.name) && (
                                                                                 <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: `${meta.color}10`, color: meta.color, border: `1px solid ${meta.color}25` }}>
-                                                                                    {data.database.name}
+                                                                                    {ci._matchedDatabase || data.database.name}
                                                                                 </span>
                                                                             )}
-                                                                            {!data?.database?.name && currentItem?.sourceName && (
+                                                                            {!ci._matchedDatabase && !data?.database?.name && currentItem?.sourceName && (
                                                                                 <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: 'rgba(100,116,139,0.08)', color: 'var(--color-text-tertiary)', border: '1px solid rgba(100,116,139,0.15)' }}>
                                                                                     {currentItem.sourceName}
                                                                                 </span>

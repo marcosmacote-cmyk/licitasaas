@@ -53,8 +53,12 @@ export function normalizeCode(raw: string, source?: string): string {
         }
 
         case 'ORSE': {
-            // digits or digits/ORSE
-            const orseMatch = code.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
+            // Strip I prefix if present (PDF formatting: I09783 means insumo 09783)
+            let orseCode = code;
+            if (/^I\d/i.test(orseCode) && !/\/ORSE$/i.test(orseCode)) orseCode = orseCode.slice(1);
+            // Strip trailing letter suffix only when no /ORSE suffix (e.g., 04342S → 04342)
+            if (!/\/ORSE$/i.test(orseCode)) orseCode = orseCode.replace(/[A-Z]$/i, '');
+            const orseMatch = orseCode.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
             if (orseMatch) return `${orseMatch[1]}/ORSE`;
             return code.toUpperCase();
         }
@@ -90,17 +94,30 @@ export function buildCodeVariants(code: string, source?: string): string[] {
 
     // ORSE-specific variants
     if (source?.toUpperCase() === 'ORSE' || /\/ORSE$/i.test(code)) {
-        const orseMatch = code.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
+        // Strip I prefix if present (PDF formatting: I09783 = insumo 09783 in ORSE)
+        let orseClean = code;
+        if (/^I\d/i.test(orseClean) && !/\/ORSE$/i.test(orseClean)) orseClean = orseClean.slice(1);
+        // Strip trailing letter suffix only when no /ORSE suffix (e.g., 04342S → 04342)
+        if (!/\/ORSE$/i.test(orseClean)) orseClean = orseClean.replace(/[A-Z]$/i, '');
+        const orseMatch = orseClean.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
         if (orseMatch) {
             variants.add(`${orseMatch[1]}/ORSE`);
             variants.add(orseMatch[1]);
             variants.add(`${orseMatch[1].padStart(4, '0')}/ORSE`);
             variants.add(`${orseMatch[1].padStart(5, '0')}/ORSE`);
+            variants.add(orseMatch[1].padStart(4, '0'));
+            variants.add(orseMatch[1].padStart(5, '0'));
         }
     }
 
-    // SEINFRA-specific variants
-    if (source?.toUpperCase() === 'SEINFRA' || /^C?\d{3,6}$/i.test(code) || /^[I1]\d{3,6}$/i.test(code)) {
+    // SEINFRA-specific variants — only generate when source is explicitly SEINFRA
+    // or code clearly looks like a SEINFRA code (C/I prefix + 3-5 digits).
+    // Guard: do NOT generate for SINAPI (5-6 digit numbers) or ORSE codes.
+    const srcUpper = source?.toUpperCase() || '';
+    const isExplicitlySeinfra = srcUpper === 'SEINFRA';
+    const looksLikeSeinfra = /^C\d{3,5}$/i.test(code) || (/^I\d{3,5}$/i.test(code) && srcUpper !== 'ORSE');
+    const isOtherKnownBase = ['SINAPI', 'ORSE', 'SICRO', 'SICRO3', 'SICOR', 'CAERN', 'SBC'].includes(srcUpper);
+    if (isExplicitlySeinfra || (looksLikeSeinfra && !isOtherKnownBase)) {
         const clean = code.replace(/\s+/g, '').toUpperCase();
         let digits = clean;
         if (clean.startsWith('C') || clean.startsWith('I')) {
