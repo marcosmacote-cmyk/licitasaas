@@ -399,11 +399,16 @@ export async function extractCompositionFromImage(
             }
             if (fuzzyPool.length > 0) {
                 // Score all fuzzy candidates and pick the one with best description match
-                let bestFuzzy: { candidate: any; sim: number } | null = null;
+                // Tiebreaker: prefer candidate whose database matches the AI-extracted source
+                let bestFuzzy: { candidate: any; sim: number; sourceMatch: boolean } | null = null;
                 for (const candidate of fuzzyPool) {
                     const sim = getStringSimilarity(item.description, candidate.description);
-                    if (sim >= 0.60 && (!bestFuzzy || sim > bestFuzzy.sim)) {
-                        bestFuzzy = { candidate, sim };
+                    if (sim < 0.60) continue;
+                    const sourceMatch = extractedSource && candidate.database?.name?.toUpperCase() === extractedSource;
+                    if (!bestFuzzy 
+                        || sim > bestFuzzy.sim 
+                        || (sim === bestFuzzy.sim && sourceMatch && !bestFuzzy.sourceMatch)) {
+                        bestFuzzy = { candidate, sim, sourceMatch };
                     }
                 }
                 if (bestFuzzy) {
