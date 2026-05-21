@@ -302,7 +302,12 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
     const propriaWhere: any = { database: { name: 'PROPRIA' } };
     if (tenantId) propriaWhere.database.tenantId = tenantId;
     const propria = await findCompositionWithItems(codeVariants, propriaWhere);
-    if (propria) return propria;
+    if (propria) {
+        logger.info(`[CompositionLookup] ✅ PROPRIA found first: id=${propria.id} code=${propria.code} items=${propria.items?.length || 0}`);
+        return propria;
+    } else {
+        logger.info(`[CompositionLookup] ℹ️ No PROPRIA composition with items found for codes=[${codeVariants.join(',')}] tenantId=${tenantId || 'none'}`);
+    }
 
     if (databaseId) {
         const exact = await findCompositionWithItems(codeVariants, { databaseId });
@@ -734,6 +739,7 @@ router.post('/compositions', async (req: any, res: any) => {
             }
         });
 
+        logger.info(`[CompositionSave] ✅ POST created PROPRIA: id=${comp.id} code=${comp.code} dbId=${propriaDb.id}`);
         res.json({ message: 'Composição criada com sucesso', composition: comp });
     } catch (e: any) {
         console.error('Error creating composition:', e);
@@ -779,6 +785,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 flatItems.push(...group);
             }
         }
+        logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} groups=${Object.keys(composition.groups).join(',')}`);
 
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
@@ -874,6 +881,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             }
         });
 
+        logger.info(`[CompositionSave] ✅ PUT complete: id=${id} code=${composition.code} items=${flatItems.length} saved`);
         res.json({ message: 'Composição atualizada com sucesso', id });
 
     } catch (e: any) {
