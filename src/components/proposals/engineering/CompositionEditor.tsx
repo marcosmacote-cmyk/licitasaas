@@ -593,6 +593,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             formData.append('code', currentItem.code);
             formData.append('description', currentItem.description);
             formData.append('unit', currentItem.unit);
+            if (engineeringConfig) {
+                formData.append('engineeringConfig', JSON.stringify(engineeringConfig));
+            }
 
             const res = await fetch('/api/engineering/ai/extract-composition', {
                 method: 'POST',
