@@ -1044,6 +1044,45 @@ if (PROCESS_ROLE !== 'api') {
             logger.error('[PNCP-AGG] ❌ Falha ao carregar módulo aggregator:', e.message);
         }
     }, 120_000); // 2 min após boot (depois dos pollers)
+
+    // ── Auto-Repair: resync empty official databases on startup ──
+    setTimeout(async () => {
+        try {
+            const emptyDbs = await prisma.engineeringDatabase.findMany({
+                where: {
+                    type: 'OFICIAL',
+                    OR: [
+                        { itemCount: 0, compositionCount: 0 },
+                        { itemCount: 0, compositionCount: { gt: 0 } },
+                        { itemCount: { gt: 0 }, compositionCount: 0 },
+                    ],
+                },
+                select: { id: true, name: true, uf: true, version: true, itemCount: true, compositionCount: true },
+            });
+
+            if (emptyDbs.length > 0) {
+                logger.warn(`[AutoRepair] ⚠️ Found ${emptyDbs.length} empty official database(s): ${emptyDbs.map(d => `${d.name}/${d.uf}/${d.version} (i=${d.itemCount},c=${d.compositionCount})`).join(', ')}`);
+
+                const hasEmptyOrse = emptyDbs.some(d => d.name === 'ORSE');
+                if (hasEmptyOrse) {
+                    logger.info('[AutoRepair] 🔄 Triggering ORSE auto-resync...');
+                    const { syncOrse } = await import('./services/engineering/orseCrawler');
+                    syncOrse({ months: 1, force: true }).then(report => {
+                        logger.info(`[AutoRepair] ✅ ORSE resync: ${report.totalSuccess}/${report.totalAttempted} success`);
+                        for (const r of report.results) {
+                            logger.info(`[AutoRepair]   ${r.message}`);
+                        }
+                    }).catch(err => {
+                        logger.error(`[AutoRepair] ❌ ORSE resync failed: ${err.message}`);
+                    });
+                }
+            } else {
+                logger.info('[AutoRepair] ✅ All official databases have data — no repair needed');
+            }
+        } catch (e: any) {
+            logger.error(`[AutoRepair] Error checking databases: ${e.message}`);
+        }
+    }, 180_000); // 3 min after boot
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }

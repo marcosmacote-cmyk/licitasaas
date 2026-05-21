@@ -572,10 +572,18 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
     };
   }
 
-  if (db) {
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
-    await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
-  } else {
+  // SAFETY: Only proceed with delete+insert if we actually have data to insert.
+  // This prevents wiping the DB when the crawl returns empty results due to network issues.
+  if (inputs.length === 0 && services.length === 0) {
+    console.warn(`[ORSE Sync] ⚠️ SAFETY: refusing to persist empty data for ${period.version} — skipping`);
+    return {
+      success: false,
+      message: `ORSE ${period.version}: crawl returned 0 items and 0 services — refusing to wipe existing data`,
+      period,
+    };
+  }
+
+  if (!db) {
     db = await prisma.engineeringDatabase.create({
       data: {
         name: 'ORSE',
@@ -587,6 +595,14 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
         referenceYear: period.year,
       },
     });
+  } else {
+    // Delete old data only when we have new data to replace it
+    console.log(`[ORSE Sync] Cleaning old data for ${period.version} (old: ${db.itemCount} items, ${db.compositionCount} comps) before inserting ${inputs.length} inputs + ${services.length} services`);
+    await prisma.engineeringCompositionItem.deleteMany({
+      where: { composition: { databaseId: db.id } },
+    });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
   }
 
   let insertedInputs = 0;
