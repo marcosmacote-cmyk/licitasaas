@@ -20,7 +20,7 @@
  * - Default: trim and uppercase
  */
 export function normalizeCode(raw: string, source?: string): string {
-    const code = String(raw || '').trim().replace(/\.$/, '');
+    const code = String(raw || '').trim().replace(/\.$/, '').replace(/\s+/g, '');
     if (!code || code === 'N/A') return code;
 
     const src = String(source || '').toUpperCase();
@@ -34,10 +34,22 @@ export function normalizeCode(raw: string, source?: string): string {
         }
 
         case 'SEINFRA': {
-            // C + digits or just digits
-            const match = code.match(/^C?(\d{3,6})$/i);
-            if (match) return `C${match[1]}`;
-            return code.toUpperCase();
+            const codeClean = code.toUpperCase();
+            // If it starts with I or 1 followed by digits: insumo
+            if (/^[I1]\d{3,6}$/.test(codeClean)) {
+                return 'I' + codeClean.slice(1);
+            }
+            // If starts with C followed by digits: composition
+            if (/^C\d{3,6}$/.test(codeClean)) {
+                return codeClean;
+            }
+            // Digits only
+            const digitsMatch = codeClean.match(/^(\d{3,6})$/);
+            if (digitsMatch) {
+                // Default to C + digits
+                return `C${digitsMatch[1]}`;
+            }
+            return codeClean;
         }
 
         case 'ORSE': {
@@ -84,6 +96,26 @@ export function buildCodeVariants(code: string, source?: string): string[] {
             variants.add(orseMatch[1]);
             variants.add(`${orseMatch[1].padStart(4, '0')}/ORSE`);
             variants.add(`${orseMatch[1].padStart(5, '0')}/ORSE`);
+        }
+    }
+
+    // SEINFRA-specific variants
+    if (source?.toUpperCase() === 'SEINFRA' || /^C?\d{3,6}$/i.test(code) || /^[I1]\d{3,6}$/i.test(code)) {
+        const clean = code.replace(/\s+/g, '').toUpperCase();
+        let digits = clean;
+        if (clean.startsWith('C') || clean.startsWith('I')) {
+            digits = clean.slice(1);
+        }
+        if (/^\d{3,6}$/.test(digits)) {
+            variants.add(`C${digits}`);
+            variants.add(`I${digits}`);
+            variants.add(digits);
+            if (digits.startsWith('1')) {
+                const rest = digits.slice(1);
+                variants.add(`I${rest}`);
+                variants.add(`C${rest}`);
+                variants.add(rest);
+            }
         }
     }
 

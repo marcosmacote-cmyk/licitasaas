@@ -19,6 +19,19 @@ describe('normalizeCode', () => {
         expect(normalizeCode('c4495', 'SEINFRA')).toBe('C4495');
     });
 
+    it('normalizes SEINFRA codes with I prefix and handles 1-prefix OCR errors', () => {
+        expect(normalizeCode('I7396', 'SEINFRA')).toBe('I7396');
+        expect(normalizeCode('17396', 'SEINFRA')).toBe('I7396');
+        expect(normalizeCode('10046', 'SEINFRA')).toBe('I0046');
+        expect(normalizeCode('I1589', 'SEINFRA')).toBe('I1589');
+        expect(normalizeCode('11589', 'SEINFRA')).toBe('I1589');
+    });
+
+    it('normalizes SEINFRA codes with internal spaces', () => {
+        expect(normalizeCode('C 4495', 'SEINFRA')).toBe('C4495');
+        expect(normalizeCode('1 7396', 'SEINFRA')).toBe('I7396');
+    });
+
     it('normalizes ORSE codes with /ORSE suffix', () => {
         expect(normalizeCode('1234/ORSE', 'ORSE')).toBe('1234/ORSE');
         expect(normalizeCode('01234/ORSE', 'ORSE')).toBe('1234/ORSE');
@@ -52,6 +65,15 @@ describe('buildCodeVariants', () => {
         expect(variants).toContain('1234/ORSE');
         expect(variants).toContain('1234');
         expect(variants).toContain('01234/ORSE');
+    });
+
+    it('generates cross variants for SEINFRA codes', () => {
+        const variants = buildCodeVariants('17396', 'SEINFRA');
+        expect(variants).toContain('I7396');
+        expect(variants).toContain('C17396');
+        expect(variants).toContain('C7396');
+        expect(variants).toContain('17396');
+        expect(variants).toContain('7396');
     });
 
     it('returns at least the original and normalized code', () => {

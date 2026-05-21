@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { fallbackToOpenAiV2 } from '../openai.service';
-import { buildCodeVariants } from '../../engineering/codeNormalizer';
+import { buildCodeVariants, normalizeCode } from '../../engineering/codeNormalizer';
 import {
     buildCandidateScore,
     chooseBestCandidate,
@@ -146,14 +146,8 @@ function getStringSimilarity(str1: string, str2: string): number {
 /**
  * Normalize an official code for matching (strip spaces, case-insensitive prep).
  */
-function normalizeOfficialCode(code: string): string {
-    let value = String(code || '').trim().toUpperCase();
-    value = value.replace(/\s+/g, '');
-    const orse = value.match(/^0*(\d+)\/ORSE$/);
-    if (orse) return `${orse[1]}/ORSE`;
-    const pureNum = value.match(/^0+(\d{4,})$/);
-    if (pureNum) return pureNum[1];
-    return value;
+function normalizeOfficialCode(code: string, source?: string): string {
+    return normalizeCode(code, source);
 }
 
 /**
@@ -323,7 +317,7 @@ export async function extractCompositionFromImage(
 
         // Strategy 1: Code match with scoring
         if (item.code) {
-            const codeLower = normalizeOfficialCode(item.code).toLowerCase();
+            const codeLower = normalizeOfficialCode(item.code, item.source).toLowerCase();
             const candidates = byCode.get(codeLower) || [];
             
             // Also try raw code variants
@@ -370,8 +364,10 @@ export async function extractCompositionFromImage(
                 const accessSql = tenantId
                     ? Prisma.sql`AND (d.type = 'OFICIAL' OR d."tenantId" = ${tenantId})`
                     : Prisma.sql`AND d.type = 'OFICIAL'`;
-                const sourceSql = configuredBases.length > 0
-                    ? Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(configuredBases)})`
+                const itemBases = [item.source, ...configuredBases].filter(Boolean);
+                const uniqueItemBases = [...new Set(itemBases.map((b: string) => b.toUpperCase()))];
+                const sourceSql = uniqueItemBases.length > 0
+                    ? Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(uniqueItemBases)})`
                     : Prisma.empty;
 
                 const [compRows, itemRows] = await Promise.all([
