@@ -252,6 +252,19 @@ function buildCompositionCodeVariants(code: string): string[] {
     const raw = String(code || '').trim();
     const upper = raw.toUpperCase().replace(/\.$/, '');
     const variants = new Set<string>([raw, upper]);
+
+    // Handle "COMP. XXX" / "COMP XXX" prefix — budget items often have this but DB may not
+    const compPrefixMatch = upper.match(/^COMP[.\s]+(.+)$/);
+    if (compPrefixMatch) {
+        const withoutPrefix = compPrefixMatch[1].trim();
+        variants.add(withoutPrefix);
+        variants.add(`COMP. ${withoutPrefix}`);
+        variants.add(`COMP ${withoutPrefix}`);
+    } else if (!upper.startsWith('COMP')) {
+        // Add the prefixed version only for non-COMP codes
+        variants.add(`COMP. ${upper}`);
+    }
+
     const orse = upper.match(/^0*(\d{1,6})(?:\/ORSE)?$/);
     if (orse && /ORSE$/i.test(upper)) {
         variants.add(`${orse[1]}/ORSE`);

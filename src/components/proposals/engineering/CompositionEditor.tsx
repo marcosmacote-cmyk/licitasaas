@@ -751,50 +751,79 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     };
 
     const saveToBase = async () => {
-        if (!data || !data.id) return;
+        if (!data || !data.id || !currentItem) return;
         setIsSavingToBase(true);
         try {
-            let targetId = data.id;
+            // Use the budget item's code as canonical (the user sees this code in the planilha)
+            const canonicalCode = currentItem.code;
+            let targetId: string | null = null;
             
-            // If it's an official composition, create a copy in PROPRIA first
-            if (data.database?.name !== 'PROPRIA') {
+            // 1. Try to find existing PROPRIA composition — check both canonical code and data.code
+            // (they can differ: budget has "COMP. 1103.1", AI extracts "1103.1")
+            const codesToTry = [canonicalCode, data.code].filter(Boolean);
+            const uniqueCodes = [...new Set(codesToTry)];
+            
+            for (const tryCode of uniqueCodes) {
+                if (targetId) break;
+                try {
+                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(tryCode)}?sourceName=PROPRIA`, { headers: hdrs() });
+                    if (resSearch.ok) {
+                        const found = await resSearch.json();
+                        if (found?.id && !found.id.startsWith('synthetic-')) {
+                            targetId = found.id;
+                        }
+                    }
+                } catch { /* skip */ }
+            }
+            
+            // 2. If no existing PROPRIA found, create one with the canonical budget code
+            if (!targetId) {
                 const resCreate = await fetch('/api/engineering/compositions', {
                     method: 'POST',
                     headers: hdrs(),
                     body: JSON.stringify({
-                        code: data.code,
-                        description: data.description,
-                        unit: data.unit,
+                        code: canonicalCode,
+                        description: data.description || currentItem.description,
+                        unit: data.unit || currentItem.unit,
                     })
                 });
-                
                 if (!resCreate.ok) {
                     const err = await resCreate.json();
                     if (!err.error?.includes('Já existe')) {
-                        throw new Error('Erro ao criar cópia na base PRÓPRIA');
+                        throw new Error('Erro ao criar composição na base PRÓPRIA');
                     }
-                    // Se já existe na PRÓPRIA, buscar a ID da existente (forçar sourceName=PROPRIA)
-                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(data.code)}?sourceName=PROPRIA`, { headers: hdrs() });
-                    const existingData = await resSearch.json();
-                    targetId = existingData.id;
+                    // Already exists — fetch it
+                    const resRetry = await fetch(`/api/engineering/compositions/${encodeURIComponent(canonicalCode)}?sourceName=PROPRIA`, { headers: hdrs() });
+                    if (resRetry.ok) {
+                        const retryData = await resRetry.json();
+                        targetId = retryData.id;
+                    }
                 } else {
                     const created = await resCreate.json();
                     targetId = created.composition.id;
                 }
             }
 
+            if (!targetId) {
+                throw new Error('Não foi possível localizar ou criar a composição na base PRÓPRIA');
+            }
+
+            // 3. PUT to update the PROPRIA composition with the extracted items
             const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: data })
+                body: JSON.stringify({ composition: { ...data, code: canonicalCode } })
             });
-            if (!res.ok) throw new Error('Erro ao salvar composição na base');
+            if (!res.ok) {
+                const errBody = await res.json().catch(() => ({}));
+                throw new Error(errBody.error || 'Erro ao salvar composição na base');
+            }
             await res.json();
             alert('Composição atualizada com sucesso na base PRÓPRIA!');
             setHasChanges(false);
             
-            // Reload to get the PROPRIA version with DB-assigned IDs
-            await loadComposition(data.code);
+            // 4. Reload to get the PROPRIA version with DB-assigned IDs
+            await loadComposition(canonicalCode);
         } catch (e: any) {
             alert(e.message || 'Erro de rede ao salvar');
         } finally {
