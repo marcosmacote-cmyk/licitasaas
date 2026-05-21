@@ -2043,7 +2043,22 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         title="Expandir todas as etapas">
                         <ChevronDown size={12} /> Expandir
                     </button>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {(() => {
+                            const shellCount = items.filter(it => it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0) && it.unitCost === 0).length;
+                            return shellCount > 0 ? (
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    padding: '2px 8px', borderRadius: 12,
+                                    background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                                    color: '#d97706', fontSize: '0.68rem', fontWeight: 700,
+                                    animation: 'shellPulse 2s ease-in-out infinite',
+                                }} title={`${shellCount} composição(ões) precisam de detalhamento analítico (insumos, mão de obra, equipamentos)`}>
+                                    <AlertTriangle size={11} />
+                                    {shellCount} {shellCount === 1 ? 'casca pendente' : 'cascas pendentes'}
+                                </span>
+                            ) : null;
+                        })()}
                         {visibleItems.filter(v => v.visible).length}/{items.length} itens
                     </span>
                 </div>
@@ -2336,6 +2351,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
                                 // ── COMPOSICAO / INSUMO ROW (data row) ──
                                 const hasInsumos = it.type === 'COMPOSICAO' && it.insumos && it.insumos.length > 0;
+                                const isShell = it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0) && it.unitCost === 0;
                                 const isExpanded = expandedItems.has(it.id);
                                 const rows = [];
 
@@ -2414,7 +2430,27 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500, flex: 1 }} />
+                                                <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500, flex: 1, ...(isShell ? { borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.03)' } : {}) }} />
+                                                {isShell && (
+                                                    <button
+                                                        title="Esta composição é apenas uma casca sem detalhamento analítico. Clique para abrir o editor e inserir insumos, mão de obra e equipamentos."
+                                                        onClick={() => setCompositionEditorIndex(items.indexOf(it))}
+                                                        style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                            padding: '2px 7px', borderRadius: 10,
+                                                            background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+                                                            color: '#d97706', fontSize: '0.58rem', fontWeight: 800,
+                                                            cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                                                            transition: 'all 0.15s',
+                                                            letterSpacing: '0.3px',
+                                                        }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.2)'; (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)'; }}
+                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.1)'; (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
+                                                    >
+                                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', animation: 'shellDot 1.5s ease-in-out infinite', flexShrink: 0 }} />
+                                                        CASCA
+                                                    </button>
+                                                )}
                                                 {/* FIX F5.5: Notes icon */}
                                                 <button
                                                     title={it.notes ? `Nota: ${it.notes}` : 'Adicionar observação'}
@@ -2472,11 +2508,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             {it.unitCost === 0 ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
-                                                    <span title={it.sourceName === 'PROPRIA' && it.type === 'COMPOSICAO' ? "Composição vazia. Preencha no Módulo Livre." : "Item sem preço unitário."} style={{ display: 'flex' }}>
-                                                        <AlertCircle size={14} />
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: isShell ? '#d97706' : 'var(--color-danger)' }}>
+                                                    <span title={isShell ? "CASCA: Esta composição precisa de detalhamento analítico. Clique no ícone de composição (🔷) ao lado do código para abrir o editor e inserir insumos, mão de obra e equipamentos." : "Item sem preço unitário."} style={{ display: 'flex', cursor: isShell ? 'pointer' : 'default' }} onClick={isShell ? () => setCompositionEditorIndex(items.indexOf(it)) : undefined}>
+                                                        {isShell ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: isShell ? '#d97706' : 'var(--color-danger)', fontWeight: 700, border: `1px solid ${isShell ? 'rgba(245,158,11,0.4)' : 'var(--color-danger)'}` }} step="0.01" />
                                                 </div>
                                             ) : (
                                                 <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01" />

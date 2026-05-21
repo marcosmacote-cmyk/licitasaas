@@ -1386,6 +1386,16 @@ input:checked + .slider:before {
   50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
 }
 
+@keyframes shellDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes shellPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
 /* ── Animation Utility Classes ── */
 .animate-fade-in {
   animation: fadeIn var(--transition-normal) ease-out both;
