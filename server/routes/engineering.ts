@@ -3552,7 +3552,7 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
 
         const { code } = req.body;
         const engineeringConfig = req.body.engineeringConfig ? JSON.parse(req.body.engineeringConfig) : undefined;
-        const result = await extractCompositionFromImage(req.file.buffer, req.file.mimetype, code, engineeringConfig);
+        const result = await extractCompositionFromImage(req.file.buffer, req.file.mimetype, code, engineeringConfig, req.user?.tenantId);
         
         res.json(result);
     } catch (e: any) {

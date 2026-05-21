@@ -3,9 +3,22 @@ import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
 import { fallbackToOpenAiV2 } from '../openai.service';
 import { buildCodeVariants } from '../../engineering/codeNormalizer';
+import {
+    buildCandidateScore,
+    chooseBestCandidate,
+    parseDataBaseMonth,
+    type EngineeringConfig,
+} from '../../engineering/priceEnricher';
 
-const DB_SELECT = { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true };
-const DB_ORDER: any[] = [{ database: { referenceYear: 'desc' } }, { database: { referenceMonth: 'desc' } }];
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════
+
+const DB_SELECT = { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true, tenantId: true };
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 1: ANTI-HALLUCINATION PROMPT
+// ═══════════════════════════════════════════════════════════
 
 const systemPrompt = `Você é um engenheiro orçamentista expert em leitura de composições de custos (CPUs).
 Seu trabalho é ler a imagem/pdf fornecida, identificar a tabela de insumos e extrair os dados ESTRITAMENTE neste schema JSON:
@@ -21,115 +34,120 @@ Seu trabalho é ler a imagem/pdf fornecida, identificar a tabela de insumos e ex
       "unit": "string",
       "coefficient": number,
       "price": number,
-      "source": "string opcional (nome da base/fonte se houver coluna FONTE, ex: SINAPI, SEINFRA, ORSE, SICRO)"
+      "source": "string (nome da base/fonte da coluna FONTE, ex: SINAPI, SEINFRA, ORSE, SICRO)"
     }
   ]
 }
 
-REGRAS:
-1. "coefficient" e "price" DEVEM ser números (use ponto para decimais, ex: 1.5 e não 1,5). Certifique-se de que "price" é o Preço Unitário e NÃO o Preço Total.
+REGRAS CRÍTICAS — LEIA TODAS:
+1. "coefficient" e "price" DEVEM ser números (use ponto para decimais). "price" é o PREÇO UNITÁRIO, NÃO o preço total.
 2. Se o preço não for legível, coloque 0.
-3. Se não houver tipo claro, tente deduzir pelo nome (ex: "Servente" -> MAO_DE_OBRA, "Cimento" -> MATERIAL, "Caminhão" -> EQUIPAMENTO).
-4. IMPORTANTE: Se houver coluna "FONTE" ou "BASE" na tabela, extraia o valor EXATO (ex: SINAPI, SEINFRA) para o campo "source" de cada item. LEIA CADA LINHA INDIVIDUALMENTE — fontes podem diferir entre linhas.
-5. O campo "code" é CRUCIAL — extraia EXATAMENTE como escrito na imagem (ex: I6519, C4291, 00035272, 102223). Não modifique, não adicione prefixos.
-6. Se o código começa com "C" seguido de dígitos (ex: C4291, C1256), o type DEVE ser "AUXILIAR" (composição auxiliar).
-7. Retorne APENAS o JSON, sem formatação Markdown.`;
+3. Deduza o tipo pelo nome: "Servente/Pedreiro/Carpinteiro" → MAO_DE_OBRA, "Cimento/Areia/Tijolo" → MATERIAL, "Caminhão/Betoneira" → EQUIPAMENTO.
+4. Se o código começa com "C" seguido de dígitos (ex: C4291, C1256), o type DEVE ser "AUXILIAR".
+
+REGRAS ANTI-ALUCINAÇÃO — IMPORTANTÍSSIMAS:
+5. Extraia APENAS E SOMENTE os itens que estão VISUALMENTE PRESENTES na tabela da imagem. NÃO invente, NÃO adicione, NÃO complemente com itens que não estão na imagem.
+6. Se a tabela tem 10 linhas de insumos, o array "items" DEVE ter EXATAMENTE 10 elementos.
+7. Copie o campo "code" EXATAMENTE como está escrito na imagem (ex: I6519, C4291, 00035272). NÃO modifique, NÃO invente códigos.
+8. Se houver coluna "FONTE" ou "BASE", copie o valor EXATO de cada linha (ex: SEINFRA, SINAPI). Cada linha pode ter uma fonte diferente — leia cada uma individualmente.
+9. Se NÃO conseguir ler um valor com certeza, use "" (string vazia) ao invés de inventar.
+10. Retorne APENAS o JSON, sem formatação Markdown.`;
+
+// ═══════════════════════════════════════════════════════════
+// LAYER 2: POST-EXTRACTION VALIDATION (ANTI-HALLUCINATION)
+// ═══════════════════════════════════════════════════════════
 
 /**
- * Search for a code in engineeringItem table with cascading filters.
- * Returns { match, db } or { match: null, db: null }
+ * Validate and filter extracted items to remove AI hallucinations.
+ * Returns only items that pass validation checks.
  */
-async function findInItems(codeVariants: string[], extractedSource: string, priorityDbIds: string[]) {
-    const include = { database: { select: DB_SELECT } };
-    
-    // 1. Try with extracted source
-    if (extractedSource) {
-        const m = await prisma.engineeringItem.findFirst({
-            where: { code: { in: codeVariants }, database: { name: extractedSource } },
-            include, orderBy: DB_ORDER,
-        });
-        if (m) return { match: m, db: m.database, table: 'item' as const };
+function validateExtractedItems(items: any[]): { valid: any[]; rejected: any[] } {
+    const valid: any[] = [];
+    const rejected: any[] = [];
+    const seen = new Set<string>();
+
+    for (const item of items) {
+        const code = String(item.code || '').trim();
+        const desc = String(item.description || '').trim();
+
+        // Rule 1: Must have a description
+        if (!desc || desc.length < 3) {
+            rejected.push({ ...item, _rejectReason: 'description too short or missing' });
+            continue;
+        }
+
+        // Rule 2: Filter obviously hallucinated codes (garbage patterns)
+        if (code && /^[A-Z]{3,}0{3,}$/i.test(code)) {
+            // Patterns like TRAO0000, ABCD0000 are clearly hallucinated
+            rejected.push({ ...item, _rejectReason: `hallucinated code pattern: ${code}` });
+            continue;
+        }
+
+        // Rule 3: Deduplication by code+description
+        const dedupKey = `${code}|${desc.substring(0, 30)}`.toLowerCase();
+        if (seen.has(dedupKey)) {
+            rejected.push({ ...item, _rejectReason: 'duplicate' });
+            continue;
+        }
+        seen.add(dedupKey);
+
+        // Rule 4: Reject items with descriptions that are too generic/short for matching
+        if (desc.length < 5 && !code) {
+            rejected.push({ ...item, _rejectReason: 'description too generic and no code' });
+            continue;
+        }
+
+        valid.push(item);
     }
-    
-    // 2. Try with configured bases
-    if (priorityDbIds.length > 0) {
-        const m = await prisma.engineeringItem.findFirst({
-            where: { code: { in: codeVariants }, databaseId: { in: priorityDbIds } },
-            include, orderBy: DB_ORDER,
-        });
-        if (m) return { match: m, db: m.database, table: 'item' as const };
+
+    if (rejected.length > 0) {
+        logger.warn(`[AI Validation] Rejected ${rejected.length} items: ${rejected.map(r => `"${r.code || 'no-code'}" (${r._rejectReason})`).join(', ')}`);
     }
-    
-    // 3. Try any database
-    const m = await prisma.engineeringItem.findFirst({
-        where: { code: { in: codeVariants } },
-        include, orderBy: DB_ORDER,
-    });
-    if (m) return { match: m, db: m.database, table: 'item' as const };
-    
-    return { match: null, db: null, table: null };
+
+    return { valid, rejected };
 }
 
 /**
- * Search for a code in engineeringComposition table with cascading filters.
+ * Normalize an official code for matching (strip spaces, case-insensitive prep).
  */
-async function findInCompositions(codeVariants: string[], extractedSource: string, priorityDbIds: string[]) {
-    const include = { database: { select: DB_SELECT } };
-    
-    // 1. Try with extracted source
-    if (extractedSource) {
-        const m = await prisma.engineeringComposition.findFirst({
-            where: { code: { in: codeVariants }, database: { name: extractedSource } },
-            include, orderBy: DB_ORDER,
-        });
-        if (m) return { match: m, db: m.database, table: 'composition' as const };
-    }
-    
-    // 2. Try with configured bases
-    if (priorityDbIds.length > 0) {
-        const m = await prisma.engineeringComposition.findFirst({
-            where: { code: { in: codeVariants }, databaseId: { in: priorityDbIds } },
-            include, orderBy: DB_ORDER,
-        });
-        if (m) return { match: m, db: m.database, table: 'composition' as const };
-    }
-    
-    // 3. Try any database
-    const m = await prisma.engineeringComposition.findFirst({
-        where: { code: { in: codeVariants } },
-        include, orderBy: DB_ORDER,
-    });
-    if (m) return { match: m, db: m.database, table: 'composition' as const };
-    
-    return { match: null, db: null, table: null };
+function normalizeOfficialCode(code: string): string {
+    let value = String(code || '').trim().toUpperCase();
+    value = value.replace(/\s+/g, '');
+    const orse = value.match(/^0*(\d+)\/ORSE$/);
+    if (orse) return `${orse[1]}/ORSE`;
+    const pureNum = value.match(/^0+(\d{4,})$/);
+    if (pureNum) return pureNum[1];
+    return value;
 }
 
 /**
- * Detect if a code looks like a composition code based on prefix patterns.
- * SEINFRA: C + digits = composition, I + digits = item
- * SINAPI: pure 5-6 digit numbers can be either
+ * Detect if a code looks like a composition based on prefix patterns.
  */
 function looksLikeComposition(code: string): boolean {
     const c = code.trim().toUpperCase();
-    // SEINFRA composition pattern: C followed by digits
     if (/^C\d{3,6}$/.test(c)) return true;
-    // COMP prefix
     if (/^COMP/i.test(c)) return true;
     return false;
 }
 
+// ═══════════════════════════════════════════════════════════
+// LAYER 3: BATCH MATCHING ENGINE (Reuses priceEnricher patterns)
+// ═══════════════════════════════════════════════════════════
+
 /**
  * Extract composition from image/PDF and match items against official databases.
  * 
- * CRITICAL FIX: Always searches BOTH tables (engineeringItem AND engineeringComposition)
- * regardless of the AI-assigned type. The AI often misclassifies AUXILIAR items as SERVICO,
- * causing code matches to fail when looking in the wrong table.
+ * 3-Layer Architecture:
+ *   L1: Anti-hallucination prompt → prevents AI from inventing items
+ *   L2: Post-extraction validation → filters remaining hallucinations
+ *   L3: Batch matching via priceEnricher patterns → precise DB matching
  */
 export async function extractCompositionFromImage(
     fileBuffer: Buffer,
     mimeType: string,
     expectedCode?: string,
-    engineeringConfig?: any
+    engineeringConfig?: any,
+    tenantId?: string
 ) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -137,6 +155,9 @@ export async function extractCompositionFromImage(
     const genAI = new GoogleGenAI({ apiKey });
     const { callGeminiWithRetry } = require('../gemini.service');
 
+    // ─────────────────────────────────────────────────
+    // STEP 1: AI EXTRACTION with anti-hallucination prompt
+    // ─────────────────────────────────────────────────
     let text: string;
     try {
         const response = await callGeminiWithRetry(
@@ -152,18 +173,18 @@ export async function extractCompositionFromImage(
                 config: {
                     systemInstruction: systemPrompt,
                     responseMimeType: 'application/json',
-                    temperature: 0.1
+                    temperature: 0.0
                 }
             },
             3
         );
         text = response.text || '';
     } catch (geminiErr: any) {
-        logger.warn(`[AI Extract Composition] Gemini falhou: ${geminiErr.message}. Tentando fallback...`);
+        logger.warn(`[AI Extract Composition] Gemini failed: ${geminiErr.message}. Trying fallback...`);
         const fallback = await fallbackToOpenAiV2({
             systemPrompt,
             userPrompt: `Extraia a composição.${expectedCode ? ` Foque no item ${expectedCode}.` : ''} Retorne APENAS JSON válido.`,
-            temperature: 0.1,
+            temperature: 0.0,
             maxTokens: 8192,
             stageName: 'Composition Extraction',
         });
@@ -171,7 +192,9 @@ export async function extractCompositionFromImage(
     }
 
     if (!text) throw new Error('Resposta vazia da IA');
-    logger.info(`[AI Extract Composition] Raw response length: ${text.length}`);
+    
+    // Log raw response for debugging
+    logger.info(`[AI Extract Composition] Raw response (${text.length} chars): ${text.substring(0, 500)}...`);
 
     let extracted: any;
     try {
@@ -180,192 +203,258 @@ export async function extractCompositionFromImage(
         throw new Error('Falha ao parsear o JSON retornado pela IA');
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // STEP 2: Resolve configured databases for matching priority
-    // ═══════════════════════════════════════════════════════════
-    const configuredBases = engineeringConfig?.basesConsideradas || [];
-    const configuredBaseNames = configuredBases.map((b: string) => b.toUpperCase());
+    logger.info(`[AI Extract Composition] AI extracted: ${(extracted.items || []).length} items, code="${extracted.code}", desc="${(extracted.description || '').substring(0, 50)}"`);
+
+    // ─────────────────────────────────────────────────
+    // STEP 2: POST-EXTRACTION VALIDATION
+    // ─────────────────────────────────────────────────
+    const { valid: validItems, rejected } = validateExtractedItems(extracted.items || []);
+    logger.info(`[AI Extract Composition] Validation: ${validItems.length} valid, ${rejected.length} rejected`);
+
+    // ─────────────────────────────────────────────────
+    // STEP 3: BATCH MATCHING (priceEnricher pattern)
+    // ─────────────────────────────────────────────────
+    const config: EngineeringConfig = engineeringConfig || {};
+    const targetDate = parseDataBaseMonth(config.dataBase);
+
+    // Collect all code variants for batch lookup
+    const allCodeVariants: string[] = [];
+    const configuredBases = (config.basesConsideradas || []).map((b: string) => b.toUpperCase());
     
-    let priorityDbIds: string[] = [];
-    if (configuredBaseNames.length > 0) {
-        const priorityDbs = await prisma.engineeringDatabase.findMany({
-            where: { name: { in: configuredBaseNames } },
-            select: { id: true, name: true },
-        });
-        priorityDbIds = priorityDbs.map(d => d.id);
-        logger.info(`[AI Extract Composition] Priority databases: ${priorityDbs.map(d => d.name).join(', ')} (${priorityDbIds.length} IDs)`);
+    for (const item of validItems) {
+        if (item.code) {
+            const base = buildCodeVariants(item.code);
+            allCodeVariants.push(...base);
+            // Also add source-specific variants
+            const sources = [item.source, ...configuredBases].filter(Boolean);
+            for (const src of sources) {
+                allCodeVariants.push(...buildCodeVariants(item.code, src));
+            }
+        }
+    }
+    const uniqueCodes = [...new Set(allCodeVariants)];
+    logger.info(`[AI Match Batch] Searching ${uniqueCodes.length} code variants across both tables`);
+
+    // Batch fetch from BOTH tables
+    const dbWhere: any = { OR: [{ type: 'OFICIAL' }] };
+    if (tenantId) dbWhere.OR.push({ tenantId });
+
+    const [dbItems, dbComps] = await Promise.all([
+        uniqueCodes.length > 0 ? prisma.engineeringItem.findMany({
+            where: { code: { in: uniqueCodes, mode: 'insensitive' }, database: dbWhere },
+            include: { database: { select: DB_SELECT } },
+        }) : Promise.resolve([]),
+        uniqueCodes.length > 0 ? prisma.engineeringComposition.findMany({
+            where: { code: { in: uniqueCodes, mode: 'insensitive' }, database: dbWhere },
+            include: { database: { select: DB_SELECT } },
+        }) : Promise.resolve([]),
+    ]);
+
+    logger.info(`[AI Match Batch] DB results: ${dbItems.length} items, ${dbComps.length} compositions`);
+
+    // Build code→candidates map
+    const byCode = new Map<string, any[]>();
+    for (const dbItem of dbItems) {
+        const candidate = { ...dbItem, matchType: 'INSUMO', matchedPrice: Number(dbItem.price) || 0 };
+        for (const keyVariant of buildCodeVariants(dbItem.code)) {
+            const key = keyVariant.toLowerCase();
+            byCode.set(key, [...(byCode.get(key) || []), candidate]);
+        }
+    }
+    for (const dbComp of dbComps) {
+        const candidate = { ...dbComp, matchType: 'COMPOSICAO', matchedPrice: Number(dbComp.totalPrice) || 0 };
+        for (const keyVariant of buildCodeVariants(dbComp.code)) {
+            const key = keyVariant.toLowerCase();
+            byCode.set(key, [...(byCode.get(key) || []), candidate]);
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // STEP 3: Match each item — ALWAYS search BOTH tables
-    // ═══════════════════════════════════════════════════════════
+    // ─────────────────────────────────────────────────
+    // STEP 4: MATCH EACH ITEM using scoring engine
+    // ─────────────────────────────────────────────────
     const itemsWithMatches = [];
     let matchedCount = 0;
     let unmatchedCount = 0;
-    
-    for (const item of extracted.items || []) {
+
+    for (const item of validItems) {
         let itemType = String(item.type || 'MATERIAL').toUpperCase();
         item.type = itemType;
-
-        const extractedSource = String(item.source || '').toUpperCase().trim();
         
-        let match: any = null;
+        const extractedSource = String(item.source || '').toUpperCase().trim();
+        let bestCandidate: any = null;
         let matchedDb: any = null;
         let foundInTable: 'item' | 'composition' | null = null;
 
+        // Strategy 1: Code match with scoring
         if (item.code) {
-            // Build variants for EACH possible source (extracted + all configured)
-            const sourcesToTry = [extractedSource, ...configuredBaseNames].filter(Boolean);
-            const allVariants = new Set<string>();
+            const codeLower = normalizeOfficialCode(item.code).toLowerCase();
+            const candidates = byCode.get(codeLower) || [];
             
-            // Always add base variants (no source)
-            for (const v of buildCodeVariants(item.code)) allVariants.add(v);
-            // Add source-specific variants
-            for (const src of sourcesToTry) {
-                for (const v of buildCodeVariants(item.code, src)) allVariants.add(v);
-            }
-            const codeVariants = [...allVariants];
-            
-            logger.info(`[AI Match] Item "${item.code}" (${itemType}) → variants: [${codeVariants.join(', ')}] source="${extractedSource}"`);
-
-            // ── Determine search order based on code prefix ──
-            const prefersComposition = looksLikeComposition(item.code) || itemType === 'AUXILIAR';
-            
-            if (prefersComposition) {
-                // Search compositions FIRST, then items
-                const compResult = await findInCompositions(codeVariants, extractedSource, priorityDbIds);
-                if (compResult.match) {
-                    match = compResult.match;
-                    matchedDb = compResult.db;
-                    foundInTable = 'composition';
-                } else {
-                    // Cross-table fallback: try items
-                    const itemResult = await findInItems(codeVariants, extractedSource, priorityDbIds);
-                    if (itemResult.match) {
-                        match = itemResult.match;
-                        matchedDb = itemResult.db;
-                        foundInTable = 'item';
-                    }
-                }
-            } else {
-                // Search items FIRST, then compositions
-                const itemResult = await findInItems(codeVariants, extractedSource, priorityDbIds);
-                if (itemResult.match) {
-                    match = itemResult.match;
-                    matchedDb = itemResult.db;
-                    foundInTable = 'item';
-                } else {
-                    // Cross-table fallback: try compositions
-                    const compResult = await findInCompositions(codeVariants, extractedSource, priorityDbIds);
-                    if (compResult.match) {
-                        match = compResult.match;
-                        matchedDb = compResult.db;
-                        foundInTable = 'composition';
-                    }
+            // Also try raw code variants
+            if (candidates.length === 0) {
+                const variants = buildCodeVariants(item.code);
+                for (const v of variants) {
+                    const c = byCode.get(v.toLowerCase());
+                    if (c) candidates.push(...c);
                 }
             }
 
-            if (match) {
-                logger.info(`[AI Match] ✅ MATCHED "${item.code}" → db=${matchedDb?.name} table=${foundInTable} id=${match.id}`);
-            }
-        }
-        
-        // ── Strategy 2: Description fallback — search BOTH tables ──
-        if (!match && item.description) {
-            const query = item.description.substring(0, 40).trim();
-            const baseWhere: any = { description: { contains: query, mode: 'insensitive' } };
-            
-            if (priorityDbIds.length > 0) {
-                baseWhere.databaseId = { in: priorityDbIds };
-            }
-            
-            // Try items first
-            const itemMatch = await prisma.engineeringItem.findFirst({
-                where: baseWhere,
-                include: { database: { select: DB_SELECT } },
-            });
-            
-            if (itemMatch) {
-                match = itemMatch;
-                matchedDb = itemMatch.database;
-                foundInTable = 'item';
-            } else {
-                // Try compositions
-                const compMatch = await prisma.engineeringComposition.findFirst({
-                    where: baseWhere,
-                    include: { database: { select: DB_SELECT } },
-                });
-                if (compMatch) {
-                    match = compMatch;
-                    matchedDb = compMatch.database;
-                    foundInTable = 'composition';
-                }
-            }
+            if (candidates.length > 0) {
+                // Use priceEnricher's scoring system
+                const virtualItem = {
+                    code: item.code,
+                    description: item.description,
+                    type: looksLikeComposition(item.code) ? 'COMPOSICAO' : 'INSUMO',
+                    sourceName: extractedSource || configuredBases[0] || '',
+                    unitCost: item.price || 0,
+                };
 
-            if (match) {
-                logger.info(`[AI Match] ✅ DESC MATCH "${query}" → db=${matchedDb?.name} table=${foundInTable} code=${match.code}`);
+                const best = chooseBestCandidate(candidates, virtualItem, config, targetDate);
+                if (best) {
+                    bestCandidate = best.candidate;
+                    matchedDb = bestCandidate.database;
+                    foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
+                    logger.info(`[AI Match] ✅ CODE "${item.code}" → ${matchedDb?.name} (${foundInTable}) score=${best.score} ${best.warnings.length > 0 ? 'warns=' + best.warnings.join(';') : ''}`);
+                }
             }
         }
 
-        if (!match) {
-            unmatchedCount++;
-            logger.warn(`[AI Match] ❌ NO MATCH for "${item.code || 'no-code'}" "${item.description?.substring(0, 40)}"`);
-        } else {
+        // Strategy 2: Description similarity fallback (pg_trgm)
+        if (!bestCandidate && item.description && item.description.length >= 10) {
+            try {
+                // Quick pg_trgm search filtered to configured bases
+                const sourceFilter = configuredBases.length > 0
+                    ? ` AND UPPER(d.name) IN (${configuredBases.map(b => `'${b}'`).join(',')})`
+                    : '';
+                const accessFilter = tenantId
+                    ? ` AND (d.type = 'OFICIAL' OR d."tenantId" = '${tenantId}')`
+                    : ` AND d.type = 'OFICIAL'`;
+
+                const descQuery = item.description.substring(0, 80);
+
+                const [compRows, itemRows] = await Promise.all([
+                    prisma.$queryRawUnsafe<any[]>(`
+                        SELECT c.id, c.code, c.description, c.unit, c."totalPrice" as "matchedPrice",
+                               'COMPOSICAO' as "matchType", similarity(c.description, $1) as sim
+                        FROM "EngineeringComposition" c
+                        INNER JOIN "EngineeringDatabase" d ON d.id = c."databaseId"
+                        WHERE c.description % $1
+                          AND similarity(c.description, $1) > 0.35
+                          ${accessFilter}${sourceFilter}
+                        ORDER BY sim DESC LIMIT 3
+                    `, descQuery).catch(() => [] as any[]),
+                    prisma.$queryRawUnsafe<any[]>(`
+                        SELECT i.id, i.code, i.description, i.unit, i.price as "matchedPrice",
+                               'INSUMO' as "matchType", similarity(i.description, $1) as sim
+                        FROM "EngineeringItem" i
+                        INNER JOIN "EngineeringDatabase" d ON d.id = i."databaseId"
+                        WHERE i.description % $1
+                          AND similarity(i.description, $1) > 0.35
+                          ${accessFilter}${sourceFilter}
+                        ORDER BY sim DESC LIMIT 3
+                    `, descQuery).catch(() => [] as any[]),
+                ]);
+
+                const allSim = [...compRows, ...itemRows].sort((a, b) => Number(b.sim) - Number(a.sim));
+                
+                if (allSim.length > 0) {
+                    const topMatch = allSim[0];
+                    const simScore = Number(topMatch.sim) || 0;
+                    
+                    // Fetch full record with database
+                    let fullRecord: any = null;
+                    if (topMatch.matchType === 'COMPOSICAO') {
+                        fullRecord = await prisma.engineeringComposition.findUnique({
+                            where: { id: topMatch.id },
+                            include: { database: { select: DB_SELECT } },
+                        });
+                    } else {
+                        fullRecord = await prisma.engineeringItem.findUnique({
+                            where: { id: topMatch.id },
+                            include: { database: { select: DB_SELECT } },
+                        });
+                    }
+
+                    if (fullRecord && simScore >= 0.5) {
+                        bestCandidate = {
+                            ...fullRecord,
+                            matchType: topMatch.matchType,
+                            matchedPrice: Number(topMatch.matchedPrice) || 0,
+                        };
+                        matchedDb = fullRecord.database;
+                        foundInTable = topMatch.matchType === 'COMPOSICAO' ? 'composition' : 'item';
+                        logger.info(`[AI Match] ✅ DESC "${item.description.substring(0, 40)}" → ${matchedDb?.name} code=${fullRecord.code} sim=${(simScore * 100).toFixed(0)}%`);
+                    } else if (allSim.length > 0) {
+                        logger.info(`[AI Match] ⚠️ DESC "${item.description.substring(0, 40)}" → best sim=${(simScore * 100).toFixed(0)}% (below threshold)`);
+                    }
+                }
+            } catch (e: any) {
+                // pg_trgm not available or query failed — skip silently
+                if (!e.message?.includes('similarity')) {
+                    logger.warn(`[AI Match] Semantic fallback failed: ${e.message}`);
+                }
+            }
+        }
+
+        // Track stats
+        if (bestCandidate) {
             matchedCount++;
+        } else {
+            unmatchedCount++;
+            logger.warn(`[AI Match] ❌ NO MATCH for "${item.code || 'no-code'}" "${item.description?.substring(0, 50)}"`);
         }
 
-        // ═══════════════════════════════════════════════════════
-        // CRITICAL: Correct the type based on WHERE we found the match
-        // If found in compositions table → must be AUXILIAR
-        // If found in items table → use the item's actual type
-        // ═══════════════════════════════════════════════════════
+        // ─────────────────────────────────────────────
+        // STEP 5: BUILD COMPOSITIONEDITOR FORMAT
+        // ─────────────────────────────────────────────
+        // Correct type based on where we found the match
         let resolvedType = itemType;
         if (foundInTable === 'composition') {
             resolvedType = 'AUXILIAR';
-        } else if (foundInTable === 'item' && match?.type) {
-            resolvedType = match.type;
+        } else if (foundInTable === 'item' && bestCandidate?.type) {
+            resolvedType = bestCandidate.type;
         }
 
-        const unitPrice = item.price || (match as any)?.price || (match as any)?.totalPrice || 0;
+        const unitPrice = item.price || bestCandidate?.matchedPrice || (bestCandidate as any)?.price || (bestCandidate as any)?.totalPrice || 0;
         const subtotal = unitPrice * (item.coefficient || 1);
-
-        const isComposition = foundInTable === 'composition' || (!match && looksLikeComposition(item.code || ''));
+        const isComposition = foundInTable === 'composition' || (!bestCandidate && looksLikeComposition(item.code || ''));
 
         const enrichedItem: any = {
             id: `temp-${Date.now()}-${Math.random()}`,
             coefficient: item.coefficient || 1,
             price: subtotal,
-            _ai_confidence: match ? 'high' : 'low',
+            _ai_confidence: bestCandidate ? 'high' : 'low',
             _matchedDatabase: matchedDb?.name || null,
+            _noBaseMatch: !bestCandidate, // Flag for frontend "⚠ Não encontrado nas bases"
         };
 
         if (isComposition) {
             enrichedItem.auxiliaryComposition = {
-                id: match ? match.id : `new-aux-${Date.now()}-${Math.random()}`,
-                code: match ? match.code : (item.code || 'NOVO'),
-                description: match ? match.description : item.description,
-                unit: match ? match.unit : item.unit,
+                id: bestCandidate ? bestCandidate.id : `new-aux-${Date.now()}-${Math.random()}`,
+                code: bestCandidate ? bestCandidate.code : (item.code || 'PROPRIO'),
+                description: bestCandidate ? bestCandidate.description : item.description,
+                unit: bestCandidate ? bestCandidate.unit : item.unit,
                 totalPrice: unitPrice,
-                isNew: !match,
+                isNew: !bestCandidate,
             };
         } else {
             enrichedItem.item = {
-                id: match ? match.id : `new-${Date.now()}-${Math.random()}`,
-                code: match ? match.code : (item.code || 'NOVO'),
-                description: match ? match.description : item.description,
-                unit: match ? match.unit : item.unit,
+                id: bestCandidate ? bestCandidate.id : `new-${Date.now()}-${Math.random()}`,
+                code: bestCandidate ? bestCandidate.code : (item.code || 'PROPRIO'),
+                description: bestCandidate ? bestCandidate.description : item.description,
+                unit: bestCandidate ? bestCandidate.unit : item.unit,
                 type: resolvedType,
                 price: unitPrice,
-                isNew: !match,
+                isNew: !bestCandidate,
             };
         }
 
         itemsWithMatches.push(enrichedItem);
     }
 
-    logger.info(`[AI Extract Composition] Match summary: ${matchedCount} matched, ${unmatchedCount} unmatched out of ${(extracted.items || []).length} items`);
+    logger.info(`[AI Extract Composition] Match summary: ${matchedCount}/${validItems.length} matched, ${unmatchedCount} unmatched, ${rejected.length} rejected by validation`);
 
-    // Group items
+    // Group items for CompositionEditor
     const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };
     for (const ci of itemsWithMatches) {
         if (ci.auxiliaryComposition) {
@@ -377,7 +466,7 @@ export async function extractCompositionFromImage(
         }
     }
 
-    // Determine primary database (most frequent among matched items)
+    // Determine primary database
     const dbCounts: Record<string, number> = {};
     for (const ci of itemsWithMatches) {
         if (ci._matchedDatabase) {
@@ -387,9 +476,8 @@ export async function extractCompositionFromImage(
     let primaryDb: any = null;
     if (Object.keys(dbCounts).length > 0) {
         const sorted = Object.entries(dbCounts).sort((a, b) => b[1] - a[1]);
-        const primaryDbName = sorted[0][0];
         primaryDb = await prisma.engineeringDatabase.findFirst({
-            where: { name: primaryDbName },
+            where: { name: sorted[0][0] },
             select: DB_SELECT,
             orderBy: [{ referenceYear: 'desc' }, { referenceMonth: 'desc' }],
         });
@@ -404,6 +492,11 @@ export async function extractCompositionFromImage(
         items: itemsWithMatches,
         groups,
         database: primaryDb || null,
-        _ai_stats: { matched: matchedCount, unmatched: unmatchedCount, total: (extracted.items || []).length },
+        _ai_stats: {
+            matched: matchedCount,
+            unmatched: unmatchedCount,
+            rejected: rejected.length,
+            total: (extracted.items || []).length,
+        },
     };
 }

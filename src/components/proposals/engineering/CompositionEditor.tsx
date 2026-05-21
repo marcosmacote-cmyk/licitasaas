@@ -1552,8 +1552,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                     {currentItem.sourceName}
                                                                                 </span>
                                                                             )}
-                                                                            {itemData?.isNew && (
-                                                                                <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Novo Insumo Próprio</span>
+                                                                            {itemData?.isNew && ci._noBaseMatch && (
+                                                                                <span style={{ fontSize: '0.6rem', background: '#f59e0b15', color: '#d97706', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>⚠ Não encontrado nas bases</span>
+                                                                            )}
+                                                                            {itemData?.isNew && !ci._noBaseMatch && (
+                                                                                <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Próprio</span>
                                                                             )}
                                                                         </div>
                                                                     </>
