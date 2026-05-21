@@ -1560,8 +1560,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             {itemData?.isNew && ci._noBaseMatch && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#f59e0b15', color: '#d97706', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>⚠ Não encontrado nas bases</span>
                                                                             )}
-                                                                            {itemData?.isNew && !ci._noBaseMatch && (
+                                                                            {itemData?.isNew && !ci._noBaseMatch && !ci._matchDivergence && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Próprio</span>
+                                                                            )}
+                                                                            {ci._matchDivergence && (
+                                                                                <span
+                                                                                    title={ci._matchDivergence.message}
+                                                                                    style={{ fontSize: '0.58rem', background: '#f59e0b18', color: '#b45309', padding: '2px 6px', borderRadius: 4, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'help', border: '1px solid #f59e0b30', maxWidth: 320, lineHeight: 1.3 }}
+                                                                                >
+                                                                                    ⚠ Diverge do edital: {ci._matchDivergence.originalSource && ci._matchDivergence.matchedSource !== ci._matchDivergence.originalSource ? `${ci._matchDivergence.originalSource} → ${ci._matchDivergence.matchedSource}` : ''}{ci._matchDivergence.originalCode && ci._matchDivergence.matchedCode !== ci._matchDivergence.originalCode ? ` cód. ${ci._matchDivergence.originalCode} → ${ci._matchDivergence.matchedCode}` : ''}
+                                                                                </span>
                                                                             )}
                                                                         </div>
                                                                     </>

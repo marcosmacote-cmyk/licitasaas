@@ -324,6 +324,7 @@ export async function extractCompositionFromImage(
         let bestCandidate: any = null;
         let matchedDb: any = null;
         let foundInTable: 'item' | 'composition' | null = null;
+        let matchMethod: 'DIRECT' | 'CROSS_BASE' | 'FUZZY_CODE' | 'DESCRIPTION' = 'DIRECT';
 
         // Strategy 1: Code match with scoring
         if (item.code) {
@@ -380,7 +381,11 @@ export async function extractCompositionFromImage(
                         bestCandidate = best.candidate;
                         matchedDb = bestCandidate.database;
                         foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
-                        logger.info(`[AI Match] ✅ CODE "${item.code}" → ${matchedDb?.name} (${foundInTable}) score=${best.score} sim=${similarity.toFixed(2)} ${best.warnings.length > 0 ? 'warns=' + best.warnings.join(';') : ''}`);
+                        // Detect cross-base: matched DB differs from extracted source
+                        if (extractedSource && matchedDb?.name?.toUpperCase() !== extractedSource) {
+                            matchMethod = 'CROSS_BASE';
+                        }
+                        logger.info(`[AI Match] ✅ CODE "${item.code}" → ${matchedDb?.name} (${foundInTable}) score=${best.score} sim=${similarity.toFixed(2)} method=${matchMethod} ${best.warnings.length > 0 ? 'warns=' + best.warnings.join(';') : ''}`);
                     } else {
                         logger.warn(`[AI Match] ❌ CODE Match Discarded for "${item.code}" due to low description similarity (${similarity.toFixed(2)} < 0.25). Extracted: "${item.description}", DB: "${best.candidate.description}"`);
                     }
@@ -415,7 +420,8 @@ export async function extractCompositionFromImage(
                     bestCandidate = bestFuzzy.candidate;
                     matchedDb = bestCandidate.database;
                     foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
-                    logger.info(`[AI Match] ✅ FUZZY CODE "${item.code}" → corrected to "${bestCandidate.code}" in ${matchedDb?.name} (${foundInTable}) sim=${bestFuzzy.sim.toFixed(2)}`);
+                    matchMethod = 'FUZZY_CODE';
+                    logger.info(`[AI Match] ✅ FUZZY CODE "${item.code}" → corrected to "${bestCandidate.code}" in ${matchedDb?.name} (${foundInTable}) sim=${bestFuzzy.sim.toFixed(2)} method=FUZZY_CODE`);
                 }
             }
         }
@@ -494,6 +500,9 @@ export async function extractCompositionFromImage(
                         logger.info(`[AI Match] ⚠️ DESC "${item.description.substring(0, 40)}" → best sim=${(simScore * 100).toFixed(0)}% (below 55% threshold)`);
                     }
                 }
+                if (bestCandidate) {
+                    matchMethod = 'DESCRIPTION';
+                }
             } catch (e: any) {
                 // pg_trgm not available or query failed — skip silently
                 if (!e.message?.includes('similarity')) {
@@ -525,6 +534,33 @@ export async function extractCompositionFromImage(
         const subtotal = unitPrice * (item.coefficient || 1);
         const isComposition = foundInTable === 'composition' || (!bestCandidate && looksLikeComposition(item.code || ''));
 
+        // Build divergence alert when match method is not DIRECT
+        let matchDivergence: any = null;
+        if (bestCandidate && matchMethod !== 'DIRECT') {
+            const matchedCode = bestCandidate.code || '';
+            const matchedSource = matchedDb?.name || '';
+            const originalCode = item.code || '';
+            const originalSource = extractedSource || '';
+
+            const codeDiverges = matchedCode.replace(/\//g, '').toUpperCase() !== originalCode.replace(/^I|S$/g, '').replace(/^0+/, '').toUpperCase();
+            const sourceDiverges = originalSource && matchedSource.toUpperCase() !== originalSource;
+
+            if (codeDiverges || sourceDiverges) {
+                const parts: string[] = [];
+                if (sourceDiverges) parts.push(`tabela ${matchedSource} (edital: ${originalSource})`);
+                if (codeDiverges) parts.push(`código ${matchedCode} (edital: ${originalCode})`);
+                matchDivergence = {
+                    type: matchMethod,
+                    originalCode,
+                    originalSource,
+                    matchedCode,
+                    matchedSource,
+                    message: `Item encontrado pela descrição em ${parts.join(' e ')}. Verifique se deseja manter ou editar para ficar conforme o edital.`,
+                };
+                logger.info(`[AI Match] ⚠️ DIVERGENCE for "${originalCode}": ${matchDivergence.message}`);
+            }
+        }
+
         const enrichedItem: any = {
             id: `temp-${Date.now()}-${Math.random()}`,
             coefficient: item.coefficient || 1,
@@ -532,6 +568,7 @@ export async function extractCompositionFromImage(
             _ai_confidence: bestCandidate ? 'high' : 'low',
             _matchedDatabase: matchedDb?.name || null,
             _noBaseMatch: !bestCandidate, // Flag for frontend "⚠ Não encontrado nas bases"
+            _matchDivergence: matchDivergence, // Alert when code/base diverges from edital
         };
 
         if (isComposition) {
