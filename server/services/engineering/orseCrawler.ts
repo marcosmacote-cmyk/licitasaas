@@ -700,6 +700,10 @@ export async function syncOrse(options: OrseSyncOptions = {}): Promise<OrseSyncR
         continue;
       }
       results.push(await persistOrsePeriod(period, services, inputs, Boolean(options.force)));
+      
+      // Delay to avoid rate limiting
+      console.log(`[ORSE Sync] Period ${period.version} synced. Waiting 3s before next period...`);
+      await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (e: any) {
       console.error(`[ORSE Sync] Failed for ${period.version}:`, e);
       results.push({ success: false, message: `ORSE ${period.version}: ${e.message}`, period });

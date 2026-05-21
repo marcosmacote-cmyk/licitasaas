@@ -119,10 +119,14 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
+        const hasSameNameWithMatchingUf = allBases.some((b: any) =>
+            b.name.toUpperCase().includes(upperName) && b.uf && b.uf.toUpperCase() === uf
+        );
+
         // Step 1: Try strict match (name + UF + date + regime)
         let candidates = allBases.filter((b: any) => {
             if (!b.name.toUpperCase().includes(upperName)) return false;
-            if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+            if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
             if (hasExplicitDate && targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
             }
@@ -138,7 +142,7 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
         if (candidates.length === 0) {
             candidates = allBases.filter((b: any) => {
                 if (!b.name.toUpperCase().includes(upperName)) return false;
-                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
                 if (hasExplicitDate && targetYear && targetMonth) {
                     if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
                 }
@@ -152,7 +156,7 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
         if (candidates.length === 0 && hasExplicitDate) {
             candidates = allBases.filter((b: any) => {
                 if (!b.name.toUpperCase().includes(upperName)) return false;
-                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
                 return true;
             });
             if (candidates.length > 0) {

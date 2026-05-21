@@ -1082,7 +1082,7 @@ if (PROCESS_ROLE !== 'api') {
                 if (hasEmptyOrse) {
                     logger.info('[AutoRepair] 🔄 Triggering ORSE auto-resync...');
                     const { syncOrse } = await import('./services/engineering/orseCrawler');
-                    syncOrse({ months: 1, force: true }).then(report => {
+                    syncOrse({ months: 24, force: false }).then(report => {
                         logger.info(`[AutoRepair] ✅ ORSE resync: ${report.totalSuccess}/${report.totalAttempted} success`);
                         for (const r of report.results) {
                             logger.info(`[AutoRepair]   ${r.message}`);

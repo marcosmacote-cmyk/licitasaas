@@ -194,10 +194,14 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
             if (y && m) { targetYear = y; targetMonth = m; }
         }
 
+        const hasSameNameWithMatchingUf = allBases.some(b =>
+            b.name.toUpperCase().includes(upperName) && b.uf && b.uf.toUpperCase() === uf
+        );
+
         // Step 1: Try strict match (name + UF + date + regime)
         let candidates = allBases.filter(b => {
             if (!b.name.toUpperCase().includes(upperName)) return false;
-            if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+            if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
             if (hasExplicitDate && targetYear && targetMonth) {
                 if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
             }
@@ -213,7 +217,7 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
         if (candidates.length === 0) {
             candidates = allBases.filter(b => {
                 if (!b.name.toUpperCase().includes(upperName)) return false;
-                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
                 if (hasExplicitDate && targetYear && targetMonth) {
                     if (b.referenceYear !== targetYear || b.referenceMonth !== targetMonth) return false;
                 }
@@ -227,7 +231,7 @@ function filterConfigBasesWithWarnings(allBases: any[], config: any): BaseFilter
         if (candidates.length === 0 && hasExplicitDate) {
             candidates = allBases.filter(b => {
                 if (!b.name.toUpperCase().includes(upperName)) return false;
-                if (uf && b.uf && b.uf.toUpperCase() !== uf) return false;
+                if (hasSameNameWithMatchingUf && b.uf && b.uf.toUpperCase() !== uf) return false;
                 return true;
             });
             if (candidates.length > 0) {

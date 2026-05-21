@@ -108,6 +108,42 @@ function validateExtractedItems(items: any[]): { valid: any[]; rejected: any[] }
 }
 
 /**
+ * Calculates string similarity using Sorensen-Dice coefficient with bigrams (Dice coefficient).
+ * Used to prevent incorrect matching of codes with completely different descriptions.
+ */
+function getStringSimilarity(str1: string, str2: string): number {
+    const s1 = String(str1 || '').trim().toLowerCase();
+    const s2 = String(str2 || '').trim().toLowerCase();
+    if (s1 === s2) return 1.0;
+    if (s1.length < 2 || s2.length < 2) return 0.0;
+
+    const bigrams1: string[] = [];
+    for (let i = 0; i < s1.length - 1; i++) {
+        bigrams1.push(s1.substring(i, i + 2));
+    }
+    const bigrams2: string[] = [];
+    for (let i = 0; i < s2.length - 1; i++) {
+        bigrams2.push(s2.substring(i, i + 2));
+    }
+
+    const map2 = new Map<string, number>();
+    for (const b of bigrams2) {
+        map2.set(b, (map2.get(b) || 0) + 1);
+    }
+
+    let intersection = 0;
+    for (const b of bigrams1) {
+        const count = map2.get(b) || 0;
+        if (count > 0) {
+            intersection++;
+            map2.set(b, count - 1);
+        }
+    }
+
+    return (2.0 * intersection) / (bigrams1.length + bigrams2.length);
+}
+
+/**
  * Normalize an official code for matching (strip spaces, case-insensitive prep).
  */
 function normalizeOfficialCode(code: string): string {
@@ -311,10 +347,15 @@ export async function extractCompositionFromImage(
 
                 const best = chooseBestCandidate(candidates, virtualItem, config, targetDate);
                 if (best) {
-                    bestCandidate = best.candidate;
-                    matchedDb = bestCandidate.database;
-                    foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
-                    logger.info(`[AI Match] ✅ CODE "${item.code}" → ${matchedDb?.name} (${foundInTable}) score=${best.score} ${best.warnings.length > 0 ? 'warns=' + best.warnings.join(';') : ''}`);
+                    const similarity = getStringSimilarity(item.description, best.candidate.description);
+                    if (similarity >= 0.25) {
+                        bestCandidate = best.candidate;
+                        matchedDb = bestCandidate.database;
+                        foundInTable = bestCandidate.matchType === 'COMPOSICAO' ? 'composition' : 'item';
+                        logger.info(`[AI Match] ✅ CODE "${item.code}" → ${matchedDb?.name} (${foundInTable}) score=${best.score} sim=${similarity.toFixed(2)} ${best.warnings.length > 0 ? 'warns=' + best.warnings.join(';') : ''}`);
+                    } else {
+                        logger.warn(`[AI Match] ❌ CODE Match Discarded for "${item.code}" due to low description similarity (${similarity.toFixed(2)} < 0.25). Extracted: "${item.description}", DB: "${best.candidate.description}"`);
+                    }
                 }
             }
         }
