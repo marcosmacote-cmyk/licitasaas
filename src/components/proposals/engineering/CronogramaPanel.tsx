@@ -10,10 +10,11 @@
  * FIX F4.2: Auto-distribuição (Linear / Curva S / Limpar)
  * FIX F4.3: Adicionar/Remover etapas manuais + edição de valor total
  */
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw, Cpu } from 'lucide-react';
 import { calcularCronograma, gerarEtapasPadrao, type CronogramaEtapa } from './cronogramaEngine';
 import { isGrouper } from './types';
+import { CronogramaImportModal } from './CronogramaImportModal';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -28,6 +29,7 @@ interface Props {
 export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
     // FIX ARQ-04: Inicializa a partir de dados salvos se disponíveis
     const [meses, setMeses] = useState(() => savedData?.meses || 6);
+    const [showImportModal, setShowImportModal] = useState(false);
     const [etapas, setEtapas] = useState<CronogramaEtapa[]>(() => {
         if (savedData?.etapas && savedData.etapas.length > 0) return savedData.etapas;
         const auto = gerarEtapasPadrao(items);
@@ -186,6 +188,7 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
     const cs: React.CSSProperties = { padding: '4px 6px', fontSize: '0.72rem', textAlign: 'right', borderRight: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' };
 
     return (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
 
             {/* Controls */}
@@ -215,6 +218,13 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                     style={{ padding: '4px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
                     title="Zera todos os percentuais">
                     <RotateCcw size={12} /> Limpar
+                </button>
+
+                <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
+                <button onClick={() => setShowImportModal(true)} className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4, borderColor: 'rgba(14,116,144,0.3)', color: '#0e7490' }}
+                    title="Extrair cronograma de imagem/print via IA">
+                    <Cpu size={12} /> Extração via IA
                 </button>
 
                 <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
@@ -336,5 +346,18 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
                 })}
             </div>
         </div>
+
+            {showImportModal && (
+                <CronogramaImportModal
+                    onClose={() => setShowImportModal(false)}
+                    onImport={(data) => {
+                        setMeses(data.meses);
+                        setEtapas(data.etapas);
+                        setShowImportModal(false);
+                    }}
+                    existingEtapas={etapas.map(e => e.nome)}
+                />
+            )}
+        </>
     );
 }

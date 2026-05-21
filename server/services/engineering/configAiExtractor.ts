@@ -822,3 +822,80 @@ Onde N é o número percentual sem o símbolo % (ex: 3.00, 0.65, 1.20). Se um it
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// Extract Cronograma from IMAGE (clipboard paste / upload)
+// ═══════════════════════════════════════════════════════════
+export async function extractCronogramaFromImage(imageBase64: string, mimeType: string, existingEtapas?: string[]): Promise<any | null> {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+    const existingCtx = existingEtapas && existingEtapas.length > 0
+        ? `\nETAPAS JÁ EXISTENTES NO ORÇAMENTO (tente mapear os nomes):\n${existingEtapas.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}\n`
+        : '';
+
+    const prompt = `Analise esta imagem de um CRONOGRAMA FÍSICO-FINANCEIRO de obra de engenharia.
+
+Extraia TODAS as seguintes informações:
+
+1. **meses**: Número total de meses do cronograma (conte as colunas de meses).
+2. **etapas**: Array com CADA ETAPA/SERVIÇO listado. Para cada etapa extraia:
+   - **nome**: Nome exato da etapa/serviço conforme aparece na imagem.
+   - **percentuais**: Array de percentuais (%) de execução por mês.
+     * Se a tabela mostra percentuais (%), copie-os diretamente.
+     * Se mostra valores em R$, calcule o percentual relativo ao valor total daquela etapa.
+     * O tamanho do array deve ser IGUAL ao número de meses.
+     * Se um mês está vazio ou em branco, use 0.
+   - **valorTotal**: Se disponível, o valor total (R$) da etapa. Se não visível, use 0.
+${existingCtx}
+REGRAS IMPORTANTES:
+- NÃO inclua linhas de "Total Mensal" ou "Acumulado" como etapas. Elas são totais, não etapas.
+- NÃO inclua linhas de cabeçalho (Mês 1, Mês 2...) como etapas.
+- Se os percentuais estiverem em formato "15,00%" converta para 15.00 (número).
+- Se uma célula mostra "—" ou "-" ou está vazia, use 0.
+- Preserve a ORDEM das etapas conforme aparecem na imagem.
+
+Retorne JSON:
+{
+  "found": true,
+  "meses": 6,
+  "etapas": [
+    { "nome": "Serviços Preliminares", "valorTotal": 15000, "percentuais": [80, 20, 0, 0, 0, 0] },
+    { "nome": "Estrutura", "valorTotal": 50000, "percentuais": [0, 40, 40, 20, 0, 0] }
+  ]
+}
+
+IMPORTANTE: Os valores acima são EXEMPLO de formato. Extraia os valores REAIS da imagem.
+Se não conseguir identificar um cronograma na imagem, retorne { "found": false }.`;
+
+    try {
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [
+                { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
+                { text: prompt }
+            ]}],
+            config: { responseMimeType: 'application/json', temperature: 0.1 }
+        });
+        if (!result?.text) return { found: false };
+        const parsed = JSON.parse(result.text);
+        if (!parsed.found) return { found: false };
+
+        // Normalize: ensure percentuais array length matches meses
+        const meses = parsed.meses || 6;
+        if (Array.isArray(parsed.etapas)) {
+            for (const etapa of parsed.etapas) {
+                if (!Array.isArray(etapa.percentuais)) etapa.percentuais = [];
+                while (etapa.percentuais.length < meses) etapa.percentuais.push(0);
+                etapa.percentuais = etapa.percentuais.slice(0, Math.max(meses, 12));
+                // Pad to 12 for consistency with CronogramaEtapa
+                while (etapa.percentuais.length < 12) etapa.percentuais.push(0);
+                etapa.valorTotal = etapa.valorTotal || 0;
+            }
+        }
+
+        console.log(`[Cronograma-IMG] 📋 found=${parsed.found} meses=${meses} etapas=${parsed.etapas?.length}`);
+        return parsed;
+    } catch (e: any) {
+        console.error(`[Cronograma-IMG] ❌ ${e.message}`);
+        return { found: false, error: e.message };
+    }
+}

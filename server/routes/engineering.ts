@@ -1607,6 +1607,24 @@ router.post('/ai-extract-bdi-image', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// POST /api/engineering/ai-extract-cronograma-image
+// Extrai cronograma físico-financeiro a partir de imagem
+// ═══════════════════════════════════════════════════════════
+router.post('/ai-extract-cronograma-image', async (req: any, res: any) => {
+    try {
+        const { imageBase64, mimeType, existingEtapas } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 é obrigatório' });
+        const { extractCronogramaFromImage } = await import('../services/engineering/configAiExtractor');
+        const data = await extractCronogramaFromImage(imageBase64, mimeType || 'image/png', existingEtapas);
+        if (!data || !data.found) return res.json({ found: false, message: 'Não foi possível extrair cronograma da imagem.' });
+        return res.json({ found: true, data });
+    } catch (e: any) {
+        console.error('[Engineering AI Cronograma-Image] Error:', e);
+        res.status(500).json({ error: 'Erro ao extrair cronograma da imagem', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
 // Pipeline: V2 itens_licitados → AI extraction (fallback)
