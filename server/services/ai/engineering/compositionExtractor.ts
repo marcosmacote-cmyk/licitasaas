@@ -404,7 +404,7 @@ export async function extractCompositionFromImage(
                 for (const candidate of fuzzyPool) {
                     const sim = getStringSimilarity(item.description, candidate.description);
                     if (sim < 0.60) continue;
-                    const sourceMatch = extractedSource && candidate.database?.name?.toUpperCase() === extractedSource;
+                    const sourceMatch = !!(extractedSource && candidate.database?.name?.toUpperCase() === extractedSource);
                     if (!bestFuzzy 
                         || sim > bestFuzzy.sim 
                         || (sim === bestFuzzy.sim && sourceMatch && !bestFuzzy.sourceMatch)) {
