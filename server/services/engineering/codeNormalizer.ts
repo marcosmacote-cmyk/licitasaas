@@ -202,7 +202,7 @@ export function buildFuzzyCodeNeighbors(code: string, source?: string): string[]
     
     if (isNaN(num)) return [];
     
-    // Generate ±1 and ±2 neighbors
+    // Strategy A: Generate ±1 and ±2 neighbors
     for (const offset of [-2, -1, 1, 2]) {
         const neighbor = num + offset;
         if (neighbor < 0) continue;
@@ -213,6 +213,56 @@ export function buildFuzzyCodeNeighbors(code: string, source?: string): string[]
         // Also add variants for this neighbor using buildCodeVariants
         for (const variant of buildCodeVariants(full, source)) {
             neighbors.add(variant);
+        }
+    }
+    
+    // Strategy B: I↔1 prefix swap (critical for OCR confusion: I00862 ↔ 100862)
+    if (prefix === 'I') {
+        // I00862 → 100862 (replace I with 1)
+        const withOne = `1${digits}${suffix}`;
+        neighbors.add(withOne);
+        for (const variant of buildCodeVariants(withOne, source)) {
+            neighbors.add(variant);
+        }
+        // Also try cross-base variants (the real code might be SINAPI 100862)
+        const knownBases = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO'];
+        for (const base of knownBases) {
+            for (const variant of buildCodeVariants(withOne, base)) {
+                neighbors.add(variant);
+            }
+        }
+    } else if (prefix === '' && digits.startsWith('1')) {
+        // 100862 → I00862 (replace leading 1 with I)
+        const withI = `I${digits.slice(1)}${suffix}`;
+        neighbors.add(withI);
+        for (const variant of buildCodeVariants(withI, source)) {
+            neighbors.add(variant);
+        }
+    }
+    
+    // Strategy C: Similar digit substitution for each position
+    // Handles OCR confusion like 6↔8, 1↔7, 0↔8, 5↔6, 3↔8
+    const similarDigits: Record<string, string[]> = {
+        '0': ['8', '6'],
+        '1': ['7'],
+        '3': ['8'],
+        '5': ['6'],
+        '6': ['8', '5', '0'],
+        '7': ['1'],
+        '8': ['6', '3', '0'],
+    };
+    const digitArr = digits.split('');
+    for (let i = 0; i < digitArr.length; i++) {
+        const swaps = similarDigits[digitArr[i]];
+        if (!swaps) continue;
+        for (const swap of swaps) {
+            const newDigits = [...digitArr];
+            newDigits[i] = swap;
+            const full = `${prefix}${newDigits.join('')}${suffix}`;
+            neighbors.add(full);
+            for (const variant of buildCodeVariants(full, source)) {
+                neighbors.add(variant);
+            }
         }
     }
     

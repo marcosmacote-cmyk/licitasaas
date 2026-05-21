@@ -166,4 +166,16 @@ describe('buildFuzzyCodeNeighbors', () => {
         expect(neighbors).toContain('C7395');
         expect(neighbors).toContain('C7397');
     });
+
+    it('swaps I prefix to 1 for OCR confusion (I00862 → 100862)', () => {
+        const neighbors = buildFuzzyCodeNeighbors('I00862', 'SINAPI');
+        // Strategy B: I→1 swap
+        expect(neighbors).toContain('100862');
+    });
+
+    it('generates similar digit substitutions (C2867 → C2667 via 8→6)', () => {
+        const neighbors = buildFuzzyCodeNeighbors('C2867', 'SEINFRA');
+        // Strategy C: digit 8 → 6 at position 1 (second digit of 2867)
+        expect(neighbors).toContain('C2667');
+    });
 });
