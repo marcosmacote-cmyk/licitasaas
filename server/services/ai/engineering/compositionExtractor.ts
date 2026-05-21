@@ -254,11 +254,19 @@ export async function extractCompositionFromImage(
     for (const item of validItems) {
         if (item.code) {
             const itemSource = String(item.source || '').toUpperCase().trim();
-            // Always pass source for proper SEINFRA I/C cross-variants
+            // Always pass source for proper cross-variants
             allCodeVariants.push(...buildCodeVariants(item.code, itemSource));
             // Also add source-specific variants for all configured bases
             for (const src of configuredBases) {
                 allCodeVariants.push(...buildCodeVariants(item.code, src));
+            }
+            // Cross-base: try ALL known bases to handle AI source errors
+            // (e.g., ORSE item tagged as SEINFRA → need ORSE variants in DB query)
+            const knownBases = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'CAERN', 'SBC', 'SICOR'];
+            for (const base of knownBases) {
+                if (base !== itemSource && !configuredBases.includes(base)) {
+                    allCodeVariants.push(...buildCodeVariants(item.code, base));
+                }
             }
             // Add fuzzy neighbors for Strategy 1.5
             allCodeVariants.push(...buildFuzzyCodeNeighbors(item.code, itemSource));
@@ -328,6 +336,30 @@ export async function extractCompositionFromImage(
                 for (const v of variants) {
                     const c = byCode.get(v.toLowerCase());
                     if (c) candidates.push(...c);
+                }
+            }
+
+            // Strategy 1.1: Cross-Base Code Lookup
+            // When AI extracts wrong source (e.g., ORSE item tagged as SEINFRA),
+            // try ALL known bases to generate the right code variants
+            if (candidates.length === 0) {
+                const knownBases = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'CAERN', 'SBC', 'SICOR'];
+                for (const base of knownBases) {
+                    if (base === extractedSource) continue; // Already tried
+                    const crossVariants = buildCodeVariants(item.code, base);
+                    for (const v of crossVariants) {
+                        const c = byCode.get(v.toLowerCase());
+                        if (c) candidates.push(...c);
+                    }
+                    // Also try normalizing with this base
+                    const crossNorm = normalizeOfficialCode(item.code, base).toLowerCase();
+                    if (crossNorm !== codeLower) {
+                        const c = byCode.get(crossNorm);
+                        if (c) candidates.push(...c);
+                    }
+                }
+                if (candidates.length > 0) {
+                    logger.info(`[AI Match] 🔄 Cross-base lookup found ${candidates.length} candidates for "${item.code}" (extracted source: ${extractedSource})`);
                 }
             }
 
