@@ -1063,7 +1063,22 @@ if (PROCESS_ROLE !== 'api') {
             if (emptyDbs.length > 0) {
                 logger.warn(`[AutoRepair] ⚠️ Found ${emptyDbs.length} empty official database(s): ${emptyDbs.map(d => `${d.name}/${d.uf}/${d.version} (i=${d.itemCount},c=${d.compositionCount})`).join(', ')}`);
 
-                const hasEmptyOrse = emptyDbs.some(d => d.name === 'ORSE');
+                // Clean up corrupt records (no UF, no version, both counts = 0)
+                const corruptDbs = emptyDbs.filter(d => (!d.uf || !d.version) && d.itemCount === 0 && d.compositionCount === 0);
+                if (corruptDbs.length > 0) {
+                    logger.info(`[AutoRepair] 🗑️ Cleaning ${corruptDbs.length} corrupt database record(s): ${corruptDbs.map(d => `${d.name}/${d.uf}/${d.version}`).join(', ')}`);
+                    for (const db of corruptDbs) {
+                        await prisma.engineeringCompositionItem.deleteMany({
+                            where: { composition: { databaseId: db.id } },
+                        });
+                        await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
+                        await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+                        await prisma.engineeringDatabase.delete({ where: { id: db.id } });
+                    }
+                    logger.info(`[AutoRepair] ✅ Deleted ${corruptDbs.length} corrupt database record(s)`);
+                }
+
+                const hasEmptyOrse = emptyDbs.some(d => d.name === 'ORSE' && d.uf);
                 if (hasEmptyOrse) {
                     logger.info('[AutoRepair] 🔄 Triggering ORSE auto-resync...');
                     const { syncOrse } = await import('./services/engineering/orseCrawler');
