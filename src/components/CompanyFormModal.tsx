@@ -153,7 +153,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                 ))}
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form id="company-form" onSubmit={handleSubmit}>
 
                 {/* ══════════════════════════════════════ */}
                 {/* TAB 1: DADOS DA EMPRESA               */}
