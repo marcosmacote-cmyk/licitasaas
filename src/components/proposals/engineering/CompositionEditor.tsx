@@ -773,8 +773,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     if (!err.error?.includes('Já existe')) {
                         throw new Error('Erro ao criar cópia na base PRÓPRIA');
                     }
-                    // Se já existe, vamos buscar a ID da que já existe
-                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(data.code)}`, { headers: hdrs() });
+                    // Se já existe na PRÓPRIA, buscar a ID da existente (forçar sourceName=PROPRIA)
+                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(data.code)}?sourceName=PROPRIA`, { headers: hdrs() });
                     const existingData = await resSearch.json();
                     targetId = existingData.id;
                 } else {
@@ -793,9 +793,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             alert('Composição atualizada com sucesso na base PRÓPRIA!');
             setHasChanges(false);
             
-            if (data.database?.name !== 'PROPRIA') {
-                await loadComposition(data.code);
-            }
+            // Reload to get the PROPRIA version with DB-assigned IDs
+            await loadComposition(data.code);
         } catch (e: any) {
             alert(e.message || 'Erro de rede ao salvar');
         } finally {
