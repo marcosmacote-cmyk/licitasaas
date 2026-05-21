@@ -322,37 +322,38 @@ export async function extractCompositionFromImage(
         // Strategy 2: Description similarity fallback (pg_trgm)
         if (!bestCandidate && item.description && item.description.length >= 10) {
             try {
-                // Quick pg_trgm search filtered to configured bases
-                const sourceFilter = configuredBases.length > 0
-                    ? ` AND UPPER(d.name) IN (${configuredBases.map(b => `'${b}'`).join(',')})`
-                    : '';
-                const accessFilter = tenantId
-                    ? ` AND (d.type = 'OFICIAL' OR d."tenantId" = '${tenantId}')`
-                    : ` AND d.type = 'OFICIAL'`;
-
                 const descQuery = item.description.substring(0, 80);
+                
+                // Build SQL filters using Prisma.sql for safety
+                const { Prisma } = require('@prisma/client');
+                const accessSql = tenantId
+                    ? Prisma.sql`AND (d.type = 'OFICIAL' OR d."tenantId" = ${tenantId})`
+                    : Prisma.sql`AND d.type = 'OFICIAL'`;
+                const sourceSql = configuredBases.length > 0
+                    ? Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(configuredBases)})`
+                    : Prisma.empty;
 
                 const [compRows, itemRows] = await Promise.all([
-                    prisma.$queryRawUnsafe<any[]>(`
+                    prisma.$queryRaw<any[]>`
                         SELECT c.id, c.code, c.description, c.unit, c."totalPrice" as "matchedPrice",
-                               'COMPOSICAO' as "matchType", similarity(c.description, $1) as sim
+                               'COMPOSICAO' as "matchType", similarity(c.description, ${descQuery}) as sim
                         FROM "EngineeringComposition" c
                         INNER JOIN "EngineeringDatabase" d ON d.id = c."databaseId"
-                        WHERE c.description % $1
-                          AND similarity(c.description, $1) > 0.35
-                          ${accessFilter}${sourceFilter}
+                        WHERE c.description % ${descQuery}
+                          AND similarity(c.description, ${descQuery}) > 0.35
+                          ${accessSql}${sourceSql}
                         ORDER BY sim DESC LIMIT 3
-                    `, descQuery).catch(() => [] as any[]),
-                    prisma.$queryRawUnsafe<any[]>(`
+                    `.catch(() => [] as any[]),
+                    prisma.$queryRaw<any[]>`
                         SELECT i.id, i.code, i.description, i.unit, i.price as "matchedPrice",
-                               'INSUMO' as "matchType", similarity(i.description, $1) as sim
+                               'INSUMO' as "matchType", similarity(i.description, ${descQuery}) as sim
                         FROM "EngineeringItem" i
                         INNER JOIN "EngineeringDatabase" d ON d.id = i."databaseId"
-                        WHERE i.description % $1
-                          AND similarity(i.description, $1) > 0.35
-                          ${accessFilter}${sourceFilter}
+                        WHERE i.description % ${descQuery}
+                          AND similarity(i.description, ${descQuery}) > 0.35
+                          ${accessSql}${sourceSql}
                         ORDER BY sim DESC LIMIT 3
-                    `, descQuery).catch(() => [] as any[]),
+                    `.catch(() => [] as any[]),
                 ]);
 
                 const allSim = [...compRows, ...itemRows].sort((a, b) => Number(b.sim) - Number(a.sim));
