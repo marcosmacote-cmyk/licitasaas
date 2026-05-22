@@ -296,8 +296,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [showAiDropzone, setShowAiDropzone] = useState(false);
     const aiFileInputRef = useRef<HTMLInputElement>(null);
 
-    // Drill-down stack for auxiliary compositions
-    const [drillStack, setDrillStack] = useState<{ code: string; description: string }[]>([]);
+    // Drill-down stack for auxiliary compositions — includes snapshot of parent data to restore on back
+    const [drillStack, setDrillStack] = useState<{ code: string; description: string; snapshot?: any; snapshotGroupNotes?: Record<string, string>; snapshotCustomLabels?: Record<string, string>; snapshotHasChanges?: boolean }[]>([]);
     // Grouper editing states
     const [grouperDesc, setGrouperDesc] = useState('');
     const [grouperFactor, setGrouperFactor] = useState('1');
@@ -317,6 +317,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [editingGroupLabelText, setEditingGroupLabelText] = useState('');
     const [showNewGroupModal, setShowNewGroupModal] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
+
+    // ── Move item between groups ──
+    const [movingItemId, setMovingItemId] = useState<string | null>(null);
 
     // ── GAP 3: Reference Divisor ──
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
@@ -516,7 +519,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         finally { setPropiaSaving(false); }
     };
 
-
+    // ── Restore composition from drillStack snapshot (avoids losing unsaved data) ──
+    const restoreFromSnapshot = useCallback((snapshot: any, snapshotGroupNotes?: Record<string, string>, snapshotCustomLabels?: Record<string, string>, snapshotHasChanges?: boolean) => {
+        setLoading(false);
+        setError('');
+        setData(snapshot);
+        if (snapshotGroupNotes) setGroupNotes(snapshotGroupNotes);
+        if (snapshotCustomLabels) setCustomGroupLabels(snapshotCustomLabels);
+        if (snapshot?.groupNotes && !snapshotGroupNotes) setGroupNotes(snapshot.groupNotes);
+        if (snapshot?.customGroupLabels && !snapshotCustomLabels) setCustomGroupLabels(snapshot.customGroupLabels);
+        setHasChanges(snapshotHasChanges ?? false);
+    }, []);
 
     const loadComposition = useCallback(async (code: string, overrideSourceName?: string, overrideDatabaseId?: string) => {
         if (!code || code === 'N/A') {
@@ -1314,7 +1327,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         {/* Drill-down breadcrumb */}
                         {drillStack.length > 0 && (
                             <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center', fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
-                                <button onClick={() => { setDrillStack([]); loadComposition(currentItem.code); }}
+                                <button onClick={() => {
+                                    // FIX DRILL-SNAPSHOT: Restore root level from first stack entry's snapshot
+                                    const rootEntry = drillStack[0];
+                                    setDrillStack([]);
+                                    if (rootEntry?.snapshot) {
+                                        restoreFromSnapshot(rootEntry.snapshot, rootEntry.snapshotGroupNotes, rootEntry.snapshotCustomLabels, rootEntry.snapshotHasChanges);
+                                    } else {
+                                        loadComposition(currentItem.code);
+                                    }
+                                }}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, padding: 0 }}>
                                     {currentItem.code}
                                 </button>
@@ -1323,9 +1345,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         <ChevronRight size={12} />
                                         {i < drillStack.length - 1 ? (
                                             <button onClick={() => {
+                                                // FIX DRILL-SNAPSHOT: Navigate to intermediate level, restoring next level's snapshot
+                                                const nextEntry = drillStack[i + 1];
                                                 const newStack = drillStack.slice(0, i + 1);
                                                 setDrillStack(newStack);
-                                                loadComposition(newStack[newStack.length - 1].code);
+                                                if (nextEntry?.snapshot) {
+                                                    restoreFromSnapshot(nextEntry.snapshot, nextEntry.snapshotGroupNotes, nextEntry.snapshotCustomLabels, nextEntry.snapshotHasChanges);
+                                                } else {
+                                                    loadComposition(newStack[newStack.length - 1].code);
+                                                }
                                             }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, padding: 0 }}>
                                                 {level.code}
                                             </button>
@@ -1807,7 +1835,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
-                                                                                        setDrillStack(prev => [...prev, { code: itemData.code, description: itemData.description }]);
+                                                                                        // FIX DRILL-SNAPSHOT: Save current data in stack so we can restore on back
+                                                                                        setDrillStack(prev => [...prev, {
+                                                                                            code: itemData.code,
+                                                                                            description: itemData.description,
+                                                                                            snapshot: data,
+                                                                                            snapshotGroupNotes: { ...groupNotes },
+                                                                                            snapshotCustomLabels: { ...customGroupLabels },
+                                                                                            snapshotHasChanges: hasChanges,
+                                                                                        }]);
                                                                                         // FIX CASCADE-02: Pass current composition's database context for correct lookup
                                                                                         loadComposition(itemData.code, data?.database?.name, data?.databaseId);
                                                                                     }}
@@ -2020,6 +2056,67 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                         <Layers size={12} />
                                                                     </button>
                                                                 )}
+                                                                {/* Move item to another group */}
+                                                                <div style={{ position: 'relative' }}>
+                                                                    <button onClick={(e) => { e.stopPropagation(); setMovingItemId(movingItemId === ci.id ? null : ci.id); }}
+                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', opacity: movingItemId === ci.id ? 1 : 0.4, padding: 2 }}
+                                                                        title="Mover para outro grupo">
+                                                                        <ArrowRightLeft size={11} />
+                                                                    </button>
+                                                                    {movingItemId === ci.id && (
+                                                                        <>
+                                                                        {/* Backdrop to dismiss dropdown */}
+                                                                        <div onClick={(e) => { e.stopPropagation(); setMovingItemId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                                        <div style={{
+                                                                            position: 'absolute', right: 0, top: '100%', zIndex: 1000,
+                                                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                                            borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
+                                                                            minWidth: 180, fontSize: '0.72rem',
+                                                                        }}>
+                                                                            <div style={{ padding: '4px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                                                                                Mover para:
+                                                                            </div>
+                                                                            {(() => {
+                                                                                const allKeys = new Set([...Object.keys(GROUP_META), ...(data.groups ? Object.keys(data.groups) : [])]);
+                                                                                return Array.from(allKeys)
+                                                                                    .filter(k => k !== groupKey)
+                                                                                    .map(targetKey => {
+                                                                                        const targetMeta = GROUP_META[targetKey] || { label: targetKey, color: '#6b7280' };
+                                                                                        const targetLabel = customGroupLabels[targetKey] || targetMeta.label;
+                                                                                        return (
+                                                                                            <button key={targetKey} onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                const updated = { ...data, groups: { ...data.groups } };
+                                                                                                // Remove from current group
+                                                                                                updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
+                                                                                                // Add to target group
+                                                                                                if (!updated.groups[targetKey]) updated.groups[targetKey] = [];
+                                                                                                updated.groups[targetKey].push(ci);
+                                                                                                // Recalculate totals
+                                                                                                updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                                                                                updated.totalDirect = updated.totalPrice;
+                                                                                                setData(updated);
+                                                                                                setHasChanges(true);
+                                                                                                setMovingItemId(null);
+                                                                                                if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                                            }} style={{
+                                                                                                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                                                                                padding: '5px 8px', border: 'none', background: 'none',
+                                                                                                cursor: 'pointer', borderRadius: 4, textAlign: 'left',
+                                                                                                color: targetMeta.color, fontWeight: 600,
+                                                                                            }}
+                                                                                            onMouseEnter={e => (e.currentTarget.style.background = `${targetMeta.color}10`)}
+                                                                                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                                                                            >
+                                                                                                <ArrowRightLeft size={10} /> {targetLabel}
+                                                                                            </button>
+                                                                                        );
+                                                                                    });
+                                                                            })()}
+                                                                        </div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                                 <button onClick={() => {
                                                                     const updated = { ...data, groups: { ...data.groups } };
                                                                     updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
