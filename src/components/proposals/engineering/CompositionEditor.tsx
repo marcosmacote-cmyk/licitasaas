@@ -1726,8 +1726,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
-                                                                {/* Convert Insumo → Composição (only for unmatched items from base própria) */}
-                                                                {ci.item && !itemData?.isObservation && ci._noBaseMatch && (
+                                                                {/* Convert Insumo → Composição (only for unmatched items or items in base PRÓPRIA) */}
+                                                                {ci.item && !itemData?.isObservation && (ci._noBaseMatch || data?.database?.name?.toUpperCase() === 'PROPRIA') && (
                                                                     <button
                                                                         onClick={() => {
                                                                             if (!data) return;
