@@ -248,7 +248,7 @@ function normalizeCompositionSource(sourceName?: string): string | undefined {
     return source;
 }
 
-function buildCompositionCodeVariants(code: string): string[] {
+function buildCompositionCodeVariants(code: string, sourceName?: string): string[] {
     const raw = String(code || '').trim();
     const upper = raw.toUpperCase().replace(/\.$/, '');
     const variants = new Set<string>([raw, upper]);
@@ -265,10 +265,16 @@ function buildCompositionCodeVariants(code: string): string[] {
         variants.add(`COMP. ${upper}`);
     }
 
+    // FIX ORSE-02: Generate ORSE variants for both old (XXXX/ORSE) and new (XXXX) format
+    // sourceName allows detection even when code has no /ORSE suffix
+    const isOrse = /ORSE$/i.test(upper) || String(sourceName || '').toUpperCase() === 'ORSE';
     const orse = upper.match(/^0*(\d{1,6})(?:\/ORSE)?$/);
-    if (orse && /ORSE$/i.test(upper)) {
-        variants.add(`${orse[1]}/ORSE`);
+    if (orse && isOrse) {
+        // Add all variants: with and without /ORSE suffix, with and without leading zeros
         variants.add(orse[1]);
+        variants.add(`${orse[1]}/ORSE`);
+        variants.add(orse[1].padStart(4, '0'));
+        variants.add(orse[1].padStart(5, '0'));
         variants.add(`${orse[1].padStart(4, '0')}/ORSE`);
         variants.add(`${orse[1].padStart(5, '0')}/ORSE`);
     }
@@ -429,7 +435,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const code = req.params.code;
         const databaseId = req.query.databaseId as string || undefined;
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
-        const codeVariants = buildCompositionCodeVariants(code);
+        const codeVariants = buildCompositionCodeVariants(code, sourceName);
 
         logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} codeVariants=${codeVariants.join(',')}`);
 

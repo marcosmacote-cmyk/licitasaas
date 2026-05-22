@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -292,6 +292,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [showRateioModal, setShowRateioModal] = useState(false);
     const [rateioData, setRateioData] = useState({ prazo: '2', fracao: '100' });
 
+    // ── AI Extraction in toolbar (when composition already has items) ──
+    const [showAiDropzone, setShowAiDropzone] = useState(false);
+    const aiFileInputRef = useRef<HTMLInputElement>(null);
+
     // Drill-down stack for auxiliary compositions
     const [drillStack, setDrillStack] = useState<{ code: string; description: string }[]>([]);
     // Grouper editing states
@@ -302,6 +306,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // ── GAP 2: Group notes ──
     const [groupNotes, setGroupNotes] = useState<Record<string, string>>({});
     const [editingGroupNote, setEditingGroupNote] = useState<string | null>(null);
+
+    // ── Etapa/Observation inline editing ──
+    const [editingEtapaId, setEditingEtapaId] = useState<string | null>(null);
+    const [editingEtapaText, setEditingEtapaText] = useState('');
 
     // ── GAP 3: Reference Divisor ──
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
@@ -503,7 +511,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
 
 
-    const loadComposition = useCallback(async (code: string) => {
+    const loadComposition = useCallback(async (code: string, overrideSourceName?: string, overrideDatabaseId?: string) => {
         if (!code || code === 'N/A') {
             setData(null);
             setError('Este item não possui código de composição vinculado.');
@@ -516,9 +524,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setHasChanges(false);
         try {
             const params = new URLSearchParams();
-            const matchedDatabaseId = currentItem?.priceAudit?.matchedDatabaseId;
-            if (matchedDatabaseId) params.set('databaseId', matchedDatabaseId);
-            if (currentItem?.sourceName) params.set('sourceName', currentItem.sourceName);
+            // FIX CASCADE-02: Use override params when navigating drill-down,
+            // falling back to root budget item context
+            const effectiveDatabaseId = overrideDatabaseId || currentItem?.priceAudit?.matchedDatabaseId;
+            const effectiveSourceName = overrideSourceName || currentItem?.sourceName;
+            if (effectiveDatabaseId) params.set('databaseId', effectiveDatabaseId);
+            if (effectiveSourceName) params.set('sourceName', effectiveSourceName);
             const qs = params.toString();
             const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`, { headers: hdrs() });
             if (!res.ok) throw new Error('not_found');
@@ -609,8 +620,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         try {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('code', currentItem.code);
-            formData.append('description', currentItem.description);
+            // FIX CASCADE-01: In drill-down, use the current drillStack level's code/description
+            // This ensures AI extracts the correct composition, not the parent budget item
+            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            formData.append('code', drillLevel?.code || currentItem.code);
+            formData.append('description', drillLevel?.description || currentItem.description);
             formData.append('unit', currentItem.unit);
             if (engineeringConfig) {
                 formData.append('engineeringConfig', JSON.stringify(engineeringConfig));
@@ -993,7 +1007,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         };
 
         const updated = { ...data, groups: { ...data.groups } };
-        const targetGroup = isObs ? 'SERVICO' : typeKey; 
+        const targetGroup = typeKey;
         if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
         updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
@@ -1007,6 +1021,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setShowFreeItemModal(false);
         setFreeItemData({ description: '', unit: 'UN', coefficient: '1', price: '0', type: 'MATERIAL' });
     };
+
+    // ── Etapa/Observation inline edit commit ──
+    const commitEtapaEdit = useCallback(() => {
+        if (!editingEtapaId || !data) { setEditingEtapaId(null); return; }
+        const newText = editingEtapaText.trim();
+        if (!newText) { setEditingEtapaId(null); return; }
+
+        const updated = { ...data, groups: { ...data.groups } };
+        for (const groupKey of Object.keys(updated.groups)) {
+            updated.groups[groupKey] = updated.groups[groupKey].map((ci: any) => {
+                if (ci.id !== editingEtapaId) return ci;
+                const newItem = { ...(ci.item || {}), description: newText };
+                return { ...ci, item: newItem };
+            });
+        }
+        setData(updated);
+        setHasChanges(true);
+        setEditingEtapaId(null);
+    }, [editingEtapaId, editingEtapaText, data]);
 
     const handleApplyFactor = () => {
         if (!data) return;
@@ -1350,13 +1383,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 {!isGrouperType(currentItem.type) && data && !error && (
                     <div style={{
                         padding: '8px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
-                        display: 'flex', gap: 12, alignItems: 'center'
+                        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'
                     }}>
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', marginRight: 4 }}>MÓDULO LIVRE:</span>
                         
+                        {/* AI Extraction button — available even when composition already has items */}
+                        <button onClick={() => setShowAiDropzone(prev => !prev)} title="Extrair insumos via IA: Cole um print (Ctrl+V) ou arraste uma imagem"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: showAiDropzone ? '1px solid var(--color-ai, #8b5cf6)' : '1px solid var(--color-ai, #8b5cf6)', background: showAiDropzone ? 'rgba(139,92,246,0.1)' : 'transparent', color: 'var(--color-ai, #8b5cf6)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 700 }}>
+                            {isExtractingAi ? <Loader2 size={13} className="spin" /> : <Cpu size={13} />} {isExtractingAi ? 'Extraindo...' : 'Extração IA'}
+                        </button>
+
                         <button onClick={() => setShowFreeItemModal(true)} title="Adicionar um insumo ou serviço avulso sem buscar na base"
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px dashed var(--color-border)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                             <PlusCircle size={13} color="var(--color-text-secondary)" /> Insumo Livre
+                        </button>
+
+                        {/* Insert Etapa/Section — opens free item modal pre-configured as OBSERVACAO */}
+                        <button onClick={() => { setFreeItemData({ description: '', unit: '', coefficient: '0', price: '0', type: 'OBSERVACAO' }); setShowFreeItemModal(true); }} title="Inserir uma etapa/seção de organização na composição"
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-text-tertiary)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
+                            <ListTree size={13} color="var(--color-text-secondary)" /> Inserir Etapa
                         </button>
 
                         <button onClick={() => setShowFactorModal(true)} title="Aplicar fator em lote (ex: perda material)"
@@ -1389,6 +1434,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-primary)', background: 'transparent', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                             <Wand2 size={13} /> Inserir Verba
                         </button>
+                    </div>
+                )}
+
+                {/* AI Dropzone — collapsible, shown when user clicks "Extração IA" in toolbar */}
+                {!isGrouperType(currentItem.type) && data && !error && data.items?.length > 0 && showAiDropzone && (
+                    <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--color-border)', background: 'rgba(139,92,246,0.03)' }}>
+                        <SmartCpuDropzone onExtract={handleExtractAi} isExtracting={isExtractingAi} />
+                        <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                            ⚠️ A extração IA substituirá o conteúdo atual desta composição.
+                        </div>
                     </div>
                 )}
 
@@ -1692,7 +1747,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
                                                                                         setDrillStack(prev => [...prev, { code: itemData.code, description: itemData.description }]);
-                                                                                        loadComposition(itemData.code);
+                                                                                        // FIX CASCADE-02: Pass current composition's database context for correct lookup
+                                                                                        loadComposition(itemData.code, data?.database?.name, data?.databaseId);
                                                                                     }}
                                                                                     title={`Abrir composição ${itemData.code}`}
                                                                                     style={{
@@ -1742,7 +1798,31 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                         </div>
                                                                     </>
                                                                 ) : (
-                                                                    <div>{itemData?.description}</div>
+                                                                    /* Editable etapa/observation */
+                                                                    editingEtapaId === ci.id ? (
+                                                                        <input
+                                                                            autoFocus
+                                                                            type="text"
+                                                                            value={editingEtapaText}
+                                                                            onChange={e => setEditingEtapaText(e.target.value)}
+                                                                            onBlur={commitEtapaEdit}
+                                                                            onKeyDown={e => { if (e.key === 'Enter') commitEtapaEdit(); if (e.key === 'Escape') setEditingEtapaId(null); }}
+                                                                            style={{
+                                                                                width: '100%', padding: '4px 8px', fontSize: '0.75rem',
+                                                                                border: '1px solid var(--color-primary)', borderRadius: 4,
+                                                                                fontStyle: 'italic', outline: 'none', background: 'white',
+                                                                            }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div
+                                                                            onClick={() => { setEditingEtapaId(ci.id); setEditingEtapaText(itemData?.description || ''); }}
+                                                                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                                                                            title="Clique para editar esta etapa/observação"
+                                                                        >
+                                                                            {itemData?.description}
+                                                                            <Pencil size={10} color="var(--color-text-tertiary)" style={{ opacity: 0.4, flexShrink: 0 }} />
+                                                                        </div>
+                                                                    )
                                                                 )}
                                                             </div>
                                                             
