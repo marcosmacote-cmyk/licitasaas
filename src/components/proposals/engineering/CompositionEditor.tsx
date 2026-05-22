@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2 } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -879,6 +879,52 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     };
 
+    // ── Clear Composition (reset to empty for re-extraction) ──
+    const handleClearComposition = async () => {
+        if (!data || !data.id || !currentItem) return;
+        // Only allow clearing PROPRIA compositions
+        if (data.database?.name !== 'PROPRIA' && data.database?.type !== 'PROPRIA') {
+            alert('Apenas composições PRÓPRIAS podem ser limpas. Composições oficiais são somente leitura.');
+            return;
+        }
+        const itemCount = data.items?.length || 0;
+        if (itemCount === 0) return;
+        if (!confirm(`Tem certeza que deseja limpar todos os ${itemCount} itens desta composição?\n\nA composição ficará vazia e você poderá fazer uma nova extração via IA.\n\nEsta ação não pode ser desfeita.`)) return;
+
+        try {
+            // Only call backend if the composition has a real DB id (not synthetic)
+            if (!data.id.startsWith('synthetic-')) {
+                const res = await fetch(`/api/engineering/compositions/${data.id}/items`, {
+                    method: 'DELETE',
+                    headers: hdrs(),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || 'Erro ao limpar composição');
+                }
+            }
+
+            // Reset local state to empty composition
+            setData((prev: any) => prev ? {
+                ...prev,
+                items: [],
+                groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] },
+                totalPrice: 0,
+                totalDirect: 0,
+                hasAnalyticalItems: true, // Keep as analytical so the empty state shows
+            } : prev);
+            setHasChanges(false);
+            setGroupNotes({});
+
+            // CASCADE: update planilha item unitCost to 0
+            if (onUpdateItem && currentItem) {
+                onUpdateItem(currentItem.id, { unitCost: 0 });
+            }
+        } catch (e: any) {
+            alert(e.message || 'Erro ao limpar composição');
+        }
+    };
+
     const handleCreateComposition = async () => {
         if (!currentItem) return;
         setLoading(true);
@@ -1329,6 +1375,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </button>
                         
                         <div style={{ flex: 1 }}></div>
+
+                        {/* Clear composition — only for PROPRIA with items */}
+                        {data?.database?.name === 'PROPRIA' && data.items?.length > 0 && (
+                            <button onClick={handleClearComposition}
+                                title="Limpar todos os itens desta composição para iniciar uma nova extração"
+                                style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-danger)', background: 'transparent', color: 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600, opacity: 0.7 }}>
+                                <Trash2 size={13} /> Limpar Composição
+                            </button>
+                        )}
+
                         <button onClick={() => { setFreeItemData(prev => ({ ...prev, description: 'Verba / Custo Indireto', unit: 'VB', type: 'SERVICO' })); setShowFreeItemModal(true); }} title="Adicionar linha de verba / custo indireto"
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-primary)', background: 'transparent', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                             <Wand2 size={13} /> Inserir Verba

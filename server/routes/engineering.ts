@@ -972,6 +972,56 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// DELETE /api/engineering/compositions/:id/items
+// Limpa todos os itens de uma composição PROPRIA (mantém a casca)
+// Permite ao usuário reiniciar a extração IA do zero
+// ═══════════════════════════════════════════════════════════
+router.delete('/compositions/:id/items', async (req: any, res: any) => {
+    try {
+        const id = req.params.id;
+
+        // Verify composition exists and belongs to PROPRIA
+        const existing = await prisma.engineeringComposition.findUnique({
+            where: { id },
+            include: { database: true, items: { select: { id: true } } }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: 'Composição não encontrada' });
+        }
+
+        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+            return res.status(403).json({ error: 'Apenas composições próprias podem ser limpas' });
+        }
+
+        // SEC-02: Verify tenant ownership
+        if (existing.database.tenantId && req.user?.tenantId && existing.database.tenantId !== req.user.tenantId) {
+            return res.status(403).json({ error: 'Composição pertence a outro tenant' });
+        }
+
+        const itemCount = existing.items.length;
+
+        // Delete all composition items (keep the composition shell)
+        await prisma.engineeringCompositionItem.deleteMany({
+            where: { compositionId: id }
+        });
+
+        // Reset totalPrice to 0
+        await prisma.engineeringComposition.update({
+            where: { id },
+            data: { totalPrice: 0 }
+        });
+
+        logger.info(`[CompositionClear] ✅ Cleared ${itemCount} items from composition id=${id} code=${existing.code}`);
+        res.json({ message: `${itemCount} itens removidos da composição`, clearedCount: itemCount });
+
+    } catch (e: any) {
+        console.error('Error clearing composition items:', e);
+        res.status(500).json({ error: 'Erro ao limpar composição', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/proposals/:id/insumos-hub
 // Consolida TODOS os insumos de todas as composições do orçamento
 // Para o Hub de Insumos (Fase 1 — Proposta de Obras)
