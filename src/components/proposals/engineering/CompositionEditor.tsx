@@ -1848,24 +1848,59 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             onDragLeave={() => { if (dragOverGroupIdx === groupIdx) setDragOverGroupIdx(null); }}
                                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleGroupDrop(groupIdx); }}
                                             style={{
-                                                height: dragOverGroupIdx === groupIdx ? 6 : 3,
+                                                height: dragOverGroupIdx === groupIdx ? 8 : 12,
                                                 background: dragOverGroupIdx === groupIdx ? 'var(--color-primary)' : 'transparent',
                                                 transition: 'all 0.15s',
-                                                borderRadius: 3,
+                                                borderRadius: 4,
                                                 marginBlock: 2,
                                             }}
                                         />
                                     )}
                                     <div
-                                        onDragOver={(e) => { if (!dragGroupKey) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
-                                        onDragEnter={(e) => { if (!dragGroupKey) { e.preventDefault(); setDragOverGroup(groupKey); } }}
-                                        onDragLeave={(e) => { if (!dragGroupKey && !e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverGroup(null); setDragOverIndex(null); } }}
-                                        onDrop={(e) => { if (!dragGroupKey) { e.preventDefault(); handleDrop(groupKey); } }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                            if (dragGroupKey) {
+                                                // Group drag: set this group as target
+                                                if (dragGroupKey !== groupKey) setDragOverGroupIdx(groupIdx);
+                                            } else {
+                                                // Item drag
+                                                setDragOverGroup(groupKey);
+                                            }
+                                        }}
+                                        onDragEnter={(e) => { e.preventDefault(); if (!dragGroupKey) setDragOverGroup(groupKey); }}
+                                        onDragLeave={(e) => {
+                                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                                setDragOverGroup(null);
+                                                setDragOverIndex(null);
+                                                if (dragGroupKey && dragOverGroupIdx === groupIdx) setDragOverGroupIdx(null);
+                                            }
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (dragGroupKey) {
+                                                handleGroupDrop(groupIdx);
+                                            } else {
+                                                handleDrop(groupKey);
+                                            }
+                                        }}
                                         style={{
-                                            border: `1px solid ${dragOverGroup === groupKey && dragItem ? meta.color : (dragGroupKey === groupKey ? 'var(--color-primary)' : meta.color + '25')}`,
+                                            border: `1px solid ${
+                                                dragGroupKey && dragGroupKey !== groupKey && dragOverGroupIdx === groupIdx
+                                                    ? 'var(--color-primary)'
+                                                    : dragOverGroup === groupKey && dragItem
+                                                        ? meta.color
+                                                        : (dragGroupKey === groupKey ? 'var(--color-primary)' : meta.color + '25')
+                                            }`,
                                             borderRadius: 'var(--radius-lg)', overflow: 'hidden',
                                             transition: 'border-color 0.15s, box-shadow 0.15s, opacity 0.2s',
-                                            boxShadow: dragOverGroup === groupKey && dragItem && dragItem.sourceGroup !== groupKey ? `0 0 0 2px ${meta.color}30` : 'none',
+                                            boxShadow:
+                                                dragGroupKey && dragGroupKey !== groupKey && dragOverGroupIdx === groupIdx
+                                                    ? '0 0 0 3px rgba(37,99,235,0.25)'
+                                                    : dragOverGroup === groupKey && dragItem && dragItem.sourceGroup !== groupKey
+                                                        ? `0 0 0 2px ${meta.color}30`
+                                                        : 'none',
                                             opacity: dragGroupKey === groupKey ? 0.4 : 1,
                                         }}>
                                         {/* Group header */}
@@ -2506,10 +2541,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             onDragLeave={() => { if (dragOverGroupIdx === groupIdx + 1) setDragOverGroupIdx(null); }}
                                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleGroupDrop(groupIdx + 1); }}
                                             style={{
-                                                height: dragOverGroupIdx === groupIdx + 1 ? 6 : 3,
+                                                height: dragOverGroupIdx === groupIdx + 1 ? 8 : 12,
                                                 background: dragOverGroupIdx === groupIdx + 1 ? 'var(--color-primary)' : 'transparent',
                                                 transition: 'all 0.15s',
-                                                borderRadius: 3,
+                                                borderRadius: 4,
                                                 marginBlock: 2,
                                             }}
                                         />
