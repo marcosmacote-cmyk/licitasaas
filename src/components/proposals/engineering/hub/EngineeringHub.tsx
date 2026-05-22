@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter } from 'lucide-react';
+import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter, Trash2, Edit3, Package, Wrench, Sparkles } from 'lucide-react';
 import { CompositionEditor } from '../CompositionEditor';
 import { apiFetch } from '../../../../services/apiClient';
 
@@ -51,18 +51,66 @@ export function EngineeringHub() {
 
     const propriaBase = bases.find(b => b.type === 'PROPRIA' || b.name === 'PROPRIA');
     const [propriaComps, setPropriaComps] = useState<any[]>([]);
+    const [propriaItems, setPropriaItems] = useState<any[]>([]);
     const [loadingPropria, setLoadingPropria] = useState(false);
     const [propriaSearch, setPropriaSearch] = useState('');
     const [editingComp, setEditingComp] = useState<any>(null);
+    const [propriaSubTab, setPropriaSubTab] = useState<'composicoes' | 'insumos'>('composicoes');
+    const [cleaningUp, setCleaningUp] = useState(false);
+    const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [editItemData, setEditItemData] = useState<{code: string; description: string; unit: string; price: string; type: string}>({code:'', description:'', unit:'', price:'', type:''});
+
+    const hdrs = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
     const loadPropria = async () => {
         if (!propriaBase) return;
         setLoadingPropria(true);
         try {
-            const res = await fetch(`/api/engineering/compositions?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-            if (res.ok) setPropriaComps(await res.json());
+            const [compsRes, itemsRes] = await Promise.all([
+                fetch(`/api/engineering/compositions?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
+                fetch(`/api/engineering/items?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
+            ]);
+            if (compsRes.ok) setPropriaComps(await compsRes.json());
+            if (itemsRes.ok) setPropriaItems(await itemsRes.json());
         } catch (e) {}
         setLoadingPropria(false);
+    };
+
+    const deleteComp = async (id: string, code: string) => {
+        if (!confirm(`Excluir composição "${code}" e todos os seus itens?`)) return;
+        try {
+            const res = await fetch(`/api/engineering/compositions/${id}`, { method: 'DELETE', headers: hdrs() });
+            if (res.ok) { loadPropria(); } else { const e = await res.json(); alert(e.error || 'Erro ao excluir'); }
+        } catch { alert('Erro de conexão'); }
+    };
+
+    const deleteItem = async (id: string, code: string) => {
+        if (!confirm(`Excluir insumo "${code}"? Se estiver em composições, as referências serão removidas.`)) return;
+        try {
+            const res = await fetch(`/api/engineering/items/${id}`, { method: 'DELETE', headers: hdrs() });
+            if (res.ok) { loadPropria(); } else { const e = await res.json(); alert(e.error || 'Erro ao excluir'); }
+        } catch { alert('Erro de conexão'); }
+    };
+
+    const saveItemEdit = async (id: string) => {
+        try {
+            const res = await fetch(`/api/engineering/items/${id}`, { method: 'PUT', headers: hdrs(), body: JSON.stringify(editItemData) });
+            if (res.ok) { setEditingItemId(null); loadPropria(); } else { const e = await res.json(); alert(e.error || 'Erro ao salvar'); }
+        } catch { alert('Erro de conexão'); }
+    };
+
+    const runCleanup = async () => {
+        if (!confirm('Limpar base própria?\n\n• Composições vazias (sem insumos) serão removidas\n• Insumos órfãos (não usados em nenhuma composição) serão removidos\n\nEssa ação não pode ser desfeita.')) return;
+        setCleaningUp(true);
+        try {
+            const res = await fetch('/api/engineering/propria/cleanup', { method: 'POST', headers: hdrs() });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ ${data.message}\n\nRestantes: ${data.remaining.compositions} composições, ${data.remaining.items} insumos`);
+                loadPropria();
+            } else { alert(data.error || 'Erro'); }
+        } catch { alert('Erro de conexão'); }
+        setCleaningUp(false);
     };
 
     useEffect(() => {
@@ -914,19 +962,53 @@ export function EngineeringHub() {
 
             {activeTab === 'propria' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Minhas Composições Próprias</h3>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                            <input 
-                                placeholder="Buscar por código ou descrição..." 
-                                value={propriaSearch} 
-                                onChange={e => setPropriaSearch(e.target.value)}
-                                style={{ padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', width: 300, background: 'var(--color-bg-surface)' }}
-                            />
-                            <button style={{ background: 'var(--color-primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                <Layers size={14} /> Nova Composição
+                    {/* Header with stats and actions */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <div>
+                            <h3 style={{ margin: '0 0 4px', color: 'var(--color-text-primary)', fontSize: '1.15rem', fontWeight: 800 }}>Minha Base Própria</h3>
+                            <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
+                                <span><Layers size={12} style={{ verticalAlign: -1 }} /> <strong style={{ color: 'var(--color-primary)' }}>{propriaComps.length}</strong> composições</span>
+                                <span><Package size={12} style={{ verticalAlign: -1 }} /> <strong style={{ color: '#059669' }}>{propriaItems.length}</strong> insumos</span>
+                                {propriaItems.filter((i: any) => (i._count?.compositionRefs || 0) === 0).length > 0 && (
+                                    <span style={{ color: '#f59e0b' }}><AlertCircle size={12} style={{ verticalAlign: -1 }} /> {propriaItems.filter((i: any) => (i._count?.compositionRefs || 0) === 0).length} órfãos</span>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <Search size={14} style={{ position: 'absolute', left: 10, color: 'var(--color-text-tertiary)' }} />
+                                <input 
+                                    placeholder="Buscar por código ou descrição..." 
+                                    value={propriaSearch} 
+                                    onChange={e => setPropriaSearch(e.target.value)}
+                                    style={{ padding: '8px 12px 8px 32px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', width: 260, background: 'var(--color-bg-surface)', fontSize: '0.85rem' }}
+                                />
+                            </div>
+                            <button 
+                                onClick={runCleanup} 
+                                disabled={cleaningUp}
+                                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: cleaningUp ? 'wait' : 'pointer', fontSize: '0.82rem', opacity: cleaningUp ? 0.7 : 1 }}
+                            >
+                                {cleaningUp ? <RefreshCw size={13} className="spin" /> : <Sparkles size={13} />}
+                                Limpar Base
                             </button>
                         </div>
+                    </div>
+
+                    {/* Sub-tabs: Composições | Insumos */}
+                    <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--color-border)' }}>
+                        {([['composicoes', 'Composições', Layers, propriaComps.length], ['insumos', 'Insumos', Package, propriaItems.length]] as const).map(([key, label, Icon, count]) => (
+                            <button key={key} onClick={() => setPropriaSubTab(key as any)} style={{
+                                background: 'none', border: 'none', padding: '10px 20px', fontSize: '0.88rem',
+                                fontWeight: propriaSubTab === key ? 700 : 500,
+                                color: propriaSubTab === key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                borderBottom: propriaSubTab === key ? '3px solid var(--color-primary)' : '3px solid transparent',
+                                cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6,
+                                marginBottom: -2,
+                            }}>
+                                <Icon size={15} /> {label} <span style={{ fontSize: '0.72rem', background: propriaSubTab === key ? 'rgba(37,99,235,0.1)' : 'var(--color-bg-base)', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>{count}</span>
+                            </button>
+                        ))}
                     </div>
 
                     {!propriaBase ? (
@@ -940,46 +1022,155 @@ export function EngineeringHub() {
                     ) : loadingPropria ? (
                         <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                             <RefreshCw size={24} className="spin" style={{ marginBottom: 12, opacity: 0.5 }} />
-                            <p>Carregando composições próprias...</p>
+                            <p>Carregando base própria...</p>
                         </div>
-                    ) : propriaComps.length === 0 ? (
-                        <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
-                            <Layers size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
-                            <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma composição encontrada</h3>
-                        </div>
-                    ) : (
-                        <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Código</th>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Descrição</th>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>Unidade</th>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'right' }}>Itens</th>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'right' }}>Custo (R$)</th>
-                                        <th style={{ padding: '12px 16px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {propriaComps.map(comp => (
-                                        <tr key={comp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-primary)' }}>{comp.code}</td>
-                                            <td style={{ padding: '12px 16px', fontWeight: 500 }}>{comp.description}</td>
-                                            <td style={{ padding: '12px 16px' }}>{comp.unit}</td>
-                                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>{comp._count?.items || 0}</td>
-                                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{comp.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                                <button onClick={() => setEditingComp({
-                                                    id: comp.id, code: comp.code, description: comp.description, 
-                                                    unit: comp.unit, quantity: 1, unitCost: comp.totalPrice, 
-                                                    itemNumber: '1', sourceName: 'PROPRIA'
-                                                })} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>Editar</button>
-                                            </td>
+                    ) : propriaSubTab === 'composicoes' ? (
+                        /* ═════ COMPOSIÇÕES TAB ═════ */
+                        propriaComps.length === 0 ? (
+                            <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+                                <Layers size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma composição encontrada</h3>
+                            </div>
+                        ) : (
+                            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                    <thead>
+                                        <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Código</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Descrição</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Unidade</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'right' }}>Insumos</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'right' }}>Custo (R$)</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'center' }}>Ações</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {propriaComps.map((comp, idx) => {
+                                            const itemCount = comp._count?.items || 0;
+                                            return (
+                                                <tr key={comp.id} style={{ borderBottom: '1px solid var(--color-border)', background: idx % 2 === 0 ? 'transparent' : 'var(--color-bg-base)' }}>
+                                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{comp.code}</td>
+                                                    <td style={{ padding: '10px 14px', fontWeight: 500, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comp.description}</td>
+                                                    <td style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{comp.unit}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, background: itemCount === 0 ? '#f59e0b15' : '#05966910', color: itemCount === 0 ? '#f59e0b' : '#059669' }}>
+                                                            {itemCount === 0 && <AlertCircle size={11} />}
+                                                            {itemCount}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem' }}>{comp.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                        <button onClick={() => setEditingComp({
+                                                            id: comp.id, code: comp.code, description: comp.description, 
+                                                            unit: comp.unit, quantity: 1, unitCost: comp.totalPrice, 
+                                                            itemNumber: '1', sourceName: 'PROPRIA'
+                                                        })} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                            <Edit3 size={11} /> Editar
+                                                        </button>
+                                                        <button onClick={() => deleteComp(comp.id, comp.code)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ef444440', background: '#ef44440a', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                            <Trash2 size={11} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    ) : (
+                        /* ═════ INSUMOS TAB ═════ */
+                        propriaItems.length === 0 ? (
+                            <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+                                <Package size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhum insumo próprio encontrado</h3>
+                            </div>
+                        ) : (
+                            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                    <thead>
+                                        <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Código</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Descrição</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Unidade</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem' }}>Tipo</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'right' }}>Preço (R$)</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'right' }}>Usado em</th>
+                                            <th style={{ padding: '10px 14px', color: 'var(--color-text-secondary)', fontSize: '0.76rem', textAlign: 'center' }}>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {propriaItems.map((item: any, idx: number) => {
+                                            const refs = item._count?.compositionRefs || 0;
+                                            const isOrphan = refs === 0;
+                                            const isEditing = editingItemId === item.id;
+                                            const typeColors: Record<string, string> = { MATERIAL: '#059669', MAO_DE_OBRA: '#2563eb', EQUIPAMENTO: '#f59e0b', SERVICO: '#7c3aed', OBSERVACAO: '#94a3b8' };
+                                            const typeLabels: Record<string, string> = { MATERIAL: 'Material', MAO_DE_OBRA: 'Mão de Obra', EQUIPAMENTO: 'Equipamento', SERVICO: 'Serviço', OBSERVACAO: 'Observação' };
+                                            return (
+                                                <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border)', background: isOrphan ? '#f59e0b06' : idx % 2 === 0 ? 'transparent' : 'var(--color-bg-base)' }}>
+                                                    <td style={{ padding: '8px 14px' }}>
+                                                        {isEditing ? (
+                                                            <input value={editItemData.code} onChange={e => setEditItemData(d => ({...d, code: e.target.value}))} style={{ width: 80, padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700 }} />
+                                                        ) : (
+                                                            <span style={{ fontWeight: 700, color: '#059669', fontSize: '0.82rem' }}>{item.code}</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px' }}>
+                                                        {isEditing ? (
+                                                            <input value={editItemData.description} onChange={e => setEditItemData(d => ({...d, description: e.target.value}))} style={{ width: '100%', padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem' }} />
+                                                        ) : (
+                                                            <span style={{ fontWeight: 500, maxWidth: 350, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{item.description}</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
+                                                        {isEditing ? (
+                                                            <input value={editItemData.unit} onChange={e => setEditItemData(d => ({...d, unit: e.target.value}))} style={{ width: 45, padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem' }} />
+                                                        ) : item.unit}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px' }}>
+                                                        {isEditing ? (
+                                                            <select value={editItemData.type} onChange={e => setEditItemData(d => ({...d, type: e.target.value}))} style={{ padding: '3px 4px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.75rem' }}>
+                                                                {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                                            </select>
+                                                        ) : (
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.72rem', fontWeight: 600, color: typeColors[item.type] || '#64748b', background: `${typeColors[item.type] || '#64748b'}12`, padding: '2px 7px', borderRadius: 8 }}>
+                                                                {typeLabels[item.type] || item.type}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem' }}>
+                                                        {isEditing ? (
+                                                            <input value={editItemData.price} onChange={e => setEditItemData(d => ({...d, price: e.target.value}))} style={{ width: 80, padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem', textAlign: 'right' }} />
+                                                        ) : (item.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px', textAlign: 'right' }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, background: isOrphan ? '#f59e0b15' : '#05966910', color: isOrphan ? '#f59e0b' : '#059669' }}>
+                                                            {isOrphan && <AlertCircle size={11} />}
+                                                            {refs} comp{refs !== 1 ? 's' : ''}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                            {isEditing ? (<>
+                                                                <button onClick={() => saveItemEdit(item.id)} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #059669', background: '#05966910', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, color: '#059669' }}>Salvar</button>
+                                                                <button onClick={() => setEditingItemId(null)} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>✕</button>
+                                                            </>) : (<>
+                                                                <button onClick={() => { setEditingItemId(item.id); setEditItemData({ code: item.code, description: item.description, unit: item.unit, price: String(item.price || 0), type: item.type }); }} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                    <Edit3 size={10} /> Editar
+                                                                </button>
+                                                                <button onClick={() => deleteItem(item.id, item.code)} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #ef444440', background: '#ef44440a', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                    <Trash2 size={10} />
+                                                                </button>
+                                                            </>)}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
                     )}
                 </div>
             )}

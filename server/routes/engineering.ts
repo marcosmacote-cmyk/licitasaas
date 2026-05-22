@@ -1050,6 +1050,252 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// DELETE /api/engineering/compositions/:id — Excluir composição própria
+// ═══════════════════════════════════════════════════════════
+router.delete('/compositions/:id', async (req: any, res: any) => {
+    try {
+        const id = req.params.id;
+
+        const existing = await prisma.engineeringComposition.findUnique({
+            where: { id },
+            include: { database: true, items: { select: { id: true } } }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: 'Composição não encontrada' });
+        }
+
+        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+            return res.status(403).json({ error: 'Apenas composições próprias podem ser excluídas' });
+        }
+
+        // SEC-02: Verify tenant ownership
+        if (existing.database.tenantId && req.user?.tenantId && existing.database.tenantId !== req.user.tenantId) {
+            return res.status(403).json({ error: 'Composição pertence a outro tenant' });
+        }
+
+        // Delete all composition items first (cascade)
+        await prisma.engineeringCompositionItem.deleteMany({
+            where: { compositionId: id }
+        });
+
+        // Delete the composition itself
+        await prisma.engineeringComposition.delete({
+            where: { id }
+        });
+
+        // Update counter
+        await prisma.engineeringDatabase.update({
+            where: { id: existing.databaseId },
+            data: { compositionCount: { decrement: 1 } }
+        });
+
+        logger.info(`[PropriaManage] 🗑️ Deleted composition: id=${id} code=${existing.code} (${existing.items.length} items)`);
+        res.json({ message: `Composição "${existing.code}" excluída com sucesso` });
+
+    } catch (e: any) {
+        console.error('Error deleting composition:', e);
+        res.status(500).json({ error: 'Erro ao excluir composição', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /api/engineering/items — Listar insumos de uma base
+// ═══════════════════════════════════════════════════════════
+router.get('/items', async (req: any, res: any) => {
+    try {
+        const databaseId = req.query.databaseId as string;
+        const q = req.query.q as string || '';
+        const limit = parseInt(req.query.limit as string) || 100;
+
+        if (!databaseId) {
+            return res.status(400).json({ error: 'databaseId é obrigatório' });
+        }
+
+        const where: any = { databaseId };
+        if (q) {
+            where.OR = [
+                { code: { contains: q, mode: 'insensitive' } },
+                { description: { contains: q, mode: 'insensitive' } }
+            ];
+        }
+
+        const items = await prisma.engineeringItem.findMany({
+            where,
+            take: limit,
+            orderBy: { code: 'asc' },
+            include: {
+                _count: { select: { compositionRefs: true } }
+            }
+        });
+
+        res.json(items);
+    } catch (e: any) {
+        console.error('Error listing items:', e);
+        res.status(500).json({ error: 'Erro ao listar insumos' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// PUT /api/engineering/items/:id — Editar insumo próprio
+// ═══════════════════════════════════════════════════════════
+router.put('/items/:id', async (req: any, res: any) => {
+    try {
+        const id = req.params.id;
+        const { code, description, unit, price, type } = req.body;
+
+        const existing = await prisma.engineeringItem.findUnique({
+            where: { id },
+            include: { database: true }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: 'Insumo não encontrado' });
+        }
+
+        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+            return res.status(403).json({ error: 'Apenas insumos próprios podem ser editados' });
+        }
+
+        if (existing.database.tenantId && req.user?.tenantId && existing.database.tenantId !== req.user.tenantId) {
+            return res.status(403).json({ error: 'Insumo pertence a outro tenant' });
+        }
+
+        const updated = await prisma.engineeringItem.update({
+            where: { id },
+            data: {
+                ...(code !== undefined && { code }),
+                ...(description !== undefined && { description }),
+                ...(unit !== undefined && { unit }),
+                ...(price !== undefined && { price: parseFloat(price) || 0 }),
+                ...(type !== undefined && { type }),
+            }
+        });
+
+        logger.info(`[PropriaManage] ✏️ Updated item: id=${id} code=${updated.code}`);
+        res.json({ message: 'Insumo atualizado com sucesso', item: updated });
+
+    } catch (e: any) {
+        console.error('Error updating item:', e);
+        res.status(500).json({ error: 'Erro ao atualizar insumo', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// DELETE /api/engineering/items/:id — Excluir insumo próprio
+// ═══════════════════════════════════════════════════════════
+router.delete('/items/:id', async (req: any, res: any) => {
+    try {
+        const id = req.params.id;
+
+        const existing = await prisma.engineeringItem.findUnique({
+            where: { id },
+            include: { database: true, compositionRefs: { select: { id: true } } }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: 'Insumo não encontrado' });
+        }
+
+        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+            return res.status(403).json({ error: 'Apenas insumos próprios podem ser excluídos' });
+        }
+
+        if (existing.database.tenantId && req.user?.tenantId && existing.database.tenantId !== req.user.tenantId) {
+            return res.status(403).json({ error: 'Insumo pertence a outro tenant' });
+        }
+
+        // Delete composition item references that point to this item
+        if (existing.compositionRefs.length > 0) {
+            await prisma.engineeringCompositionItem.deleteMany({
+                where: { itemId: id }
+            });
+            logger.info(`[PropriaManage] 🔗 Removed ${existing.compositionRefs.length} composition refs for item ${existing.code}`);
+        }
+
+        await prisma.engineeringItem.delete({
+            where: { id }
+        });
+
+        // Update counter
+        await prisma.engineeringDatabase.update({
+            where: { id: existing.databaseId },
+            data: { itemCount: { decrement: 1 } }
+        });
+
+        logger.info(`[PropriaManage] 🗑️ Deleted item: id=${id} code=${existing.code} (was in ${existing.compositionRefs.length} compositions)`);
+        res.json({ message: `Insumo "${existing.code}" excluído com sucesso`, removedRefs: existing.compositionRefs.length });
+
+    } catch (e: any) {
+        console.error('Error deleting item:', e);
+        res.status(500).json({ error: 'Erro ao excluir insumo', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/propria/cleanup — Limpeza batch da base própria
+// Remove itens órfãos e composições vazias
+// ═══════════════════════════════════════════════════════════
+router.post('/propria/cleanup', async (req: any, res: any) => {
+    try {
+        const tenantId = req.user?.tenantId;
+        if (!tenantId) return res.status(401).json({ error: 'Não autenticado' });
+
+        const propriaDb = await prisma.engineeringDatabase.findFirst({
+            where: { name: 'PROPRIA', tenantId }
+        });
+
+        if (!propriaDb) return res.json({ message: 'Base própria não encontrada', cleaned: { compositions: 0, items: 0 } });
+
+        // 1. Find and remove empty compositions (0 items)
+        const emptyComps = await prisma.engineeringComposition.findMany({
+            where: { databaseId: propriaDb.id },
+            include: { _count: { select: { items: true } } }
+        });
+        const compsToDelete = emptyComps.filter(c => c._count.items === 0);
+        let deletedComps = 0;
+        for (const c of compsToDelete) {
+            await prisma.engineeringComposition.delete({ where: { id: c.id } });
+            deletedComps++;
+        }
+
+        // 2. Find and remove orphan items (not referenced by any composition)
+        const allItems = await prisma.engineeringItem.findMany({
+            where: { databaseId: propriaDb.id },
+            include: { _count: { select: { compositionRefs: true } } }
+        });
+        const orphanItems = allItems.filter(i => i._count.compositionRefs === 0);
+        let deletedItems = 0;
+        for (const i of orphanItems) {
+            await prisma.engineeringItem.delete({ where: { id: i.id } });
+            deletedItems++;
+        }
+
+        // 3. Update counters
+        const [remainingComps, remainingItems] = await Promise.all([
+            prisma.engineeringComposition.count({ where: { databaseId: propriaDb.id } }),
+            prisma.engineeringItem.count({ where: { databaseId: propriaDb.id } }),
+        ]);
+        await prisma.engineeringDatabase.update({
+            where: { id: propriaDb.id },
+            data: { compositionCount: remainingComps, itemCount: remainingItems }
+        });
+
+        logger.info(`[PropriaCleanup] 🧹 Cleaned: ${deletedComps} empty compositions, ${deletedItems} orphan items. Remaining: ${remainingComps} comps, ${remainingItems} items`);
+        res.json({
+            message: `Limpeza concluída: ${deletedComps} composições vazias e ${deletedItems} insumos órfãos removidos`,
+            cleaned: { compositions: deletedComps, items: deletedItems },
+            remaining: { compositions: remainingComps, items: remainingItems }
+        });
+
+    } catch (e: any) {
+        console.error('Error cleaning propria:', e);
+        res.status(500).json({ error: 'Erro ao limpar base própria', details: e.message });
+    }
+});
+
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/proposals/:id/insumos-hub
 // Consolida TODOS os insumos de todas as composições do orçamento
 // Para o Hub de Insumos (Fase 1 — Proposta de Obras)
@@ -2285,8 +2531,13 @@ router.post('/ai-populate', async (req: any, res: any) => {
         await enrichWithOfficialPrices(items, engineeringConfig, { tenantId: req.user?.tenantId });
 
         // Auto-save composições PRÓPRIAS to the database
+        // FIX: Filter out spurious items (declarations, admin, etapas) that shouldn't be in PROPRIA
+        const SPURIOUS_CODE_PATTERNS = /^(DC-|ADM-|CP-0[1-9]$|CXXXXX|ETAPA)/i;
         const ownComps = items.filter((it: any) => {
             if (it.type !== 'COMPOSICAO') return false;
+            if (it.type === 'ETAPA' || it.type === 'SUBETAPA') return false;
+            const code = (it.code || it.item || '').trim();
+            if (!code || SPURIOUS_CODE_PATTERNS.test(code)) return false;
             const source = (it.sourceName || '').toUpperCase();
             const isKnownSource = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SICOR', 'SBC'].includes(source);
             return !isKnownSource || source === 'PROPRIA';
