@@ -978,6 +978,22 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     continue;
                 }
                 
+                // Verify FK references exist before inserting
+                if (!isAux && itemId) {
+                    const itemExists = await tx.engineeringItem.findUnique({ where: { id: itemId }, select: { id: true } });
+                    if (!itemExists) {
+                        logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist (FK would fail). Item code=${item.item?.code}`);
+                        continue;
+                    }
+                }
+                if (isAux && auxId) {
+                    const auxExists = await tx.engineeringComposition.findUnique({ where: { id: auxId }, select: { id: true } });
+                    if (!auxExists) {
+                        logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist (FK would fail). Aux code=${item.auxiliaryComposition?.code}`);
+                        continue;
+                    }
+                }
+
                 await tx.engineeringCompositionItem.create({
                     data: {
                         compositionId: id,

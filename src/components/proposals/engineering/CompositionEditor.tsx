@@ -6,7 +6,7 @@
  *   → recalcula total da composição → callback onUpdateItem(unitCost)
  *   → planilha recalcula BDI + total → Hub reflete novos preços
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree, GripVertical } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
@@ -322,8 +322,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [movingItemId, setMovingItemId] = useState<string | null>(null);
 
     // ── Drag & Drop between groups ──
-    const [dragItem, setDragItem] = useState<{ id: string; sourceGroup: string } | null>(null);
+    const [dragItem, setDragItem] = useState<{ id: string; sourceGroup: string; sourceIndex: number } | null>(null);
     const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
     // ── Change item base classification ──
     const [editingBaseItemId, setEditingBaseItemId] = useState<string | null>(null);
@@ -419,12 +420,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         let typeKey = 'MATERIAL';
         let newItem: any = null;
 
+        // Resolve source database name for correct badge display
+        const selectedBase = bases.find(b => b.id === selectedBaseId);
+        const sourceDbName = selectedBase?.name || '';
+
         if (searchType === 'composition') {
             typeKey = 'AUXILIAR';
             newItem = {
                 id: `temp-${Date.now()}`,
                 coefficient: coef,
                 price: Number(dbItem.totalPrice) || 0,
+                _matchedDatabase: sourceDbName,
                 auxiliaryComposition: {
                     id: dbItem.id,
                     code: dbItem.code,
@@ -444,6 +450,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 id: `temp-${Date.now()}`,
                 coefficient: coef,
                 price: Number(dbItem.price) || 0,
+                _matchedDatabase: sourceDbName,
                 item: {
                     id: dbItem.id,
                     code: dbItem.code,
@@ -696,23 +703,47 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         });
     };
 
-    // ── Drag & Drop: Move item between groups ──
-    const handleDrop = (targetGroup: string) => {
-        if (!dragItem || !data || dragItem.sourceGroup === targetGroup) {
+    // ── Drag & Drop: Move item between groups OR reorder within same group ──
+    const handleDrop = (targetGroup: string, insertAtIndex?: number) => {
+        if (!dragItem || !data) {
             setDragItem(null);
             setDragOverGroup(null);
+            setDragOverIndex(null);
             return;
         }
         const updated = { ...data, groups: { ...data.groups } };
-        // Find and remove item from source group
-        const sourceItems = [...(updated.groups[dragItem.sourceGroup] || [])];
-        const itemIndex = sourceItems.findIndex((i: any) => i.id === dragItem.id);
-        if (itemIndex === -1) { setDragItem(null); setDragOverGroup(null); return; }
-        const [movedItem] = sourceItems.splice(itemIndex, 1);
-        updated.groups[dragItem.sourceGroup] = sourceItems;
-        // Add to target group
-        if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
-        updated.groups[targetGroup] = [...updated.groups[targetGroup], movedItem];
+        const isSameGroup = dragItem.sourceGroup === targetGroup;
+
+        if (isSameGroup) {
+            // Reorder within the same group
+            const items = [...(updated.groups[targetGroup] || [])];
+            const fromIdx = items.findIndex((i: any) => i.id === dragItem.id);
+            if (fromIdx === -1 || insertAtIndex === undefined || insertAtIndex === null) {
+                setDragItem(null); setDragOverGroup(null); setDragOverIndex(null);
+                return;
+            }
+            const [movedItem] = items.splice(fromIdx, 1);
+            // Adjust target index after removal
+            const adjustedIdx = insertAtIndex > fromIdx ? insertAtIndex - 1 : insertAtIndex;
+            items.splice(adjustedIdx, 0, movedItem);
+            updated.groups[targetGroup] = items;
+        } else {
+            // Move between groups
+            const sourceItems = [...(updated.groups[dragItem.sourceGroup] || [])];
+            const itemIndex = sourceItems.findIndex((i: any) => i.id === dragItem.id);
+            if (itemIndex === -1) { setDragItem(null); setDragOverGroup(null); setDragOverIndex(null); return; }
+            const [movedItem] = sourceItems.splice(itemIndex, 1);
+            updated.groups[dragItem.sourceGroup] = sourceItems;
+            // Add to target group at specific position or end
+            if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
+            const targetItems = [...updated.groups[targetGroup]];
+            if (insertAtIndex !== undefined && insertAtIndex !== null) {
+                targetItems.splice(insertAtIndex, 0, movedItem);
+            } else {
+                targetItems.push(movedItem);
+            }
+            updated.groups[targetGroup] = targetItems;
+        }
         // Recalculate totals
         updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
@@ -723,6 +754,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setExpandedGroups(prev => new Set([...prev, targetGroup]));
         setDragItem(null);
         setDragOverGroup(null);
+        setDragOverIndex(null);
     };
 
     // ═══════════════════════════════════════════════════════
@@ -1767,13 +1799,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     <div key={groupKey}
                                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                                         onDragEnter={(e) => { e.preventDefault(); setDragOverGroup(groupKey); }}
-                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverGroup(null); }}
+                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverGroup(null); setDragOverIndex(null); } }}
                                         onDrop={(e) => { e.preventDefault(); handleDrop(groupKey); }}
                                         style={{
-                                            border: `1px solid ${dragOverGroup === groupKey && dragItem?.sourceGroup !== groupKey ? meta.color : meta.color + '25'}`,
+                                            border: `1px solid ${dragOverGroup === groupKey && dragItem ? meta.color : meta.color + '25'}`,
                                             borderRadius: 'var(--radius-lg)', overflow: 'hidden',
                                             transition: 'border-color 0.15s, box-shadow 0.15s',
-                                            boxShadow: dragOverGroup === groupKey && dragItem?.sourceGroup !== groupKey ? `0 0 0 2px ${meta.color}30` : 'none',
+                                            boxShadow: dragOverGroup === groupKey && dragItem && dragItem.sourceGroup !== groupKey ? `0 0 0 2px ${meta.color}30` : 'none',
                                         }}>
                                         {/* Group header */}
                                         <div onClick={() => toggleGroup(groupKey)}
@@ -1878,13 +1910,28 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     const isEditingPrice = editingField?.id === ci.id && editingField?.field === 'price';
 
                                                     return (
-                                                        <div key={ci.id || idx}
+                                                        <React.Fragment key={ci.id || idx}>
+                                                        {/* Drop zone BEFORE this row */}
+                                                        {dragItem && dragItem.id !== ci.id && (
+                                                            <div
+                                                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey); setDragOverIndex(idx); }}
+                                                                onDragLeave={() => { if (dragOverIndex === idx && dragOverGroup === groupKey) setDragOverIndex(null); }}
+                                                                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx); }}
+                                                                style={{
+                                                                    height: dragOverGroup === groupKey && dragOverIndex === idx ? 4 : 2,
+                                                                    background: dragOverGroup === groupKey && dragOverIndex === idx ? meta.color : 'transparent',
+                                                                    transition: 'all 0.15s',
+                                                                    borderRadius: 2,
+                                                                    marginInline: 20,
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <div
                                                             draggable={!isEditingCoef && !isEditingPrice}
                                                             onDragStart={(e) => {
-                                                                setDragItem({ id: ci.id, sourceGroup: groupKey });
+                                                                setDragItem({ id: ci.id, sourceGroup: groupKey, sourceIndex: idx });
                                                                 e.dataTransfer.effectAllowed = 'move';
                                                                 e.dataTransfer.setData('text/plain', ci.id);
-                                                                // Semi-transparent ghost
                                                                 if (e.currentTarget) {
                                                                     e.currentTarget.style.opacity = '0.4';
                                                                 }
@@ -1893,7 +1940,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 if (e.currentTarget) e.currentTarget.style.opacity = '1';
                                                                 setDragItem(null);
                                                                 setDragOverGroup(null);
+                                                                setDragOverIndex(null);
                                                             }}
+                                                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey); }}
+                                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx); }}
                                                             style={{
                                                                 display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                                 gap: 8, padding: '8px 20px', alignItems: 'center',
@@ -2297,6 +2347,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 </button>
                                                             </div>
                                                         </div>
+                                                        {/* Drop zone AFTER last row */}
+                                                        {dragItem && dragItem.id !== ci.id && idx === groupItems.length - 1 && (
+                                                            <div
+                                                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey); setDragOverIndex(idx + 1); }}
+                                                                onDragLeave={() => { if (dragOverIndex === idx + 1 && dragOverGroup === groupKey) setDragOverIndex(null); }}
+                                                                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx + 1); }}
+                                                                style={{
+                                                                    height: dragOverGroup === groupKey && dragOverIndex === idx + 1 ? 4 : 2,
+                                                                    background: dragOverGroup === groupKey && dragOverIndex === idx + 1 ? meta.color : 'transparent',
+                                                                    transition: 'all 0.15s',
+                                                                    borderRadius: 2,
+                                                                    marginInline: 20,
+                                                                }}
+                                                            />
+                                                        )}
+                                                        </React.Fragment>
                                                     );
                                                 })}
 
