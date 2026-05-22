@@ -865,8 +865,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     const enrichedSource = ai.priceAudit?.matchedSourceName;
                     const extractedSource = /\/ORSE$/i.test(String(ai.code || '')) ? 'ORSE' : (enrichedSource || ai.sourceName || 'PROPRIA');
                     const finalSource = isGroup ? '' : extractedSource;
+                    // FIX ORSE-01: Strip /ORSE suffix — sourceName already identifies the base
                     const normalizedCode = finalSource === 'ORSE' && ai.code
-                        ? String(ai.code).toUpperCase().replace(/^0+(\d)/, '$1').replace(/\/?ORSE$/, '/ORSE')
+                        ? String(ai.code).toUpperCase().replace(/^0+(\d)/, '$1').replace(/\/?ORSE$/i, '')
                         : ai.code;
 
                     // FIX #3: Always compute unitPrice from BDI — never freeze edital prices

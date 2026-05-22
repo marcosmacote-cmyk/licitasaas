@@ -118,9 +118,10 @@ function parseBrNumber(value: string): number {
 }
 
 function normalizeOrseCode(code: string): string {
+  // FIX ORSE-01: Return only the numeric part — /ORSE suffix is redundant (sourceName identifies the base)
   const cleaned = String(code || '').trim().toUpperCase();
-  const match = cleaned.match(/^0*(\d+)\/ORSE$/);
-  return match ? `${match[1]}/ORSE` : cleaned;
+  const match = cleaned.match(/^0*(\d+)(?:\/ORSE)?$/);
+  return match ? match[1] : cleaned.replace(/\/ORSE$/i, '');
 }
 
 function detectInsumoType(description: string): OrseInsumoRow['type'] {

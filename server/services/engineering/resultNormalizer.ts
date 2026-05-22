@@ -568,7 +568,8 @@ export function normalizeEngineeringItems(items: Array<Record<string, unknown>>)
             item: String(firstDefined(item, ['i', 'item', 'itemNumber', 'numero', 'n', 'ordem']) ?? `${index + 1}`),
             type: normalizeType(firstDefined(item, ['t', 'type', 'tipo', 'classification'])),
             sourceName: isOrse ? 'ORSE' : rawSourceName,
-            code: isOrse && orseCodeMatch ? `${orseCodeMatch[1]}/ORSE` : rawCode,
+            // FIX ORSE-01: Return only the numeric part — /ORSE suffix is redundant
+            code: isOrse && orseCodeMatch ? orseCodeMatch[1] : rawCode,
             description: String(firstDefined(item, ['d', 'description', 'descricao', 'descrição', 'servico', 'serviço', 'nome']) || ''),
             unit: String(firstDefined(item, ['u', 'unit', 'unidade', 'unid', 'und']) || ''),
             quantity: parseNumber(firstDefined(item, ['q', 'quantity', 'quantidade', 'qtd', 'qty'])),

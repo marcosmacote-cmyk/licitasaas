@@ -53,14 +53,15 @@ export function normalizeCode(raw: string, source?: string): string {
         }
 
         case 'ORSE': {
+            // FIX ORSE-01: Return only the numeric part — sourceName identifies the base
             // Strip I prefix if present (PDF formatting: I09783 means insumo 09783)
             let orseCode = code;
             if (/^I\d/i.test(orseCode) && !/\/ORSE$/i.test(orseCode)) orseCode = orseCode.slice(1);
             // Strip trailing letter suffix only when no /ORSE suffix (e.g., 04342S → 04342)
             if (!/\/ORSE$/i.test(orseCode)) orseCode = orseCode.replace(/[A-Z]$/i, '');
             const orseMatch = orseCode.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
-            if (orseMatch) return `${orseMatch[1]}/ORSE`;
-            return code.toUpperCase();
+            if (orseMatch) return orseMatch[1];
+            return code.toUpperCase().replace(/\/ORSE$/i, '');
         }
 
         case 'SICRO':
@@ -101,12 +102,14 @@ export function buildCodeVariants(code: string, source?: string): string[] {
         if (!/\/ORSE$/i.test(orseClean)) orseClean = orseClean.replace(/[A-Z]$/i, '');
         const orseMatch = orseClean.match(/^0*(\d{1,6})(?:\/ORSE)?$/i);
         if (orseMatch) {
-            variants.add(`${orseMatch[1]}/ORSE`);
+            // FIX ORSE-01: Primary variant is just the number
             variants.add(orseMatch[1]);
-            variants.add(`${orseMatch[1].padStart(4, '0')}/ORSE`);
-            variants.add(`${orseMatch[1].padStart(5, '0')}/ORSE`);
             variants.add(orseMatch[1].padStart(4, '0'));
             variants.add(orseMatch[1].padStart(5, '0'));
+            // Backward compat: also add /ORSE variants for matching old DB records
+            variants.add(`${orseMatch[1]}/ORSE`);
+            variants.add(`${orseMatch[1].padStart(4, '0')}/ORSE`);
+            variants.add(`${orseMatch[1].padStart(5, '0')}/ORSE`);
         }
     }
 
@@ -167,7 +170,7 @@ export function validateCodeFormat(code: string, source: string): string | null 
 
         case 'ORSE': {
             if (!/^\d{1,6}(\/ORSE)?$/i.test(trimmed)) {
-                return `Código ORSE inválido: "${trimmed}" — esperado 1-6 dígitos (/ORSE opcional)`;
+                return `Código ORSE inválido: "${trimmed}" — esperado 1-6 dígitos`;
             }
             return null;
         }

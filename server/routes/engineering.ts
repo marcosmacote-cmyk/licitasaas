@@ -2677,11 +2677,13 @@ async function mapV2ToEngineering(itensV2: any[], engineeringConfig?: any, tenan
             sourceName = detected.sourceName;
             code = detected.code;
         } else if (!sourceName) {
+            // FIX ORSE-01: detect ORSE from /ORSE suffix but strip it from code
             sourceName = /\/ORSE$/i.test(code)
                 ? 'ORSE'
                 : code.match(/^[CI]\d/i)
                     ? 'SEINFRA'
                     : 'SINAPI';
+            if (sourceName === 'ORSE') code = code.replace(/\/ORSE$/i, '').replace(/^0+(\d)/, '$1');
         }
 
         // Infer type from item structure
@@ -2738,8 +2740,9 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
         const numericCode = isSlashFormat ? sourceMatch[1] : sourceMatch[2];
         return {
             sourceName,
+            // FIX ORSE-01: Return only numeric code for ORSE
             code: sourceName === 'ORSE'
-                ? `${String(numericCode).replace(/^0+(\d)/, '$1')}/ORSE`
+                ? String(numericCode).replace(/^0+(\d)/, '$1')
                 : String(numericCode),
         };
     }
@@ -2748,8 +2751,9 @@ function detectSourceAndCode(description: string, itemNumber?: string): { source
     if (itemNumber && /^[CI]\d{3,5}$/i.test(itemNumber.trim())) {
         return { sourceName: 'SEINFRA', code: itemNumber.trim().toUpperCase() };
     }
+    // FIX ORSE-01: detect ORSE from itemNumber format, return just the number
     if (itemNumber && /^0*\d{1,6}\/ORSE$/i.test(itemNumber.trim())) {
-        return { sourceName: 'ORSE', code: itemNumber.trim().toUpperCase().replace(/^0+(\d)/, '$1') };
+        return { sourceName: 'ORSE', code: itemNumber.trim().toUpperCase().replace(/\/ORSE$/i, '').replace(/^0+(\d)/, '$1') };
     }
 
     return { sourceName: 'PROPRIA', code: itemNumber || 'N/A' };
