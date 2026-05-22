@@ -64,7 +64,15 @@ REGRAS PARA COMPOSIÇÕES COMPLEXAS (Iluminação Pública, Manutenção, Garant
     - "coefficientExpression" DEVE ser a expressão dos fatores separados por * (ex: "1*1", "1*220").
     - "price" continua sendo o PREÇO UNITÁRIO de um único elemento (valor horista, valor hora, custo unitário).
 12. Se a composição tiver subseções nomeadas (ex: "1.1.a — MÃO DE OBRA", "1.1.b — MATERIAIS"), extraia TODOS os itens de TODAS as subseções.
-13. Para composições padrão SINAPI/SEINFRA com uma única coluna de coeficiente, NÃO use coefficientExpression — deixe o campo ausente.`;
+13. Para composições padrão SINAPI/SEINFRA com uma única coluna de coeficiente, NÃO use coefficientExpression — deixe o campo ausente.
+
+REGRA PARA CÓDIGO+BASE NA MESMA CÉLULA:
+14. Em muitos editais, a coluna CÓDIGO contém código e base juntos, separados por barra. Exemplos:
+    - "2510/SINAPI" → code: "2510", source: "SINAPI"
+    - "02622/ORSE" → code: "02622", source: "ORSE"
+    - "16278/SEINFRA" → code: "16278", source: "SEINFRA"
+    - "20111/SINAPI" → code: "20111", source: "SINAPI"
+    Quando detectar este padrão, SEPARE o código da base: coloque apenas o número em "code" e a base em "source". NÃO coloque o nome da base no campo code.`;
 
 // ═══════════════════════════════════════════════════════════
 // LAYER 2: POST-EXTRACTION VALIDATION (ANTI-HALLUCINATION)
@@ -118,6 +126,33 @@ function validateExtractedItems(items: any[]): { valid: any[]; rejected: any[] }
     }
 
     return { valid, rejected };
+}
+
+/**
+ * Post-extraction normalizer: splits combined "CODE/BASE" patterns.
+ * E.g., code="2510/SINAPI" → code="2510", source="SINAPI"
+ * Also handles "091C6064P/ORSE", "I6519/SEINFRA", etc.
+ */
+function normalizeExtractedCodes(items: any[]): any[] {
+    const KNOWN_BASES = ['SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'SICRO3', 'CAERN', 'SBC', 'SICOR'];
+    const basePattern = new RegExp(`^(.+?)\\/(${KNOWN_BASES.join('|')})$`, 'i');
+
+    return items.map(item => {
+        const code = String(item.code || '').trim();
+        const match = code.match(basePattern);
+        if (match) {
+            const extractedCode = match[1].trim();
+            const extractedBase = match[2].toUpperCase();
+            logger.info(`[AI Normalize] Split combined code: "${code}" → code="${extractedCode}", source="${extractedBase}"`);
+            return {
+                ...item,
+                code: extractedCode,
+                source: extractedBase,
+                _originalCode: code, // Keep original for divergence tracking
+            };
+        }
+        return item;
+    });
 }
 
 /**
@@ -255,6 +290,12 @@ export async function extractCompositionFromImage(
     logger.info(`[AI Extract Composition] Validation: ${validItems.length} valid, ${rejected.length} rejected`);
 
     // ─────────────────────────────────────────────────
+    // STEP 2.5: NORMALIZE COMBINED CODE/BASE PATTERNS
+    // ─────────────────────────────────────────────────
+    const normalizedItems = normalizeExtractedCodes(validItems);
+    logger.info(`[AI Extract Composition] Post-normalization: ${normalizedItems.length} items`);
+
+    // ─────────────────────────────────────────────────
     // STEP 3: BATCH MATCHING (priceEnricher pattern)
     // ─────────────────────────────────────────────────
     const config: EngineeringConfig = engineeringConfig || {};
@@ -264,7 +305,7 @@ export async function extractCompositionFromImage(
     const allCodeVariants: string[] = [];
     const configuredBases = (config.basesConsideradas || []).map((b: string) => b.toUpperCase());
     
-    for (const item of validItems) {
+    for (const item of normalizedItems) {
         if (item.code) {
             const itemSource = String(item.source || '').toUpperCase().trim();
             // Always pass source for proper cross-variants
@@ -329,7 +370,7 @@ export async function extractCompositionFromImage(
     let matchedCount = 0;
     let unmatchedCount = 0;
 
-    for (const item of validItems) {
+    for (const item of normalizedItems) {
         let itemType = String(item.type || 'MATERIAL').toUpperCase();
         item.type = itemType;
         
@@ -451,9 +492,7 @@ export async function extractCompositionFromImage(
                     : Prisma.sql`AND d.type = 'OFICIAL'`;
                 const itemBases = [item.source, ...configuredBases].filter(Boolean);
                 const uniqueItemBases = [...new Set(itemBases.map((b: string) => b.toUpperCase()))];
-                const sourceSql = uniqueItemBases.length > 0
-                    ? Prisma.sql`AND UPPER(d.name) IN (${Prisma.join(uniqueItemBases)})`
-                    : Prisma.empty;
+                const sourceSql = Prisma.empty; // Don't filter by base — allow cross-base description matching
 
                 const [compRows, itemRows] = await Promise.all([
                     prisma.$queryRaw<any[]>`
@@ -610,7 +649,7 @@ export async function extractCompositionFromImage(
         itemsWithMatches.push(enrichedItem);
     }
 
-    logger.info(`[AI Extract Composition] Match summary: ${matchedCount}/${validItems.length} matched, ${unmatchedCount} unmatched, ${rejected.length} rejected by validation`);
+    logger.info(`[AI Extract Composition] Match summary: ${matchedCount}/${normalizedItems.length} matched, ${unmatchedCount} unmatched, ${rejected.length} rejected by validation`);
 
     // Group items for CompositionEditor
     const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };

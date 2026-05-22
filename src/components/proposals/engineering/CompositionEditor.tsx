@@ -1581,7 +1581,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                         <div style={{ fontSize: '0.8rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                                             {itemData?.description || '—'}
                                                                             {/* Drill-down button for auxiliary compositions */}
-                                                                            {ci.auxiliaryComposition && itemData?.code && !itemData?.isNew && (
+                                                                            {ci.auxiliaryComposition && itemData?.code && (!itemData?.isNew || itemData?._isCasca) && (
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
@@ -1617,8 +1617,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             {itemData?.isNew && ci._noBaseMatch && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#f59e0b15', color: '#d97706', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>⚠ Não encontrado nas bases</span>
                                                                             )}
-                                                                            {itemData?.isNew && !ci._noBaseMatch && !ci._matchDivergence && (
+                                                                            {itemData?.isNew && !ci._noBaseMatch && !ci._matchDivergence && !itemData?._isCasca && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Próprio</span>
+                                                                            )}
+                                                                            {itemData?._isCasca && (
+                                                                                <span style={{ fontSize: '0.6rem', background: '#7c3aed15', color: '#7c3aed', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                                                                    <Layers size={8} /> CASCA — Clique Abrir ▸
+                                                                                </span>
                                                                             )}
                                                                             {ci._matchDivergence && (
                                                                                 <span
@@ -1713,7 +1718,53 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 {!itemData?.isObservation && fmt(lineSubtotal)}
                                                             </span>
                                                             
-                                                            <div style={{ textAlign: 'center' }}>
+                                                            <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
+                                                                {/* Convert Insumo → Composição (only for items, not auxiliary compositions) */}
+                                                                {ci.item && !itemData?.isObservation && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (!data) return;
+                                                                            // Convert insumo to casca (shell composition)
+                                                                            const itemInfo = ci.item;
+                                                                            const compCode = itemInfo.code || `CP-${Date.now().toString(36).toUpperCase()}`;
+                                                                            
+                                                                            // Remove from current group
+                                                                            const updated = { ...data, groups: { ...data.groups } };
+                                                                            updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
+                                                                            
+                                                                            // Create as auxiliary composition (casca)
+                                                                            const newAuxItem = {
+                                                                                ...ci,
+                                                                                item: undefined,
+                                                                                auxiliaryComposition: {
+                                                                                    id: `casca-${Date.now()}`,
+                                                                                    code: compCode,
+                                                                                    description: itemInfo.description,
+                                                                                    unit: itemInfo.unit || 'UN',
+                                                                                    totalPrice: itemInfo.price || 0,
+                                                                                    isNew: true,
+                                                                                    _isCasca: true,
+                                                                                },
+                                                                            };
+                                                                            
+                                                                            // Add to AUXILIAR group
+                                                                            if (!updated.groups.AUXILIAR) updated.groups.AUXILIAR = [];
+                                                                            updated.groups.AUXILIAR.push(newAuxItem);
+                                                                            
+                                                                            // Recalculate totals
+                                                                            updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                                                            updated.totalDirect = updated.totalPrice;
+                                                                            
+                                                                            setData(updated);
+                                                                            setHasChanges(true);
+                                                                            if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                        }}
+                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', opacity: 0.4, padding: 2 }}
+                                                                        title="Converter em Composição Auxiliar (Casca) — permite abrir e inserir sub-insumos"
+                                                                    >
+                                                                        <Layers size={12} />
+                                                                    </button>
+                                                                )}
                                                                 <button onClick={() => {
                                                                     const updated = { ...data, groups: { ...data.groups } };
                                                                     updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
