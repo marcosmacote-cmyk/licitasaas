@@ -3,7 +3,7 @@
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
 import React, { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info, ClipboardList } from 'lucide-react';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info, ClipboardList, RotateCcw } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
 import { applyPrecision } from '../precisionEngine';
 import type { EngineeringConfig, PrecisionConfig } from '../types';
@@ -356,6 +356,12 @@ export function Step1ConfigPanel({
         borderRadius: 'var(--radius-md)', fontWeight: 700,
         boxShadow: '0 2px 6px rgba(99,102,241,0.2)', transition: 'all 0.2s', whiteSpace: 'nowrap',
     };
+    const btnClear: React.CSSProperties = {
+        padding: '6px 10px', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: 4,
+        background: 'transparent', color: '#dc2626', border: '1px solid rgba(220,38,38,0.25)',
+        borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 700,
+        transition: 'all 0.2s', whiteSpace: 'nowrap',
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -370,6 +376,15 @@ export function Step1ConfigPanel({
                         </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
                                 <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => {
+                                        if (!confirm('Limpar todos os dados extraídos da Configuração? Você poderá extrair novamente.')) return;
+                                        onConfigChange({ ...engineeringConfig, objeto: '', ufReferencia: '', basesConsideradas: ['SINAPI'], regimeOneracao: 'DESONERADO', dataBase: '', dataBases: {}, _aiExtractedRef: undefined } as any);
+                                        setHasUnsavedChanges(true);
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}><RotateCcw size={14} /> Configuração limpa</span>);
+                                        setTimeout(() => setSaveMsg(null), 3000);
+                                    }} style={btnClear} title="Limpar dados extraídos para re-extrair">
+                                        <RotateCcw size={12} /> Limpar
+                                    </button>
                                     <button onClick={async () => {
                                         try {
                                             const clipItems = await navigator.clipboard.read();
@@ -607,6 +622,17 @@ export function Step1ConfigPanel({
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
                                 <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => {
+                                        if (!confirm('Limpar todos os valores do BDI? Você poderá extrair novamente.')) return;
+                                        const defaultTcu: BdiTcuParams = { adminCentral: 0, seguros: 0, garantias: 0, riscos: 0, despFinanceiras: 0, lucro: 0, pis: 0, cofins: 0, iss: 0, csll: 0, cprb: 0 };
+                                        onBdiChange({ ...bdiConfig, mode: 'TCU', tcu: defaultTcu, bdiGlobal: 0 });
+                                        onConfigChange({ ...engineeringConfig, _aiExtractedBdi: undefined } as any);
+                                        setHasUnsavedChanges(true);
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}><RotateCcw size={14} /> BDI limpo</span>);
+                                        setTimeout(() => setSaveMsg(null), 3000);
+                                    }} style={btnClear} title="Limpar BDI para re-extrair">
+                                        <RotateCcw size={12} /> Limpar
+                                    </button>
                                     <button onClick={async () => {
                                         try {
                                             const clipItems = await navigator.clipboard.read();
@@ -865,6 +891,16 @@ export function Step1ConfigPanel({
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', minWidth: 260 }}>
                                 <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => {
+                                        if (!confirm('Limpar os Encargos Sociais principais? Você poderá extrair novamente.')) return;
+                                        const emptyEs = { horista: 0, mensalista: 0, basePrincipal: null, encargosAdicionais: engineeringConfig.encargosSociais?.encargosAdicionais, encargoAtivo: engineeringConfig.encargosSociais?.encargoAtivo };
+                                        onConfigChange({ ...engineeringConfig, encargosSociais: emptyEs as any, _aiExtractedEncargos: undefined } as any);
+                                        setHasUnsavedChanges(true);
+                                        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}><RotateCcw size={14} /> Encargos limpos</span>);
+                                        setTimeout(() => setSaveMsg(null), 3000);
+                                    }} style={btnClear} title="Limpar encargos principais para re-extrair">
+                                        <RotateCcw size={12} /> Limpar
+                                    </button>
                                     {/* Botão de Colar Imagem para o Encargo Principal */}
                                     <button onClick={async () => {
                                         try {
@@ -1079,10 +1115,23 @@ export function Step1ConfigPanel({
                                             <ProgressBar progress={additionalImageProgress[idx] ?? null} color="#6d28d9" />
                                         </div>
                                         <button onClick={() => {
+                                            if (!confirm(`Limpar os valores desta planilha (${sheet.label || 'Base ' + (idx+2)})? Você poderá extrair novamente.`)) return;
+                                            const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
+                                            sheets[idx] = { label: sheet.label, horista: 0, mensalista: 0 };
+                                            const aiArr = [...((engineeringConfig as any)._aiExtractedEncargosAdicionais || [])];
+                                            aiArr[idx] = undefined;
+                                            onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets }, _aiExtractedEncargosAdicionais: aiArr } as any);
+                                            setHasUnsavedChanges(true);
+                                            setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}><RotateCcw size={14} /> Planilha limpa</span>);
+                                            setTimeout(() => setSaveMsg(null), 3000);
+                                        }} style={btnClear} title="Limpar valores desta planilha para re-extrair" disabled={isProcessingAdditionalImage[idx]}>
+                                            <RotateCcw size={12} /> Limpar
+                                        </button>
+                                        <button onClick={() => {
                                             const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                             sheets.splice(idx, 1);
                                             onConfigChange({ ...engineeringConfig, encargosSociais: { ...engineeringConfig.encargosSociais, encargosAdicionais: sheets } });
-                                        }} style={{ padding: '7px 8px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }} disabled={isProcessingAdditionalImage[idx]}>
+                                        }} style={{ padding: '7px 8px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }} disabled={isProcessingAdditionalImage[idx]} title="Remover esta planilha">
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
