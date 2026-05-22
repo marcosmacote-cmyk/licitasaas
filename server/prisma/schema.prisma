@@ -782,6 +782,8 @@ model EngineeringComposition {
   unit            String   // "M2", "M3", "UN"
   totalPrice      Float    // Calculated total price without BDI
   
+  metadata        Json?    // Custom metadata (stages, custom labels, order, group notes, divisor)
+
   database        EngineeringDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
   items           EngineeringCompositionItem[]
 
@@ -801,6 +803,7 @@ model EngineeringCompositionItem {
   
   coefficient     Float    // Quantity of the item required for 1 unit of the composition
   price           Float    // Snapshot of the price at the time of creation (price * coefficient)
+  groupKey        String?  // The visual stage/group this item belongs to
 
   composition     EngineeringComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
   item            EngineeringItem? @relation(fields: [itemId], references: [id])

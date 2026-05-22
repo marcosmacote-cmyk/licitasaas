@@ -432,7 +432,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (searchType === 'composition') {
             typeKey = 'AUXILIAR';
             newItem = {
-                id: `temp-${Date.now()}`,
+                id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 coefficient: coef,
                 price: Number(dbItem.totalPrice) || 0,
                 _matchedDatabase: sourceDbName,
@@ -452,7 +452,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             else typeKey = 'MATERIAL';
 
             newItem = {
-                id: `temp-${Date.now()}`,
+                id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 coefficient: coef,
                 price: Number(dbItem.price) || 0,
                 _matchedDatabase: sourceDbName,
@@ -516,10 +516,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const coef = parseFloat(propriaCoef.replace(',', '.')) || 1;
             const typeKey = searchType === 'composition' ? 'AUXILIAR' : 'MATERIAL';
             const newItem = searchType === 'composition' ? {
-                id: `temp-${Date.now()}`, coefficient: coef, price,
+                id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, coefficient: coef, price,
                 auxiliaryComposition: { id: result.item.id, code: result.item.code, description: result.item.description, unit: result.item.unit, totalPrice: price }
             } : {
-                id: `temp-${Date.now()}`, coefficient: coef, price,
+                id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, coefficient: coef, price,
                 item: { id: result.item.id, code: result.item.code, description: result.item.description, unit: result.item.unit, type: 'MATERIAL', price }
             };
 
@@ -787,7 +787,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         return Array.from(allKeys);
     }, [data, customGroupLabels, groupOrder]);
 
-    const handleGroupDrop = (targetIdx: number) => {
+    const handleGroupDrop = (targetIdx: number, isDirectDrop: boolean = false) => {
         if (dragGroupKey === null) return;
         const keys = getEffectiveGroupKeys();
         const fromIdx = keys.indexOf(dragGroupKey);
@@ -798,7 +798,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
         const newOrder = [...keys];
         const [moved] = newOrder.splice(fromIdx, 1);
-        const adjustedIdx = targetIdx > fromIdx ? targetIdx - 1 : targetIdx;
+        const adjustedIdx = isDirectDrop
+            ? targetIdx
+            : (targetIdx > fromIdx ? targetIdx - 1 : targetIdx);
         newOrder.splice(adjustedIdx, 0, moved);
         setGroupOrder(newOrder);
         setHasChanges(true);
@@ -1120,12 +1122,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         const hasExpr = !isObs && /[*\/+\-]/.test(rawCoefExpr) && rawCoefExpr !== String(coefNum);
         
         const newItem = {
-            id: `temp-${Date.now()}`,
+            id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             coefficient: coefNum,
             coefficientExpression: hasExpr ? rawCoefExpr : undefined,
             price: isObs ? 0 : applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
             item: !isAux ? {
-                id: `new-${Date.now()}`,
+                id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 code: isObs ? 'OBS' : 'LIVRE',
                 description: freeItemData.description || 'Novo Insumo',
                 unit: isObs ? '' : freeItemData.unit,
@@ -1135,7 +1137,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 isObservation: isObs
             } : undefined,
             auxiliaryComposition: isAux ? {
-                id: `new-aux-${Date.now()}`,
+                id: `new-aux-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 code: 'LIVRE',
                 description: freeItemData.description || 'Nova Composição Auxiliar',
                 unit: freeItemData.unit,
@@ -1276,11 +1278,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         // Inject Observation explaining the conversion
         updated.groups['OBSERVACAO'].push({
-            id: `temp-${Date.now()}`,
+            id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             coefficient: 0,
             price: 0,
             item: {
-                id: `new-${Date.now()}`,
+                id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 code: 'OBS',
                 description: `Rateio aplicado: Prazo = ${prazoNum} / Fração = ${fracaoNum}. Todos os coeficientes originais foram multiplicados por ${factor.toFixed(5)} para refletir o custo unitário da Fração.`,
                 unit: '',
@@ -1880,7 +1882,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             e.preventDefault();
                                             e.stopPropagation();
                                             if (dragGroupKey) {
-                                                handleGroupDrop(groupIdx);
+                                                handleGroupDrop(groupIdx, true);
                                             } else {
                                                 handleDrop(groupKey);
                                             }
@@ -2362,7 +2364,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 ...ci,
                                                                                 item: undefined,
                                                                                 auxiliaryComposition: {
-                                                                                    id: `new-casca-${Date.now()}`,
+                                                                                    id: `new-casca-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                                                                                     code: compCode,
                                                                                     description: itemInfo.description,
                                                                                     unit: itemInfo.unit || 'UN',
@@ -3001,10 +3003,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
                                     // Add a placeholder observation so group appears
                                     updated.groups[groupKey].push({
-                                        id: `etapa-${Date.now()}`,
+                                        id: `etapa-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                                         coefficient: 0,
                                         price: 0,
-                                        item: { id: `etapa-item-${Date.now()}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
+                                        item: { id: `etapa-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
                                     });
                                     setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
                                     setData(updated);
@@ -3022,10 +3024,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const updated = { ...data, groups: { ...data.groups } };
                                 if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
                                 updated.groups[groupKey].push({
-                                    id: `etapa-${Date.now()}`,
+                                    id: `etapa-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                                     coefficient: 0,
                                     price: 0,
-                                    item: { id: `etapa-item-${Date.now()}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
+                                    item: { id: `etapa-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
                                 });
                                 setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
                                 setData(updated);

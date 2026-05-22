@@ -585,20 +585,42 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             return ci;
         }));
 
-        // Group by type for nice display
-        const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [], AUXILIAR: [] };
-        for (const ci of enrichedItems) {
-            if (ci.auxiliaryComposition) {
-                groups.AUXILIAR.push(ci);
-            } else if (ci.item) {
-                const type = ci.item.type || 'MATERIAL';
-                if (!groups[type]) groups[type] = [];
-                groups[type].push(ci);
+        // Group by groupKey if present, otherwise fallback by type for nice display
+        const groups: Record<string, any[]> = {};
+        const hasGroupKeys = enrichedItems.some((ci: any) => ci.groupKey);
+
+        if (hasGroupKeys) {
+            for (const ci of enrichedItems) {
+                const key = ci.groupKey || 'MATERIAL';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(ci);
+            }
+        } else {
+            groups.MATERIAL = [];
+            groups.MAO_DE_OBRA = [];
+            groups.EQUIPAMENTO = [];
+            groups.SERVICO = [];
+            groups.AUXILIAR = [];
+            for (const ci of enrichedItems) {
+                if (ci.auxiliaryComposition) {
+                    groups.AUXILIAR.push(ci);
+                } else if (ci.item) {
+                    const type = ci.item.type || 'MATERIAL';
+                    if (!groups[type]) groups[type] = [];
+                    groups[type].push(ci);
+                }
             }
         }
 
+        const metadataObj = finalComposition.metadata 
+            ? (typeof finalComposition.metadata === 'string' 
+                ? JSON.parse(finalComposition.metadata) 
+                : finalComposition.metadata)
+            : {};
+
         res.json({
             ...finalComposition,
+            ...metadataObj,
             items: enrichedItems,
             groups,
             totalDirect: enrichedItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0),
@@ -848,11 +870,16 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Composição pertence a outro tenant' });
         }
 
-        // Flatten all items from groups to update
+        // Flatten all items from groups to update, preserving their groupKey
         const flatItems: any[] = [];
-        for (const group of Object.values(composition.groups)) {
+        for (const [groupKey, group] of Object.entries(composition.groups)) {
             if (Array.isArray(group)) {
-                flatItems.push(...group);
+                for (const item of group) {
+                    flatItems.push({
+                        ...item,
+                        groupKey: groupKey
+                    });
+                }
             }
         }
         logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} groups=${Object.keys(composition.groups).join(',')}`);
@@ -876,6 +903,14 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 }
             }
             
+            const metadata = {
+                groupNotes: composition.groupNotes || null,
+                customGroupLabels: composition.customGroupLabels || null,
+                groupOrder: composition.groupOrder || null,
+                referenceDivisor: composition.referenceDivisor || null,
+                _officialRef: composition._officialRef || null,
+            };
+
             await tx.engineeringComposition.update({
                 where: { id },
                 data: {
@@ -883,6 +918,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     totalPrice: composition.totalPrice,
                     description: composition.description,
                     unit: composition.unit,
+                    metadata: metadata
                 }
             });
 
@@ -917,7 +953,10 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 
                 // Dynamically create AI-extracted proprietary inputs
                 if (!isAux && itemId && isTempId(itemId)) {
-                    const itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    let itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    if (itemCode === 'LIVRE') {
+                        itemCode = `LIVRE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    }
                     
                     let existingItem = await tx.engineeringItem.findFirst({
                         where: {
@@ -944,7 +983,10 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                 // Dynamically create AI-extracted auxiliary compositions
                 if (isAux && auxId && isTempId(auxId)) {
-                    const auxCode = item.auxiliaryComposition?.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    let auxCode = item.auxiliaryComposition?.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    if (auxCode === 'LIVRE') {
+                        auxCode = `LIVRE-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    }
                     
                     let existingAux = await tx.engineeringComposition.findFirst({
                         where: {
@@ -1001,6 +1043,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         auxiliaryCompositionId: isAux ? auxId : null,
                         coefficient: item.coefficient,
                         price: item.price,
+                        groupKey: item.groupKey || null,
                     }
                 });
             }
