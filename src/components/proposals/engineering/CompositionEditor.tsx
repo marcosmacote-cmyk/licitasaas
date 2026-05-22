@@ -774,8 +774,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!data || !data.id || !currentItem) return;
         setIsSavingToBase(true);
         try {
-            // Use the budget item's code as canonical (the user sees this code in the planilha)
-            const canonicalCode = currentItem.code;
+            // Use the budget item's code as canonical — UNLESS in drill-down, where we use the drillStack code
+            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            const canonicalCode = drillLevel?.code || currentItem.code;
             let targetId: string | null = null;
             
             // 1. Try to find existing PROPRIA composition — check both canonical code and data.code
@@ -856,18 +857,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setLoading(true);
         setError('');
         try {
+            // When in drill-down, use the drillStack's code/description (casca), not currentItem (parent)
+            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            const compCode = drillLevel?.code || currentItem.code;
+            const compDesc = drillLevel?.description || currentItem.description;
+            
             // SEC-02 FIX: Backend extracts tenantId from req.user (auth middleware)
             const res = await fetch('/api/engineering/compositions', {
                 method: 'POST',
                 headers: hdrs(),
                 body: JSON.stringify({
-                    code: currentItem.code,
-                    description: currentItem.description,
+                    code: compCode,
+                    description: compDesc,
                     unit: currentItem.unit,
                 })
             });
             if (!res.ok) throw new Error('Erro ao criar composição');
-            await loadComposition(currentItem.code); // Reloads the newly created empty composition
+            await loadComposition(compCode); // Reloads the newly created empty composition
         } catch (e: any) {
             alert(e.message || 'Erro ao criar composição própria');
             setLoading(false);
@@ -1388,7 +1394,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
                             <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>Composição não encontrada nas bases de dados</div>
                             <div style={{ fontSize: '0.85rem', marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
-                                O código <strong>{currentItem.code}</strong> não foi encontrado nas bases oficiais e nem no seu banco de dados próprio.
+                                O código <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> não foi encontrado nas bases oficiais e nem no seu banco de dados próprio.
+                                {drillStack.length > 0 && <><br/><span style={{ color: '#7c3aed', fontWeight: 600 }}>Crie abaixo para montar esta composição auxiliar como PRÓPRIA.</span></>}
                             </div>
                             
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
