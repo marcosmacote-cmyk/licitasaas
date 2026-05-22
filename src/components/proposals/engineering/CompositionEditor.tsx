@@ -311,6 +311,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [editingEtapaId, setEditingEtapaId] = useState<string | null>(null);
     const [editingEtapaText, setEditingEtapaText] = useState('');
 
+    // ── Group/Section (Etapa) management ──
+    const [customGroupLabels, setCustomGroupLabels] = useState<Record<string, string>>({});
+    const [editingGroupLabel, setEditingGroupLabel] = useState<string | null>(null);
+    const [editingGroupLabelText, setEditingGroupLabelText] = useState('');
+    const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+    const [newGroupName, setNewGroupName] = useState('');
+
     // ── GAP 3: Reference Divisor ──
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
     const [refDivisorValue, setRefDivisorValue] = useState('');
@@ -570,6 +577,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setData(normalized);
             // Restore GAP 2/3 data from composition
             if (normalized.groupNotes) setGroupNotes(normalized.groupNotes);
+            if (normalized.customGroupLabels) setCustomGroupLabels(normalized.customGroupLabels);
             if (normalized.referenceDivisor) {
                 setRefDivisorLabel(normalized.referenceDivisor.label || '');
                 setRefDivisorValue(String(normalized.referenceDivisor.value || ''));
@@ -860,7 +868,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
+                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, customGroupLabels, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
             });
             if (!res.ok) {
                 const errBody = await res.json().catch(() => ({}));
@@ -1398,8 +1406,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             <PlusCircle size={13} color="var(--color-text-secondary)" /> Insumo Livre
                         </button>
 
-                        {/* Insert Etapa/Section — opens free item modal pre-configured as OBSERVACAO */}
-                        <button onClick={() => { setFreeItemData({ description: '', unit: '', coefficient: '0', price: '0', type: 'OBSERVACAO' }); setShowFreeItemModal(true); }} title="Inserir uma etapa/seção de organização na composição"
+                        {/* Insert Etapa/Section — creates a new custom group/section */}
+                        <button onClick={() => { setNewGroupName(''); setShowNewGroupModal(true); }} title="Inserir uma nova etapa/seção na composição (ex: Transporte, Encargos, etc.)"
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-text-tertiary)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                             <ListTree size={13} color="var(--color-text-secondary)" /> Inserir Etapa
                         </button>
@@ -1673,7 +1681,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     </button>
                                 </div>
                             )}
-                            {Object.entries(GROUP_META).map(([groupKey, meta]) => {
+                            {/* Render all groups: known GROUP_META + custom groups */}
+                            {(() => {
+                                // Merge known groups with any custom groups in data
+                                const allGroupKeys = new Set([
+                                    ...Object.keys(GROUP_META),
+                                    ...(data.groups ? Object.keys(data.groups) : []),
+                                ]);
+                                return Array.from(allGroupKeys).map(groupKey => {
+                                const meta = GROUP_META[groupKey] || { label: groupKey, icon: Folder, color: '#6b7280' };
+                                const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
                                 if (groupItems.length === 0) return null;
                                 const Icon = meta.icon;
@@ -1692,11 +1709,55 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 {isExpanded ? <ChevronDown size={14} color={meta.color} /> : <ChevronRight size={14} color={meta.color} />}
                                                 <Icon size={16} color={meta.color} />
-                                                <span style={{ fontWeight: 700, fontSize: '0.88rem', color: meta.color }}>{meta.label}</span>
+                                                {/* Editable group label */}
+                                                {editingGroupLabel === groupKey ? (
+                                                    <input
+                                                        autoFocus
+                                                        type="text"
+                                                        value={editingGroupLabelText}
+                                                        onChange={e => setEditingGroupLabelText(e.target.value)}
+                                                        onBlur={() => {
+                                                            if (editingGroupLabelText.trim()) {
+                                                                setCustomGroupLabels(prev => ({ ...prev, [groupKey]: editingGroupLabelText.trim() }));
+                                                                setHasChanges(true);
+                                                            }
+                                                            setEditingGroupLabel(null);
+                                                        }}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') {
+                                                                if (editingGroupLabelText.trim()) {
+                                                                    setCustomGroupLabels(prev => ({ ...prev, [groupKey]: editingGroupLabelText.trim() }));
+                                                                    setHasChanges(true);
+                                                                }
+                                                                setEditingGroupLabel(null);
+                                                            }
+                                                            if (e.key === 'Escape') setEditingGroupLabel(null);
+                                                        }}
+                                                        onClick={e => e.stopPropagation()}
+                                                        style={{
+                                                            fontWeight: 700, fontSize: '0.88rem', color: meta.color,
+                                                            border: `1px solid ${meta.color}`, borderRadius: 4,
+                                                            padding: '2px 8px', background: 'white', outline: 'none', width: 220,
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        onDoubleClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
+                                                        title="Duplo-clique para renomear esta etapa"
+                                                        style={{ fontWeight: 700, fontSize: '0.88rem', color: meta.color, cursor: 'text' }}
+                                                    >
+                                                        {displayLabel}
+                                                    </span>
+                                                )}
                                                 <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>({groupItems.length})</span>
                                                 {groupNotes[groupKey] && (
                                                     <span title={groupNotes[groupKey]} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, background: `${meta.color}10`, color: meta.color, fontWeight: 600 }}>
                                                         <MessageSquare size={9} /> Nota
+                                                    </span>
+                                                )}
+                                                {customGroupLabels[groupKey] && (
+                                                    <span style={{ fontSize: '0.55rem', padding: '1px 4px', borderRadius: 3, background: `${meta.color}10`, color: meta.color, fontWeight: 600 }}>
+                                                        editado
                                                     </span>
                                                 )}
                                             </div>
@@ -2019,7 +2080,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         )}
                                     </div>
                                 );
-                            })}
+                            });
+                            })()}
                         </div>
                     )}
                 </div>
@@ -2445,6 +2507,60 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                             <button className="btn" onClick={() => setShowRateioModal(false)}>Cancelar</button>
                             <button className="btn btn-primary" onClick={handleApplyRateio}>Aplicar Rateio</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showNewGroupModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><ListTree size={18} /> Nova Etapa / Seção</h3>
+                        
+                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                            Crie uma nova seção para organizar insumos da composição. Ex: "Transportes", "Encargos Complementares", etc.
+                        </div>
+
+                        <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Nome da Etapa / Seção</label>
+                            <input autoFocus type="text" className="form-input" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && newGroupName.trim()) {
+                                    const groupKey = `CUSTOM_${newGroupName.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')}`;
+                                    if (!data) return;
+                                    const updated = { ...data, groups: { ...data.groups } };
+                                    if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
+                                    // Add a placeholder observation so group appears
+                                    updated.groups[groupKey].push({
+                                        id: `etapa-${Date.now()}`,
+                                        coefficient: 0,
+                                        price: 0,
+                                        item: { id: `etapa-item-${Date.now()}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
+                                    });
+                                    setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
+                                    setData(updated);
+                                    setHasChanges(true);
+                                    setShowNewGroupModal(false);
+                                }}}
+                                placeholder="Ex: Transportes" style={{ width: '100%' }} />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button className="btn" onClick={() => setShowNewGroupModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" disabled={!newGroupName.trim()} onClick={() => {
+                                const groupKey = `CUSTOM_${newGroupName.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')}`;
+                                if (!data) return;
+                                const updated = { ...data, groups: { ...data.groups } };
+                                if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
+                                updated.groups[groupKey].push({
+                                    id: `etapa-${Date.now()}`,
+                                    coefficient: 0,
+                                    price: 0,
+                                    item: { id: `etapa-item-${Date.now()}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
+                                });
+                                setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
+                                setData(updated);
+                                setHasChanges(true);
+                                setShowNewGroupModal(false);
+                            }}>Criar Etapa</button>
                         </div>
                     </div>
                 </div>
