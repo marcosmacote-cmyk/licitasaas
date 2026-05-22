@@ -620,7 +620,10 @@ export async function extractCompositionFromImage(
             coefficientExpression: item.coefficientExpression || undefined,
             price: subtotal,
             _ai_confidence: bestCandidate ? 'high' : 'low',
-            _matchedDatabase: matchedDb?.name || null,
+            // FIX BASE-CLASS: Auto-reclassify unmatched items as PRÓPRIO
+            // When no match is found in any official base, the item is by definition próprio
+            _matchedDatabase: bestCandidate ? (matchedDb?.name || null) : 'PRÓPRIO',
+            _aiExtractedSource: extractedSource || null, // Preserve what the AI read from the image
             _noBaseMatch: !bestCandidate, // Flag for frontend "⚠ Não encontrado nas bases"
             _matchDivergence: matchDivergence, // Alert when code/base diverges from edital
         };

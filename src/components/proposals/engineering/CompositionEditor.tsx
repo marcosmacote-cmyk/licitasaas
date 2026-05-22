@@ -321,6 +321,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // ── Move item between groups ──
     const [movingItemId, setMovingItemId] = useState<string | null>(null);
 
+    // ── Change item base classification ──
+    const [editingBaseItemId, setEditingBaseItemId] = useState<string | null>(null);
+
     // ── GAP 3: Reference Divisor ──
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
     const [refDivisorValue, setRefDivisorValue] = useState('');
@@ -1862,22 +1865,107 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             {itemData?.code && (
                                                                                 <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
                                                                             )}
-                                                                            {/* Show the item's own matched database, falling back to composition database, then sourceName */}
-                                                                            {(ci._matchedDatabase || data?.database?.name) && (
-                                                                                <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: `${meta.color}10`, color: meta.color, border: `1px solid ${meta.color}25` }}>
-                                                                                    {ci._matchedDatabase || data.database.name}
+                                                                            {/* ── Interactive Base Badge with change dropdown ── */}
+                                                                            {(() => {
+                                                                                const displayBase = ci._matchedDatabase || data?.database?.name || currentItem?.sourceName || '';
+                                                                                const isUnmatched = ci._noBaseMatch;
+                                                                                const isProprio = displayBase === 'PRÓPRIO' || displayBase === 'PROPRIA';
+                                                                                const isConfirmedMatch = !isUnmatched && !isProprio;
+                                                                                // Visual styling: confirmed = solid, unmatched/próprio = dashed
+                                                                                const badgeStyle: React.CSSProperties = {
+                                                                                    fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700,
+                                                                                    cursor: 'pointer', position: 'relative' as const,
+                                                                                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                                                    ...(isConfirmedMatch ? {
+                                                                                        background: `${meta.color}10`, color: meta.color,
+                                                                                        border: `1px solid ${meta.color}25`,
+                                                                                    } : isProprio ? {
+                                                                                        background: '#f9731615', color: '#ea580c',
+                                                                                        border: '1px dashed #ea580c40',
+                                                                                    } : {
+                                                                                        background: '#f59e0b15', color: '#d97706',
+                                                                                        border: '1px dashed #d9770640',
+                                                                                    }),
+                                                                                };
+                                                                                const tooltip = isUnmatched
+                                                                                    ? `Não encontrado em bases oficiais${ci._aiExtractedSource ? ` (IA leu: ${ci._aiExtractedSource})` : ''}. Clique para alterar.`
+                                                                                    : isConfirmedMatch
+                                                                                        ? `Encontrado na base ${displayBase}. Clique para alterar classificação.`
+                                                                                        : 'Insumo próprio. Clique para alterar classificação.';
+
+                                                                                if (!displayBase) return null;
+                                                                                return (
+                                                                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                                                                        <span
+                                                                                            onClick={(e) => { e.stopPropagation(); setEditingBaseItemId(editingBaseItemId === ci.id ? null : ci.id); }}
+                                                                                            title={tooltip}
+                                                                                            style={badgeStyle}
+                                                                                        >
+                                                                                            {displayBase}
+                                                                                            <span style={{ fontSize: '0.5rem', opacity: 0.5 }}>▾</span>
+                                                                                        </span>
+                                                                                        {editingBaseItemId === ci.id && (
+                                                                                            <>
+                                                                                            <div onClick={(e) => { e.stopPropagation(); setEditingBaseItemId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                                                            <div style={{
+                                                                                                position: 'absolute', left: 0, top: '100%', zIndex: 1000, marginTop: 2,
+                                                                                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                                                                borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
+                                                                                                minWidth: 160, fontSize: '0.7rem',
+                                                                                            }}>
+                                                                                                <div style={{ padding: '3px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.6rem', textTransform: 'uppercase' }}>
+                                                                                                    Classificar como:
+                                                                                                </div>
+                                                                                                {['PRÓPRIO', 'SINAPI', 'SEINFRA', 'ORSE', 'SICRO', 'CAERN', 'SBC', 'SICOR'].map(baseName => {
+                                                                                                    const isActive = displayBase === baseName;
+                                                                                                    return (
+                                                                                                        <button key={baseName} onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            // Update _matchedDatabase in state
+                                                                                                            const updated = { ...data, groups: { ...data.groups } };
+                                                                                                            for (const gk of Object.keys(updated.groups)) {
+                                                                                                                updated.groups[gk] = updated.groups[gk].map((item: any) => {
+                                                                                                                    if (item.id !== ci.id) return item;
+                                                                                                                    return {
+                                                                                                                        ...item,
+                                                                                                                        _matchedDatabase: baseName === 'PRÓPRIO' ? 'PRÓPRIO' : baseName,
+                                                                                                                        _noBaseMatch: baseName === 'PRÓPRIO',
+                                                                                                                        _baseManuallySet: true,
+                                                                                                                    };
+                                                                                                                });
+                                                                                                            }
+                                                                                                            setData(updated);
+                                                                                                            setHasChanges(true);
+                                                                                                            setEditingBaseItemId(null);
+                                                                                                        }} style={{
+                                                                                                            display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                                                                                            padding: '4px 8px', border: 'none',
+                                                                                                            background: isActive ? 'var(--color-primary-bg)' : 'none',
+                                                                                                            cursor: 'pointer', borderRadius: 4, textAlign: 'left',
+                                                                                                            color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                                                                            fontWeight: isActive ? 700 : 500, fontSize: '0.68rem',
+                                                                                                        }}
+                                                                                                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
+                                                                                                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
+                                                                                                        >
+                                                                                                            {isActive && <span>✓</span>} {baseName}
+                                                                                                        </button>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
+                                                                            {/* Warning badge for unmatched items */}
+                                                                            {ci._noBaseMatch && !ci._baseManuallySet && (
+                                                                                <span
+                                                                                    title={`Item não encontrado em bases oficiais${ci._aiExtractedSource ? `. IA leu fonte: ${ci._aiExtractedSource}` : ''}`}
+                                                                                    style={{ fontSize: '0.6rem', background: '#f59e0b12', color: '#d97706', padding: '1px 5px', borderRadius: 4, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'help' }}
+                                                                                >
+                                                                                    ⚠ Próprio{ci._aiExtractedSource ? ` (IA: ${ci._aiExtractedSource})` : ''}
                                                                                 </span>
-                                                                            )}
-                                                                            {!ci._matchedDatabase && !data?.database?.name && currentItem?.sourceName && (
-                                                                                <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700, background: 'rgba(100,116,139,0.08)', color: 'var(--color-text-tertiary)', border: '1px solid rgba(100,116,139,0.15)' }}>
-                                                                                    {currentItem.sourceName}
-                                                                                </span>
-                                                                            )}
-                                                                            {itemData?.isNew && ci._noBaseMatch && (
-                                                                                <span style={{ fontSize: '0.6rem', background: '#f59e0b15', color: '#d97706', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>⚠ Não encontrado nas bases</span>
-                                                                            )}
-                                                                            {itemData?.isNew && !ci._noBaseMatch && !ci._matchDivergence && !itemData?._isCasca && (
-                                                                                <span style={{ fontSize: '0.6rem', background: '#f9731615', color: '#ea580c', padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>Próprio</span>
                                                                             )}
                                                                             {itemData?._isCasca && (
                                                                                 <span style={{ fontSize: '0.6rem', background: '#7c3aed15', color: '#7c3aed', padding: '1px 5px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
