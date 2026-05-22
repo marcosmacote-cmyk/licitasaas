@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree, GripVertical } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -320,6 +320,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     // ── Move item between groups ──
     const [movingItemId, setMovingItemId] = useState<string | null>(null);
+
+    // ── Drag & Drop between groups ──
+    const [dragItem, setDragItem] = useState<{ id: string; sourceGroup: string } | null>(null);
+    const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
     // ── Change item base classification ──
     const [editingBaseItemId, setEditingBaseItemId] = useState<string | null>(null);
@@ -690,6 +694,35 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             n.has(key) ? n.delete(key) : n.add(key);
             return n;
         });
+    };
+
+    // ── Drag & Drop: Move item between groups ──
+    const handleDrop = (targetGroup: string) => {
+        if (!dragItem || !data || dragItem.sourceGroup === targetGroup) {
+            setDragItem(null);
+            setDragOverGroup(null);
+            return;
+        }
+        const updated = { ...data, groups: { ...data.groups } };
+        // Find and remove item from source group
+        const sourceItems = [...(updated.groups[dragItem.sourceGroup] || [])];
+        const itemIndex = sourceItems.findIndex((i: any) => i.id === dragItem.id);
+        if (itemIndex === -1) { setDragItem(null); setDragOverGroup(null); return; }
+        const [movedItem] = sourceItems.splice(itemIndex, 1);
+        updated.groups[dragItem.sourceGroup] = sourceItems;
+        // Add to target group
+        if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
+        updated.groups[targetGroup] = [...updated.groups[targetGroup], movedItem];
+        // Recalculate totals
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+        updated.totalDirect = updated.totalPrice;
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        // Expand target group so user sees the moved item
+        setExpandedGroups(prev => new Set([...prev, targetGroup]));
+        setDragItem(null);
+        setDragOverGroup(null);
     };
 
     // ═══════════════════════════════════════════════════════
@@ -1718,18 +1751,30 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const allGroupKeys = new Set([
                                     ...Object.keys(GROUP_META),
                                     ...(data.groups ? Object.keys(data.groups) : []),
+                                    ...Object.keys(customGroupLabels), // Include custom etapas even if empty
                                 ]);
                                 return Array.from(allGroupKeys).map(groupKey => {
                                 const meta = GROUP_META[groupKey] || { label: groupKey, icon: Folder, color: '#6b7280' };
                                 const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
-                                if (groupItems.length === 0) return null;
+                                // FIX EMPTY-GROUP: Show empty groups as drop targets during drag
+                                if (groupItems.length === 0 && !dragItem) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
 
                                 return (
-                                    <div key={groupKey} style={{ border: `1px solid ${meta.color}25`, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                                    <div key={groupKey}
+                                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                        onDragEnter={(e) => { e.preventDefault(); setDragOverGroup(groupKey); }}
+                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverGroup(null); }}
+                                        onDrop={(e) => { e.preventDefault(); handleDrop(groupKey); }}
+                                        style={{
+                                            border: `1px solid ${dragOverGroup === groupKey && dragItem?.sourceGroup !== groupKey ? meta.color : meta.color + '25'}`,
+                                            borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+                                            transition: 'border-color 0.15s, box-shadow 0.15s',
+                                            boxShadow: dragOverGroup === groupKey && dragItem?.sourceGroup !== groupKey ? `0 0 0 2px ${meta.color}30` : 'none',
+                                        }}>
                                         {/* Group header */}
                                         <div onClick={() => toggleGroup(groupKey)}
                                             style={{
@@ -1795,6 +1840,18 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color }}>{fmt(groupTotal)}</span>
                                         </div>
 
+                                        {/* Drop indicator when dragging over this group */}
+                                        {dragItem && dragOverGroup === groupKey && dragItem.sourceGroup !== groupKey && (
+                                            <div style={{
+                                                padding: '6px 20px', background: `${meta.color}12`,
+                                                borderBottom: `2px dashed ${meta.color}`,
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                fontSize: '0.72rem', color: meta.color, fontWeight: 600,
+                                            }}>
+                                                <ArrowDownUp size={13} /> Soltar aqui para mover para {displayLabel}
+                                            </div>
+                                        )}
+
                                         {isExpanded && groupItems.length > 0 && (
                                             <>
                                                 {/* Column headers */}
@@ -1821,13 +1878,33 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     const isEditingPrice = editingField?.id === ci.id && editingField?.field === 'price';
 
                                                     return (
-                                                        <div key={ci.id || idx} style={{
-                                                            display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
-                                                            gap: 8, padding: '8px 20px', alignItems: 'center',
-                                                            borderBottom: '1px solid var(--color-border)',
-                                                            background: itemData?.isObservation ? 'rgba(0,0,0,0.03)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)'),
-                                                        }}>
-                                                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
+                                                        <div key={ci.id || idx}
+                                                            draggable={!isEditingCoef && !isEditingPrice}
+                                                            onDragStart={(e) => {
+                                                                setDragItem({ id: ci.id, sourceGroup: groupKey });
+                                                                e.dataTransfer.effectAllowed = 'move';
+                                                                e.dataTransfer.setData('text/plain', ci.id);
+                                                                // Semi-transparent ghost
+                                                                if (e.currentTarget) {
+                                                                    e.currentTarget.style.opacity = '0.4';
+                                                                }
+                                                            }}
+                                                            onDragEnd={(e) => {
+                                                                if (e.currentTarget) e.currentTarget.style.opacity = '1';
+                                                                setDragItem(null);
+                                                                setDragOverGroup(null);
+                                                            }}
+                                                            style={{
+                                                                display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
+                                                                gap: 8, padding: '8px 20px', alignItems: 'center',
+                                                                borderBottom: '1px solid var(--color-border)',
+                                                                background: itemData?.isObservation ? 'rgba(0,0,0,0.03)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)'),
+                                                                cursor: (isEditingCoef || isEditingPrice) ? 'text' : 'grab',
+                                                            }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                                <GripVertical size={10} style={{ color: 'var(--color-text-tertiary)', opacity: 0.35, flexShrink: 0 }} />
+                                                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
+                                                            </div>
                                                             <div style={itemData?.isObservation ? { gridColumn: '2 / 6', fontStyle: 'italic', color: 'var(--color-text-secondary)', fontSize: '0.75rem' } : {}}>
                                                                 {!itemData?.isObservation ? (
                                                                     <>
@@ -2165,7 +2242,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 Mover para:
                                                                             </div>
                                                                             {(() => {
-                                                                                const allKeys = new Set([...Object.keys(GROUP_META), ...(data.groups ? Object.keys(data.groups) : [])]);
+                                                                                const allKeys = new Set([...Object.keys(GROUP_META), ...(data.groups ? Object.keys(data.groups) : []), ...Object.keys(customGroupLabels)]);
                                                                                 return Array.from(allKeys)
                                                                                     .filter(k => k !== groupKey)
                                                                                     .map(targetKey => {
