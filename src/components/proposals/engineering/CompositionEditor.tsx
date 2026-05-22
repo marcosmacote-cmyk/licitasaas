@@ -778,6 +778,18 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
             const canonicalCode = drillLevel?.code || currentItem.code;
             let targetId: string | null = null;
+
+            // FIX SYNC-01: Detect if this composition comes from an official database
+            const isOfficialOrigin = data.database?.type === 'OFICIAL' || 
+                (data.database?.name && data.database.name !== 'PROPRIA');
+            
+            // Build _officialRef to preserve traceability when saving official → PROPRIA
+            const officialRef = isOfficialOrigin ? {
+                databaseId: data.databaseId || data.database?.id,
+                databaseName: data.database?.name,
+                databaseUf: data.database?.uf,
+                originalCode: data.code,
+            } : (data._officialRef || undefined);
             
             // 1. Try to find existing PROPRIA composition — check both canonical code and data.code
             // (they can differ: budget has "COMP. 1103.1", AI extracts "1103.1")
@@ -830,21 +842,36 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             }
 
             // 3. PUT to update the PROPRIA composition with the extracted items
+            // FIX SYNC-01: Include _officialRef so we preserve traceability to the official base
             const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: { ...data, code: canonicalCode, groupNotes, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
+                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
             });
             if (!res.ok) {
                 const errBody = await res.json().catch(() => ({}));
                 throw new Error(errBody.error || 'Erro ao salvar composição na base');
             }
             await res.json();
-            alert('Composição atualizada com sucesso na base PRÓPRIA!');
-            setHasChanges(false);
             
-            // 4. Reload to get the PROPRIA version with DB-assigned IDs
-            await loadComposition(canonicalCode);
+            // FIX SYNC-01: After saving, update local state to reflect the new PROPRIA status
+            // WITHOUT reloading (avoids the vicious cycle: PROPRIA→load→PROPRIA overrides official)
+            setData((prev: any) => prev ? {
+                ...prev,
+                database: { ...prev.database, name: 'PROPRIA', type: 'PROPRIA' },
+                _officialRef: officialRef,
+            } : prev);
+            setHasChanges(false);
+
+            // FIX SYNC-05: If this was an official composition, notify planilha about the change
+            if (isOfficialOrigin && onUpdateItem && currentItem) {
+                onUpdateItem(currentItem.id, {
+                    unitCost: data.totalPrice,
+                    sourceName: `PROPRIA`,
+                } as any);
+            }
+            
+            alert(`Composição salva com sucesso na base PRÓPRIA!${officialRef ? ` (referência: ${officialRef.databaseName})` : ''}`);
         } catch (e: any) {
             alert(e.message || 'Erro de rede ao salvar');
         } finally {
@@ -1178,6 +1205,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         {!isGrouperType(currentItem.type) && (
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
                                 Código: <strong>{currentItem.code}</strong> · {currentItem.sourceName}
+                                {/* FIX SYNC-04: Show real composition origin when loaded */}
+                                {data?.database?.name && data.database.name !== currentItem.sourceName && (
+                                    <span style={{
+                                        marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: '0.65rem', fontWeight: 700,
+                                        background: data.database.name === 'PROPRIA' 
+                                            ? (data._officialRef ? 'rgba(124,58,237,0.08)' : 'rgba(16,185,129,0.08)')
+                                            : 'rgba(37,99,235,0.08)',
+                                        color: data.database.name === 'PROPRIA'
+                                            ? (data._officialRef ? '#7c3aed' : '#059669')
+                                            : '#2563eb',
+                                    }}>
+                                        {data.database.name === 'PROPRIA' && data._officialRef
+                                            ? `editada de ${data._officialRef.databaseName}`
+                                            : `via ${data.database.name}`}
+                                    </span>
+                                )}
                                 {hasChanges && <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 700 }}>● Modificado</span>}
                             </span>
                         )}
@@ -1744,13 +1787,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 ...ci,
                                                                                 item: undefined,
                                                                                 auxiliaryComposition: {
-                                                                                    id: `casca-${Date.now()}`,
+                                                                                    id: `new-casca-${Date.now()}`,
                                                                                     code: compCode,
                                                                                     description: itemInfo.description,
                                                                                     unit: itemInfo.unit || 'UN',
                                                                                     totalPrice: itemInfo.price || 0,
-                                                                                    isNew: true,
+                                                                                    // FIX SYNC-02: Only mark as truly "new" for PROPRIA items
+                                                                                    // Official items are copies, not new creations
+                                                                                    isNew: data?.database?.name?.toUpperCase() === 'PROPRIA' || !data?.database?.name,
                                                                                     _isCasca: true,
+                                                                                    // FIX SYNC-02: Preserve original database reference for traceability
+                                                                                    _officialSourceRef: data?.database?.name && data.database.name !== 'PROPRIA' ? {
+                                                                                        databaseId: data.databaseId || data.database?.id,
+                                                                                        databaseName: data.database.name,
+                                                                                        originalItemCode: itemInfo.code,
+                                                                                    } : undefined,
                                                                                 },
                                                                             };
                                                                             

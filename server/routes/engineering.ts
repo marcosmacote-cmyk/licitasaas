@@ -312,6 +312,57 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         })
         : null;
 
+    // FIX SYNC-03: Determine if the caller is requesting a specific official source
+    const normalizedSource = normalizeCompositionSource(sourceName);
+    const isRequestingOfficial = normalizedSource && normalizedSource !== 'PROPRIA';
+
+    // FIX SYNC-03: When an official source is explicitly requested, try it FIRST
+    // This prevents PROPRIA copies from hijacking lookups for official compositions
+    if (isRequestingOfficial) {
+        // 1. Try exact databaseId first
+        if (databaseId) {
+            const exact = await findCompositionWithItems(codeVariants, { databaseId });
+            if (exact) {
+                logger.info(`[CompositionLookup] ✅ OFFICIAL exact databaseId match: db=${exact.database?.name} code=${exact.code} items=${exact.items?.length || 0}`);
+                return exact;
+            }
+        }
+
+        // 2. Try same source + UF + payroll
+        const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || sourceName);
+        if (dbSourceName) {
+            const sameSourceAndUfWhere: any = { database: { name: dbSourceName } };
+            if (requestedDatabase?.uf) sameSourceAndUfWhere.database.uf = requestedDatabase.uf;
+            if (typeof requestedDatabase?.payrollExemption === 'boolean') {
+                sameSourceAndUfWhere.database.payrollExemption = requestedDatabase.payrollExemption;
+            }
+            const sameSourceAndUf = await findCompositionWithItems(codeVariants, sameSourceAndUfWhere);
+            if (sameSourceAndUf) {
+                logger.info(`[CompositionLookup] ✅ OFFICIAL source+UF match: db=${sameSourceAndUf.database?.name} code=${sameSourceAndUf.code} items=${sameSourceAndUf.items?.length || 0}`);
+                return sameSourceAndUf;
+            }
+
+            const sameSource = await findCompositionWithItems(codeVariants, { database: { name: dbSourceName } });
+            if (sameSource) {
+                logger.info(`[CompositionLookup] ✅ OFFICIAL source match: db=${sameSource.database?.name} code=${sameSource.code} items=${sameSource.items?.length || 0}`);
+                return sameSource;
+            }
+        }
+
+        // 3. Fall back to PROPRIA only if no official match was found
+        const propriaWhere: any = { database: { name: 'PROPRIA' } };
+        if (tenantId) propriaWhere.database.tenantId = tenantId;
+        const propria = await findCompositionWithItems(codeVariants, propriaWhere);
+        if (propria) {
+            logger.info(`[CompositionLookup] ⚠️ No official match, falling back to PROPRIA: id=${propria.id} code=${propria.code} items=${propria.items?.length || 0}`);
+            return propria;
+        }
+
+        // 4. Try any official database
+        return findCompositionWithItems(codeVariants, { database: { type: 'OFICIAL' } });
+    }
+
+    // Original behavior when PROPRIA is explicitly requested or no sourceName given
     const propriaWhere: any = { database: { name: 'PROPRIA' } };
     if (tenantId) propriaWhere.database.tenantId = tenantId;
     const propria = await findCompositionWithItems(codeVariants, propriaWhere);

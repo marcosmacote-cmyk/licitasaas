@@ -3130,6 +3130,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         if (updates.description !== undefined) {
                             updateItem(itemId, 'description', updates.description);
                         }
+                        // FIX SYNC-05: Handle sourceName updates from CompositionEditor's saveToBase
+                        // When an official composition is saved as PROPRIA, update the planilha badge
+                        if ((updates as any).sourceName !== undefined) {
+                            updateItem(itemId, 'sourceName', (updates as any).sourceName);
+                        }
                         if (updates.multiplicationFactor !== undefined) {
                             const factor = Number(updates.multiplicationFactor) || 1;
                             // Unified: save factor on grouper + cascade to children in ONE setItems call
