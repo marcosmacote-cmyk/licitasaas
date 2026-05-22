@@ -949,13 +949,16 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                 // Helper: detect temporary/synthetic IDs that don't exist in DB
                 const isTempId = (id: string | null | undefined) => 
-                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-');
+                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
                 
                 // Dynamically create AI-extracted proprietary inputs
                 if (!isAux && itemId && isTempId(itemId)) {
                     let itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                     if (itemCode === 'LIVRE') {
                         itemCode = `LIVRE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                    }
+                    if (itemCode === 'OBS' || item.item?.type === 'OBSERVACAO') {
+                        itemCode = `OBS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                     }
                     
                     let existingItem = await tx.engineeringItem.findFirst({

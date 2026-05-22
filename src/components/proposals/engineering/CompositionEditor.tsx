@@ -219,6 +219,9 @@ const normalizeCompositionMath = (raw: any, precision?: any) => {
 
     for (const groupKey of Object.keys(groups)) {
         groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
+            if (ci.item && (ci.item.type === 'OBSERVACAO' || ci.item.code?.startsWith('OBS'))) {
+                ci.item = { ...ci.item, isObservation: true };
+            }
             const subtotal = getLineSubtotal(ci, precision);
             total += subtotal;
             return { ...ci, price: subtotal };
