@@ -33,6 +33,7 @@ Seu trabalho é ler a imagem/pdf fornecida, identificar a tabela de insumos e ex
       "description": "string (descrição do insumo)",
       "unit": "string",
       "coefficient": number,
+      "coefficientExpression": "string opcional (expressão multi-fator do coeficiente, ex: '1*220', '2*3.5')",
       "price": number,
       "source": "string (nome da base/fonte da coluna FONTE, ex: SINAPI, SEINFRA, ORSE, SICRO)"
     }
@@ -51,7 +52,19 @@ REGRAS ANTI-ALUCINAÇÃO — IMPORTANTÍSSIMAS:
 7. Copie o campo "code" EXATAMENTE como está escrito na imagem (ex: I6519, C4291, 00035272). NÃO modifique, NÃO invente códigos.
 8. Se houver coluna "FONTE" ou "BASE", copie o valor EXATO de cada linha (ex: SEINFRA, SINAPI). Cada linha pode ter uma fonte diferente — leia cada uma individualmente.
 9. Se NÃO conseguir ler um valor com certeza, use "" (string vazia) ao invés de inventar.
-10. Retorne APENAS o JSON, sem formatação Markdown.`;
+10. Retorne APENAS o JSON, sem formatação Markdown.
+
+REGRAS PARA COMPOSIÇÕES COMPLEXAS (Iluminação Pública, Manutenção, Garantia):
+11. Algumas composições possuem COLUNAS HETEROGÊNEAS por subseção. Exemplos:
+    - Mão de Obra: "Qtd Funcionários" × "Qtd Meses" × "Valor Unitário"
+    - Veículos: "Qtd Veículos" × "Horas/Mês" × "Valor Hora"
+    - Materiais: "Quantidade (UN)" × "Custo Unitário"
+    Nestes casos:
+    - "coefficient" DEVE ser o PRODUTO FINAL de todos os fatores numéricos (ex: 1 funcionário × 1 mês = coefficient: 1, ou 1 veículo × 220 horas = coefficient: 220).
+    - "coefficientExpression" DEVE ser a expressão dos fatores separados por * (ex: "1*1", "1*220").
+    - "price" continua sendo o PREÇO UNITÁRIO de um único elemento (valor horista, valor hora, custo unitário).
+12. Se a composição tiver subseções nomeadas (ex: "1.1.a — MÃO DE OBRA", "1.1.b — MATERIAIS"), extraia TODOS os itens de TODAS as subseções.
+13. Para composições padrão SINAPI/SEINFRA com uma única coluna de coeficiente, NÃO use coefficientExpression — deixe o campo ausente.`;
 
 // ═══════════════════════════════════════════════════════════
 // LAYER 2: POST-EXTRACTION VALIDATION (ANTI-HALLUCINATION)
@@ -564,6 +577,8 @@ export async function extractCompositionFromImage(
         const enrichedItem: any = {
             id: `temp-${Date.now()}-${Math.random()}`,
             coefficient: item.coefficient || 1,
+            // GAP 1: Preserve multi-factor expression from AI extraction
+            coefficientExpression: item.coefficientExpression || undefined,
             price: subtotal,
             _ai_confidence: bestCandidate ? 'high' : 'low',
             _matchedDatabase: matchedDb?.name || null,

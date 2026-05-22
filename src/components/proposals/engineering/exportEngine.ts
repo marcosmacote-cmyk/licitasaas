@@ -135,7 +135,7 @@ export function exportCompositionExcel(
                 itemData?.code || '—',
                 `"${(itemData?.description || '—').replace(/"/g, '""')}"`,
                 itemData?.unit || '—',
-                fmtCoef(ci.coefficient),
+                ci.coefficientExpression ? `"${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(ci.coefficient)}"` : fmtCoef(ci.coefficient),
                 fmtNum(itemData?.price || itemData?.totalPrice || 0),
                 fmtNum(ci.price || 0),
             ]);
@@ -342,7 +342,7 @@ ${engineeringConfig ? `
   <td class="mono">${itemData?.code || '—'}</td>
   <td>${itemData?.description || '—'}</td>
   <td>${itemData?.unit || '—'}</td>
-  <td class="right mono">${ci.coefficient.toFixed(4)}</td>
+  <td class="right mono">${ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(4)}` : ci.coefficient.toFixed(4)}</td>
   <td class="right">${fmt(itemData?.price || itemData?.totalPrice || 0)}</td>
   <td class="right" style="font-weight:600;color:${meta.color}">${fmt(ci.price)}</td>
 </tr>`;

@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -299,6 +299,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [grouperFactor, setGrouperFactor] = useState('1');
     const [grouperFactorSaved, setGrouperFactorSaved] = useState(false);
 
+    // ── GAP 2: Group notes ──
+    const [groupNotes, setGroupNotes] = useState<Record<string, string>>({});
+    const [editingGroupNote, setEditingGroupNote] = useState<string | null>(null);
+
+    // ── GAP 3: Reference Divisor ──
+    const [refDivisorLabel, setRefDivisorLabel] = useState('');
+    const [refDivisorValue, setRefDivisorValue] = useState('');
+
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
         if (showSearch && bases.length === 0) {
@@ -547,7 +555,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 d.sourceIsEdital = true;
             }
 
-            setData(normalizeCompositionMath(d, engineeringConfig?.precision));
+            const normalized = normalizeCompositionMath(d, engineeringConfig?.precision);
+            setData(normalized);
+            // Restore GAP 2/3 data from composition
+            if (normalized.groupNotes) setGroupNotes(normalized.groupNotes);
+            if (normalized.referenceDivisor) {
+                setRefDivisorLabel(normalized.referenceDivisor.label || '');
+                setRefDivisorValue(String(normalized.referenceDivisor.value || ''));
+            }
         } catch {
             setError('not_found');
         }
@@ -685,7 +700,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     };
 
     const commitEdit = useCallback(() => {
-        if (!editingField || !data) {
+        if (!editingField || !data || !editValue) {
             setEditingField(null);
             return;
         }
@@ -707,9 +722,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 if (editingField.field === 'coef') {
                     const newCoef = newVal;
                     const unitPrice = getLineUnitPrice(ci);
+                    // GAP 1: preserve expression when it contains operators
+                    const rawExpr = editValue.trim();
+                    const hasExpression = /[*\/+\-]/.test(rawExpr) && rawExpr !== String(newCoef);
                     return {
                         ...ci,
                         coefficient: newCoef,
+                        coefficientExpression: hasExpression ? rawExpr : undefined,
                         price: applyPrecision(newCoef * unitPrice, { precision: engineeringConfig?.precision }),
                     };
                 } else {
@@ -745,9 +764,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setEditingField(null);
     }, [editingField, editValue, data, currentItem, onUpdateItem]);
 
-    const startEdit = (id: string, field: 'coef' | 'price', currentValue: number) => {
+    const startEdit = (id: string, field: 'coef' | 'price', currentValue: number, expression?: string) => {
         setEditingField({ id, field });
-        setEditValue(String(currentValue));
+        // GAP 1: If there's a stored expression, show it instead of the computed value
+        setEditValue(expression || String(currentValue));
     };
 
     const saveToBase = async () => {
@@ -812,7 +832,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: { ...data, code: canonicalCode } })
+                body: JSON.stringify({ composition: { ...data, code: canonicalCode, groupNotes, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
             });
             if (!res.ok) {
                 const errBody = await res.json().catch(() => ({}));
@@ -864,10 +884,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         
         const priceNum = isObs ? 0 : (evaluateMath(freeItemData.price) || 0);
         const coefNum = isObs ? 0 : (evaluateMath(freeItemData.coefficient) || 1);
+        // GAP 1: Detect expression in coefficient field
+        const rawCoefExpr = freeItemData.coefficient.trim();
+        const hasExpr = !isObs && /[*\/+\-]/.test(rawCoefExpr) && rawCoefExpr !== String(coefNum);
         
         const newItem = {
             id: `temp-${Date.now()}`,
             coefficient: coefNum,
+            coefficientExpression: hasExpr ? rawCoefExpr : undefined,
             price: isObs ? 0 : applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
             item: !isAux ? {
                 id: `new-${Date.now()}`,
@@ -1509,6 +1533,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 <Icon size={16} color={meta.color} />
                                                 <span style={{ fontWeight: 700, fontSize: '0.88rem', color: meta.color }}>{meta.label}</span>
                                                 <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>({groupItems.length})</span>
+                                                {groupNotes[groupKey] && (
+                                                    <span title={groupNotes[groupKey]} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, background: `${meta.color}10`, color: meta.color, fontWeight: 600 }}>
+                                                        <MessageSquare size={9} /> Nota
+                                                    </span>
+                                                )}
                                             </div>
                                             <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color }}>{fmt(groupTotal)}</span>
                                         </div>
@@ -1631,10 +1660,18 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                         </>
                                                                     ) : (
                                                                         <>
-                                                                            <span style={{ fontSize: '0.78rem', fontFamily: 'monospace' }}>{fmtCoef(ci.coefficient)}</span>
-                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient)}
+                                                                            <span
+                                                                                style={{ fontSize: '0.78rem', fontFamily: 'monospace', cursor: ci.coefficientExpression ? 'help' : 'default' }}
+                                                                                title={ci.coefficientExpression ? `${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(ci.coefficient)}` : undefined}
+                                                                            >
+                                                                                {ci.coefficientExpression
+                                                                                    ? <><span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>{ci.coefficientExpression.replace(/\*/g, '×')} = </span>{fmtCoef(ci.coefficient)}</>
+                                                                                    : fmtCoef(ci.coefficient)
+                                                                                }
+                                                                            </span>
+                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
                                                                                 style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                                title="Editar coeficiente">
+                                                                                title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
                                                                                 <Pencil size={10} />
                                                                             </button>
                                                                         </>
@@ -1694,6 +1731,45 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         </div>
                                                     );
                                                 })}
+
+                                                {/* GAP 2: Group Note — inline editor below rows */}
+                                                {isExpanded && (
+                                                    <div style={{ padding: '8px 20px', background: `${meta.color}04`, borderTop: `1px dashed ${meta.color}15` }}>
+                                                        {editingGroupNote === groupKey ? (
+                                                            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                                                                <textarea
+                                                                    autoFocus
+                                                                    value={groupNotes[groupKey] || ''}
+                                                                    onChange={e => setGroupNotes(prev => ({ ...prev, [groupKey]: e.target.value }))}
+                                                                    onBlur={() => { setEditingGroupNote(null); setHasChanges(true); }}
+                                                                    onKeyDown={e => { if (e.key === 'Escape') setEditingGroupNote(null); }}
+                                                                    placeholder="Ex: Disponibilidade básica de turno mensal com 44 horas semanais..."
+                                                                    style={{
+                                                                        flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-md)',
+                                                                        border: `1px solid ${meta.color}40`, fontSize: '0.75rem',
+                                                                        background: 'white', color: 'var(--color-text-primary)',
+                                                                        resize: 'vertical', minHeight: 48, fontFamily: 'inherit',
+                                                                        outline: 'none',
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setEditingGroupNote(groupKey)}
+                                                                style={{
+                                                                    display: 'flex', alignItems: 'center', gap: 4,
+                                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                                    fontSize: '0.7rem', color: groupNotes[groupKey] ? meta.color : 'var(--color-text-tertiary)',
+                                                                    fontStyle: groupNotes[groupKey] ? 'normal' : 'italic',
+                                                                    padding: '2px 0', width: '100%', textAlign: 'left',
+                                                                }}
+                                                            >
+                                                                <MessageSquare size={11} />
+                                                                {groupNotes[groupKey] || 'Adicionar observação ao grupo...'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                     </div>
@@ -1757,6 +1833,44 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
                                 onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
                             />
+                        </div>
+
+                        {/* GAP 3: Reference Divisor — derived metric (e.g. Price per Light Point) */}
+                        <div style={{ marginTop: 8, borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                <Hash size={12} color="var(--color-text-tertiary)" />
+                                <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Divisor de Referência
+                                </label>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 1fr', gap: 8, alignItems: 'center' }}>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Ex: Nº de Pontos Luminosos"
+                                    value={refDivisorLabel}
+                                    onChange={e => { setRefDivisorLabel(e.target.value); setHasChanges(true); }}
+                                    style={{ fontSize: '0.75rem', padding: '5px 8px' }}
+                                />
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Qtd"
+                                    value={refDivisorValue}
+                                    onChange={e => { setRefDivisorValue(e.target.value); setHasChanges(true); }}
+                                    style={{ fontSize: '0.75rem', padding: '5px 8px', textAlign: 'center', fontWeight: 700 }}
+                                />
+                                {refDivisorLabel && refDivisorValue && parseFloat(refDivisorValue.replace(',', '.')) > 0 && (
+                                    <div style={{ padding: '4px 10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(124,58,237,0.06))', border: '1px solid rgba(37,99,235,0.12)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>
+                                            Custo/{refDivisorLabel.substring(0, 20)}
+                                        </div>
+                                        <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                                            {fmt(compositionTotal / (parseFloat(refDivisorValue.replace(',', '.')) || 1))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1988,8 +2102,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
                         <div style={{ display: 'flex', gap: 12 }}>
                             <div style={{ flex: 1 }}>
-                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Coeficiente</label>
-                                <input type="text" className="form-input" value={freeItemData.coefficient} onChange={e => setFreeItemData({...freeItemData, coefficient: e.target.value})} placeholder="Ex: 1 * 32" style={{ width: '100%' }} />
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Coeficiente <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>(aceita expressões: 1*220)</span></label>
+                                <input type="text" className="form-input" value={freeItemData.coefficient} onChange={e => setFreeItemData({...freeItemData, coefficient: e.target.value})} placeholder="Ex: 1*220" style={{ width: '100%' }} />
                             </div>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Preço Unitário</label>
