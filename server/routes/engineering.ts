@@ -905,9 +905,19 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 let itemId = item.item ? item.item.id : item.itemId;
                 let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
                 
+                // Skip observation/etapa items that have no real item or composition data
+                if (!itemId && !auxId && !isAux) {
+                    logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId (likely observation/etapa): coef=${item.coefficient}`);
+                    continue;
+                }
+
+                // Helper: detect temporary/synthetic IDs that don't exist in DB
+                const isTempId = (id: string | null | undefined) => 
+                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-');
+                
                 // Dynamically create AI-extracted proprietary inputs
-                if (!isAux && itemId && itemId.startsWith('new-')) {
-                    const itemCode = item.item.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                if (!isAux && itemId && isTempId(itemId)) {
+                    const itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                     
                     let existingItem = await tx.engineeringItem.findFirst({
                         where: {
@@ -921,19 +931,20 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             data: {
                                 databaseId: basePropria.id,
                                 code: itemCode,
-                                description: item.item.description || 'Novo Insumo Próprio (IA)',
-                                unit: item.item.unit || 'UN',
-                                type: item.item.type || 'MATERIAL',
-                                price: item.item.price || 0
+                                description: item.item?.description || 'Novo Insumo Próprio (IA)',
+                                unit: item.item?.unit || 'UN',
+                                type: item.item?.type || 'MATERIAL',
+                                price: item.item?.price || 0
                             }
                         });
+                        logger.info(`[CompositionSave] 🆕 Created own item: code=${itemCode} id=${existingItem.id}`);
                     }
                     itemId = existingItem.id;
                 }
 
                 // Dynamically create AI-extracted auxiliary compositions
-                if (isAux && auxId && auxId.startsWith('new-')) {
-                    const auxCode = item.auxiliaryComposition.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                if (isAux && auxId && isTempId(auxId)) {
+                    const auxCode = item.auxiliaryComposition?.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                     
                     let existingAux = await tx.engineeringComposition.findFirst({
                         where: {
@@ -947,13 +958,24 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             data: {
                                 databaseId: basePropria.id,
                                 code: auxCode,
-                                description: item.auxiliaryComposition.description || 'Nova Composição Auxiliar Própria (IA)',
-                                unit: item.auxiliaryComposition.unit || 'UN',
-                                totalPrice: item.auxiliaryComposition.totalPrice || 0
+                                description: item.auxiliaryComposition?.description || 'Nova Composição Auxiliar Própria (IA)',
+                                unit: item.auxiliaryComposition?.unit || 'UN',
+                                totalPrice: item.auxiliaryComposition?.totalPrice || 0
                             }
                         });
+                        logger.info(`[CompositionSave] 🆕 Created own composition: code=${auxCode} id=${existingAux.id}`);
                     }
                     auxId = existingAux.id;
+                }
+
+                // Final validation: skip if we still don't have valid references
+                if (!isAux && !itemId) {
+                    logger.warn(`[CompositionSave] ⚠️ Skipping item with no valid itemId after resolution`);
+                    continue;
+                }
+                if (isAux && !auxId) {
+                    logger.warn(`[CompositionSave] ⚠️ Skipping aux comp with no valid auxId after resolution`);
+                    continue;
                 }
                 
                 await tx.engineeringCompositionItem.create({
