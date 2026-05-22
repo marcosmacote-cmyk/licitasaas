@@ -326,6 +326,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+    // ── Drag & Drop: Reorder entire groups (etapas) ──
+    const [dragGroupKey, setDragGroupKey] = useState<string | null>(null);
+    const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
+    const [groupOrder, setGroupOrder] = useState<string[]>([]);
+
     // ── Change item base classification ──
     const [editingBaseItemId, setEditingBaseItemId] = useState<string | null>(null);
 
@@ -542,6 +547,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (snapshotCustomLabels) setCustomGroupLabels(snapshotCustomLabels);
         if (snapshot?.groupNotes && !snapshotGroupNotes) setGroupNotes(snapshot.groupNotes);
         if (snapshot?.customGroupLabels && !snapshotCustomLabels) setCustomGroupLabels(snapshot.customGroupLabels);
+        if (snapshot?.groupOrder && Array.isArray(snapshot.groupOrder)) setGroupOrder(snapshot.groupOrder);
         setHasChanges(snapshotHasChanges ?? false);
     }, []);
 
@@ -605,6 +611,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             // Restore GAP 2/3 data from composition
             if (normalized.groupNotes) setGroupNotes(normalized.groupNotes);
             if (normalized.customGroupLabels) setCustomGroupLabels(normalized.customGroupLabels);
+            if (normalized.groupOrder && Array.isArray(normalized.groupOrder)) setGroupOrder(normalized.groupOrder);
             if (normalized.referenceDivisor) {
                 setRefDivisorLabel(normalized.referenceDivisor.label || '');
                 setRefDivisorValue(String(normalized.referenceDivisor.value || ''));
@@ -755,6 +762,48 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setDragItem(null);
         setDragOverGroup(null);
         setDragOverIndex(null);
+    };
+
+    // ── Drag & Drop: Reorder entire groups (etapas) ──
+    const getEffectiveGroupKeys = useCallback(() => {
+        const allKeys = new Set([
+            ...Object.keys(GROUP_META),
+            ...(data?.groups ? Object.keys(data.groups) : []),
+            ...Object.keys(customGroupLabels),
+        ]);
+        // If we have a saved groupOrder, use it as the base ordering
+        if (groupOrder.length > 0) {
+            const ordered: string[] = [];
+            for (const key of groupOrder) {
+                if (allKeys.has(key)) {
+                    ordered.push(key);
+                    allKeys.delete(key);
+                }
+            }
+            // Append any new keys not in the saved order
+            for (const key of allKeys) ordered.push(key);
+            return ordered;
+        }
+        return Array.from(allKeys);
+    }, [data, customGroupLabels, groupOrder]);
+
+    const handleGroupDrop = (targetIdx: number) => {
+        if (dragGroupKey === null) return;
+        const keys = getEffectiveGroupKeys();
+        const fromIdx = keys.indexOf(dragGroupKey);
+        if (fromIdx === -1 || fromIdx === targetIdx) {
+            setDragGroupKey(null);
+            setDragOverGroupIdx(null);
+            return;
+        }
+        const newOrder = [...keys];
+        const [moved] = newOrder.splice(fromIdx, 1);
+        const adjustedIdx = targetIdx > fromIdx ? targetIdx - 1 : targetIdx;
+        newOrder.splice(adjustedIdx, 0, moved);
+        setGroupOrder(newOrder);
+        setHasChanges(true);
+        setDragGroupKey(null);
+        setDragOverGroupIdx(null);
     };
 
     // ═══════════════════════════════════════════════════════
@@ -949,7 +998,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const res = await fetch(`/api/engineering/compositions/${targetId}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, customGroupLabels, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
+                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, customGroupLabels, groupOrder, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
             });
             if (!res.ok) {
                 const errBody = await res.json().catch(() => ({}));
@@ -1779,33 +1828,45 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             )}
                             {/* Render all groups: known GROUP_META + custom groups */}
                             {(() => {
-                                // Merge known groups with any custom groups in data
-                                const allGroupKeys = new Set([
-                                    ...Object.keys(GROUP_META),
-                                    ...(data.groups ? Object.keys(data.groups) : []),
-                                    ...Object.keys(customGroupLabels), // Include custom etapas even if empty
-                                ]);
-                                return Array.from(allGroupKeys).map(groupKey => {
+                                const orderedKeys = getEffectiveGroupKeys();
+                                return orderedKeys.map((groupKey, groupIdx) => {
                                 const meta = GROUP_META[groupKey] || { label: groupKey, icon: Folder, color: '#6b7280' };
                                 const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
                                 // FIX EMPTY-GROUP: Show empty groups as drop targets during drag
-                                if (groupItems.length === 0 && !dragItem) return null;
+                                if (groupItems.length === 0 && !dragItem && !dragGroupKey) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
 
                                 return (
-                                    <div key={groupKey}
-                                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                                        onDragEnter={(e) => { e.preventDefault(); setDragOverGroup(groupKey); }}
-                                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverGroup(null); setDragOverIndex(null); } }}
-                                        onDrop={(e) => { e.preventDefault(); handleDrop(groupKey); }}
+                                    <React.Fragment key={groupKey}>
+                                    {/* Group-level drop zone BEFORE this group */}
+                                    {dragGroupKey && dragGroupKey !== groupKey && (
+                                        <div
+                                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroupIdx(groupIdx); }}
+                                            onDragLeave={() => { if (dragOverGroupIdx === groupIdx) setDragOverGroupIdx(null); }}
+                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleGroupDrop(groupIdx); }}
+                                            style={{
+                                                height: dragOverGroupIdx === groupIdx ? 6 : 3,
+                                                background: dragOverGroupIdx === groupIdx ? 'var(--color-primary)' : 'transparent',
+                                                transition: 'all 0.15s',
+                                                borderRadius: 3,
+                                                marginBlock: 2,
+                                            }}
+                                        />
+                                    )}
+                                    <div
+                                        onDragOver={(e) => { if (!dragGroupKey) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+                                        onDragEnter={(e) => { if (!dragGroupKey) { e.preventDefault(); setDragOverGroup(groupKey); } }}
+                                        onDragLeave={(e) => { if (!dragGroupKey && !e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverGroup(null); setDragOverIndex(null); } }}
+                                        onDrop={(e) => { if (!dragGroupKey) { e.preventDefault(); handleDrop(groupKey); } }}
                                         style={{
-                                            border: `1px solid ${dragOverGroup === groupKey && dragItem ? meta.color : meta.color + '25'}`,
+                                            border: `1px solid ${dragOverGroup === groupKey && dragItem ? meta.color : (dragGroupKey === groupKey ? 'var(--color-primary)' : meta.color + '25')}`,
                                             borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-                                            transition: 'border-color 0.15s, box-shadow 0.15s',
+                                            transition: 'border-color 0.15s, box-shadow 0.15s, opacity 0.2s',
                                             boxShadow: dragOverGroup === groupKey && dragItem && dragItem.sourceGroup !== groupKey ? `0 0 0 2px ${meta.color}30` : 'none',
+                                            opacity: dragGroupKey === groupKey ? 0.4 : 1,
                                         }}>
                                         {/* Group header */}
                                         <div onClick={() => toggleGroup(groupKey)}
@@ -1815,6 +1876,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 borderBottom: isExpanded ? `1px solid ${meta.color}15` : 'none',
                                             }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                {/* Grip handle to drag the entire group */}
+                                                <div
+                                                    draggable
+                                                    onDragStart={(e) => {
+                                                        e.stopPropagation();
+                                                        setDragGroupKey(groupKey);
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                        e.dataTransfer.setData('text/plain', `group:${groupKey}`);
+                                                    }}
+                                                    onDragEnd={() => { setDragGroupKey(null); setDragOverGroupIdx(null); }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    title="Arrastar para reordenar esta etapa"
+                                                    style={{ cursor: 'grab', padding: '2px 0', display: 'flex', alignItems: 'center' }}
+                                                >
+                                                    <GripVertical size={14} style={{ color: meta.color, opacity: 0.4 }} />
+                                                </div>
                                                 {isExpanded ? <ChevronDown size={14} color={meta.color} /> : <ChevronRight size={14} color={meta.color} />}
                                                 <Icon size={16} color={meta.color} />
                                                 {/* Editable group label */}
@@ -2407,6 +2484,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             </>
                                         )}
                                     </div>
+                                    {/* Group-level drop zone AFTER last group */}
+                                    {dragGroupKey && dragGroupKey !== groupKey && groupIdx === orderedKeys.length - 1 && (
+                                        <div
+                                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroupIdx(groupIdx + 1); }}
+                                            onDragLeave={() => { if (dragOverGroupIdx === groupIdx + 1) setDragOverGroupIdx(null); }}
+                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleGroupDrop(groupIdx + 1); }}
+                                            style={{
+                                                height: dragOverGroupIdx === groupIdx + 1 ? 6 : 3,
+                                                background: dragOverGroupIdx === groupIdx + 1 ? 'var(--color-primary)' : 'transparent',
+                                                transition: 'all 0.15s',
+                                                borderRadius: 3,
+                                                marginBlock: 2,
+                                            }}
+                                        />
+                                    )}
+                                    </React.Fragment>
                                 );
                             });
                             })()}
