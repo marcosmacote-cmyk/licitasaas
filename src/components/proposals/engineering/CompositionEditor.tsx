@@ -1926,13 +1926,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         }}
                                                     />
                                                 ) : (
-                                                    <span
-                                                        onDoubleClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
-                                                        title="Duplo-clique para renomear esta etapa"
-                                                        style={{ fontWeight: 700, fontSize: '0.88rem', color: meta.color, cursor: 'text' }}
-                                                    >
+                                                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: meta.color }}>
                                                         {displayLabel}
                                                     </span>
+                                                )}
+                                                {/* Edit button for group label */}
+                                                {editingGroupLabel !== groupKey && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
+                                                        title="Renomear esta etapa"
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            padding: '2px', display: 'inline-flex', alignItems: 'center',
+                                                            color: meta.color, opacity: 0.35,
+                                                        }}
+                                                    >
+                                                        <Pencil size={11} />
+                                                    </button>
                                                 )}
                                                 <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>({groupItems.length})</span>
                                                 {groupNotes[groupKey] && (
