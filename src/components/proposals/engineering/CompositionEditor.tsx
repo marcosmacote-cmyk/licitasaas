@@ -1881,11 +1881,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     draggable
                                                     onDragStart={(e) => {
                                                         e.stopPropagation();
+                                                        setDragItem(null); // Ensure item drag doesn't interfere
                                                         setDragGroupKey(groupKey);
                                                         e.dataTransfer.effectAllowed = 'move';
                                                         e.dataTransfer.setData('text/plain', `group:${groupKey}`);
                                                     }}
-                                                    onDragEnd={() => { setDragGroupKey(null); setDragOverGroupIdx(null); }}
+                                                    onDragEnd={() => { setDragGroupKey(null); setDragOverGroupIdx(null); setDragItem(null); setDragOverGroup(null); setDragOverIndex(null); }}
                                                     onClick={(e) => e.stopPropagation()}
                                                     title="Arrastar para reordenar esta etapa"
                                                     style={{ cursor: 'grab', padding: '2px 0', display: 'flex', alignItems: 'center' }}
@@ -2016,6 +2017,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         <div
                                                             draggable={!isEditingCoef && !isEditingPrice}
                                                             onDragStart={(e) => {
+                                                                e.stopPropagation();
+                                                                setDragGroupKey(null); // Ensure group drag doesn't interfere
                                                                 setDragItem({ id: ci.id, sourceGroup: groupKey, sourceIndex: idx });
                                                                 e.dataTransfer.effectAllowed = 'move';
                                                                 e.dataTransfer.setData('text/plain', ci.id);
@@ -2028,6 +2031,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 setDragItem(null);
                                                                 setDragOverGroup(null);
                                                                 setDragOverIndex(null);
+                                                                setDragGroupKey(null);
+                                                                setDragOverGroupIdx(null);
                                                             }}
                                                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey); }}
                                                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx); }}
