@@ -247,7 +247,30 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
     const hasNext = currentIndex < items.length - 1;
-    const [data, setData] = useState<any>(null);
+    const [data, setRawData] = useState<any>(null);
+    const setData = useCallback((nextData: any) => {
+        if (typeof nextData === 'function') {
+            setRawData((prev: any) => {
+                const res = nextData(prev);
+                if (res && res.groups) {
+                    return {
+                        ...res,
+                        items: Object.values(res.groups).flat().filter(Boolean)
+                    };
+                }
+                return res;
+            });
+        } else {
+            if (nextData && nextData.groups) {
+                setRawData({
+                    ...nextData,
+                    items: Object.values(nextData.groups).flat().filter(Boolean)
+                });
+            } else {
+                setRawData(nextData);
+            }
+        }
+    }, []);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'SERVICO', 'AUXILIAR']));
