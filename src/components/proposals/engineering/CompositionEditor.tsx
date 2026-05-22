@@ -1574,8 +1574,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         
                         <div style={{ flex: 1 }}></div>
 
-                        {/* Clear composition — only for PROPRIA with items */}
-                        {data?.database?.name === 'PROPRIA' && data.items?.length > 0 && (
+                        {/* Clear composition — available for all PROPRIA compositions with items */}
+                        {(data?.database?.name === 'PROPRIA' || data?.database?.type === 'PROPRIA') && (data.items?.length > 0 || Object.values(data.groups || {}).some((g: any) => g?.length > 0)) && (
                             <button onClick={handleClearComposition}
                                 title="Limpar todos os itens desta composição para iniciar uma nova extração"
                                 style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-danger)', background: 'transparent', color: 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600, opacity: 0.7 }}>
