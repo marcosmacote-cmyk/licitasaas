@@ -324,7 +324,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const aiFileInputRef = useRef<HTMLInputElement>(null);
 
     // Drill-down stack for auxiliary compositions — includes snapshot of parent data to restore on back
-    const [drillStack, setDrillStack] = useState<{ code: string; description: string; snapshot?: any; snapshotGroupNotes?: Record<string, string>; snapshotCustomLabels?: Record<string, string>; snapshotHasChanges?: boolean }[]>([]);
+    const [drillStack, setDrillStack] = useState<{ code: string; description: string; snapshot?: any; snapshotGroupNotes?: Record<string, string>; snapshotCustomLabels?: Record<string, string>; snapshotGroupOrder?: string[]; snapshotHasChanges?: boolean }[]>([]);
     // Grouper editing states
     const [grouperDesc, setGrouperDesc] = useState('');
     const [grouperFactor, setGrouperFactor] = useState('1');
@@ -566,15 +566,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     };
 
     // ── Restore composition from drillStack snapshot (avoids losing unsaved data) ──
-    const restoreFromSnapshot = useCallback((snapshot: any, snapshotGroupNotes?: Record<string, string>, snapshotCustomLabels?: Record<string, string>, snapshotHasChanges?: boolean) => {
+    const restoreFromSnapshot = useCallback((snapshot: any, snapshotGroupNotes?: Record<string, string>, snapshotCustomLabels?: Record<string, string>, snapshotGroupOrder?: string[], snapshotHasChanges?: boolean) => {
         setLoading(false);
         setError('');
         setData(snapshot);
         if (snapshotGroupNotes) setGroupNotes(snapshotGroupNotes);
         if (snapshotCustomLabels) setCustomGroupLabels(snapshotCustomLabels);
+        if (snapshotGroupOrder) setGroupOrder(snapshotGroupOrder);
         if (snapshot?.groupNotes && !snapshotGroupNotes) setGroupNotes(snapshot.groupNotes);
         if (snapshot?.customGroupLabels && !snapshotCustomLabels) setCustomGroupLabels(snapshot.customGroupLabels);
-        if (snapshot?.groupOrder && Array.isArray(snapshot.groupOrder)) setGroupOrder(snapshot.groupOrder);
+        if (snapshot?.groupOrder && !snapshotGroupOrder && Array.isArray(snapshot.groupOrder)) setGroupOrder(snapshot.groupOrder);
         setHasChanges(snapshotHasChanges ?? false);
     }, []);
 
@@ -589,6 +590,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setError('');
         setData(null);
         setHasChanges(false);
+        setGroupNotes({});
+        setCustomGroupLabels({});
+        setGroupOrder([]);
+        setRefDivisorLabel('');
+        setRefDivisorValue('');
         try {
             const params = new URLSearchParams();
             // FIX CASCADE-02: Use override params when navigating drill-down,
@@ -1543,7 +1549,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     const rootEntry = drillStack[0];
                                     setDrillStack([]);
                                     if (rootEntry?.snapshot) {
-                                        restoreFromSnapshot(rootEntry.snapshot, rootEntry.snapshotGroupNotes, rootEntry.snapshotCustomLabels, rootEntry.snapshotHasChanges);
+                                        restoreFromSnapshot(rootEntry.snapshot, rootEntry.snapshotGroupNotes, rootEntry.snapshotCustomLabels, rootEntry.snapshotGroupOrder, rootEntry.snapshotHasChanges);
                                     } else {
                                         loadComposition(currentItem.code);
                                     }
@@ -1561,7 +1567,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 const newStack = drillStack.slice(0, i + 1);
                                                 setDrillStack(newStack);
                                                 if (nextEntry?.snapshot) {
-                                                    restoreFromSnapshot(nextEntry.snapshot, nextEntry.snapshotGroupNotes, nextEntry.snapshotCustomLabels, nextEntry.snapshotHasChanges);
+                                                    restoreFromSnapshot(nextEntry.snapshot, nextEntry.snapshotGroupNotes, nextEntry.snapshotCustomLabels, nextEntry.snapshotGroupOrder, nextEntry.snapshotHasChanges);
                                                 } else {
                                                     loadComposition(newStack[newStack.length - 1].code);
                                                 }
@@ -1578,7 +1584,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {data && !isGrouperType(currentItem.type) && (
+                        {data && !isGrouperType(currentItem.type) && drillStack.length === 0 && (
                             <>
                                 <button onClick={() => { setSearchType('composition'); setShowSearch(true); }} title="Adicionar Composição Auxiliar"
                                     style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
@@ -1590,7 +1596,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </button>
                             </>
                         )}
-                        {data && !isGrouperType(currentItem.type) && hasChanges && (
+                        {data && !isGrouperType(currentItem.type) && hasChanges && drillStack.length === 0 && (
                             <button onClick={saveToBase} disabled={isSavingToBase} title={data.database?.name === 'PROPRIA' ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                                 {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} 
@@ -1627,7 +1633,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 )}
 
                 {/* Toolbar Módulo Livre — only for non-groupers */}
-                {!isGrouperType(currentItem.type) && data && !error && (
+                {!isGrouperType(currentItem.type) && data && !error && drillStack.length === 0 && (
                     <div style={{
                         padding: '8px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
                         display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'
@@ -1928,8 +1934,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
                                 // Show custom groups (or labeled ones) always, even if empty. Standard groups only show if they have items or during drag.
+                                // If viewing nested auxiliary compositions (drillStack.length > 0), hide all empty groups to keep the layout lean.
                                 const isCustomGroup = !GROUP_META[groupKey] || groupKey.startsWith('CUSTOM_') || !!customGroupLabels[groupKey];
-                                if (groupItems.length === 0 && !isCustomGroup && !dragItem && !dragGroupKey) return null;
+                                if (groupItems.length === 0 && (drillStack.length > 0 || (!isCustomGroup && !dragItem && !dragGroupKey))) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
@@ -2065,7 +2072,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     </span>
                                                 )}
                                                 {/* Edit button for group label */}
-                                                {editingGroupLabel !== groupKey && (
+                                                {drillStack.length === 0 && editingGroupLabel !== groupKey && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
                                                         title="Renomear este grupo"
@@ -2091,68 +2098,72 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 )}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
-                                                {/* Plus button to add free item to this group */}
-                                                <button
-                                                    onClick={() => openAddFreeItemToGroup(groupKey)}
-                                                    title="Adicionar insumo livre a este grupo"
-                                                    style={{
-                                                        background: 'none', border: 'none', cursor: 'pointer',
-                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                        color: meta.color, opacity: 0.6, width: 24, height: 24, borderRadius: 4
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = `${meta.color}15`}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                                                >
-                                                    <Plus size={14} />
-                                                </button>
+                                                {drillStack.length === 0 && (
+                                                    <>
+                                                        {/* Plus button to add free item to this group */}
+                                                        <button
+                                                            onClick={() => openAddFreeItemToGroup(groupKey)}
+                                                            title="Adicionar insumo livre a este grupo"
+                                                            style={{
+                                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                color: meta.color, opacity: 0.6, width: 24, height: 24, borderRadius: 4
+                                                            }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = `${meta.color}15`}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                        >
+                                                            <Plus size={14} />
+                                                        </button>
 
-                                                {/* Move Up button */}
-                                                <button
-                                                    onClick={() => moveGroupOrder(groupKey, -1)}
-                                                    disabled={groupIdx === 0}
-                                                    title="Mover grupo para cima"
-                                                    style={{
-                                                        background: 'none', border: 'none', cursor: groupIdx === 0 ? 'not-allowed' : 'pointer',
-                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                        color: meta.color, opacity: groupIdx === 0 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
-                                                    }}
-                                                    onMouseEnter={e => { if (groupIdx > 0) e.currentTarget.style.background = `${meta.color}15`; }}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                                                >
-                                                    <ChevronUp size={14} />
-                                                </button>
+                                                        {/* Move Up button */}
+                                                        <button
+                                                            onClick={() => moveGroupOrder(groupKey, -1)}
+                                                            disabled={groupIdx === 0}
+                                                            title="Mover grupo para cima"
+                                                            style={{
+                                                                background: 'none', border: 'none', cursor: groupIdx === 0 ? 'not-allowed' : 'pointer',
+                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                color: meta.color, opacity: groupIdx === 0 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
+                                                            }}
+                                                            onMouseEnter={e => { if (groupIdx > 0) e.currentTarget.style.background = `${meta.color}15`; }}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                        >
+                                                            <ChevronUp size={14} />
+                                                        </button>
 
-                                                {/* Move Down button */}
-                                                <button
-                                                    onClick={() => moveGroupOrder(groupKey, 1)}
-                                                    disabled={groupIdx === orderedKeys.length - 1}
-                                                    title="Mover grupo para baixo"
-                                                    style={{
-                                                        background: 'none', border: 'none', cursor: groupIdx === orderedKeys.length - 1 ? 'not-allowed' : 'pointer',
-                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                        color: meta.color, opacity: groupIdx === orderedKeys.length - 1 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
-                                                    }}
-                                                    onMouseEnter={e => { if (groupIdx < orderedKeys.length - 1) e.currentTarget.style.background = `${meta.color}15`; }}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                                                >
-                                                    <ChevronDown size={14} />
-                                                </button>
+                                                        {/* Move Down button */}
+                                                        <button
+                                                            onClick={() => moveGroupOrder(groupKey, 1)}
+                                                            disabled={groupIdx === orderedKeys.length - 1}
+                                                            title="Mover grupo para baixo"
+                                                            style={{
+                                                                background: 'none', border: 'none', cursor: groupIdx === orderedKeys.length - 1 ? 'not-allowed' : 'pointer',
+                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                color: meta.color, opacity: groupIdx === orderedKeys.length - 1 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
+                                                            }}
+                                                            onMouseEnter={e => { if (groupIdx < orderedKeys.length - 1) e.currentTarget.style.background = `${meta.color}15`; }}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                        >
+                                                            <ChevronDown size={14} />
+                                                        </button>
 
-                                                {/* Delete button (only for custom groups) */}
-                                                {!GROUP_META[groupKey] && (
-                                                    <button
-                                                        onClick={() => handleDeleteGroup(groupKey)}
-                                                        title="Excluir este grupo"
-                                                        style={{
-                                                            background: 'none', border: 'none', cursor: 'pointer',
-                                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                            color: 'var(--color-danger, #ef4444)', opacity: 0.6, width: 24, height: 24, borderRadius: 4
-                                                        }}
-                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                                                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                                                    >
-                                                        <Trash2 size={13} />
-                                                    </button>
+                                                        {/* Delete button (only for custom groups) */}
+                                                        {!GROUP_META[groupKey] && (
+                                                            <button
+                                                                onClick={() => handleDeleteGroup(groupKey)}
+                                                                title="Excluir este grupo"
+                                                                style={{
+                                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                    color: 'var(--color-danger, #ef4444)', opacity: 0.6, width: 24, height: 24, borderRadius: 4
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                                                                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                            >
+                                                                <Trash2 size={13} />
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
 
                                                 <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color, marginLeft: 8 }}>{fmt(groupTotal)}</span>
@@ -2216,8 +2227,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             />
                                                         )}
                                                         <div
-                                                            draggable={!isEditingCoef && !isEditingPrice}
+                                                            draggable={drillStack.length === 0 && !isEditingCoef && !isEditingPrice}
                                                             onDragStart={(e) => {
+                                                                if (drillStack.length > 0) return;
                                                                 const targetId = ci.id;
                                                                 const targetGroup = groupKey;
                                                                 const targetIdx = idx;
@@ -2233,6 +2245,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 }, 0);
                                                             }}
                                                             onDragEnd={(e) => {
+                                                                if (drillStack.length > 0) return;
                                                                 if (e.currentTarget) e.currentTarget.style.opacity = '1';
                                                                 setDragItem(null);
                                                                 setDragOverGroup(null);
@@ -2240,17 +2253,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 setDragGroupKey(null);
                                                                 setDragOverGroupIdx(null);
                                                             }}
-                                                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey); }}
-                                                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx); }}
+                                                            onDragOver={(e) => {
+                                                                if (drillStack.length > 0) return;
+                                                                e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey);
+                                                            }}
+                                                            onDrop={(e) => {
+                                                                if (drillStack.length > 0) return;
+                                                                e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx);
+                                                            }}
                                                             style={{
                                                                 display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                                 gap: 8, padding: '8px 20px', alignItems: 'center',
                                                                 borderBottom: '1px solid var(--color-border)',
                                                                 background: itemData?.isObservation ? 'rgba(0,0,0,0.03)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)'),
-                                                                cursor: (isEditingCoef || isEditingPrice) ? 'text' : 'grab',
+                                                                cursor: drillStack.length > 0 ? 'default' : ((isEditingCoef || isEditingPrice) ? 'text' : 'grab'),
                                                             }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                                <GripVertical size={10} style={{ color: 'var(--color-text-tertiary)', opacity: 0.35, flexShrink: 0 }} />
+                                                                {drillStack.length === 0 && (
+                                                                    <GripVertical size={10} style={{ color: 'var(--color-text-tertiary)', opacity: 0.35, flexShrink: 0 }} />
+                                                                )}
                                                                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
                                                             </div>
                                                             <div style={itemData?.isObservation ? { gridColumn: '2 / 6', fontStyle: 'italic', color: 'var(--color-text-secondary)', fontSize: '0.75rem' } : {}}>
@@ -2270,6 +2291,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                             snapshot: data,
                                                                                             snapshotGroupNotes: { ...groupNotes },
                                                                                             snapshotCustomLabels: { ...customGroupLabels },
+                                                                                            snapshotGroupOrder: [...groupOrder],
                                                                                             snapshotHasChanges: hasChanges,
                                                                                         }]);
                                                                                         // FIX CASCADE-02: Pass current composition's database context for correct lookup
@@ -2470,11 +2492,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                     : fmtCoef(ci.coefficient)
                                                                                 }
                                                                             </span>
-                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
-                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                                title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
-                                                                                <Pencil size={10} />
-                                                                            </button>
+                                                                            {drillStack.length === 0 && (
+                                                                                <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
+                                                                                    style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                    title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
+                                                                                    <Pencil size={10} />
+                                                                                </button>
+                                                                            )}
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -2500,11 +2524,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                     ) : (
                                                                         <>
                                                                             <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{fmt(unitPrice)}</span>
-                                                                            <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
-                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                                title="Editar preço unitário">
-                                                                                <Pencil size={10} />
-                                                                            </button>
+                                                                            {drillStack.length === 0 && (
+                                                                                <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
+                                                                                    style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                    title="Editar preço unitário">
+                                                                                    <Pencil size={10} />
+                                                                                </button>
+                                                                            )}
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -2515,134 +2541,138 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
-                                                                {/* Convert Insumo → Composição (only for unmatched items or items in base PRÓPRIA) */}
-                                                                {ci.item && !itemData?.isObservation && (ci._noBaseMatch || data?.database?.name?.toUpperCase() === 'PROPRIA') && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            if (!data) return;
-                                                                            // Convert insumo to casca (shell composition)
-                                                                            const itemInfo = ci.item;
-                                                                            const compCode = itemInfo.code || `CP-${Date.now().toString(36).toUpperCase()}`;
-                                                                            
-                                                                            // Remove from current group
+                                                                {drillStack.length === 0 && (
+                                                                    <>
+                                                                        {/* Convert Insumo → Composição (only for unmatched items or items in base PRÓPRIA) */}
+                                                                        {ci.item && !itemData?.isObservation && (ci._noBaseMatch || data?.database?.name?.toUpperCase() === 'PROPRIA') && (
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (!data) return;
+                                                                                    // Convert insumo to casca (shell composition)
+                                                                                    const itemInfo = ci.item;
+                                                                                    const compCode = itemInfo.code || `CP-${Date.now().toString(36).toUpperCase()}`;
+                                                                                    
+                                                                                    // Remove from current group
+                                                                                    const updated = { ...data, groups: { ...data.groups } };
+                                                                                    updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
+                                                                                    
+                                                                                    // Create as auxiliary composition (casca)
+                                                                                    const newAuxItem = {
+                                                                                        ...ci,
+                                                                                        item: undefined,
+                                                                                        auxiliaryComposition: {
+                                                                                            id: `new-casca-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                                                                            code: compCode,
+                                                                                            description: itemInfo.description,
+                                                                                            unit: itemInfo.unit || 'UN',
+                                                                                            totalPrice: itemInfo.price || 0,
+                                                                                            // FIX SYNC-02: Only mark as truly "new" for PROPRIA items
+                                                                                            // Official items are copies, not new creations
+                                                                                            isNew: data?.database?.name?.toUpperCase() === 'PROPRIA' || !data?.database?.name,
+                                                                                            _isCasca: true,
+                                                                                            // FIX SYNC-02: Preserve original database reference for traceability
+                                                                                            _officialSourceRef: data?.database?.name && data.database.name !== 'PROPRIA' ? {
+                                                                                                databaseId: data.databaseId || data.database?.id,
+                                                                                                databaseName: data.database.name,
+                                                                                                originalItemCode: itemInfo.code,
+                                                                                            } : undefined,
+                                                                                        },
+                                                                                    };
+                                                                                    
+                                                                                    // Add to AUXILIAR group
+                                                                                    if (!updated.groups.AUXILIAR) updated.groups.AUXILIAR = [];
+                                                                                    updated.groups.AUXILIAR.push(newAuxItem);
+                                                                                    
+                                                                                    // Recalculate totals
+                                                                                    updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                                                                    updated.totalDirect = updated.totalPrice;
+                                                                                    
+                                                                                    setData(updated);
+                                                                                    setHasChanges(true);
+                                                                                    if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                                }}
+                                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', opacity: 0.4, padding: 2 }}
+                                                                                title="Converter em Composição Auxiliar (Casca) — permite abrir e inserir sub-insumos"
+                                                                            >
+                                                                                <Layers size={12} />
+                                                                            </button>
+                                                                        )}
+                                                                        {/* Move item to another group */}
+                                                                        <div style={{ position: 'relative' }}>
+                                                                            <button onClick={(e) => { e.stopPropagation(); setMovingItemId(movingItemId === ci.id ? null : ci.id); }}
+                                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', opacity: movingItemId === ci.id ? 1 : 0.4, padding: 2 }}
+                                                                                title="Mover para outro group">
+                                                                                <ArrowRightLeft size={11} />
+                                                                            </button>
+                                                                            {movingItemId === ci.id && (
+                                                                                <>
+                                                                                {/* Backdrop to dismiss dropdown */}
+                                                                                <div onClick={(e) => { e.stopPropagation(); setMovingItemId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                                                <div style={{
+                                                                                    position: 'absolute', right: 0, top: '100%', zIndex: 1000,
+                                                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                                                    borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
+                                                                                    minWidth: 180, fontSize: '0.72rem',
+                                                                                }}>
+                                                                                    <div style={{ padding: '4px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                                                                                        Mover para:
+                                                                                    </div>
+                                                                                    {(() => {
+                                                                                        const allKeys = new Set([...Object.keys(GROUP_META), ...(data.groups ? Object.keys(data.groups) : []), ...Object.keys(customGroupLabels)]);
+                                                                                        return Array.from(allKeys)
+                                                                                            .filter(k => k !== groupKey)
+                                                                                            .map(targetKey => {
+                                                                                                const targetMeta = GROUP_META[targetKey] || { label: targetKey, color: '#6b7280' };
+                                                                                                const targetLabel = customGroupLabels[targetKey] || targetMeta.label;
+                                                                                                return (
+                                                                                                    <button key={targetKey} onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        const updated = { ...data, groups: { ...data.groups } };
+                                                                                                        // Remove from current group
+                                                                                                        updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
+                                                                                                        // Add to target group
+                                                                                                        if (!updated.groups[targetKey]) updated.groups[targetKey] = [];
+                                                                                                        updated.groups[targetKey].push(ci);
+                                                                                                        // Recalculate totals
+                                                                                                        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                                                                                        updated.totalDirect = updated.totalPrice;
+                                                                                                        setData(updated);
+                                                                                                        setHasChanges(true);
+                                                                                                        setMovingItemId(null);
+                                                                                                        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                                                    }} style={{
+                                                                                                        display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                                                                                        padding: '5px 8px', border: 'none', background: 'none',
+                                                                                                        cursor: 'pointer', borderRadius: 4, textAlign: 'left',
+                                                                                                        color: targetMeta.color, fontWeight: 600,
+                                                                                                    }}
+                                                                                                    onMouseEnter={e => (e.currentTarget.style.background = `${targetMeta.color}10`)}
+                                                                                                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                                                                                    >
+                                                                                                        <ArrowRightLeft size={10} /> {targetLabel}
+                                                                                                    </button>
+                                                                                                );
+                                                                                            });
+                                                                                    })()}
+                                                                                </div>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                        <button onClick={() => {
                                                                             const updated = { ...data, groups: { ...data.groups } };
                                                                             updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
                                                                             
-                                                                            // Create as auxiliary composition (casca)
-                                                                            const newAuxItem = {
-                                                                                ...ci,
-                                                                                item: undefined,
-                                                                                auxiliaryComposition: {
-                                                                                    id: `new-casca-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                                                                                    code: compCode,
-                                                                                    description: itemInfo.description,
-                                                                                    unit: itemInfo.unit || 'UN',
-                                                                                    totalPrice: itemInfo.price || 0,
-                                                                                    // FIX SYNC-02: Only mark as truly "new" for PROPRIA items
-                                                                                    // Official items are copies, not new creations
-                                                                                    isNew: data?.database?.name?.toUpperCase() === 'PROPRIA' || !data?.database?.name,
-                                                                                    _isCasca: true,
-                                                                                    // FIX SYNC-02: Preserve original database reference for traceability
-                                                                                    _officialSourceRef: data?.database?.name && data.database.name !== 'PROPRIA' ? {
-                                                                                        databaseId: data.databaseId || data.database?.id,
-                                                                                        databaseName: data.database.name,
-                                                                                        originalItemCode: itemInfo.code,
-                                                                                    } : undefined,
-                                                                                },
-                                                                            };
-                                                                            
-                                                                            // Add to AUXILIAR group
-                                                                            if (!updated.groups.AUXILIAR) updated.groups.AUXILIAR = [];
-                                                                            updated.groups.AUXILIAR.push(newAuxItem);
-                                                                            
-                                                                            // Recalculate totals
                                                                             updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
                                                                             updated.totalDirect = updated.totalPrice;
                                                                             
                                                                             setData(updated);
                                                                             setHasChanges(true);
                                                                             if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', opacity: 0.4, padding: 2 }}
-                                                                        title="Converter em Composição Auxiliar (Casca) — permite abrir e inserir sub-insumos"
-                                                                    >
-                                                                        <Layers size={12} />
-                                                                    </button>
+                                                                        }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.5 }}>
+                                                                            <X size={14} />
+                                                                        </button>
+                                                                    </>
                                                                 )}
-                                                                {/* Move item to another group */}
-                                                                <div style={{ position: 'relative' }}>
-                                                                    <button onClick={(e) => { e.stopPropagation(); setMovingItemId(movingItemId === ci.id ? null : ci.id); }}
-                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', opacity: movingItemId === ci.id ? 1 : 0.4, padding: 2 }}
-                                                                        title="Mover para outro grupo">
-                                                                        <ArrowRightLeft size={11} />
-                                                                    </button>
-                                                                    {movingItemId === ci.id && (
-                                                                        <>
-                                                                        {/* Backdrop to dismiss dropdown */}
-                                                                        <div onClick={(e) => { e.stopPropagation(); setMovingItemId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
-                                                                        <div style={{
-                                                                            position: 'absolute', right: 0, top: '100%', zIndex: 1000,
-                                                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                                                                            borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
-                                                                            minWidth: 180, fontSize: '0.72rem',
-                                                                        }}>
-                                                                            <div style={{ padding: '4px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.65rem', textTransform: 'uppercase' }}>
-                                                                                Mover para:
-                                                                            </div>
-                                                                            {(() => {
-                                                                                const allKeys = new Set([...Object.keys(GROUP_META), ...(data.groups ? Object.keys(data.groups) : []), ...Object.keys(customGroupLabels)]);
-                                                                                return Array.from(allKeys)
-                                                                                    .filter(k => k !== groupKey)
-                                                                                    .map(targetKey => {
-                                                                                        const targetMeta = GROUP_META[targetKey] || { label: targetKey, color: '#6b7280' };
-                                                                                        const targetLabel = customGroupLabels[targetKey] || targetMeta.label;
-                                                                                        return (
-                                                                                            <button key={targetKey} onClick={(e) => {
-                                                                                                e.stopPropagation();
-                                                                                                const updated = { ...data, groups: { ...data.groups } };
-                                                                                                // Remove from current group
-                                                                                                updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
-                                                                                                // Add to target group
-                                                                                                if (!updated.groups[targetKey]) updated.groups[targetKey] = [];
-                                                                                                updated.groups[targetKey].push(ci);
-                                                                                                // Recalculate totals
-                                                                                                updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
-                                                                                                updated.totalDirect = updated.totalPrice;
-                                                                                                setData(updated);
-                                                                                                setHasChanges(true);
-                                                                                                setMovingItemId(null);
-                                                                                                if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-                                                                                            }} style={{
-                                                                                                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                                                                                                padding: '5px 8px', border: 'none', background: 'none',
-                                                                                                cursor: 'pointer', borderRadius: 4, textAlign: 'left',
-                                                                                                color: targetMeta.color, fontWeight: 600,
-                                                                                            }}
-                                                                                            onMouseEnter={e => (e.currentTarget.style.background = `${targetMeta.color}10`)}
-                                                                                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                                                                                            >
-                                                                                                <ArrowRightLeft size={10} /> {targetLabel}
-                                                                                            </button>
-                                                                                        );
-                                                                                    });
-                                                                            })()}
-                                                                        </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                                <button onClick={() => {
-                                                                    const updated = { ...data, groups: { ...data.groups } };
-                                                                    updated.groups[groupKey] = updated.groups[groupKey].filter((i: any) => i.id !== ci.id);
-                                                                    
-                                                                    updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
-                                                                    updated.totalDirect = updated.totalPrice;
-                                                                    
-                                                                    setData(updated);
-                                                                    setHasChanges(true);
-                                                                    if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-                                                                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.5 }}>
-                                                                    <X size={14} />
-                                                                </button>
                                                             </div>
                                                         </div>
                                                         {/* Drop zone AFTER last row */}
@@ -2678,9 +2708,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 )}
 
                                                 {/* GAP 2: Group Note — inline editor below rows */}
-                                                {isExpanded && (
+                                                {isExpanded && (groupNotes[groupKey] || drillStack.length === 0) && (
                                                     <div style={{ padding: '8px 20px', background: `${meta.color}04`, borderTop: `1px dashed ${meta.color}15` }}>
-                                                        {editingGroupNote === groupKey ? (
+                                                        {drillStack.length > 0 ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', padding: '2px 0' }}>
+                                                                <MessageSquare size={11} />
+                                                                <strong>Nota:</strong> {groupNotes[groupKey]}
+                                                            </div>
+                                                        ) : editingGroupNote === groupKey ? (
                                                             <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                                                                 <textarea
                                                                     autoFocus
