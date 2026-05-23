@@ -672,6 +672,53 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     }, [currentItem?.code, currentItem?.type, loadComposition]);
 
+    // Sync child composition changes back to the parent snapshot in drillStack
+    useEffect(() => {
+        if (drillStack.length > 0 && data && data.totalPrice !== undefined) {
+            const currentLevel = drillStack[drillStack.length - 1];
+            const childCode = currentLevel.code;
+            const parentSnapshot = currentLevel.snapshot;
+            if (parentSnapshot && parentSnapshot.groups) {
+                let updatedSnapshot = { ...parentSnapshot, groups: { ...parentSnapshot.groups } };
+                let found = false;
+                for (const groupKey of Object.keys(updatedSnapshot.groups)) {
+                    const groupItems = updatedSnapshot.groups[groupKey] || [];
+                    const updatedItems = groupItems.map((ci: any) => {
+                        if (ci.auxiliaryComposition && ci.auxiliaryComposition.code === childCode) {
+                            if (ci.price !== data.totalPrice || ci.auxiliaryComposition.totalPrice !== data.totalPrice) {
+                                found = true;
+                                return {
+                                    ...ci,
+                                    price: data.totalPrice,
+                                    auxiliaryComposition: {
+                                        ...ci.auxiliaryComposition,
+                                        totalPrice: data.totalPrice
+                                    }
+                                };
+                            }
+                        }
+                        return ci;
+                    });
+                    updatedSnapshot.groups[groupKey] = updatedItems;
+                }
+                if (found) {
+                    updatedSnapshot.totalPrice = sumCompositionGroups(updatedSnapshot.groups, engineeringConfig?.precision);
+                    updatedSnapshot.totalDirect = updatedSnapshot.totalPrice;
+                    setDrillStack(prev => {
+                        const copy = [...prev];
+                        copy[copy.length - 1] = {
+                            ...currentLevel,
+                            snapshot: updatedSnapshot,
+                            snapshotHasChanges: true
+                        };
+                        return copy;
+                    });
+                    setHasChanges(true);
+                }
+            }
+        }
+    }, [data, drillStack.length, engineeringConfig?.precision]);
+
     const navigate = (dir: -1 | 1) => {
         const next = currentIndex + dir;
         if (next >= 0 && next < items.length) setCurrentIndex(next);
@@ -1518,10 +1565,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 ? <>{currentItem.type === 'ETAPA' ? <FolderOpen size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{currentItem.type === 'ETAPA' ? 'ETAPA' : 'SUBETAPA'} — Agrupador</>
                                 : 'CPU — Composição de Preços Unitários'}
                         </div>
-                        <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>{currentItem.description}</h3>
+                        <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>
+                            {drillStack.length > 0 ? drillStack[drillStack.length - 1].description : currentItem.description}
+                        </h3>
                         {!isGrouperType(currentItem.type) && (
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                                Código: <strong>{currentItem.code}</strong> · {currentItem.sourceName}
+                                Código: <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> · {drillStack.length > 0 ? (data?.database?.name || '') : currentItem.sourceName}
                                 {/* FIX SYNC-04: Show real composition origin when loaded */}
                                 {data?.database?.name && data.database.name !== currentItem.sourceName && (
                                     <span style={{
@@ -1584,7 +1633,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {data && !isGrouperType(currentItem.type) && drillStack.length === 0 && (
+                        {data && !isGrouperType(currentItem.type) && (
                             <>
                                 <button onClick={() => { setSearchType('composition'); setShowSearch(true); }} title="Adicionar Composição Auxiliar"
                                     style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
@@ -1596,7 +1645,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </button>
                             </>
                         )}
-                        {data && !isGrouperType(currentItem.type) && hasChanges && drillStack.length === 0 && (
+                        {data && !isGrouperType(currentItem.type) && hasChanges && (
                             <button onClick={saveToBase} disabled={isSavingToBase} title={data.database?.name === 'PROPRIA' ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                                 {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} 
@@ -1633,7 +1682,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 )}
 
                 {/* Toolbar Módulo Livre — only for non-groupers */}
-                {!isGrouperType(currentItem.type) && data && !error && drillStack.length === 0 && (
+                {!isGrouperType(currentItem.type) && data && !error && (
                     <div style={{
                         padding: '8px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
                         display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'
@@ -1934,9 +1983,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
                                 // Show custom groups (or labeled ones) always, even if empty. Standard groups only show if they have items or during drag.
-                                // If viewing nested auxiliary compositions (drillStack.length > 0), hide all empty groups to keep the layout lean.
                                 const isCustomGroup = !GROUP_META[groupKey] || groupKey.startsWith('CUSTOM_') || !!customGroupLabels[groupKey];
-                                if (groupItems.length === 0 && (drillStack.length > 0 || (!isCustomGroup && !dragItem && !dragGroupKey))) return null;
+                                if (groupItems.length === 0 && !isCustomGroup && !dragItem && !dragGroupKey) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
@@ -2072,7 +2120,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     </span>
                                                 )}
                                                 {/* Edit button for group label */}
-                                                {drillStack.length === 0 && editingGroupLabel !== groupKey && (
+                                                {editingGroupLabel !== groupKey && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
                                                         title="Renomear este grupo"
@@ -2098,7 +2146,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 )}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
-                                                {drillStack.length === 0 && (
+                                                {(
                                                     <>
                                                         {/* Plus button to add free item to this group */}
                                                         <button
@@ -2227,9 +2275,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             />
                                                         )}
                                                         <div
-                                                            draggable={drillStack.length === 0 && !isEditingCoef && !isEditingPrice}
+                                                            draggable={!isEditingCoef && !isEditingPrice}
                                                             onDragStart={(e) => {
-                                                                if (drillStack.length > 0) return;
                                                                 const targetId = ci.id;
                                                                 const targetGroup = groupKey;
                                                                 const targetIdx = idx;
@@ -2245,7 +2292,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 }, 0);
                                                             }}
                                                             onDragEnd={(e) => {
-                                                                if (drillStack.length > 0) return;
                                                                 if (e.currentTarget) e.currentTarget.style.opacity = '1';
                                                                 setDragItem(null);
                                                                 setDragOverGroup(null);
@@ -2254,11 +2300,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 setDragOverGroupIdx(null);
                                                             }}
                                                             onDragOver={(e) => {
-                                                                if (drillStack.length > 0) return;
                                                                 e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverGroup(groupKey);
                                                             }}
                                                             onDrop={(e) => {
-                                                                if (drillStack.length > 0) return;
                                                                 e.preventDefault(); e.stopPropagation(); handleDrop(groupKey, idx);
                                                             }}
                                                             style={{
@@ -2266,12 +2310,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 gap: 8, padding: '8px 20px', alignItems: 'center',
                                                                 borderBottom: '1px solid var(--color-border)',
                                                                 background: itemData?.isObservation ? 'rgba(0,0,0,0.03)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.01)'),
-                                                                cursor: drillStack.length > 0 ? 'default' : ((isEditingCoef || isEditingPrice) ? 'text' : 'grab'),
+                                                                cursor: (isEditingCoef || isEditingPrice) ? 'text' : 'grab',
                                                             }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                                {drillStack.length === 0 && (
-                                                                    <GripVertical size={10} style={{ color: 'var(--color-text-tertiary)', opacity: 0.35, flexShrink: 0 }} />
-                                                                )}
+                                                                <GripVertical size={10} style={{ color: 'var(--color-text-tertiary)', opacity: 0.35, flexShrink: 0 }} />
                                                                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>{idx + 1}</span>
                                                             </div>
                                                             <div style={itemData?.isObservation ? { gridColumn: '2 / 6', fontStyle: 'italic', color: 'var(--color-text-secondary)', fontSize: '0.75rem' } : {}}>
@@ -2492,13 +2534,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                     : fmtCoef(ci.coefficient)
                                                                                 }
                                                                             </span>
-                                                                            {drillStack.length === 0 && (
-                                                                                <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
-                                                                                    style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                                    title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
-                                                                                    <Pencil size={10} />
-                                                                                </button>
-                                                                            )}
+                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
+                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
+                                                                                <Pencil size={10} />
+                                                                            </button>
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -2524,13 +2564,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                     ) : (
                                                                         <>
                                                                             <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{fmt(unitPrice)}</span>
-                                                                            {drillStack.length === 0 && (
-                                                                                <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
-                                                                                    style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
-                                                                                    title="Editar preço unitário">
-                                                                                    <Pencil size={10} />
-                                                                                </button>
-                                                                            )}
+                                                                            <button onClick={() => startEdit(ci.id, 'price', unitPrice)}
+                                                                                style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
+                                                                                title="Editar preço unitário">
+                                                                                <Pencil size={10} />
+                                                                            </button>
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -2541,7 +2579,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
-                                                                {drillStack.length === 0 && (
                                                                     <>
                                                                         {/* Convert Insumo → Composição (only for unmatched items or items in base PRÓPRIA) */}
                                                                         {ci.item && !itemData?.isObservation && (ci._noBaseMatch || data?.database?.name?.toUpperCase() === 'PROPRIA') && (
@@ -2672,7 +2709,6 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             <X size={14} />
                                                                         </button>
                                                                     </>
-                                                                )}
                                                             </div>
                                                         </div>
                                                         {/* Drop zone AFTER last row */}
@@ -2708,14 +2744,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 )}
 
                                                 {/* GAP 2: Group Note — inline editor below rows */}
-                                                {isExpanded && (groupNotes[groupKey] || drillStack.length === 0) && (
+                                                {isExpanded && (
                                                     <div style={{ padding: '8px 20px', background: `${meta.color}04`, borderTop: `1px dashed ${meta.color}15` }}>
-                                                        {drillStack.length > 0 ? (
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', padding: '2px 0' }}>
-                                                                <MessageSquare size={11} />
-                                                                <strong>Nota:</strong> {groupNotes[groupKey]}
-                                                            </div>
-                                                        ) : editingGroupNote === groupKey ? (
+                                                        {editingGroupNote === groupKey ? (
                                                             <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                                                                 <textarea
                                                                     autoFocus
