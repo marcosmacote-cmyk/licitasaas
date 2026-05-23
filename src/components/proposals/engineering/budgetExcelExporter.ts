@@ -558,14 +558,25 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
     const up = Number(ci.unitPrice) || 0;
     const tp = Number(ci.totalPrice) || 0;
     
+    let coefVal: any = coef;
+    if (ci.coefficientExpression) {
+      if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+        coefVal = { formula: ci.coefficientExpression };
+      } else {
+        coefVal = `${ci.coefficientExpression.replace(/\*/g, '×')} = ${coef.toFixed(4).replace('.', ',')}`;
+      }
+    }
+
     let totalVal: any = tp;
     if (engConfig?.reportConfig?.exportExcelWithFormulas && coef > 0 && up > 0) {
       const nextRn = ws.rowCount + 1;
       totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
     }
 
-    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coef, up, totalVal], idx, [6, 7, 8]);
-    r.getCell(6).numFmt = '#,##0.0000';
+    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
+    if (!ci.coefficientExpression || engConfig?.reportConfig?.exportExcelWithFormulas) {
+      r.getCell(6).numFmt = '#,##0.0000';
+    }
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '#,##0.00';
   });

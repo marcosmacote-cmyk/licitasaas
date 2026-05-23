@@ -674,7 +674,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
             ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
             <td>${ci.description || '—'}</td>
             <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
-            ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : ci.coefficient.toFixed(7)}</td>` : ''}
+            ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(7)}` : ci.coefficient.toFixed(7))}</td>` : ''}
             <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
             <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
         </tr>`;

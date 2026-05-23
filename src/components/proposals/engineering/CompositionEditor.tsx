@@ -1599,11 +1599,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         )}
                         {data && !isGrouperType(currentItem.type) && (
                             <>
-                                <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, data, engineeringConfig)}
+                                <button onClick={() => exportCompositionExcel(currentItem.code, currentItem.description, { ...data, customGroupLabels, groupOrder }, engineeringConfig)}
                                     title="Exportar Excel" style={{ padding: 6, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
                                     <Download size={13} /> Excel
                                 </button>
-                                <button onClick={() => exportCompositionPdf(currentItem.code, currentItem.description, data, engineeringConfig)}
+                                <button onClick={() => exportCompositionPdf(currentItem.code, currentItem.description, { ...data, customGroupLabels, groupOrder }, engineeringConfig)}
                                     title="Exportar PDF" style={{ padding: 6, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
                                     <FileText size={13} /> PDF
                                 </button>
@@ -2292,7 +2292,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             )}
                                                                             {/* ── Interactive Base Badge with change dropdown ── */}
                                                                             {(() => {
-                                                                                const displayBase = ci._matchedDatabase || data?.database?.name || currentItem?.sourceName || '';
+                                                                                const displayBase = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';
                                                                                 const isUnmatched = ci._noBaseMatch;
                                                                                 const isProprio = displayBase === 'PRÓPRIO' || displayBase === 'PROPRIA';
                                                                                 const isConfirmedMatch = !isUnmatched && !isProprio;

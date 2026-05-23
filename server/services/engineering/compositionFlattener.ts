@@ -11,6 +11,7 @@ export interface FlattenedItem {
   coefficient: number;
   unitPrice: number;
   totalPrice: number;
+  coefficientExpression?: string | null;
 }
 
 export interface FlattenedComposition {
@@ -189,6 +190,7 @@ export class CompositionFlattener {
           coefficient: ci.coefficient,
           unitPrice: ci.item.price,
           totalPrice: ci.item.price * ci.coefficient,
+          coefficientExpression: ci.coefficientExpression || null,
         });
 
         // Accumulate totals for the footer (in SINAPI/SEINFRA, unit price already includes LS!)
@@ -216,6 +218,7 @@ export class CompositionFlattener {
             coefficient: ci.coefficient,
             unitPrice: auxComp.totalPrice, // Unit price of the composition
             totalPrice: auxComp.totalPrice * ci.coefficient,
+            coefficientExpression: ci.coefficientExpression || null,
           });
 
           // Recursively resolve and store the auxiliary composition

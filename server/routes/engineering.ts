@@ -289,7 +289,12 @@ function buildCompositionCodeVariants(code: string, sourceName?: string): string
 
 function compositionIncludes() {
     return {
-        items: { include: { item: true }, orderBy: { createdAt: 'asc' as const } },
+        items: { 
+            include: { 
+                item: { include: { database: true } } 
+            }, 
+            orderBy: { createdAt: 'asc' as const } 
+        },
         database: { select: { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } },
     };
 }
@@ -578,7 +583,10 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             if (ci.auxiliaryCompositionId) {
                 const aux = await prisma.engineeringComposition.findUnique({
                     where: { id: ci.auxiliaryCompositionId },
-                    include: { items: { include: { item: true } } }
+                    include: { 
+                        database: { select: { id: true, name: true, uf: true, type: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } },
+                        items: { include: { item: { include: { database: true } } } }
+                    }
                 });
                 return { ...ci, auxiliaryComposition: aux };
             }
@@ -940,16 +948,60 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
                 let itemId = item.item ? item.item.id : item.itemId;
                 let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                const dbName = item._matchedDatabase;
                 
+                // Helper: detect temporary/synthetic IDs that don't exist in DB
+                const isTempId = (id: string | null | undefined) => 
+                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
+
+                // 🔗 Look up item/composition in official database if _matchedDatabase is official!
+                if (dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA') {
+                    if (isAux) {
+                        const codeToFind = item.auxiliaryComposition?.code || item.code;
+                        if (codeToFind) {
+                            const matchedAux = await tx.engineeringComposition.findFirst({
+                                where: {
+                                    code: { equals: codeToFind, mode: 'insensitive' },
+                                    database: { name: dbName }
+                                },
+                                orderBy: [
+                                    { database: { referenceYear: 'desc' } },
+                                    { database: { referenceMonth: 'desc' } }
+                                ]
+                            });
+                            if (matchedAux) {
+                                auxId = matchedAux.id;
+                                isAux = true;
+                                logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName}`);
+                            }
+                        }
+                    } else {
+                        const codeToFind = item.item?.code || item.code;
+                        if (codeToFind) {
+                            const matchedItem = await tx.engineeringItem.findFirst({
+                                where: {
+                                    code: { equals: codeToFind, mode: 'insensitive' },
+                                    database: { name: dbName }
+                                },
+                                orderBy: [
+                                    { database: { referenceYear: 'desc' } },
+                                    { database: { referenceMonth: 'desc' } }
+                                ]
+                            });
+                            if (matchedItem) {
+                                itemId = matchedItem.id;
+                                isAux = false;
+                                logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName}`);
+                            }
+                        }
+                    }
+                }
+
                 // Skip observation/etapa items that have no real item or composition data
                 if (!itemId && !auxId && !isAux) {
                     logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId (likely observation/etapa): coef=${item.coefficient}`);
                     continue;
                 }
-
-                // Helper: detect temporary/synthetic IDs that don't exist in DB
-                const isTempId = (id: string | null | undefined) => 
-                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
                 
                 // Dynamically create AI-extracted proprietary inputs
                 if (!isAux && itemId && isTempId(itemId)) {
@@ -1047,6 +1099,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         coefficient: item.coefficient,
                         price: item.price,
                         groupKey: item.groupKey || null,
+                        coefficientExpression: item.coefficientExpression || null,
                     }
                 });
             }

@@ -117,15 +117,41 @@ export function exportCompositionExcel(
     const header = ['Grupo', '#', 'Código', 'Descrição', 'Unidade', 'Coeficiente', 'Preço Unitário', 'Subtotal'];
     const rows: string[][] = [];
 
-    const groupLabels: Record<string, string> = {
-        MATERIAL: 'MATERIAL', MAO_DE_OBRA: 'MÃO DE OBRA',
-        EQUIPAMENTO: 'EQUIPAMENTO', SERVICO: 'SERVIÇOS',
-        AUXILIAR: 'COMPOSIÇÃO AUXILIAR', OBSERVACAO: 'OBSERVAÇÕES E TEXTOS'
+    const groupOrder = data.groupOrder || [];
+    const customGroupLabels = data.customGroupLabels || {};
+
+    const GROUP_META_LABELS: Record<string, string> = {
+        MATERIAL: 'MATERIAL', 
+        MAO_DE_OBRA: 'MÃO DE OBRA',
+        EQUIPAMENTO: 'EQUIPAMENTO', 
+        SERVICO: 'SERVIÇOS',
+        AUXILIAR: 'COMPOSIÇÃO AUXILIAR', 
+        OBSERVACAO: 'OBSERVAÇÕES E TEXTOS'
     };
 
-    for (const [groupKey, groupLabel] of Object.entries(groupLabels)) {
+    const allKeys = new Set([
+        ...Object.keys(GROUP_META_LABELS),
+        ...Object.keys(data.groups || {})
+    ]);
+
+    const orderedKeys: string[] = [];
+    if (groupOrder.length > 0) {
+        for (const key of groupOrder) {
+            if (allKeys.has(key)) {
+                orderedKeys.push(key);
+                allKeys.delete(key);
+            }
+        }
+    }
+    for (const key of allKeys) {
+        orderedKeys.push(key);
+    }
+
+    for (const groupKey of orderedKeys) {
         const items = data.groups[groupKey] || [];
         if (items.length === 0) continue;
+
+        const groupLabel = customGroupLabels[groupKey] || GROUP_META_LABELS[groupKey] || groupKey;
 
         items.forEach((ci: any, idx: number) => {
             const itemData = ci.item || ci.auxiliaryComposition;
@@ -293,7 +319,10 @@ export function exportCompositionPdf(
 ) {
     if (!data?.groups) return;
 
-    const groupLabels: Record<string, { label: string; color: string }> = {
+    const groupOrder = data.groupOrder || [];
+    const customGroupLabels = data.customGroupLabels || {};
+
+    const GROUP_META_PDF: Record<string, { label: string; color: string }> = {
         MATERIAL: { label: 'Materiais', color: '#2563eb' },
         MAO_DE_OBRA: { label: 'Mão de Obra', color: '#16a34a' },
         EQUIPAMENTO: { label: 'Equipamentos', color: '#d97706' },
@@ -301,6 +330,24 @@ export function exportCompositionPdf(
         AUXILIAR: { label: 'Composições Auxiliares', color: '#7c3aed' },
         OBSERVACAO: { label: 'Observações e Textos', color: '#64748b' },
     };
+
+    const allKeys = new Set([
+        ...Object.keys(GROUP_META_PDF),
+        ...Object.keys(data.groups || {})
+    ]);
+
+    const orderedKeys: string[] = [];
+    if (groupOrder.length > 0) {
+        for (const key of groupOrder) {
+            if (allKeys.has(key)) {
+                orderedKeys.push(key);
+                allKeys.delete(key);
+            }
+        }
+    }
+    for (const key of allKeys) {
+        orderedKeys.push(key);
+    }
 
     let html = `
 <h1>CPU — Composição de Preços Unitários</h1>
@@ -324,12 +371,17 @@ ${engineeringConfig ? `
 ` : ''}
 <div style="margin-bottom:12px;font-size:11px;font-weight:600">${description}</div>`;
 
-    for (const [groupKey, meta] of Object.entries(groupLabels)) {
+    for (const groupKey of orderedKeys) {
         const items = data.groups[groupKey] || [];
         if (items.length === 0) continue;
+
+        const defaultMeta = GROUP_META_PDF[groupKey] || { label: groupKey, color: '#64748b' };
+        const label = customGroupLabels[groupKey] || defaultMeta.label;
+        const color = defaultMeta.color;
+
         const groupTotal = items.reduce((s: number, ci: any) => s + (ci.price || 0), 0);
 
-        html += `<h2 style="color:${meta.color}">${meta.label} (${items.length})</h2>
+        html += `<h2 style="color:${color}">${label} (${items.length})</h2>
 <table><thead><tr>
   <th style="width:30px">#</th><th>Código</th><th>Descrição</th><th>Un.</th>
   <th class="right">Coeficiente</th><th class="right">Preço Unit.</th><th class="right">Subtotal</th>
@@ -344,13 +396,13 @@ ${engineeringConfig ? `
   <td>${itemData?.unit || '—'}</td>
   <td class="right mono">${ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(4)}` : ci.coefficient.toFixed(4)}</td>
   <td class="right">${fmt(itemData?.price || itemData?.totalPrice || 0)}</td>
-  <td class="right" style="font-weight:600;color:${meta.color}">${fmt(ci.price)}</td>
+  <td class="right" style="font-weight:600;color:${color}">${fmt(ci.price)}</td>
 </tr>`;
         });
 
         html += `<tr class="total-row">
-  <td colspan="6" style="text-align:right">Subtotal ${meta.label}</td>
-  <td class="right" style="color:${meta.color}">${fmt(groupTotal)}</td>
+  <td colspan="6" style="text-align:right">Subtotal ${label}</td>
+  <td class="right" style="color:${color}">${fmt(groupTotal)}</td>
 </tr></tbody></table>`;
     }
 
