@@ -2010,11 +2010,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 <div
                                                     draggable
                                                     onDragStart={(e) => {
+                                                        const targetGroupKey = groupKey;
                                                         e.stopPropagation();
-                                                        setDragItem(null); // Ensure item drag doesn't interfere
-                                                        setDragGroupKey(groupKey);
                                                         e.dataTransfer.effectAllowed = 'move';
-                                                        e.dataTransfer.setData('text/plain', `group:${groupKey}`);
+                                                        e.dataTransfer.setData('text/plain', `group:${targetGroupKey}`);
+                                                        setTimeout(() => {
+                                                            setDragItem(null); // Ensure item drag doesn't interfere
+                                                            setDragGroupKey(targetGroupKey);
+                                                        }, 0);
                                                     }}
                                                     onDragEnd={() => { setDragGroupKey(null); setDragOverGroupIdx(null); setDragItem(null); setDragOverGroup(null); setDragOverIndex(null); }}
                                                     onClick={(e) => e.stopPropagation()}
@@ -2215,14 +2218,19 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         <div
                                                             draggable={!isEditingCoef && !isEditingPrice}
                                                             onDragStart={(e) => {
+                                                                const targetId = ci.id;
+                                                                const targetGroup = groupKey;
+                                                                const targetIdx = idx;
                                                                 e.stopPropagation();
-                                                                setDragGroupKey(null); // Ensure group drag doesn't interfere
-                                                                setDragItem({ id: ci.id, sourceGroup: groupKey, sourceIndex: idx });
                                                                 e.dataTransfer.effectAllowed = 'move';
-                                                                e.dataTransfer.setData('text/plain', ci.id);
+                                                                e.dataTransfer.setData('text/plain', targetId);
                                                                 if (e.currentTarget) {
                                                                     e.currentTarget.style.opacity = '0.4';
                                                                 }
+                                                                setTimeout(() => {
+                                                                    setDragGroupKey(null);
+                                                                    setDragItem({ id: targetId, sourceGroup: targetGroup, sourceIndex: targetIdx });
+                                                                }, 0);
                                                             }}
                                                             onDragEnd={(e) => {
                                                                 if (e.currentTarget) e.currentTarget.style.opacity = '1';
@@ -2660,62 +2668,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     <div style={{
                                                         padding: '24px 20px',
                                                         textAlign: 'center',
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: 12,
                                                         borderBottom: '1px solid var(--color-border)',
                                                         background: 'var(--color-bg-base)',
                                                     }}>
                                                         <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', fontStyle: 'italic' }}>
-                                                            Nenhum insumo neste grupo.
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: 10 }}>
-                                                            <button
-                                                                onClick={() => openAddFreeItemToGroup(groupKey)}
-                                                                style={{
-                                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                                                    padding: '5px 12px', fontSize: '0.72rem', fontWeight: 600,
-                                                                    borderRadius: 6, border: `1px solid ${meta.color}50`,
-                                                                    background: `${meta.color}05`, color: meta.color,
-                                                                    cursor: 'pointer', transition: 'all 0.15s'
-                                                                }}
-                                                                onMouseEnter={e => {
-                                                                    e.currentTarget.style.background = `${meta.color}15`;
-                                                                }}
-                                                                onMouseLeave={e => {
-                                                                    e.currentTarget.style.background = `${meta.color}05`;
-                                                                }}
-                                                            >
-                                                                <Plus size={12} /> Inserir Insumo Livre
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    const searchEl = document.querySelector('input[placeholder*="Buscar insumo"], input[placeholder*="Buscar composição"], .form-input[placeholder*="Buscar"]');
-                                                                    if (searchEl) {
-                                                                        searchEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                                        (searchEl as HTMLInputElement).focus();
-                                                                    }
-                                                                }}
-                                                                style={{
-                                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                                                    padding: '5px 12px', fontSize: '0.72rem', fontWeight: 600,
-                                                                    borderRadius: 6, border: '1px solid var(--color-border)',
-                                                                    background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)',
-                                                                    cursor: 'pointer', transition: 'all 0.15s'
-                                                                }}
-                                                                onMouseEnter={e => {
-                                                                    e.currentTarget.style.background = 'var(--color-bg-elevated)';
-                                                                    e.currentTarget.style.borderColor = 'var(--color-text-tertiary)';
-                                                                }}
-                                                                onMouseLeave={e => {
-                                                                    e.currentTarget.style.background = 'var(--color-bg-surface)';
-                                                                    e.currentTarget.style.borderColor = 'var(--color-border)';
-                                                                }}
-                                                            >
-                                                                <Search size={12} /> Buscar na Base
-                                                            </button>
+                                                            Nenhum insumo neste grupo. Arraste itens para cá ou utilize os botões da barra de ferramentas.
                                                         </div>
                                                     </div>
                                                 )}
