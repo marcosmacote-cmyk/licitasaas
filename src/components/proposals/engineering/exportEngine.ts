@@ -119,6 +119,7 @@ export function exportCompositionExcel(
 
     const groupOrder = data.groupOrder || [];
     const customGroupLabels = data.customGroupLabels || {};
+    const groupNotes = data.groupNotes || {};
 
     const GROUP_META_LABELS: Record<string, string> = {
         MATERIAL: 'MATERIAL', 
@@ -169,6 +170,9 @@ export function exportCompositionExcel(
 
         const groupTotal = items.reduce((s: number, ci: any) => s + (ci.price || 0), 0);
         rows.push(['', '', '', `SUBTOTAL ${groupLabel}`, '', '', '', fmtNum(groupTotal)]);
+        if (groupNotes[groupKey]) {
+            rows.push(['', '', '', `Nota: ${groupNotes[groupKey]}`, '', '', '', '']);
+        }
         rows.push([]);
     }
 
@@ -321,6 +325,7 @@ export function exportCompositionPdf(
 
     const groupOrder = data.groupOrder || [];
     const customGroupLabels = data.customGroupLabels || {};
+    const groupNotes = data.groupNotes || {};
 
     const GROUP_META_PDF: Record<string, { label: string; color: string }> = {
         MATERIAL: { label: 'Materiais', color: '#2563eb' },
@@ -404,6 +409,13 @@ ${engineeringConfig ? `
   <td colspan="6" style="text-align:right">Subtotal ${label}</td>
   <td class="right" style="color:${color}">${fmt(groupTotal)}</td>
 </tr></tbody></table>`;
+
+        const note = groupNotes[groupKey];
+        if (note) {
+            html += `<div style="margin: -6px 0 12px 6px; font-size: 8px; font-style: italic; color: #475569; padding: 4px 8px; border-left: 2px solid ${color}; background: #f8fafc; text-align: left;">
+                <strong>Nota:</strong> ${note}
+            </div>`;
+        }
     }
 
     html += `

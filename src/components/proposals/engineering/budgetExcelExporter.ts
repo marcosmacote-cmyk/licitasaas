@@ -545,50 +545,156 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
 
   // Insumos header
   headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
-  const firstInsumoRow = ws.rowCount + 1;
 
-  // Insumos data
-  (comp.items || []).forEach((ci: any, idx: number) => {
-    let tipo = 'Comp. Auxiliar';
-    if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
-    else if (ci.type === 'MATERIAL') tipo = 'Material';
-    else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
-    else if (ci.type === 'SERVICO') tipo = 'Serviço';
-    const coef = Number(ci.coefficient) || 0;
-    const up = Number(ci.unitPrice) || 0;
-    const tp = Number(ci.totalPrice) || 0;
-    
-    let coefVal: any = coef;
-    if (ci.coefficientExpression) {
-      if (engConfig?.reportConfig?.exportExcelWithFormulas) {
-        coefVal = { formula: ci.coefficientExpression };
-      } else {
-        coefVal = `${ci.coefficientExpression.replace(/\*/g, '×')} = ${coef.toFixed(4).replace('.', ',')}`;
+  // Grouping metadata
+  const metadata = comp.metadata || {};
+  const customGroupLabels = metadata.customGroupLabels || {};
+  const groupOrder = metadata.groupOrder || [];
+  const groupNotes = metadata.groupNotes || {};
+
+  const GROUP_META: Record<string, { label: string; color: string }> = {
+    MATERIAL: { label: 'Materiais', color: 'FF2563EB' },
+    MAO_DE_OBRA: { label: 'Mão de Obra', color: 'FF16A34A' },
+    EQUIPAMENTO: { label: 'Equipamentos', color: 'FFD97706' },
+    SERVICO: { label: 'Serviços', color: 'FF0EA5E9' },
+    AUXILIAR: { label: 'Composições Auxiliares', color: 'FF7C3AED' },
+    OBSERVACAO: { label: 'Observações e Textos', color: 'FF64748B' },
+  };
+
+  // Separate items by group Key
+  const itemsByGroup: Record<string, any[]> = {};
+  for (const ci of comp.items || []) {
+    let gKey = ci.groupKey;
+    if (!gKey) {
+      if (ci.type === 'MAO_DE_OBRA') gKey = 'MAO_DE_OBRA';
+      else if (ci.type === 'MATERIAL') gKey = 'MATERIAL';
+      else if (ci.type === 'EQUIPAMENTO') gKey = 'EQUIPAMENTO';
+      else if (ci.type === 'COMPOSICAO_AUXILIAR' || ci.type === 'SERVICO') gKey = 'AUXILIAR';
+      else gKey = 'OBSERVACAO';
+    }
+    if (!itemsByGroup[gKey]) itemsByGroup[gKey] = [];
+    itemsByGroup[gKey].push(ci);
+  }
+
+  // Determine ordering
+  const allKeys = new Set([
+    ...Object.keys(GROUP_META),
+    ...Object.keys(itemsByGroup)
+  ]);
+  const orderedKeys: string[] = [];
+  if (groupOrder.length > 0) {
+    for (const key of groupOrder) {
+      if (allKeys.has(key)) {
+        orderedKeys.push(key);
+        allKeys.delete(key);
       }
     }
+  }
+  for (const key of allKeys) {
+    orderedKeys.push(key);
+  }
 
-    let totalVal: any = tp;
-    if (engConfig?.reportConfig?.exportExcelWithFormulas && coef > 0 && up > 0) {
-      const nextRn = ws.rowCount + 1;
-      totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
+  const subtotalRowNums: number[] = [];
+
+  // Render each group
+  for (const groupKey of orderedKeys) {
+    const items = itemsByGroup[groupKey] || [];
+    if (items.length === 0) continue;
+
+    const defaultMeta = GROUP_META[groupKey] || { label: groupKey, color: 'FF64748B' };
+    const groupLabel = customGroupLabels[groupKey] || defaultMeta.label;
+    const groupColor = defaultMeta.color;
+
+    // Group header row
+    const grn = ws.rowCount + 1;
+    const groupRow = ws.addRow([`${groupLabel} (${items.length})`]);
+    ws.mergeCells(grn, 1, grn, 8);
+    groupRow.height = 16;
+    for (let i = 1; i <= 8; i++) {
+      groupRow.getCell(i).fill = fill('FFF8FAFC');
+      groupRow.getCell(i).border = border();
+      groupRow.getCell(i).font = { bold: true, size: 8.5, color: { argb: groupColor } };
     }
 
-    const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
-    if (!ci.coefficientExpression || engConfig?.reportConfig?.exportExcelWithFormulas) {
-      r.getCell(6).numFmt = '#,##0.0000';
+    // Insumos data for this group
+    const firstGroupRow = ws.rowCount + 1;
+    items.forEach((ci: any, idx: number) => {
+      let tipo = 'Comp. Auxiliar';
+      if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
+      else if (ci.type === 'MATERIAL') tipo = 'Material';
+      else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
+      else if (ci.type === 'SERVICO') tipo = 'Serviço';
+      else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
+
+      const coef = Number(ci.coefficient) || 0;
+      const up = Number(ci.unitPrice) || 0;
+      const tp = Number(ci.totalPrice) || 0;
+
+      let coefVal: any = coef;
+      if (ci.coefficientExpression) {
+        if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+          coefVal = { formula: ci.coefficientExpression };
+        } else {
+          coefVal = `${ci.coefficientExpression.replace(/\*/g, '×')} = ${coef.toFixed(4).replace('.', ',')}`;
+        }
+      }
+
+      let totalVal: any = tp;
+      if (engConfig?.reportConfig?.exportExcelWithFormulas && coef > 0 && up > 0) {
+        const nextRn = ws.rowCount + 1;
+        totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
+      }
+
+      const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
+      if (!ci.coefficientExpression || engConfig?.reportConfig?.exportExcelWithFormulas) {
+        r.getCell(6).numFmt = '#,##0.0000';
+      }
+      r.getCell(7).numFmt = '#,##0.00';
+      r.getCell(8).numFmt = '#,##0.00';
+    });
+    const lastGroupRow = ws.rowCount;
+
+    // Group Subtotal Row
+    const subRn = ws.rowCount + 1;
+    const groupTotal = items.reduce((s, ci) => s + (ci.totalPrice || 0), 0);
+    let subtotalVal: any = groupTotal;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas && items.length > 0) {
+      subtotalVal = { formula: `SUM(H${firstGroupRow}:H${lastGroupRow})` };
     }
-    r.getCell(7).numFmt = '#,##0.00';
-    r.getCell(8).numFmt = '#,##0.00';
-  });
-  const lastInsumoRow = ws.rowCount;
+    const subtotalRowObj = ws.addRow([`Subtotal ${groupLabel}`, '', '', '', '', '', '', subtotalVal]);
+    ws.mergeCells(subRn, 1, subRn, 7);
+    subtotalRowObj.getCell(8).numFmt = '#,##0.00';
+    subtotalRowObj.height = 16;
+    for (let i = 1; i <= 8; i++) {
+      subtotalRowObj.getCell(i).fill = fill('FFF8FAFC');
+      subtotalRowObj.getCell(i).border = border();
+      subtotalRowObj.getCell(i).font = { bold: true, size: 8, color: { argb: groupColor } };
+      subtotalRowObj.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+    subtotalRowNums.push(subRn);
+
+    // Group Note Row
+    const note = groupNotes[groupKey];
+    if (note) {
+      const noteRn = ws.rowCount + 1;
+      const noteRow = ws.addRow([`Nota: ${note}`]);
+      ws.mergeCells(noteRn, 1, noteRn, 8);
+      noteRow.height = 14;
+      for (let i = 1; i <= 8; i++) {
+        noteRow.getCell(i).fill = fill('FFF8FAFC');
+        noteRow.getCell(i).border = border();
+        noteRow.getCell(i).font = { italic: true, size: 7.5, color: { argb: 'FF475569' } };
+      }
+    }
+  }
 
   // Footer: Custo Unitário Total
   const costRn = ws.rowCount + 1;
   const totalPriceVal = Number(comp.totalPrice) || 0;
   
   let costVal: any = totalPriceVal;
-  if (engConfig?.reportConfig?.exportExcelWithFormulas && comp.items?.length > 0) {
-    costVal = { formula: `SUM(H${firstInsumoRow}:H${lastInsumoRow})` };
+  if (engConfig?.reportConfig?.exportExcelWithFormulas && subtotalRowNums.length > 0) {
+    costVal = { formula: subtotalRowNums.map(rn => `H${rn}`).join('+') };
   }
 
   const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', costVal]);

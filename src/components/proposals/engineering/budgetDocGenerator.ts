@@ -650,38 +650,111 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
     const rc = reportConfig || {};
     const showCoef = rc.showCoeficientes !== false;
     const showBanco = rc.showBancoOrigem !== false;
+
+    // Grouping metadata
+    const metadata = comp.metadata || {};
+    const customGroupLabels = metadata.customGroupLabels || {};
+    const groupOrder = metadata.groupOrder || [];
+    const groupNotes = metadata.groupNotes || {};
+
+    const GROUP_META_PDF: Record<string, { label: string; color: string }> = {
+        MATERIAL: { label: 'Materiais', color: '#2563eb' },
+        MAO_DE_OBRA: { label: 'Mão de Obra', color: '#16a34a' },
+        EQUIPAMENTO: { label: 'Equipamentos', color: '#d97706' },
+        SERVICO: { label: 'Serviços', color: '#0ea5e9' },
+        AUXILIAR: { label: 'Composições Auxiliares', color: '#7c3aed' },
+        OBSERVACAO: { label: 'Observações e Textos', color: '#64748b' },
+    };
+
+    // Separate items by group Key
+    const itemsByGroup: Record<string, any[]> = {};
+    for (const ci of comp.items || []) {
+        let gKey = ci.groupKey;
+        if (!gKey) {
+            if (ci.type === 'MAO_DE_OBRA') gKey = 'MAO_DE_OBRA';
+            else if (ci.type === 'MATERIAL') gKey = 'MATERIAL';
+            else if (ci.type === 'EQUIPAMENTO') gKey = 'EQUIPAMENTO';
+            else if (ci.type === 'COMPOSICAO_AUXILIAR' || ci.type === 'SERVICO') gKey = 'AUXILIAR';
+            else gKey = 'OBSERVACAO';
+        }
+        if (!itemsByGroup[gKey]) itemsByGroup[gKey] = [];
+        itemsByGroup[gKey].push(ci);
+    }
+
+    // Determine ordering
+    const allKeys = new Set([
+        ...Object.keys(GROUP_META_PDF),
+        ...Object.keys(itemsByGroup)
+    ]);
+    const orderedKeys: string[] = [];
+    if (groupOrder.length > 0) {
+        for (const key of groupOrder) {
+            if (allKeys.has(key)) {
+                orderedKeys.push(key);
+                allKeys.delete(key);
+            }
+        }
+    }
+    for (const key of allKeys) {
+        orderedKeys.push(key);
+    }
+
     let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
             ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
             <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
             <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
-        </div>
-        <table>
-        <thead><tr><th>Tipo</th><th>Código</th>${showBanco ? '<th>Banco</th>' : ''}<th>Descrição</th><th class="c">Und</th>${showCoef ? '<th class="r">Coef.</th>' : ''}<th class="r">Valor Unit</th><th class="r">Total</th></tr></thead>
+        </div>`;
+
+    for (const groupKey of orderedKeys) {
+        const items = itemsByGroup[groupKey] || [];
+        if (items.length === 0) continue;
+
+        const defaultMeta = GROUP_META_PDF[groupKey] || { label: groupKey, color: '#64748b' };
+        const label = customGroupLabels[groupKey] || defaultMeta.label;
+        const color = defaultMeta.color;
+        const groupTotal = items.reduce((s, ci) => s + (ci.totalPrice || 0), 0);
+
+        ch += `<h4 style="color:${color}; font-size:8.5px; margin:10px 6px 4px; font-weight:700;">${label} (${items.length})</h4>
+        <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+        <thead><tr><th>Tipo</th><th>Código</th>${showBanco ? '<th>Banco</th>' : ''}<th>Descrição</th><th class="c">Und</th>${showCoef ? '<th class="r">Coef.</th>' : ''}<th>Valor Unit</th><th class="r">Total</th></tr></thead>
         <tbody>`;
 
-    for (const ci of comp.items) {
-        let tipo = 'Comp. Auxiliar';
-        if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
-        else if (ci.type === 'MATERIAL') tipo = 'Material';
-        else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
-        else if (ci.type === 'SERVICO') tipo = 'Serviço';
-        else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
+        for (const ci of items) {
+            let tipo = 'Comp. Auxiliar';
+            if (ci.type === 'MAO_DE_OBRA') tipo = 'Mão de Obra';
+            else if (ci.type === 'MATERIAL') tipo = 'Material';
+            else if (ci.type === 'EQUIPAMENTO') tipo = 'Equipamento';
+            else if (ci.type === 'SERVICO') tipo = 'Serviço';
+            else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
 
-        ch += `<tr>
-            <td>${tipo}</td>
-            <td class="mono">${ci.code || ''}</td>
-            ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
-            <td>${ci.description || '—'}</td>
-            <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
-            ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(7)}` : ci.coefficient.toFixed(7))}</td>` : ''}
-            <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
-            <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
+            ch += `<tr>
+                <td>${tipo}</td>
+                <td class="mono">${ci.code || ''}</td>
+                ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
+                <td>${ci.description || '—'}</td>
+                <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
+                ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(7)}` : ci.coefficient.toFixed(7))}</td>` : ''}
+                <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
+                <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
+            </tr>`;
+        }
+
+        ch += `<tr class="total-row" style="background:#f8fafc; font-weight:700;">
+            <td colspan="${showBanco ? 5 : 4}" class="r" style="font-size:7.5px;">Subtotal ${label}</td>
+            <td class="r" style="font-size:7.5px; color:${color};" colspan="${(showCoef ? 1 : 0) + 2}">${fmt(groupTotal)}</td>
         </tr>`;
+        ch += `</tbody></table>`;
+
+        const note = groupNotes[groupKey];
+        if (note) {
+            ch += `<div style="margin: -4px 0 10px 8px; font-size: 7.5px; font-style: italic; color: #475569; padding: 3px 6px; border-left: 2px solid ${color}; background: #f8fafc; page-break-inside: avoid; text-align: left;">
+                <strong>Nota:</strong> ${note}
+            </div>`;
+        }
     }
 
-    // Composition footer: CUSTO UNITÁRIO TOTAL is the primary highlight (sem BDI)
-    ch += `</tbody></table>
+    ch += `
     <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
         <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
             <div style="color:#475569;">

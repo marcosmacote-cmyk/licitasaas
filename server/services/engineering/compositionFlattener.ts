@@ -12,6 +12,7 @@ export interface FlattenedItem {
   unitPrice: number;
   totalPrice: number;
   coefficientExpression?: string | null;
+  groupKey?: string | null;
 }
 
 export interface FlattenedComposition {
@@ -24,6 +25,7 @@ export interface FlattenedComposition {
   items: FlattenedItem[];
   isAuxiliary: boolean;
   itemNumbers: string[]; // Budget item numbers linked to this composition
+  metadata?: any;
   
   // Footer calculation fields
   totalMoSemLs: number;
@@ -165,7 +167,11 @@ export class CompositionFlattener {
         database: true,
         items: {
           include: {
-            item: true,
+            item: {
+              include: {
+                database: true
+              }
+            },
           }
         }
       }
@@ -184,13 +190,14 @@ export class CompositionFlattener {
         flattenedItems.push({
           type: ci.item.type,
           code: ci.item.code,
-          sourceName: composition.database?.name || sourceName,
+          sourceName: ci.item.database?.name || composition.database?.name || sourceName,
           description: ci.item.description,
           unit: ci.item.unit,
           coefficient: ci.coefficient,
           unitPrice: ci.item.price,
           totalPrice: ci.item.price * ci.coefficient,
           coefficientExpression: ci.coefficientExpression || null,
+          groupKey: ci.groupKey || null,
         });
 
         // Accumulate totals for the footer (in SINAPI/SEINFRA, unit price already includes LS!)
@@ -219,6 +226,7 @@ export class CompositionFlattener {
             unitPrice: auxComp.totalPrice, // Unit price of the composition
             totalPrice: auxComp.totalPrice * ci.coefficient,
             coefficientExpression: ci.coefficientExpression || null,
+            groupKey: ci.groupKey || null,
           });
 
           // Recursively resolve and store the auxiliary composition
@@ -252,6 +260,7 @@ export class CompositionFlattener {
       items: flattenedItems,
       isAuxiliary,
       itemNumbers: [], // populated by flattenProposal for principals
+      metadata: composition.metadata,
       totalMoSemLs,
       totalLs,
       totalMoComLs,
