@@ -8,7 +8,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree, GripVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, ChevronDown, ChevronUp, Loader2, AlertCircle, AlertTriangle, Pencil, Check, CheckCircle2, ArrowDownUp, Download, FileText, Save, PlusCircle, Plus, Percent, Calculator, Wand2, Divide, FolderOpen, Folder, RefreshCw, ArrowRightLeft, Database, Hash, MessageSquare, Trash2, Cpu, ListTree, GripVertical, Search } from 'lucide-react';
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
@@ -308,6 +308,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // ── Phase 4: Free Mode States ──
     const [showFreeItemModal, setShowFreeItemModal] = useState(false);
     const [freeItemData, setFreeItemData] = useState({ description: '', unit: 'UN', coefficient: '1', price: '0', type: 'MATERIAL' });
+    const [freeItemTargetGroup, setFreeItemTargetGroup] = useState<string | null>(null);
     
     const [showFactorModal, setShowFactorModal] = useState(false);
     const [factorData, setFactorData] = useState({ value: '1.05', target: 'ALL' });
@@ -834,6 +835,70 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setDragOverGroupIdx(null);
     };
 
+    // ── Helper: Open free item modal targeting a specific group ──
+    const openAddFreeItemToGroup = (groupKey: string) => {
+        setFreeItemTargetGroup(groupKey);
+        let typeVal = 'MATERIAL';
+        if (GROUP_META[groupKey]) {
+            typeVal = groupKey;
+        }
+        setFreeItemData({ description: '', unit: 'UN', coefficient: '1', price: '0', type: typeVal });
+        setShowFreeItemModal(true);
+    };
+
+    // ── Group Actions: Delete Group ──
+    const handleDeleteGroup = (groupKey: string) => {
+        if (!data) return;
+        const groupItems = data.groups?.[groupKey] || [];
+        const displayLabel = customGroupLabels[groupKey] || GROUP_META[groupKey]?.label || groupKey;
+
+        if (groupItems.length > 0) {
+            const confirmed = window.confirm(
+                `O grupo "${displayLabel}" contém ${groupItems.length} item(ns).\n\n` +
+                `Tem certeza que deseja excluir este grupo e TODOS os seus insumos?\n` +
+                `Esta ação não pode ser desfeita.`
+            );
+            if (!confirmed) return;
+        } else {
+            const confirmed = window.confirm(`Deseja excluir o grupo "${displayLabel}"?`);
+            if (!confirmed) return;
+        }
+
+        const updated = { ...data, groups: { ...data.groups } };
+        delete updated.groups[groupKey];
+
+        const updatedLabels = { ...customGroupLabels };
+        delete updatedLabels[groupKey];
+        setCustomGroupLabels(updatedLabels);
+
+        const updatedOrder = groupOrder.filter(k => k !== groupKey);
+        setGroupOrder(updatedOrder);
+
+        updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+        updated.totalDirect = updated.totalPrice;
+
+        setData(updated);
+        setHasChanges(true);
+        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+    };
+
+    // ── Group Actions: Move Group Up/Down ──
+    const moveGroupOrder = (groupKey: string, direction: -1 | 1) => {
+        const keys = getEffectiveGroupKeys();
+        const fromIdx = keys.indexOf(groupKey);
+        if (fromIdx === -1) return;
+        const toIdx = fromIdx + direction;
+        if (toIdx < 0 || toIdx >= keys.length) return;
+
+        const newOrder = [...keys];
+        const temp = newOrder[fromIdx];
+        newOrder[fromIdx] = newOrder[toIdx];
+        newOrder[toIdx] = temp;
+
+        setGroupOrder(newOrder);
+        setHasChanges(true);
+    };
+
     // ═══════════════════════════════════════════════════════
     // CASCADE ENGINE — Recalculates everything when a value changes
     // ═══════════════════════════════════════════════════════
@@ -1173,7 +1238,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         };
 
         const updated = { ...data, groups: { ...data.groups } };
-        const targetGroup = typeKey;
+        const targetGroup = freeItemTargetGroup || typeKey;
         if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
         updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
@@ -1185,6 +1250,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
         
         setShowFreeItemModal(false);
+        setFreeItemTargetGroup(null);
         setFreeItemData({ description: '', unit: 'UN', coefficient: '1', price: '0', type: 'MATERIAL' });
     };
 
@@ -1579,10 +1645,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             <PlusCircle size={13} color="var(--color-text-secondary)" /> Insumo Livre
                         </button>
 
-                        {/* Insert Etapa/Section — creates a new custom group/section */}
-                        <button onClick={() => { setNewGroupName(''); setShowNewGroupModal(true); }} title="Inserir uma nova etapa/seção na composição (ex: Transporte, Encargos, etc.)"
+                        {/* Insert Group — creates a new custom group/section */}
+                        <button onClick={() => { setNewGroupName(''); setShowNewGroupModal(true); }} title="Inserir um novo grupo/seção na composição (ex: Transporte, Encargos, etc.)"
                             style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-text-tertiary)', background: 'var(--color-bg-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
-                            <ListTree size={13} color="var(--color-text-secondary)" /> Inserir Etapa
+                            <ListTree size={13} color="var(--color-text-secondary)" /> Inserir Grupo
                         </button>
 
                         <button onClick={() => setShowFactorModal(true)} title="Aplicar fator em lote (ex: perda material)"
@@ -1861,8 +1927,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const meta = GROUP_META[groupKey] || { label: groupKey, icon: Folder, color: '#6b7280' };
                                 const displayLabel = customGroupLabels[groupKey] || meta.label;
                                 const groupItems = data.groups?.[groupKey] || [];
-                                // FIX EMPTY-GROUP: Show empty groups as drop targets during drag
-                                if (groupItems.length === 0 && !dragItem && !dragGroupKey) return null;
+                                // Show custom groups (or labeled ones) always, even if empty. Standard groups only show if they have items or during drag.
+                                const isCustomGroup = !GROUP_META[groupKey] || groupKey.startsWith('CUSTOM_') || !!customGroupLabels[groupKey];
+                                if (groupItems.length === 0 && !isCustomGroup && !dragItem && !dragGroupKey) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
@@ -1998,7 +2065,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 {editingGroupLabel !== groupKey && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setEditingGroupLabel(groupKey); setEditingGroupLabelText(displayLabel); }}
-                                                        title="Renomear esta etapa"
+                                                        title="Renomear este grupo"
                                                         style={{
                                                             background: 'none', border: 'none', cursor: 'pointer',
                                                             padding: '2px', display: 'inline-flex', alignItems: 'center',
@@ -2020,7 +2087,73 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     </span>
                                                 )}
                                             </div>
-                                            <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color }}>{fmt(groupTotal)}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                                                {/* Plus button to add free item to this group */}
+                                                <button
+                                                    onClick={() => openAddFreeItemToGroup(groupKey)}
+                                                    title="Adicionar insumo livre a este grupo"
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: meta.color, opacity: 0.6, width: 24, height: 24, borderRadius: 4
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = `${meta.color}15`}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                >
+                                                    <Plus size={14} />
+                                                </button>
+
+                                                {/* Move Up button */}
+                                                <button
+                                                    onClick={() => moveGroupOrder(groupKey, -1)}
+                                                    disabled={groupIdx === 0}
+                                                    title="Mover grupo para cima"
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: groupIdx === 0 ? 'not-allowed' : 'pointer',
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: meta.color, opacity: groupIdx === 0 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
+                                                    }}
+                                                    onMouseEnter={e => { if (groupIdx > 0) e.currentTarget.style.background = `${meta.color}15`; }}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                >
+                                                    <ChevronUp size={14} />
+                                                </button>
+
+                                                {/* Move Down button */}
+                                                <button
+                                                    onClick={() => moveGroupOrder(groupKey, 1)}
+                                                    disabled={groupIdx === orderedKeys.length - 1}
+                                                    title="Mover grupo para baixo"
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: groupIdx === orderedKeys.length - 1 ? 'not-allowed' : 'pointer',
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: meta.color, opacity: groupIdx === orderedKeys.length - 1 ? 0.15 : 0.6, width: 24, height: 24, borderRadius: 4
+                                                    }}
+                                                    onMouseEnter={e => { if (groupIdx < orderedKeys.length - 1) e.currentTarget.style.background = `${meta.color}15`; }}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                >
+                                                    <ChevronDown size={14} />
+                                                </button>
+
+                                                {/* Delete button (only for custom groups) */}
+                                                {!GROUP_META[groupKey] && (
+                                                    <button
+                                                        onClick={() => handleDeleteGroup(groupKey)}
+                                                        title="Excluir este grupo"
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                            color: 'var(--color-danger, #ef4444)', opacity: 0.6, width: 24, height: 24, borderRadius: 4
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                )}
+
+                                                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color, marginLeft: 8 }}>{fmt(groupTotal)}</span>
+                                            </div>
                                         </div>
 
                                         {/* Drop indicator when dragging over this group */}
@@ -2035,9 +2168,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             </div>
                                         )}
 
-                                        {isExpanded && groupItems.length > 0 && (
+                                        {isExpanded && (
                                             <>
-                                                {/* Column headers */}
+                                                {groupItems.length > 0 ? (
+                                                    <>
+                                                        {/* Column headers */}
                                                 <div style={{
                                                     display: 'grid', gridTemplateColumns: '40px 2.5fr 60px 90px 100px 90px 30px',
                                                     gap: 8, padding: '8px 20px', background: 'var(--color-bg-base)',
@@ -2520,6 +2655,70 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         </React.Fragment>
                                                     );
                                                 })}
+                                                    </>
+                                                ) : (
+                                                    <div style={{
+                                                        padding: '24px 20px',
+                                                        textAlign: 'center',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 12,
+                                                        borderBottom: '1px solid var(--color-border)',
+                                                        background: 'var(--color-bg-base)',
+                                                    }}>
+                                                        <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', fontStyle: 'italic' }}>
+                                                            Nenhum insumo neste grupo.
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: 10 }}>
+                                                            <button
+                                                                onClick={() => openAddFreeItemToGroup(groupKey)}
+                                                                style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                                    padding: '5px 12px', fontSize: '0.72rem', fontWeight: 600,
+                                                                    borderRadius: 6, border: `1px solid ${meta.color}50`,
+                                                                    background: `${meta.color}05`, color: meta.color,
+                                                                    cursor: 'pointer', transition: 'all 0.15s'
+                                                                }}
+                                                                onMouseEnter={e => {
+                                                                    e.currentTarget.style.background = `${meta.color}15`;
+                                                                }}
+                                                                onMouseLeave={e => {
+                                                                    e.currentTarget.style.background = `${meta.color}05`;
+                                                                }}
+                                                            >
+                                                                <Plus size={12} /> Inserir Insumo Livre
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const searchEl = document.querySelector('input[placeholder*="Buscar insumo"], input[placeholder*="Buscar composição"], .form-input[placeholder*="Buscar"]');
+                                                                    if (searchEl) {
+                                                                        searchEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                        (searchEl as HTMLInputElement).focus();
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                                    padding: '5px 12px', fontSize: '0.72rem', fontWeight: 600,
+                                                                    borderRadius: 6, border: '1px solid var(--color-border)',
+                                                                    background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)',
+                                                                    cursor: 'pointer', transition: 'all 0.15s'
+                                                                }}
+                                                                onMouseEnter={e => {
+                                                                    e.currentTarget.style.background = 'var(--color-bg-elevated)';
+                                                                    e.currentTarget.style.borderColor = 'var(--color-text-tertiary)';
+                                                                }}
+                                                                onMouseLeave={e => {
+                                                                    e.currentTarget.style.background = 'var(--color-bg-surface)';
+                                                                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                                                                }}
+                                                            >
+                                                                <Search size={12} /> Buscar na Base
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {/* GAP 2: Group Note — inline editor below rows */}
                                                 {isExpanded && (
@@ -3013,35 +3212,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             {showNewGroupModal && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><ListTree size={18} /> Nova Etapa / Seção</h3>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><ListTree size={18} /> Novo Grupo de Insumos</h3>
                         
                         <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-                            Crie uma nova seção para organizar insumos da composição. Ex: "Transportes", "Encargos Complementares", etc.
+                            Crie um novo grupo/seção para organizar insumos na composição. Ex: "Transportes", "Encargos Complementares", etc.
                         </div>
-
+ 
                         <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Nome da Etapa / Seção</label>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Nome do Grupo</label>
                             <input autoFocus type="text" className="form-input" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter' && newGroupName.trim()) {
                                     const groupKey = `CUSTOM_${newGroupName.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')}`;
                                     if (!data) return;
                                     const updated = { ...data, groups: { ...data.groups } };
                                     if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
-                                    // Add a placeholder observation so group appears
-                                    updated.groups[groupKey].push({
-                                        id: `etapa-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                                        coefficient: 0,
-                                        price: 0,
-                                        item: { id: `etapa-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
-                                    });
                                     setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
+                                    setExpandedGroups(prev => new Set([...prev, groupKey]));
                                     setData(updated);
                                     setHasChanges(true);
                                     setShowNewGroupModal(false);
                                 }}}
                                 placeholder="Ex: Transportes" style={{ width: '100%' }} />
                         </div>
-
+ 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                             <button className="btn" onClick={() => setShowNewGroupModal(false)}>Cancelar</button>
                             <button className="btn btn-primary" disabled={!newGroupName.trim()} onClick={() => {
@@ -3049,17 +3242,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 if (!data) return;
                                 const updated = { ...data, groups: { ...data.groups } };
                                 if (!updated.groups[groupKey]) updated.groups[groupKey] = [];
-                                updated.groups[groupKey].push({
-                                    id: `etapa-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                                    coefficient: 0,
-                                    price: 0,
-                                    item: { id: `etapa-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, code: 'OBS', description: `— ${newGroupName.trim()} —`, unit: '', type: 'OBSERVACAO', price: 0, isNew: true, isObservation: true },
-                                });
                                 setCustomGroupLabels(prev => ({ ...prev, [groupKey]: newGroupName.trim() }));
+                                setExpandedGroups(prev => new Set([...prev, groupKey]));
                                 setData(updated);
                                 setHasChanges(true);
                                 setShowNewGroupModal(false);
-                            }}>Criar Etapa</button>
+                            }}>Criar Grupo</button>
                         </div>
                     </div>
                 </div>
