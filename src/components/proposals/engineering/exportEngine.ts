@@ -114,7 +114,7 @@ export function exportCompositionExcel(
 ) {
     if (!data?.groups) return;
 
-    const header = ['Grupo', '#', 'Código', 'Descrição', 'Unidade', 'Coeficiente', 'Preço Unitário', 'Subtotal'];
+    const header = ['Grupo', '#', 'Código', 'Banco', 'Descrição', 'Unidade', 'Coeficiente', 'Preço Unitário', 'Subtotal'];
     const rows: string[][] = [];
 
     const groupOrder = data.groupOrder || [];
@@ -156,10 +156,12 @@ export function exportCompositionExcel(
 
         items.forEach((ci: any, idx: number) => {
             const itemData = ci.item || ci.auxiliaryComposition;
+            const banco = ci._matchedDatabase || itemData?.database?.name || data.database?.name || '';
             rows.push([
                 groupLabel,
                 String(idx + 1),
                 itemData?.code || '—',
+                banco || '—',
                 `"${(itemData?.description || '—').replace(/"/g, '""')}"`,
                 itemData?.unit || '—',
                 ci.coefficientExpression ? `"${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(ci.coefficient)}"` : fmtCoef(ci.coefficient),
@@ -169,14 +171,14 @@ export function exportCompositionExcel(
         });
 
         const groupTotal = items.reduce((s: number, ci: any) => s + (ci.price || 0), 0);
-        rows.push(['', '', '', `SUBTOTAL ${groupLabel}`, '', '', '', fmtNum(groupTotal)]);
+        rows.push(['', '', '', '', `SUBTOTAL ${groupLabel}`, '', '', '', fmtNum(groupTotal)]);
         if (groupNotes[groupKey]) {
-            rows.push(['', '', '', `Nota: ${groupNotes[groupKey]}`, '', '', '', '']);
+            rows.push(['', '', '', '', `Nota: ${groupNotes[groupKey]}`, '', '', '', '']);
         }
         rows.push([]);
     }
 
-    rows.push(['', '', '', 'CUSTO UNITÁRIO DO SERVIÇO (S/ BDI)', '', '', '', fmtNum(data.totalPrice || data.totalDirect || 0)]);
+    rows.push(['', '', '', '', 'CUSTO UNITÁRIO DO SERVIÇO (S/ BDI)', '', '', '', fmtNum(data.totalPrice || data.totalDirect || 0)]);
 
     const headerTop = ['Obra', 'Bancos', 'Encargos Sociais'];
     const headerTopValues = [
@@ -388,15 +390,17 @@ ${engineeringConfig ? `
 
         html += `<h2 style="color:${color}">${label} (${items.length})</h2>
 <table><thead><tr>
-  <th style="width:30px">#</th><th>Código</th><th>Descrição</th><th>Un.</th>
+  <th style="width:30px">#</th><th>Código</th><th>Banco</th><th>Descrição</th><th>Un.</th>
   <th class="right">Coeficiente</th><th class="right">Preço Unit.</th><th class="right">Subtotal</th>
 </tr></thead><tbody>`;
 
         items.forEach((ci: any, idx: number) => {
             const itemData = ci.item || ci.auxiliaryComposition;
+            const banco = ci._matchedDatabase || itemData?.database?.name || data.database?.name || '';
             html += `<tr>
   <td>${idx + 1}</td>
   <td class="mono">${itemData?.code || '—'}</td>
+  <td>${banco || '—'}</td>
   <td>${itemData?.description || '—'}</td>
   <td>${itemData?.unit || '—'}</td>
   <td class="right mono">${ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(4)}` : ci.coefficient.toFixed(4)}</td>
@@ -406,7 +410,7 @@ ${engineeringConfig ? `
         });
 
         html += `<tr class="total-row">
-  <td colspan="6" style="text-align:right">Subtotal ${label}</td>
+  <td colspan="7" style="text-align:right">Subtotal ${label}</td>
   <td class="right" style="color:${color}">${fmt(groupTotal)}</td>
 </tr></tbody></table>`;
 
