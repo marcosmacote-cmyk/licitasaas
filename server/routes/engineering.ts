@@ -854,6 +854,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
     try {
         const id = req.params.id;
         const { composition } = req.body;
+        const targetDbId = (req.query.databaseId as string) || (req.body.databaseId as string) || (composition?.databaseId as string) || undefined;
 
         if (!composition || !composition.groups) {
             return res.status(400).json({ error: 'Dados da composição inválidos' });
@@ -894,6 +895,17 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
+            // Retrieve proposal's target database details if databaseId is provided
+            const targetDatabase = targetDbId
+                ? await tx.engineeringDatabase.findUnique({
+                    where: { id: targetDbId },
+                    select: { id: true, name: true, uf: true, payrollExemption: true }
+                })
+                : null;
+            if (targetDatabase) {
+                logger.info(`[CompositionSave] 🎯 Resolved target database context: name=${targetDatabase.name} uf=${targetDatabase.uf} payrollExemption=${targetDatabase.payrollExemption}`);
+            }
+
             // Update total price, description, and code (code may differ between AI and budget)
             const newCode = composition.code || existing.code;
             
@@ -959,39 +971,77 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     if (isAux) {
                         const codeToFind = item.auxiliaryComposition?.code || item.code;
                         if (codeToFind) {
-                            const matchedAux = await tx.engineeringComposition.findFirst({
-                                where: {
-                                    code: { equals: codeToFind, mode: 'insensitive' },
-                                    database: { name: dbName }
-                                },
-                                orderBy: [
-                                    { database: { referenceYear: 'desc' } },
-                                    { database: { referenceMonth: 'desc' } }
-                                ]
-                            });
+                            let matchedAux = null;
+                            if (targetDatabase) {
+                                matchedAux = await tx.engineeringComposition.findFirst({
+                                    where: {
+                                        code: { equals: codeToFind, mode: 'insensitive' },
+                                        database: {
+                                            name: dbName,
+                                            uf: targetDatabase.uf || undefined,
+                                            payrollExemption: targetDatabase.payrollExemption
+                                        }
+                                    },
+                                    orderBy: [
+                                        { database: { referenceYear: 'desc' } },
+                                        { database: { referenceMonth: 'desc' } }
+                                    ]
+                                });
+                            }
+                            if (!matchedAux) {
+                                matchedAux = await tx.engineeringComposition.findFirst({
+                                    where: {
+                                        code: { equals: codeToFind, mode: 'insensitive' },
+                                        database: { name: dbName }
+                                    },
+                                    orderBy: [
+                                        { database: { referenceYear: 'desc' } },
+                                        { database: { referenceMonth: 'desc' } }
+                                    ]
+                                });
+                            }
                             if (matchedAux) {
                                 auxId = matchedAux.id;
                                 isAux = true;
-                                logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName}`);
+                                logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName} (UF=${matchedAux.database?.uf || 'default'})`);
                             }
                         }
                     } else {
                         const codeToFind = item.item?.code || item.code;
                         if (codeToFind) {
-                            const matchedItem = await tx.engineeringItem.findFirst({
-                                where: {
-                                    code: { equals: codeToFind, mode: 'insensitive' },
-                                    database: { name: dbName }
-                                },
-                                orderBy: [
-                                    { database: { referenceYear: 'desc' } },
-                                    { database: { referenceMonth: 'desc' } }
-                                ]
-                            });
+                            let matchedItem = null;
+                            if (targetDatabase) {
+                                matchedItem = await tx.engineeringItem.findFirst({
+                                    where: {
+                                        code: { equals: codeToFind, mode: 'insensitive' },
+                                        database: {
+                                            name: dbName,
+                                            uf: targetDatabase.uf || undefined,
+                                            payrollExemption: targetDatabase.payrollExemption
+                                        }
+                                    },
+                                    orderBy: [
+                                        { database: { referenceYear: 'desc' } },
+                                        { database: { referenceMonth: 'desc' } }
+                                    ]
+                                });
+                            }
+                            if (!matchedItem) {
+                                matchedItem = await tx.engineeringItem.findFirst({
+                                    where: {
+                                        code: { equals: codeToFind, mode: 'insensitive' },
+                                        database: { name: dbName }
+                                    },
+                                    orderBy: [
+                                        { database: { referenceYear: 'desc' } },
+                                        { database: { referenceMonth: 'desc' } }
+                                    ]
+                                });
+                            }
                             if (matchedItem) {
                                 itemId = matchedItem.id;
                                 isAux = false;
-                                logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName}`);
+                                logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName} (UF=${matchedItem.database?.uf || 'default'})`);
                             }
                         }
                     }

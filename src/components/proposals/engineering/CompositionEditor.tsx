@@ -1141,7 +1141,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
             // 3. PUT to update the PROPRIA composition with the extracted items
             // FIX SYNC-01: Include _officialRef so we preserve traceability to the official base
-            const res = await fetch(`/api/engineering/compositions/${targetId}`, {
+            const effectiveDatabaseId = currentItem?.priceAudit?.matchedDatabaseId || data.databaseId || data.database?.id || data._officialRef?.databaseId;
+            const params = new URLSearchParams();
+            if (effectiveDatabaseId) params.set('databaseId', effectiveDatabaseId);
+            const qs = params.toString();
+            
+            const res = await fetch(`/api/engineering/compositions/${targetId}${qs ? `?${qs}` : ''}`, {
                 method: 'PUT',
                 headers: hdrs(),
                 body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, customGroupLabels, groupOrder, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
