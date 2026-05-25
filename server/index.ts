@@ -135,18 +135,6 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-app.get('/temp-cpmh-check', async (req, res) => {
-    try {
-        const comps = await prisma.engineeringComposition.findMany({
-            where: { code: { in: ['CPMH04', 'CPMH05'] } },
-            include: { database: true, items: { include: { item: true } } }
-        });
-        res.json(comps);
-    } catch (e: any) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 // Auth
 app.use('/api/auth', authRoutes);
 

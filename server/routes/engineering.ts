@@ -16,18 +16,6 @@ import { Prisma } from '@prisma/client';
 
 const router = Router();
 
-router.get('/temp-cpmh-check', async (req: any, res: any) => {
-    try {
-        const comps = await prisma.engineeringComposition.findMany({
-            where: { code: { in: ['CPMH04', 'CPMH05'] } },
-            include: { database: true, items: { include: { item: true } } }
-        });
-        res.json(comps);
-    } catch (e: any) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 function refreshSubmittedPriceAudit(item: any) {
     const audit = item?.priceAudit;
     const matchedUnitCost = Number(audit?.matchedUnitCost) || 0;

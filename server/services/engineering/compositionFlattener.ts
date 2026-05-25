@@ -228,6 +228,14 @@ export class CompositionFlattener {
         const displayItemSourceName = itemDbName.startsWith('PROPRIA') ? 'PROPRIA' : itemDbName;
 
         // It's a basic item (Material, Labor, Equipment)
+        let unitPrice = ci.item.price;
+        let itemTotal = ci.item.price * ci.coefficient;
+
+        if (isPropriaDb && ci.price !== undefined && ci.coefficient > 0) {
+          unitPrice = ci.price / ci.coefficient;
+          itemTotal = ci.price;
+        }
+
         flattenedItems.push({
           type: ci.item.type,
           code: ci.item.code,
@@ -235,14 +243,13 @@ export class CompositionFlattener {
           description: ci.item.description,
           unit: ci.item.unit,
           coefficient: ci.coefficient,
-          unitPrice: ci.item.price,
-          totalPrice: ci.item.price * ci.coefficient,
+          unitPrice: unitPrice,
+          totalPrice: itemTotal,
           coefficientExpression: ci.coefficientExpression || null,
           groupKey: ci.groupKey || null,
         });
 
         // Accumulate totals for the footer
-        const itemTotal = ci.item.price * ci.coefficient;
         if (ci.item.type === 'MAO_DE_OBRA') totalMoComLs += itemTotal;
         else if (ci.item.type === 'MATERIAL') totalMaterial += itemTotal;
         else if (ci.item.type === 'EQUIPAMENTO') totalEquipamento += itemTotal;
@@ -275,6 +282,14 @@ export class CompositionFlattener {
             }
           }
           
+          let unitPrice = auxComp.totalPrice;
+          let itemTotal = auxComp.totalPrice * ci.coefficient;
+
+          if (isPropriaDb && ci.price !== undefined && ci.coefficient > 0) {
+            unitPrice = ci.price / ci.coefficient;
+            itemTotal = ci.price;
+          }
+
           flattenedItems.push({
             type: 'COMPOSICAO_AUXILIAR',
             code: displayAuxCode,
@@ -282,8 +297,8 @@ export class CompositionFlattener {
             description: auxComp.description,
             unit: auxComp.unit,
             coefficient: ci.coefficient,
-            unitPrice: auxComp.totalPrice, // Unit price of the composition
-            totalPrice: auxComp.totalPrice * ci.coefficient,
+            unitPrice: unitPrice, // Unit price of the composition
+            totalPrice: itemTotal,
             coefficientExpression: ci.coefficientExpression || null,
             groupKey: ci.groupKey || null,
           });
@@ -291,9 +306,10 @@ export class CompositionFlattener {
           // Recursively resolve and store the auxiliary composition
           const auxFlattened = await this.resolveComposition(ci.auxiliaryCompositionId, true, auxSourceName);
           if (auxFlattened) {
-             totalMoComLs += auxFlattened.totalMoComLs * ci.coefficient;
-             totalMaterial += auxFlattened.totalMaterial * ci.coefficient;
-             totalEquipamento += auxFlattened.totalEquipamento * ci.coefficient;
+             const scale = auxComp.totalPrice > 0 ? (unitPrice / auxComp.totalPrice) : 1;
+             totalMoComLs += auxFlattened.totalMoComLs * ci.coefficient * scale;
+             totalMaterial += auxFlattened.totalMaterial * ci.coefficient * scale;
+             totalEquipamento += auxFlattened.totalEquipamento * ci.coefficient * scale;
           }
         }
       }

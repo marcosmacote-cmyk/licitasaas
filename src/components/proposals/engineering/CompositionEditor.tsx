@@ -218,8 +218,18 @@ const normalizeCompositionMath = (raw: any, precision?: any) => {
     const groups = { ...(raw.groups || {}) };
     let total = 0;
 
+    const isPropria = raw.database?.type === 'PROPRIA' || raw.database?.name?.startsWith('PROPRIA') || raw.database?.name === 'PRÓPRIO';
+
     for (const groupKey of Object.keys(groups)) {
         groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
+            if (isPropria && ci.price !== undefined && ci.coefficient > 0) {
+                const dbUnitPrice = ci.price / ci.coefficient;
+                if (ci.item) {
+                    ci.item = { ...ci.item, price: dbUnitPrice };
+                } else if (ci.auxiliaryComposition) {
+                    ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
+                }
+            }
             if (ci.item && (ci.item.type === 'OBSERVACAO' || ci.item.code?.startsWith('OBS'))) {
                 ci.item = { ...ci.item, isObservation: true };
             }
