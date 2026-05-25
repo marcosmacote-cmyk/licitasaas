@@ -419,9 +419,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         if (wizardConfig) setEngineeringConfig(wizardConfig);
     }, [wizardConfig]);
 
-    // Dashboard sidebar: prefer wizard values (from Step 1) over internal state
-    const dashConfig = wizardConfig || engineeringConfig;
-    const dashBdi = wizardBdiConfig || bdiConfig;
+    // Dashboard sidebar: reference local states (synchronized from props on mount/change)
+    const dashConfig = engineeringConfig;
+    const dashBdi = bdiConfig;
     const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);

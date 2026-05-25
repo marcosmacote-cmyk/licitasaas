@@ -375,6 +375,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
     const [refDivisorValue, setRefDivisorValue] = useState('');
 
+    const activeCode = drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem?.code;
+
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
         if (showSearch && bases.length === 0) {
@@ -2905,11 +2907,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 Observação (aparece nos relatórios PDF/XLS)
                             </label>
                             <textarea
-                                value={engineeringConfig?.reportConfig?.compositionNotes?.[currentItem.code] || ''}
+                                value={activeCode ? (engineeringConfig?.reportConfig?.compositionNotes?.[activeCode] || '') : ''}
                                 onChange={e => {
-                                    if (!onUpdateItem || !engineeringConfig) return;
-                                    const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [currentItem.code]: e.target.value };
-                                    if (!e.target.value) delete notes[currentItem.code];
+                                    if (!activeCode || !onUpdateItem || !engineeringConfig) return;
+                                    const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [activeCode]: e.target.value };
+                                    if (!e.target.value) delete notes[activeCode];
                                     const rc = { ...(engineeringConfig.reportConfig || {}), compositionNotes: notes };
                                     // Propagate via onUpdateItem — trick: use a special key to signal config change
                                     (onUpdateItem as any)('__reportConfig__', rc);
