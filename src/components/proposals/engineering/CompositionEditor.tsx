@@ -50,6 +50,7 @@ interface Props {
     onClose: () => void;
     onUpdateItem: (itemId: string, updates: Partial<EngItem>) => void;
     engineeringConfig?: any;
+    proposalId?: string;
 }
 
 const GROUP_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -245,7 +246,7 @@ const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precisi
     return applyPrecision(total, { precision });
 };
 
-export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig }: Props) {
+export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig, proposalId }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -436,13 +437,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 if (effectiveDate) params.append('dataBase', effectiveDate);
                 url = `/api/engineering/bases/${selectedBaseId}/items?${params.toString()}`;
             } else {
-                url = `/api/engineering/compositions?databaseId=${selectedBaseId}&q=${encodeURIComponent(q)}`;
+                const params = new URLSearchParams({ databaseId: selectedBaseId, q });
+                if (proposalId) params.append('proposalId', proposalId);
+                url = `/api/engineering/compositions?${params.toString()}`;
             }
             const res = await fetch(url, { headers: hdrs() });
             const d = await res.json();
             setSearchResults(searchType === 'item' ? (d.items || []) : (Array.isArray(d) ? d : []));
         } catch { } finally { setIsSearching(false); }
-    }, [searchQuery, selectedBaseId, bases, engineeringConfig, searchType]);
+    }, [searchQuery, selectedBaseId, bases, engineeringConfig, searchType, proposalId]);
 
     // Auto-search: fires when user types 2+ characters, with 350ms debounce
     useEffect(() => {
@@ -538,7 +541,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || !data) return;
         setPropiaSaving(true);
         try {
-            const res = await fetch('/api/engineering/propria/create', {
+            const qs = proposalId ? `?proposalId=${encodeURIComponent(proposalId)}` : '';
+            const res = await fetch(`/api/engineering/propria/create${qs}`, {
                 method: 'POST', headers: hdrs(),
                 body: JSON.stringify({
                     code: propriaCode.trim(),
@@ -622,6 +626,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const effectiveSourceName = overrideSourceName || currentItem?.sourceName;
             if (effectiveDatabaseId) params.set('databaseId', effectiveDatabaseId);
             if (effectiveSourceName) params.set('sourceName', effectiveSourceName);
+            if (proposalId) params.set('proposalId', proposalId);
             const qs = params.toString();
             const res = await fetch(`/api/engineering/compositions/${encodeURIComponent(code)}${qs ? `?${qs}` : ''}`, { headers: hdrs() });
             if (!res.ok) throw new Error('not_found');
@@ -672,7 +677,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setError('not_found');
         }
         setLoading(false);
-    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig?.precision]);
+    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig?.precision, proposalId]);
 
     useEffect(() => {
         if (currentItem) {
@@ -769,6 +774,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             formData.append('unit', currentItem.unit);
             if (engineeringConfig) {
                 formData.append('engineeringConfig', JSON.stringify(engineeringConfig));
+            }
+            if (proposalId) {
+                formData.append('proposalId', proposalId);
             }
 
             const res = await fetch('/api/engineering/ai/extract-composition', {
@@ -1116,7 +1124,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             for (const tryCode of uniqueCodes) {
                 if (targetId) break;
                 try {
-                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(tryCode)}?sourceName=PROPRIA`, { headers: hdrs() });
+                    const searchParams = new URLSearchParams({ sourceName: 'PROPRIA' });
+                    if (proposalId) searchParams.append('proposalId', proposalId);
+                    const resSearch = await fetch(`/api/engineering/compositions/${encodeURIComponent(tryCode)}?${searchParams.toString()}`, { headers: hdrs() });
                     if (resSearch.ok) {
                         const found = await resSearch.json();
                         if (found?.id && !found.id.startsWith('synthetic-')) {
@@ -1128,7 +1138,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             
             // 2. If no existing PROPRIA found, create one with the canonical budget code
             if (!targetId) {
-                const resCreate = await fetch('/api/engineering/compositions', {
+                const postParams = new URLSearchParams();
+                if (proposalId) postParams.append('proposalId', proposalId);
+                const resCreate = await fetch(`/api/engineering/compositions?${postParams.toString()}`, {
                     method: 'POST',
                     headers: hdrs(),
                     body: JSON.stringify({
@@ -1143,7 +1155,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         throw new Error('Erro ao criar composição na base PRÓPRIA');
                     }
                     // Already exists — fetch it
-                    const resRetry = await fetch(`/api/engineering/compositions/${encodeURIComponent(canonicalCode)}?sourceName=PROPRIA`, { headers: hdrs() });
+                    const retryParams = new URLSearchParams({ sourceName: 'PROPRIA' });
+                    if (proposalId) retryParams.append('proposalId', proposalId);
+                    const resRetry = await fetch(`/api/engineering/compositions/${encodeURIComponent(canonicalCode)}?${retryParams.toString()}`, { headers: hdrs() });
                     if (resRetry.ok) {
                         const retryData = await resRetry.json();
                         targetId = retryData.id;
@@ -1163,6 +1177,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const effectiveDatabaseId = currentItem?.priceAudit?.matchedDatabaseId || data.databaseId || data.database?.id || data._officialRef?.databaseId;
             const params = new URLSearchParams();
             if (effectiveDatabaseId) params.set('databaseId', effectiveDatabaseId);
+            if (proposalId) params.set('proposalId', proposalId);
             const qs = params.toString();
             
             const res = await fetch(`/api/engineering/compositions/${targetId}${qs ? `?${qs}` : ''}`, {
@@ -1174,22 +1189,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 const errBody = await res.json().catch(() => ({}));
                 throw new Error(errBody.error || 'Erro ao salvar composição na base');
             }
-            await res.json();
+            const putRes = await res.json();
+            const savedId = putRes.id || targetId;
             
             // FIX SYNC-01: After saving, update local state to reflect the new PROPRIA status
             // WITHOUT reloading (avoids the vicious cycle: PROPRIA→load→PROPRIA overrides official)
             setData((prev: any) => prev ? {
                 ...prev,
-                database: { ...prev.database, name: 'PROPRIA', type: 'PROPRIA' },
+                id: savedId,
+                database: { ...prev.database, name: proposalId ? `PROPRIA_${proposalId}` : 'PROPRIA', type: 'PROPRIA' },
                 _officialRef: officialRef,
             } : prev);
             setHasChanges(false);
 
-            // FIX SYNC-05: If this was an official composition, notify planilha about the change
-            if (isOfficialOrigin && onUpdateItem && currentItem) {
+            // Notify parent item about the updated ID, unitCost, and sourceName
+            if (onUpdateItem && currentItem) {
                 onUpdateItem(currentItem.id, {
+                    code: canonicalCode,
                     unitCost: data.totalPrice,
                     sourceName: `PROPRIA`,
+                    priceAudit: {
+                        ...currentItem.priceAudit,
+                        matchedSourceName: `PROPRIA`
+                    }
                 } as any);
             }
             
@@ -1236,13 +1258,19 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         try {
             // Only call backend if the composition has a real DB id (not synthetic)
             if (!data.id.startsWith('synthetic-')) {
-                const res = await fetch(`/api/engineering/compositions/${data.id}/items`, {
+                const deleteParams = new URLSearchParams();
+                if (proposalId) deleteParams.append('proposalId', proposalId);
+                const res = await fetch(`/api/engineering/compositions/${data.id}/items?${deleteParams.toString()}`, {
                     method: 'DELETE',
                     headers: hdrs(),
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
                     throw new Error(err.error || 'Erro ao limpar composição');
+                }
+                const clearRes = await res.json();
+                if (clearRes.id) {
+                    setData((prev: any) => prev ? { ...prev, id: clearRes.id } : prev);
                 }
             }
 
@@ -1282,7 +1310,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const compDesc = drillLevel?.description || currentItem.description;
             
             // SEC-02 FIX: Backend extracts tenantId from req.user (auth middleware)
-            const res = await fetch('/api/engineering/compositions', {
+            const postParams = new URLSearchParams();
+            if (proposalId) postParams.append('proposalId', proposalId);
+            const res = await fetch(`/api/engineering/compositions?${postParams.toString()}`, {
                 method: 'POST',
                 headers: hdrs(),
                 body: JSON.stringify({

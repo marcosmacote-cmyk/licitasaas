@@ -295,7 +295,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
         try {
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig }),
+                body: JSON.stringify({ items, engineeringConfig, proposalId }),
             });
             if (!res.ok) throw new Error('Erro ao sincronizar');
             const data = await res.json();

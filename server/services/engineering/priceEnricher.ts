@@ -58,6 +58,7 @@ export interface PriceEnrichmentOptions {
     tenantId?: string | null;
     includeOwnTenantDatabase?: boolean;
     allowSemanticFallback?: boolean;
+    proposalId?: string;
 }
 
 // ── Utility Functions ──
@@ -139,11 +140,19 @@ export function buildCandidateScore(
     let score = 0;
     const warnings: string[] = [];
     const itemSource = normalizeSourceName(sourceName);
+    const itemIsPropria = itemSource === 'PROPRIA' || itemSource.startsWith('PROPRIA_');
+    const dbIsPropria = dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_');
 
     // Source match scoring
-    if (itemSource && itemSource !== 'PROPRIA' && dbName === itemSource) score += 40;
-    else if (desiredSources.includes(dbName)) score += 20;
-    else if ((itemSource && itemSource !== 'PROPRIA') || desiredSources.length > 0) warnings.push('fonte fora das bases configuradas');
+    if (itemIsPropria && dbIsPropria) {
+        score += 40;
+    } else if (itemSource && !itemIsPropria && dbName === itemSource) {
+        score += 40;
+    } else if (desiredSources.includes(dbName)) {
+        score += 20;
+    } else if ((itemSource && !itemIsPropria) || desiredSources.length > 0) {
+        warnings.push('fonte fora das bases configuradas');
+    }
 
     // UF match scoring. SINAPI/SICRO/SBC/SEINFRA are state-sensitive; without
     // this, equal code/date/regime candidates can randomly fall back to another UF.
@@ -281,13 +290,24 @@ export function chooseBestCandidate(
 function buildDatabaseWhere(options?: PriceEnrichmentOptions) {
     const or: any[] = [{ type: 'OFICIAL' }];
     if (options?.tenantId && options.includeOwnTenantDatabase !== false) {
-        or.push({ tenantId: options.tenantId });
+        if (options.proposalId) {
+            or.push({
+                tenantId: options.tenantId,
+                name: { in: ['PROPRIA', `PROPRIA_${options.proposalId}`] }
+            });
+        } else {
+            or.push({ tenantId: options.tenantId });
+        }
     }
     return { OR: or };
 }
 
 function semanticAccessSql(options?: PriceEnrichmentOptions) {
     if (options?.tenantId && options.includeOwnTenantDatabase !== false) {
+        if (options.proposalId) {
+            const allowedNames = ['PROPRIA', `PROPRIA_${options.proposalId}`];
+            return Prisma.sql`AND (d.type = 'OFICIAL' OR (d."tenantId" = ${options.tenantId} AND d.name IN (${Prisma.join(allowedNames)})))`;
+        }
         return Prisma.sql`AND (d.type = 'OFICIAL' OR d."tenantId" = ${options.tenantId})`;
     }
     return Prisma.sql`AND d.type = 'OFICIAL'`;
@@ -601,7 +621,7 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
     // Mantém o preço extraído do edital. Só completa metadados seguros.
     if (matchMethod === 'code_exact') {
         if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
-        if ((!item.sourceName || item.sourceName === 'PROPRIA') && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
+        if ((!item.sourceName || item.sourceName.startsWith('PROPRIA')) && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
         if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
     }
 

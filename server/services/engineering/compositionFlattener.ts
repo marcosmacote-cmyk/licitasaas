@@ -89,9 +89,9 @@ export class CompositionFlattener {
     }
 
     for (const agg of aggregatedItems.values()) {
-      // Try to find in PROPRIA first (overridden composition)
+      // Try to find in PROPRIA_${proposalId} first
       let composition = await prisma.engineeringComposition.findFirst({
-        where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: 'PROPRIA' } },
+        where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: `PROPRIA_${proposalId}` } },
         include: {
           database: true,
           items: {
@@ -102,6 +102,22 @@ export class CompositionFlattener {
           }
         }
       });
+
+      // Try to find in PROPRIA next (overridden composition)
+      if (!composition) {
+        composition = await prisma.engineeringComposition.findFirst({
+          where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: 'PROPRIA' } },
+          include: {
+            database: true,
+            items: {
+              include: {
+                item: true,
+                composition: { include: { database: true } }
+              }
+            }
+          }
+        });
+      }
 
       // Fallback to the one matching the sourceName
       if (!composition) {
@@ -179,6 +195,28 @@ export class CompositionFlattener {
 
     if (!composition) return null;
 
+    const metadataObj = composition.metadata 
+      ? (typeof composition.metadata === 'string' 
+          ? JSON.parse(composition.metadata) 
+          : composition.metadata)
+      : null;
+    const officialRef = (metadataObj && typeof metadataObj === 'object') ? metadataObj._officialRef : null;
+
+    const dbName = composition.database?.name || sourceName;
+    const isPropriaDb = dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_');
+
+    let displayCode = composition.code;
+    let displaySourceName = dbName;
+
+    if (isPropriaDb) {
+      if (officialRef && typeof officialRef === 'object') {
+        displayCode = officialRef.originalCode || officialRef.code || composition.code;
+        displaySourceName = officialRef.databaseName || officialRef.sourceName || 'PROPRIA';
+      } else {
+        displaySourceName = 'PROPRIA';
+      }
+    }
+
     const flattenedItems: FlattenedItem[] = [];
     let totalMoComLs = 0;
     let totalMaterial = 0;
@@ -186,11 +224,14 @@ export class CompositionFlattener {
 
     for (const ci of composition.items) {
       if (ci.itemId && ci.item) {
+        const itemDbName = ci.item.database?.name || composition.database?.name || sourceName;
+        const displayItemSourceName = itemDbName.startsWith('PROPRIA') ? 'PROPRIA' : itemDbName;
+
         // It's a basic item (Material, Labor, Equipment)
         flattenedItems.push({
           type: ci.item.type,
           code: ci.item.code,
-          sourceName: ci.item.database?.name || composition.database?.name || sourceName,
+          sourceName: displayItemSourceName,
           description: ci.item.description,
           unit: ci.item.unit,
           coefficient: ci.coefficient,
@@ -200,7 +241,7 @@ export class CompositionFlattener {
           groupKey: ci.groupKey || null,
         });
 
-        // Accumulate totals for the footer (in SINAPI/SEINFRA, unit price already includes LS!)
+        // Accumulate totals for the footer
         const itemTotal = ci.item.price * ci.coefficient;
         if (ci.item.type === 'MAO_DE_OBRA') totalMoComLs += itemTotal;
         else if (ci.item.type === 'MATERIAL') totalMaterial += itemTotal;
@@ -215,11 +256,29 @@ export class CompositionFlattener {
 
         if (auxComp) {
           const auxSourceName = auxComp.database?.name || sourceName;
+          const auxMetadataObj = auxComp.metadata 
+            ? (typeof auxComp.metadata === 'string' 
+                ? JSON.parse(auxComp.metadata) 
+                : auxComp.metadata)
+            : null;
+          const auxOfficialRef = (auxMetadataObj && typeof auxMetadataObj === 'object') ? auxMetadataObj._officialRef : null;
+
+          let displayAuxCode = auxComp.code;
+          let displayAuxSourceName = auxSourceName;
+
+          if (displayAuxSourceName === 'PROPRIA' || displayAuxSourceName.startsWith('PROPRIA_')) {
+            if (auxOfficialRef && typeof auxOfficialRef === 'object') {
+              displayAuxCode = auxOfficialRef.originalCode || auxOfficialRef.code || auxComp.code;
+              displayAuxSourceName = auxOfficialRef.databaseName || auxOfficialRef.sourceName || 'PROPRIA';
+            } else {
+              displayAuxSourceName = 'PROPRIA';
+            }
+          }
           
           flattenedItems.push({
             type: 'COMPOSICAO_AUXILIAR',
-            code: auxComp.code,
-            sourceName: auxSourceName,
+            code: displayAuxCode,
+            sourceName: displayAuxSourceName,
             description: auxComp.description,
             unit: auxComp.unit,
             coefficient: ci.coefficient,
@@ -244,16 +303,13 @@ export class CompositionFlattener {
     const totalMoSemLs = totalMoComLs / (1 + this.lsPercentage);
     const totalLs = totalMoComLs - totalMoSemLs;
     
-    // We will stick to the composition's provided totalPrice to respect the official bank, 
-    // unless we strictly want dynamic calculation. Let's use the official one for the composition itself.
-    
     const valorBdi = composition.totalPrice * this.bdi;
     const valorComBdi = composition.totalPrice + valorBdi;
 
     const result: FlattenedComposition = {
       id: composition.id,
-      code: composition.code,
-      sourceName: composition.database?.name || sourceName,
+      code: displayCode,
+      sourceName: displaySourceName,
       description: composition.description,
       unit: composition.unit,
       totalPrice: composition.totalPrice,

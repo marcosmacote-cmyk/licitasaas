@@ -1264,7 +1264,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST',
                 headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig: dashConfig }),
+                body: JSON.stringify({ items, engineeringConfig: dashConfig, proposalId }),
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao reauditar');
             const data = await res.json();
@@ -1305,7 +1305,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST',
                 headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig: dashConfig }),
+                body: JSON.stringify({ items, engineeringConfig: dashConfig, proposalId }),
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar preços');
             const data = await res.json();
@@ -3114,6 +3114,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 <CompositionEditor
                     items={items}
                     initialIndex={compositionEditorIndex}
+                    proposalId={proposalId}
                     onClose={() => setCompositionEditorIndex(null)}
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea

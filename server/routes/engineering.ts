@@ -241,6 +241,26 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
     }
 });
 
+function getPropriaDatabaseName(proposalId?: string): string {
+    if (proposalId && proposalId !== 'undefined' && proposalId !== 'null') {
+        return `PROPRIA_${proposalId}`;
+    }
+    return 'PROPRIA';
+}
+
+async function getOrCreatePropriaDatabase(txOrPrisma: any, tenantId: string, proposalId?: string) {
+    const dbName = getPropriaDatabaseName(proposalId);
+    let db = await txOrPrisma.engineeringDatabase.findFirst({
+        where: { name: dbName, tenantId }
+    });
+    if (!db) {
+        db = await txOrPrisma.engineeringDatabase.create({
+            data: { name: dbName, uf: '', tenantId, type: 'PROPRIA' }
+        });
+    }
+    return db;
+}
+
 function normalizeCompositionSource(sourceName?: string): string | undefined {
     const source = String(sourceName || '').trim().toUpperCase();
     if (!source) return undefined;
@@ -349,7 +369,7 @@ async function findCompositionWithItems(codeVariants: string[], where: any) {
     });
 }
 
-async function findBestAnalyticalComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string) {
+async function findBestAnalyticalComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string, proposalId?: string) {
     const requestedDatabase = databaseId
         ? await prisma.engineeringDatabase.findUnique({
             where: { id: databaseId },
@@ -395,12 +415,21 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         }
 
         // 3. Fall back to PROPRIA only if no official match was found
-        const propriaWhere: any = { database: { name: 'PROPRIA' } };
+        const targetPropriaName = getPropriaDatabaseName(proposalId);
+        const propriaWhere: any = { database: { name: targetPropriaName } };
         if (tenantId) propriaWhere.database.tenantId = tenantId;
         const propria = await findCompositionWithItems(codeVariants, propriaWhere);
         if (propria) {
             logger.info(`[CompositionLookup] ⚠️ No official match, falling back to PROPRIA: id=${propria.id} code=${propria.code} items=${propria.items?.length || 0}`);
             return propria;
+        } else if (proposalId) {
+            const globalPropriaWhere: any = { database: { name: 'PROPRIA' } };
+            if (tenantId) globalPropriaWhere.database.tenantId = tenantId;
+            const globalPropria = await findCompositionWithItems(codeVariants, globalPropriaWhere);
+            if (globalPropria) {
+                logger.info(`[CompositionLookup] ⚠️ No official match, falling back to global PROPRIA: id=${globalPropria.id} code=${globalPropria.code} items=${globalPropria.items?.length || 0}`);
+                return globalPropria;
+            }
         }
 
         // 4. Try any official database
@@ -408,12 +437,22 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
     }
 
     // Original behavior when PROPRIA is explicitly requested or no sourceName given
-    const propriaWhere: any = { database: { name: 'PROPRIA' } };
+    const targetPropriaName = getPropriaDatabaseName(proposalId);
+    const propriaWhere: any = { database: { name: targetPropriaName } };
     if (tenantId) propriaWhere.database.tenantId = tenantId;
     const propria = await findCompositionWithItems(codeVariants, propriaWhere);
     if (propria) {
         logger.info(`[CompositionLookup] ✅ PROPRIA found first: id=${propria.id} code=${propria.code} items=${propria.items?.length || 0}`);
         return propria;
+    } else if (proposalId) {
+        // Fallback to global tenant-wide PROPRIA
+        const globalPropriaWhere: any = { database: { name: 'PROPRIA' } };
+        if (tenantId) globalPropriaWhere.database.tenantId = tenantId;
+        const globalPropria = await findCompositionWithItems(codeVariants, globalPropriaWhere);
+        if (globalPropria) {
+            logger.info(`[CompositionLookup] ✅ PROPRIA found in global tenant-wide fallback: id=${globalPropria.id} code=${globalPropria.code} items=${globalPropria.items?.length || 0}`);
+            return globalPropria;
+        }
     } else {
         logger.info(`[CompositionLookup] ℹ️ No PROPRIA composition with items found for codes=[${codeVariants.join(',')}] tenantId=${tenantId || 'none'}`);
     }
@@ -440,11 +479,12 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
     return findCompositionWithItems(codeVariants, { database: { type: 'OFICIAL' } });
 }
 
-async function findFallbackComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string) {
+async function findFallbackComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string, proposalId?: string) {
     const include = compositionIncludes();
 
     if (!databaseId) {
-        const propriaDatabaseWhere: any = { name: 'PROPRIA' };
+        const targetPropriaName = getPropriaDatabaseName(proposalId);
+        const propriaDatabaseWhere: any = { name: targetPropriaName };
         if (tenantId) propriaDatabaseWhere.tenantId = tenantId;
         const propria = await prisma.engineeringComposition.findFirst({
             where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
@@ -452,6 +492,16 @@ async function findFallbackComposition(codeVariants: string[], databaseId?: stri
             orderBy: compositionOrderBy(),
         });
         if (propria) return propria;
+
+        if (proposalId) {
+            const globalPropriaDatabaseWhere: any = { name: 'PROPRIA', tenantId };
+            const globalPropria = await prisma.engineeringComposition.findFirst({
+                where: { code: { in: codeVariants }, database: globalPropriaDatabaseWhere },
+                include,
+                orderBy: compositionOrderBy(),
+            });
+            if (globalPropria) return globalPropria;
+        }
     }
 
     const where: any = { code: { in: codeVariants } };
@@ -474,17 +524,18 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const code = req.params.code;
         const databaseId = req.query.databaseId as string || undefined;
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
+        const proposalId = req.query.proposalId as string || undefined;
         const codeVariants = buildCompositionCodeVariants(code, sourceName);
 
-        logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} codeVariants=${codeVariants.join(',')}`);
+        logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} proposalId=${proposalId || 'none'} codeVariants=${codeVariants.join(',')}`);
 
-        let composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
+        let composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
         if (composition) {
             logger.info(`[CompositionLookup] ✅ ANALYTICAL found: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
         } else {
             logger.info(`[CompositionLookup] ⚠️ No analytical found, trying fallback...`);
         }
-        if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId);
+        if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
         if (composition) {
             logger.info(`[CompositionLookup] Fallback result: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
         }
@@ -776,15 +827,8 @@ router.post('/propria/create', async (req: any, res: any) => {
             return res.status(400).json({ error: 'Valor unitário é obrigatório' });
         }
 
-        // Find or create PROPRIA database for this tenant
-        let propriaDb = await prisma.engineeringDatabase.findFirst({
-            where: { name: 'PROPRIA', tenantId }
-        });
-        if (!propriaDb) {
-            propriaDb = await prisma.engineeringDatabase.create({
-                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
-            });
-        }
+        const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
+        const propriaDb = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
 
         const kind = (recordKind || 'INSUMO').toUpperCase();
         const unitValue = (unit || 'UN').toUpperCase().trim();
@@ -843,6 +887,7 @@ router.post('/propria/create', async (req: any, res: any) => {
 router.post('/compositions', async (req: any, res: any) => {
     try {
         const { code, description, unit } = req.body;
+        const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
         // SEC-02 FIX: Always use authenticated tenantId from middleware
         const tenantId = req.user?.tenantId || req.body.tenantId;
         
@@ -850,15 +895,7 @@ router.post('/compositions', async (req: any, res: any) => {
             return res.status(400).json({ error: 'Código e descrição são obrigatórios' });
         }
 
-        let propriaDb = await prisma.engineeringDatabase.findFirst({
-            where: { name: 'PROPRIA', tenantId }
-        });
-
-        if (!propriaDb) {
-            propriaDb = await prisma.engineeringDatabase.create({
-                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
-            });
-        }
+        const propriaDb = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
 
         const existing = await prisma.engineeringComposition.findFirst({
             where: { code, databaseId: propriaDb.id }
@@ -894,6 +931,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         const id = req.params.id;
         const { composition } = req.body;
         const targetDbId = (req.query.databaseId as string) || (req.body.databaseId as string) || (composition?.databaseId as string) || undefined;
+        const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
 
         if (!composition || !composition.groups) {
             return res.status(400).json({ error: 'Dados da composição inválidos' });
@@ -932,6 +970,9 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         }
         logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} groups=${Object.keys(composition.groups).join(',')}`);
 
+        let targetCompId = id;
+        const tenantId = req.user?.tenantId || composition.tenantId;
+
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
             // Retrieve proposal's target database details if databaseId is provided
@@ -945,23 +986,6 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 logger.info(`[CompositionSave] 🎯 Resolved target database context: name=${targetDatabase.name} uf=${targetDatabase.uf} payrollExemption=${targetDatabase.payrollExemption}`);
             }
 
-            // Update total price, description, and code (code may differ between AI and budget)
-            const newCode = composition.code || existing.code;
-            
-            // If code is changing, check for unique constraint collision
-            if (newCode !== existing.code) {
-                const conflicting = await tx.engineeringComposition.findFirst({
-                    where: { databaseId: existing.databaseId, code: newCode, id: { not: id } },
-                    include: { items: { select: { id: true } } }
-                });
-                if (conflicting) {
-                    // Merge: delete the conflicting empty shell (usually created by budget extraction)
-                    await tx.engineeringCompositionItem.deleteMany({ where: { compositionId: conflicting.id } });
-                    await tx.engineeringComposition.delete({ where: { id: conflicting.id } });
-                    logger.info(`[CompositionSave] 🔄 Merged: deleted conflicting shell code=${newCode} id=${conflicting.id} (had ${conflicting.items.length} items)`);
-                }
-            }
-            
             const metadata = {
                 groupNotes: composition.groupNotes || null,
                 customGroupLabels: composition.customGroupLabels || null,
@@ -970,30 +994,73 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 _officialRef: composition._officialRef || null,
             };
 
-            await tx.engineeringComposition.update({
-                where: { id },
-                data: {
-                    code: newCode,
-                    totalPrice: composition.totalPrice,
-                    description: composition.description,
-                    unit: composition.unit,
-                    metadata: metadata
+            const newCode = composition.code || existing.code;
+
+            const isGlobalPropria = existing.database.name === 'PROPRIA';
+            if (isGlobalPropria && proposalId) {
+                const targetDb = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
+                let targetComp = await tx.engineeringComposition.findFirst({
+                    where: { databaseId: targetDb.id, code: newCode }
+                });
+                if (!targetComp) {
+                    targetComp = await tx.engineeringComposition.create({
+                        data: {
+                            code: newCode,
+                            description: composition.description || existing.description,
+                            unit: composition.unit || existing.unit,
+                            totalPrice: composition.totalPrice,
+                            databaseId: targetDb.id,
+                            metadata: metadata
+                        }
+                    });
+                    logger.info(`[CompositionSave] 🐑 Cloned global PROPRIA comp id=${id} code=${newCode} to proposal database ${targetDb.name} with new id=${targetComp.id}`);
+                } else {
+                    logger.info(`[CompositionSave] 🐑 Found existing target comp code=${newCode} in proposal database ${targetDb.name} id=${targetComp.id}, will overwrite`);
+                    await tx.engineeringComposition.update({
+                        where: { id: targetComp.id },
+                        data: {
+                            description: composition.description || existing.description,
+                            unit: composition.unit || existing.unit,
+                            totalPrice: composition.totalPrice,
+                            metadata: metadata
+                        }
+                    });
                 }
-            });
+                targetCompId = targetComp.id;
+            } else {
+                // If code is changing, check for unique constraint collision
+                if (newCode !== existing.code) {
+                    const conflicting = await tx.engineeringComposition.findFirst({
+                        where: { databaseId: existing.databaseId, code: newCode, id: { not: id } },
+                        include: { items: { select: { id: true } } }
+                    });
+                    if (conflicting) {
+                        // Merge: delete the conflicting empty shell (usually created by budget extraction)
+                        await tx.engineeringCompositionItem.deleteMany({ where: { compositionId: conflicting.id } });
+                        await tx.engineeringComposition.delete({ where: { id: conflicting.id } });
+                        logger.info(`[CompositionSave] 🔄 Merged: deleted conflicting shell code=${newCode} id=${conflicting.id} (had ${conflicting.items.length} items)`);
+                    }
+                }
+
+                await tx.engineeringComposition.update({
+                    where: { id },
+                    data: {
+                        code: newCode,
+                        totalPrice: composition.totalPrice,
+                        description: composition.description,
+                        unit: composition.unit,
+                        metadata: metadata
+                    }
+                });
+            }
 
             // Delete existing items
             await tx.engineeringCompositionItem.deleteMany({
-                where: { compositionId: id }
+                where: { compositionId: targetCompId }
             });
 
-            // Create new items — SEC-02: use authenticated tenantId
-            const tenantId = req.user?.tenantId || composition.tenantId;
-            let basePropria = await tx.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId } });
-            if (!basePropria) {
-                basePropria = await tx.engineeringDatabase.create({
-                    data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
-                });
-            }
+            // Create new items — use proposal-specific or global PROPRIA database
+            const basePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
 
             for (const item of flatItems) {
                 let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
@@ -1182,7 +1249,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                 await tx.engineeringCompositionItem.create({
                     data: {
-                        compositionId: id,
+                        compositionId: targetCompId,
                         itemId: isAux ? null : itemId,
                         auxiliaryCompositionId: isAux ? auxId : null,
                         coefficient: item.coefficient,
@@ -1194,8 +1261,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             }
         });
 
-        logger.info(`[CompositionSave] ✅ PUT complete: id=${id} code=${composition.code} items=${flatItems.length} saved`);
-        res.json({ message: 'Composição atualizada com sucesso', id });
+        logger.info(`[CompositionSave] ✅ PUT complete: id=${targetCompId} code=${composition.code} items=${flatItems.length} saved`);
+        res.json({ message: 'Composição atualizada com sucesso', id: targetCompId });
 
     } catch (e: any) {
         console.error('Error updating custom composition:', e);
@@ -1211,6 +1278,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 router.delete('/compositions/:id/items', async (req: any, res: any) => {
     try {
         const id = req.params.id;
+        const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
 
         // Verify composition exists and belongs to PROPRIA
         const existing = await prisma.engineeringComposition.findUnique({
@@ -1233,22 +1301,46 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
 
         const itemCount = existing.items.length;
 
+        let targetId = id;
+        const isGlobalPropria = existing.database.name === 'PROPRIA';
+        if (isGlobalPropria && proposalId) {
+            const tenantId = req.user?.tenantId || existing.database.tenantId;
+            const targetDb = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
+            let targetComp = await prisma.engineeringComposition.findFirst({
+                where: { databaseId: targetDb.id, code: existing.code }
+            });
+            if (!targetComp) {
+                targetComp = await prisma.engineeringComposition.create({
+                    data: {
+                        code: existing.code,
+                        description: existing.description,
+                        unit: existing.unit,
+                        totalPrice: 0,
+                        databaseId: targetDb.id,
+                        metadata: Prisma.DbNull
+                    }
+                });
+                logger.info(`[CompositionClear] Cloned global shell code=${existing.code} to proposal database ${targetDb.name} with new id=${targetComp.id}`);
+            }
+            targetId = targetComp.id;
+        }
+
         // Delete all composition items (keep the composition shell)
         await prisma.engineeringCompositionItem.deleteMany({
-            where: { compositionId: id }
+            where: { compositionId: targetId }
         });
 
         // Reset totalPrice to 0 and clear metadata
         await prisma.engineeringComposition.update({
-            where: { id },
+            where: { id: targetId },
             data: { 
                 totalPrice: 0,
                 metadata: Prisma.DbNull
             }
         });
 
-        logger.info(`[CompositionClear] ✅ Cleared ${itemCount} items from composition id=${id} code=${existing.code}`);
-        res.json({ message: `${itemCount} itens removidos da composição`, clearedCount: itemCount });
+        logger.info(`[CompositionClear] ✅ Cleared ${itemCount} items from composition id=${targetId} code=${existing.code}`);
+        res.json({ message: `${itemCount} itens removidos da composição`, clearedCount: itemCount, id: targetId });
 
     } catch (e: any) {
         console.error('Error clearing composition items:', e);
@@ -1448,8 +1540,10 @@ router.post('/propria/cleanup', async (req: any, res: any) => {
         const tenantId = req.user?.tenantId;
         if (!tenantId) return res.status(401).json({ error: 'Não autenticado' });
 
+        const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
+        const targetDbName = getPropriaDatabaseName(proposalId);
         const propriaDb = await prisma.engineeringDatabase.findFirst({
-            where: { name: 'PROPRIA', tenantId }
+            where: { name: targetDbName, tenantId }
         });
 
         if (!propriaDb) return res.json({ message: 'Base própria não encontrada', cleaned: { compositions: 0, items: 0 } });
@@ -2031,13 +2125,13 @@ router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
 // Recalcula o match dos itens contra as bases oficiais respeitando data-base e regime.
 router.post('/price-audit', async (req: any, res: any) => {
     try {
-        const { items, engineeringConfig } = req.body || {};
+        const { items, engineeringConfig, proposalId } = req.body || {};
         if (!Array.isArray(items)) {
             return res.status(400).json({ error: 'items deve ser um array' });
         }
 
         const audited = items.map((item: any) => ({ ...item }));
-        await enrichWithOfficialPrices(audited, engineeringConfig, { tenantId: req.user?.tenantId });
+        await enrichWithOfficialPrices(audited, engineeringConfig, { tenantId: req.user?.tenantId, proposalId });
 
         // FIX AUDIT-01: Log result for diagnostic
         const nonGroupItems = audited.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA');
@@ -2773,10 +2867,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
                 const bidding = await prisma.biddingProcess.findUnique({ where: { id: biddingId }, select: { tenantId: true } });
                 if (bidding?.tenantId) {
-                    let propriaDb = await prisma.engineeringDatabase.findFirst({ where: { name: 'PROPRIA', tenantId: bidding.tenantId } });
-                    if (!propriaDb) {
-                        propriaDb = await prisma.engineeringDatabase.create({ data: { name: 'PROPRIA', uf: '', tenantId: bidding.tenantId, type: 'PROPRIA' } });
-                    }
+                    const propriaDb = await getOrCreatePropriaDatabase(prisma, bidding.tenantId, proposalId);
                     let saved = 0;
                     for (const comp of ownComps) {
                         try {
@@ -2834,7 +2925,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-extract-compositions', async (req: any, res: any) => {
     try {
-        const { biddingId, engineeringConfig, proposalItems, allContext } = req.body;
+        const { biddingId, engineeringConfig, proposalItems, allContext, proposalId } = req.body;
         if (!biddingId) return res.status(400).json({ error: 'biddingId obrigatório' });
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -3058,14 +3149,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         let dbId: string | undefined;
         // Find or create a "PROPRIA" database for this tenant
         const tenantId = bidding.tenantId;
-        let propriaDb = await prisma.engineeringDatabase.findFirst({
-            where: { name: 'PROPRIA', tenantId }
-        });
-        if (!propriaDb) {
-            propriaDb = await prisma.engineeringDatabase.create({
-                data: { name: 'PROPRIA', uf: '', tenantId, type: 'PROPRIA' }
-            });
-        }
+        const propriaDb = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
         dbId = propriaDb.id;
 
         let insertedCount = 0;
