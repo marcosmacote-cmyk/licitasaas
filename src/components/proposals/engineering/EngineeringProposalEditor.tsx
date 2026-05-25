@@ -3118,6 +3118,26 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     onClose={() => setCompositionEditorIndex(null)}
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea
+                        if (itemId === '__syncComposition__') {
+                            const { code, description, unit, unitCost, sourceName } = updates as any;
+                            setItems(prev => prev.map(it => {
+                                if (it.code !== code) return it;
+                                const updated = { ...it };
+                                if (description !== undefined) updated.description = description;
+                                if (unit !== undefined) updated.unit = unit;
+                                if (unitCost !== undefined) {
+                                    updated.unitCost = unitCost;
+                                    const itemBdi = resolveItemBdi(updated);
+                                    updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                                    updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                                    updated.priceAudit = refreshPriceAudit(updated);
+                                }
+                                if (sourceName !== undefined) updated.sourceName = sourceName;
+                                return updated;
+                            }));
+                            setHasUnsavedChanges(true);
+                            return;
+                        }
                         if (itemId === '__reportConfig__') {
                             setEngineeringConfig((prev: any) => ({ ...prev, reportConfig: updates }));
                             setHasUnsavedChanges(true);

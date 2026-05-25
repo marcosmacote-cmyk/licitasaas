@@ -749,13 +749,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     const groupItems = updatedSnapshot.groups[groupKey] || [];
                     const updatedItems = groupItems.map((ci: any) => {
                         if (ci.auxiliaryComposition && ci.auxiliaryComposition.code === childCode) {
-                            if (ci.price !== data.totalPrice || ci.auxiliaryComposition.totalPrice !== data.totalPrice) {
+                            const descChanged = data.description && ci.auxiliaryComposition.description !== data.description;
+                            const priceChanged = ci.price !== data.totalPrice || ci.auxiliaryComposition.totalPrice !== data.totalPrice;
+                            const unitChanged = data.unit && ci.auxiliaryComposition.unit !== data.unit;
+                            const codeChanged = data.code && ci.auxiliaryComposition.code !== data.code;
+                            
+                            if (descChanged || priceChanged || unitChanged || codeChanged) {
                                 found = true;
                                 return {
                                     ...ci,
                                     price: data.totalPrice,
                                     auxiliaryComposition: {
                                         ...ci.auxiliaryComposition,
+                                        code: data.code || ci.auxiliaryComposition.code,
+                                        description: data.description || ci.auxiliaryComposition.description,
+                                        unit: data.unit || ci.auxiliaryComposition.unit,
                                         totalPrice: data.totalPrice
                                     }
                                 };
@@ -772,6 +780,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         const copy = [...prev];
                         copy[copy.length - 1] = {
                             ...currentLevel,
+                            code: data.code || currentLevel.code,
+                            description: data.description || currentLevel.description,
                             snapshot: updatedSnapshot,
                             snapshotHasChanges: true
                         };
@@ -1149,6 +1159,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 // Also notify parent item about the updated description
                 triggerUpdateItem({ description: trimmed });
             }
+
+            // Also notify parent spreadsheet about this composition's name change!
+            if (onUpdateItem && activeCode) {
+                (onUpdateItem as any)('__syncComposition__', { code: activeCode, description: trimmed });
+            }
+
             setHasChanges(true);
         }
         setIsEditingTitle(false);
@@ -1289,16 +1305,35 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             } : prev);
             setHasChanges(false);
 
-            // Notify parent item about the updated ID, unitCost, and sourceName
-            triggerUpdateItem({
-                code: canonicalCode,
-                unitCost: data.totalPrice,
-                sourceName: `PROPRIA`,
-                priceAudit: {
-                    ...currentItem.priceAudit,
-                    matchedSourceName: `PROPRIA`
+            // Sync this composition's details (code, description, unit, cost, sourceName) to any matching spreadsheet items
+            if (onUpdateItem && canonicalCode) {
+                (onUpdateItem as any)('__syncComposition__', {
+                    code: canonicalCode,
+                    description: data.description || currentItem.description,
+                    unit: data.unit || currentItem.unit,
+                    unitCost: data.totalPrice,
+                    sourceName: `PROPRIA`
+                });
+            }
+
+            if (drillStack.length === 0) {
+                // If at the root level, also trigger update for the parent item specifically
+                triggerUpdateItem({
+                    code: canonicalCode,
+                    unitCost: data.totalPrice,
+                    sourceName: `PROPRIA`,
+                    priceAudit: {
+                        ...currentItem.priceAudit,
+                        matchedSourceName: `PROPRIA`
+                    }
+                } as any);
+            } else {
+                // If in drill-down, propagate the parent's recalculated totalPrice to the spreadsheet immediately
+                const rootSnapshot = drillStack[0]?.snapshot;
+                if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
+                    onUpdateItem(currentItem.id, { unitCost: rootSnapshot.totalPrice });
                 }
-            } as any);
+            }
             
             alert(`Composição salva com sucesso na base PRÓPRIA!${officialRef ? ` (referência: ${officialRef.databaseName})` : ''}`);
         } catch (e: any) {
