@@ -3146,11 +3146,10 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
         }
 
         // Store extracted compositions in the database as "PROPRIA"
-        let dbId: string | undefined;
         // Find or create a "PROPRIA" database for this tenant
         const tenantId = bidding.tenantId;
         const propriaDb = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
-        dbId = propriaDb.id;
+        const dbId: string = propriaDb.id;
 
         let insertedCount = 0;
         for (const comp of compositions) {
