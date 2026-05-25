@@ -734,63 +734,126 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 loadComposition(currentItem.code);
             }
         }
-    }, [currentItem?.code, currentItem?.type, loadComposition]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentItem?.code, currentItem?.type]);
 
-    // Sync child composition changes back to the parent snapshot in drillStack
+    // Sync child composition changes back to all parent snapshots in drillStack (bottom-up cascade)
     useEffect(() => {
         if (drillStack.length > 0 && data && data.totalPrice !== undefined) {
-            const currentLevel = drillStack[drillStack.length - 1];
-            const childCode = currentLevel.code;
-            const parentSnapshot = currentLevel.snapshot;
-            if (parentSnapshot && parentSnapshot.groups) {
-                let updatedSnapshot = { ...parentSnapshot, groups: { ...parentSnapshot.groups } };
-                let found = false;
-                for (const groupKey of Object.keys(updatedSnapshot.groups)) {
-                    const groupItems = updatedSnapshot.groups[groupKey] || [];
-                    const updatedItems = groupItems.map((ci: any) => {
-                        if (ci.auxiliaryComposition && ci.auxiliaryComposition.code === childCode) {
-                            const descChanged = data.description && ci.auxiliaryComposition.description !== data.description;
-                            const priceChanged = ci.price !== data.totalPrice || ci.auxiliaryComposition.totalPrice !== data.totalPrice;
-                            const unitChanged = data.unit && ci.auxiliaryComposition.unit !== data.unit;
-                            const codeChanged = data.code && ci.auxiliaryComposition.code !== data.code;
+            let currentData = data;
+            let foundAny = false;
+            
+            // Check if any level in the stack needs an update (prevents infinite updates / warnings)
+            for (let i = drillStack.length - 1; i >= 0; i--) {
+                const level = drillStack[i];
+                const parentSnapshot = level.snapshot;
+                if (!parentSnapshot || !parentSnapshot.groups) continue;
+                
+                let levelFound = false;
+                const childCodeUpper = currentData.code?.trim().toUpperCase();
+                
+                for (const groupKey of Object.keys(parentSnapshot.groups)) {
+                    const groupItems = parentSnapshot.groups[groupKey] || [];
+                    for (const ci of groupItems) {
+                        if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
+                            const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
+                            const priceChanged = ci.price !== currentData.totalPrice || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
+                            const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
+                            const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
                             
                             if (descChanged || priceChanged || unitChanged || codeChanged) {
-                                found = true;
-                                return {
-                                    ...ci,
-                                    price: data.totalPrice,
-                                    auxiliaryComposition: {
-                                        ...ci.auxiliaryComposition,
-                                        code: data.code || ci.auxiliaryComposition.code,
-                                        description: data.description || ci.auxiliaryComposition.description,
-                                        unit: data.unit || ci.auxiliaryComposition.unit,
-                                        totalPrice: data.totalPrice
-                                    }
-                                };
+                                levelFound = true;
+                                foundAny = true;
+                                break;
                             }
                         }
-                        return ci;
-                    });
-                    updatedSnapshot.groups[groupKey] = updatedItems;
+                    }
+                    if (levelFound) break;
                 }
-                if (found) {
-                    updatedSnapshot.totalPrice = sumCompositionGroups(updatedSnapshot.groups, engineeringConfig?.precision);
-                    updatedSnapshot.totalDirect = updatedSnapshot.totalPrice;
-                    setDrillStack(prev => {
-                        const copy = [...prev];
-                        copy[copy.length - 1] = {
-                            ...currentLevel,
-                            code: data.code || currentLevel.code,
-                            description: data.description || currentLevel.description,
-                            snapshot: updatedSnapshot,
-                            snapshotHasChanges: true
+                
+                let levelPrice = level.snapshot?.totalPrice || 0;
+                if (levelFound) {
+                    levelPrice = currentData.totalPrice;
+                }
+                
+                currentData = {
+                    code: level.code,
+                    description: level.description,
+                    unit: level.snapshot?.unit || '',
+                    totalPrice: levelPrice
+                };
+            }
+            
+            if (foundAny) {
+                setDrillStack(prev => {
+                    if (prev.length === 0) return prev;
+                    const copy = [...prev];
+                    let currentData = data;
+                    
+                    for (let i = copy.length - 1; i >= 0; i--) {
+                        const level = copy[i];
+                        const parentSnapshot = level.snapshot;
+                        if (!parentSnapshot || !parentSnapshot.groups) continue;
+                        
+                        let updatedSnapshot = { ...parentSnapshot, groups: { ...parentSnapshot.groups } };
+                        let levelFound = false;
+                        const childCodeUpper = currentData.code?.trim().toUpperCase();
+                        
+                        for (const groupKey of Object.keys(updatedSnapshot.groups)) {
+                            const groupItems = updatedSnapshot.groups[groupKey] || [];
+                            const updatedItems = groupItems.map((ci: any) => {
+                                if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
+                                    const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
+                                    const priceChanged = ci.price !== currentData.totalPrice || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
+                                    const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
+                                    const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
+                                    
+                                    if (descChanged || priceChanged || unitChanged || codeChanged) {
+                                        levelFound = true;
+                                        return {
+                                            ...ci,
+                                            price: currentData.totalPrice,
+                                            auxiliaryComposition: {
+                                                ...ci.auxiliaryComposition,
+                                                code: currentData.code || ci.auxiliaryComposition.code,
+                                                description: currentData.description || ci.auxiliaryComposition.description,
+                                                unit: currentData.unit || ci.auxiliaryComposition.unit,
+                                                totalPrice: currentData.totalPrice
+                                            }
+                                        };
+                                    }
+                                }
+                                return ci;
+                            });
+                            updatedSnapshot.groups[groupKey] = updatedItems;
+                        }
+                        
+                        if (levelFound) {
+                            updatedSnapshot.totalPrice = sumCompositionGroups(updatedSnapshot.groups, engineeringConfig?.precision);
+                            updatedSnapshot.totalDirect = updatedSnapshot.totalPrice;
+                            
+                            copy[i] = {
+                                ...level,
+                                snapshot: updatedSnapshot,
+                                snapshotHasChanges: true
+                            };
+                        }
+                        
+                        currentData = {
+                            code: level.code,
+                            description: level.description,
+                            unit: updatedSnapshot.unit || level.snapshot?.unit || '',
+                            totalPrice: updatedSnapshot.totalPrice
                         };
-                        return copy;
-                    });
-                    setHasChanges(true);
-                }
+                    }
+                    
+                    return copy;
+                });
+                
+                setHasChanges(true);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, drillStack.length, engineeringConfig?.precision]);
 
     const navigate = (dir: -1 | 1) => {
