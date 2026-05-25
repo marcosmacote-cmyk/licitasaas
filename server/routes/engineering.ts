@@ -308,6 +308,39 @@ function compositionOrderBy() {
     ];
 }
 
+async function autoCleanCompositionMetadata(comp: any) {
+    if (!comp) return;
+    const isPropria = comp.database?.type === 'PROPRIA' || comp.database?.name === 'PROPRIA';
+    const hasNoItems = !comp.items || comp.items.length === 0;
+    if (isPropria && hasNoItems) {
+        let hasMetadata = false;
+        if (comp.metadata) {
+            if (typeof comp.metadata === 'string') {
+                try {
+                    const parsed = JSON.parse(comp.metadata);
+                    hasMetadata = parsed && Object.keys(parsed).length > 0;
+                } catch {
+                    hasMetadata = true;
+                }
+            } else {
+                hasMetadata = Object.keys(comp.metadata).length > 0;
+            }
+        }
+        if (hasMetadata) {
+            logger.info(`[CompositionAutoClean] 🧼 Auto-cleaning stale metadata for empty composition: code=${comp.code} id=${comp.id}`);
+            try {
+                await prisma.engineeringComposition.update({
+                    where: { id: comp.id },
+                    data: { metadata: Prisma.DbNull }
+                });
+                comp.metadata = null;
+            } catch (e: any) {
+                logger.warn(`[CompositionAutoClean] Failed to clear metadata for id=${comp.id}: ${e.message}`);
+            }
+        }
+    }
+}
+
 async function findCompositionWithItems(codeVariants: string[], where: any) {
     return prisma.engineeringComposition.findFirst({
         where: { ...where, code: { in: codeVariants }, items: { some: {} } },
@@ -580,6 +613,8 @@ router.get('/compositions/:code', async (req: any, res: any) => {
 
         // Enrich with auxiliary compositions if any
         const finalComposition = analyticalFallback || composition;
+        await autoCleanCompositionMetadata(finalComposition);
+
         const enrichedItems = await Promise.all(finalComposition.items.map(async (ci: any) => {
             if (ci.auxiliaryCompositionId) {
                 const aux = await prisma.engineeringComposition.findUnique({
@@ -589,6 +624,9 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                         items: { include: { item: { include: { database: true } } } }
                     }
                 });
+                if (aux) {
+                    await autoCleanCompositionMetadata(aux);
+                }
                 return { ...ci, auxiliaryComposition: aux };
             }
             return ci;

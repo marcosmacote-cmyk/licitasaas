@@ -324,7 +324,17 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const aiFileInputRef = useRef<HTMLInputElement>(null);
 
     // Drill-down stack for auxiliary compositions — includes snapshot of parent data to restore on back
-    const [drillStack, setDrillStack] = useState<{ code: string; description: string; snapshot?: any; snapshotGroupNotes?: Record<string, string>; snapshotCustomLabels?: Record<string, string>; snapshotGroupOrder?: string[]; snapshotHasChanges?: boolean }[]>([]);
+    const [drillStack, setDrillStack] = useState<{
+        code: string;
+        description: string;
+        snapshot?: any;
+        snapshotGroupNotes?: Record<string, string>;
+        snapshotCustomLabels?: Record<string, string>;
+        snapshotGroupOrder?: string[];
+        snapshotRefDivisorLabel?: string;
+        snapshotRefDivisorValue?: string;
+        snapshotHasChanges?: boolean;
+    }[]>([]);
     // Grouper editing states
     const [grouperDesc, setGrouperDesc] = useState('');
     const [grouperFactor, setGrouperFactor] = useState('1');
@@ -566,16 +576,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     };
 
     // ── Restore composition from drillStack snapshot (avoids losing unsaved data) ──
-    const restoreFromSnapshot = useCallback((snapshot: any, snapshotGroupNotes?: Record<string, string>, snapshotCustomLabels?: Record<string, string>, snapshotGroupOrder?: string[], snapshotHasChanges?: boolean) => {
+    const restoreFromSnapshot = useCallback((
+        snapshot: any,
+        snapshotGroupNotes?: Record<string, string>,
+        snapshotCustomLabels?: Record<string, string>,
+        snapshotGroupOrder?: string[],
+        snapshotRefDivisorLabel?: string,
+        snapshotRefDivisorValue?: string,
+        snapshotHasChanges?: boolean
+    ) => {
         setLoading(false);
         setError('');
         setData(snapshot);
-        if (snapshotGroupNotes) setGroupNotes(snapshotGroupNotes);
-        if (snapshotCustomLabels) setCustomGroupLabels(snapshotCustomLabels);
-        if (snapshotGroupOrder) setGroupOrder(snapshotGroupOrder);
-        if (snapshot?.groupNotes && !snapshotGroupNotes) setGroupNotes(snapshot.groupNotes);
-        if (snapshot?.customGroupLabels && !snapshotCustomLabels) setCustomGroupLabels(snapshot.customGroupLabels);
-        if (snapshot?.groupOrder && !snapshotGroupOrder && Array.isArray(snapshot.groupOrder)) setGroupOrder(snapshot.groupOrder);
+        setGroupNotes(snapshotGroupNotes || {});
+        setCustomGroupLabels(snapshotCustomLabels || {});
+        setGroupOrder(snapshotGroupOrder || []);
+        setRefDivisorLabel(snapshotRefDivisorLabel || '');
+        setRefDivisorValue(snapshotRefDivisorValue || '');
         setHasChanges(snapshotHasChanges ?? false);
     }, []);
 
@@ -1190,9 +1207,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             alert('Apenas composições PRÓPRIAS podem ser limpas. Composições oficiais são somente leitura.');
             return;
         }
+        
         const itemCount = data.items?.length || 0;
-        if (itemCount === 0) return;
-        if (!confirm(`Tem certeza que deseja limpar todos os ${itemCount} itens desta composição?\n\nA composição ficará vazia e você poderá fazer uma nova extração via IA.\n\nEsta ação não pode ser desfeita.`)) return;
+        const hasMetadata = Object.keys(groupNotes || {}).length > 0 ||
+                            Object.keys(customGroupLabels || {}).length > 0 ||
+                            (groupOrder || []).length > 0 ||
+                            refDivisorLabel !== '' ||
+                            refDivisorValue !== '';
+
+        if (itemCount === 0 && !hasMetadata) {
+            // Force reset of local states even if empty
+            setGroupNotes({});
+            setCustomGroupLabels({});
+            setGroupOrder([]);
+            setRefDivisorLabel('');
+            setRefDivisorValue('');
+            return;
+        }
+
+        const confirmMessage = itemCount > 0
+            ? `Tem certeza que deseja limpar todos os ${itemCount} itens e configurações personalizadas desta composição?\n\nA composição ficará vazia.\n\nEsta ação não pode ser desfeita.`
+            : `Tem certeza que deseja limpar as configurações e grupos personalizados desta composição vazia?\n\nEsta ação não pode ser desfeita.`;
+
+        if (!confirm(confirmMessage)) return;
 
         try {
             // Only call backend if the composition has a real DB id (not synthetic)
@@ -1607,7 +1644,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     const rootEntry = drillStack[0];
                                     setDrillStack([]);
                                     if (rootEntry?.snapshot) {
-                                        restoreFromSnapshot(rootEntry.snapshot, rootEntry.snapshotGroupNotes, rootEntry.snapshotCustomLabels, rootEntry.snapshotGroupOrder, rootEntry.snapshotHasChanges);
+                                        restoreFromSnapshot(
+                                            rootEntry.snapshot,
+                                            rootEntry.snapshotGroupNotes,
+                                            rootEntry.snapshotCustomLabels,
+                                            rootEntry.snapshotGroupOrder,
+                                            rootEntry.snapshotRefDivisorLabel,
+                                            rootEntry.snapshotRefDivisorValue,
+                                            rootEntry.snapshotHasChanges
+                                        );
                                     } else {
                                         loadComposition(currentItem.code);
                                     }
@@ -1625,7 +1670,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                 const newStack = drillStack.slice(0, i + 1);
                                                 setDrillStack(newStack);
                                                 if (nextEntry?.snapshot) {
-                                                    restoreFromSnapshot(nextEntry.snapshot, nextEntry.snapshotGroupNotes, nextEntry.snapshotCustomLabels, nextEntry.snapshotGroupOrder, nextEntry.snapshotHasChanges);
+                                                    restoreFromSnapshot(
+                                                        nextEntry.snapshot,
+                                                        nextEntry.snapshotGroupNotes,
+                                                        nextEntry.snapshotCustomLabels,
+                                                        nextEntry.snapshotGroupOrder,
+                                                        nextEntry.snapshotRefDivisorLabel,
+                                                        nextEntry.snapshotRefDivisorValue,
+                                                        nextEntry.snapshotHasChanges
+                                                    );
                                                 } else {
                                                     loadComposition(newStack[newStack.length - 1].code);
                                                 }
@@ -1732,10 +1785,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         
                         <div style={{ flex: 1 }}></div>
 
-                        {/* Clear composition — available for all PROPRIA compositions with items */}
-                        {(data?.database?.name === 'PROPRIA' || data?.database?.type === 'PROPRIA') && (data.items?.length > 0 || Object.values(data.groups || {}).some((g: any) => g?.length > 0)) && (
+                        {/* Clear composition — available for all PROPRIA compositions */}
+                        {(data?.database?.name === 'PROPRIA' || data?.database?.type === 'PROPRIA') && (
                             <button onClick={handleClearComposition}
-                                title="Limpar todos os itens desta composição para iniciar uma nova extração"
+                                title="Limpar todos os itens e grupos customizados desta composição"
                                 style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-danger)', background: 'transparent', color: 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600, opacity: 0.7 }}>
                                 <Trash2 size={13} /> Limpar Composição
                             </button>
@@ -2343,6 +2396,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                             snapshotGroupNotes: { ...groupNotes },
                                                                                             snapshotCustomLabels: { ...customGroupLabels },
                                                                                             snapshotGroupOrder: [...groupOrder],
+                                                                                            snapshotRefDivisorLabel: refDivisorLabel,
+                                                                                            snapshotRefDivisorValue: refDivisorValue,
                                                                                             snapshotHasChanges: hasChanges,
                                                                                         }]);
                                                                                         // FIX CASCADE-02: Pass current composition's database context for correct lookup
