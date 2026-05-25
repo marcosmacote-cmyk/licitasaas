@@ -1057,6 +1057,23 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 });
             }
 
+            // Sync description to any matching EngineeringProposalItem records in this proposal
+            if (proposalId) {
+                const finalDescription = composition.description || existing.description;
+                const finalUnit = composition.unit || existing.unit;
+                await tx.engineeringProposalItem.updateMany({
+                    where: {
+                        proposalId,
+                        code: { in: [newCode, existing.code].filter(Boolean) }
+                    },
+                    data: {
+                        description: finalDescription,
+                        unit: finalUnit
+                    }
+                });
+                logger.info(`[CompositionSave] 🔄 Sync'd proposal items matching proposalId=${proposalId} and code=${newCode}/${existing.code} to description "${finalDescription}" and unit "${finalUnit}"`);
+            }
+
             if (hasGroups) {
                 // Delete existing items
                 await tx.engineeringCompositionItem.deleteMany({

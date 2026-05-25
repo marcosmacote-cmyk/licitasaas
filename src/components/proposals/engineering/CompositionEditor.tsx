@@ -404,6 +404,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     const activeCode = drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem?.code;
 
+    const triggerUpdateItem = useCallback((updates: Partial<EngItem>) => {
+        if (onUpdateItem && currentItem) {
+            const isRoot = drillStack.length === 0;
+            const isGrouper = currentItem.type === 'ETAPA' || currentItem.type === 'SUBETAPA';
+            
+            const descToUse = updates.description !== undefined
+                ? updates.description
+                : (isRoot && !isGrouper && data?.description ? data.description : undefined);
+
+            onUpdateItem(currentItem.id, {
+                ...updates,
+                ...(descToUse !== undefined ? { description: descToUse } : {})
+            });
+        }
+    }, [onUpdateItem, currentItem, drillStack.length, data?.description]);
+
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
         if (showSearch && bases.length === 0) {
@@ -545,9 +561,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setData(updated);
         setHasChanges(true);
 
-        if (onUpdateItem && currentItem) {
-            onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-        }
+        triggerUpdateItem({ unitCost: updated.totalPrice });
 
         // Flash feedback — keep modal open for adding more items
         setAddedItemIds(prev => new Set(prev).add(dbItem.id));
@@ -599,7 +613,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             updated.totalDirect = updated.totalPrice;
             setData(updated);
             setHasChanges(true);
-            if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+            triggerUpdateItem({ unitCost: updated.totalPrice });
 
             setAddedCount(c => c + 1);
             setPropriaCode(''); setPropriaDesc(''); setPropriaUnit('UN'); setPropriaPrice(''); setPropriaCoef('1');
@@ -824,9 +838,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setError('');
             setHasChanges(true);
             
-            if (onUpdateItem && currentItem) {
-                onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-            }
+            triggerUpdateItem({ unitCost: updated.totalPrice });
 
         } catch (e: any) {
             alert(e.message || 'Erro de rede na extração AI');
@@ -889,7 +901,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         updated.totalDirect = updated.totalPrice;
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
         // Expand target group so user sees the moved item
         setExpandedGroups(prev => new Set([...prev, targetGroup]));
         setDragItem(null);
@@ -985,7 +997,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
     };
 
     // ── Group Actions: Move Group Up/Down ──
@@ -1108,9 +1120,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setHasChanges(true);
 
         // CASCADE → Update the parent planilha item with new unitCost
-        if (onUpdateItem && currentItem) {
-            onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
-        }
+        triggerUpdateItem({ unitCost: updated.totalPrice });
 
         setEditingField(null);
     }, [editingField, editValue, data, currentItem, onUpdateItem]);
@@ -1137,9 +1147,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 });
             } else {
                 // Also notify parent item about the updated description
-                if (onUpdateItem && currentItem) {
-                    onUpdateItem(currentItem.id, { description: trimmed } as any);
-                }
+                triggerUpdateItem({ description: trimmed });
             }
             setHasChanges(true);
         }
@@ -1282,17 +1290,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setHasChanges(false);
 
             // Notify parent item about the updated ID, unitCost, and sourceName
-            if (onUpdateItem && currentItem) {
-                onUpdateItem(currentItem.id, {
-                    code: canonicalCode,
-                    unitCost: data.totalPrice,
-                    sourceName: `PROPRIA`,
-                    priceAudit: {
-                        ...currentItem.priceAudit,
-                        matchedSourceName: `PROPRIA`
-                    }
-                } as any);
-            }
+            triggerUpdateItem({
+                code: canonicalCode,
+                unitCost: data.totalPrice,
+                sourceName: `PROPRIA`,
+                priceAudit: {
+                    ...currentItem.priceAudit,
+                    matchedSourceName: `PROPRIA`
+                }
+            } as any);
             
             alert(`Composição salva com sucesso na base PRÓPRIA!${officialRef ? ` (referência: ${officialRef.databaseName})` : ''}`);
         } catch (e: any) {
@@ -1370,9 +1376,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setRefDivisorValue('');
 
             // CASCADE: update planilha item unitCost to 0
-            if (onUpdateItem && currentItem) {
-                onUpdateItem(currentItem.id, { unitCost: 0 });
-            }
+            triggerUpdateItem({ unitCost: 0 });
         } catch (e: any) {
             alert(e.message || 'Erro ao limpar composição');
         }
@@ -1457,7 +1461,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
         
         setShowFreeItemModal(false);
         setFreeItemTargetGroup(null);
@@ -1509,7 +1513,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
         setShowFactorModal(false);
     };
 
@@ -1545,7 +1549,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
         setShowDiscountModal(false);
     };
 
@@ -1600,7 +1604,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
         setData(updated);
         setHasChanges(true);
-        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+        triggerUpdateItem({ unitCost: updated.totalPrice });
         setShowRateioModal(false);
     };
 
@@ -2176,7 +2180,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         type="button"
                                         onClick={() => {
                                             if (!currentItem) return;
-                                            onUpdateItem(currentItem.id, { unitCost: compositionTotal });
+                                            triggerUpdateItem({ unitCost: compositionTotal });
                                             setHasChanges(true);
                                         }}
                                         style={{
@@ -2881,7 +2885,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                     
                                                                                     setData(updated);
                                                                                     setHasChanges(true);
-                                                                                    if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                                    triggerUpdateItem({ unitCost: updated.totalPrice });
                                                                                 }}
                                                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', opacity: 0.4, padding: 2 }}
                                                                                 title="Converter em Composição Auxiliar (Casca) — permite abrir e inserir sub-insumos"
@@ -2931,7 +2935,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                                         setData(updated);
                                                                                                         setHasChanges(true);
                                                                                                         setMovingItemId(null);
-                                                                                                        if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                                                        triggerUpdateItem({ unitCost: updated.totalPrice });
                                                                                                     }} style={{
                                                                                                         display: 'flex', alignItems: 'center', gap: 6, width: '100%',
                                                                                                         padding: '5px 8px', border: 'none', background: 'none',
@@ -2959,7 +2963,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             
                                                                             setData(updated);
                                                                             setHasChanges(true);
-                                                                            if (onUpdateItem && currentItem) onUpdateItem(currentItem.id, { unitCost: updated.totalPrice });
+                                                                            triggerUpdateItem({ unitCost: updated.totalPrice });
                                                                         }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.5 }}>
                                                                             <X size={14} />
                                                                         </button>
