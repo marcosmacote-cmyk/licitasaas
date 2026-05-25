@@ -359,6 +359,22 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [editingEtapaId, setEditingEtapaId] = useState<string | null>(null);
     const [editingEtapaText, setEditingEtapaText] = useState('');
 
+    // ── Proprietary items renaming states ──
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [tempTitle, setTempTitle] = useState('');
+    const [editingItemDescId, setEditingItemDescId] = useState<string | null>(null);
+    const [editingItemDescText, setEditingItemDescText] = useState('');
+
+    const isProprietaryItem = useCallback((itemData: any, ci: any) => {
+        if (!itemData) return false;
+        if (itemData.isNew) return true;
+        const dbType = itemData.database?.type;
+        const dbName = itemData.database?.name || ci?._matchedDatabase;
+        if (dbType === 'PROPRIA') return true;
+        if (dbName === 'PROPRIA' || (dbName && dbName.startsWith('PROPRIA_'))) return true;
+        return false;
+    }, []);
+
     // ── Group/Section (Etapa) management ──
     const [customGroupLabels, setCustomGroupLabels] = useState<Record<string, string>>({});
     const [editingGroupLabel, setEditingGroupLabel] = useState<string | null>(null);
@@ -1105,6 +1121,59 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setEditValue(expression || String(currentValue));
     };
 
+    const handleSaveTitle = () => {
+        const trimmed = tempTitle.trim();
+        const currentCompDesc = drillStack.length > 0 ? drillStack[drillStack.length - 1].description : (data?.description || currentItem.description);
+        if (trimmed && trimmed !== currentCompDesc) {
+            // Update local data description
+            setData((prev: any) => prev ? { ...prev, description: trimmed } : prev);
+            
+            // If in drillstack, update the drillstack entry description
+            if (drillStack.length > 0) {
+                setDrillStack(prev => {
+                    const next = [...prev];
+                    next[next.length - 1].description = trimmed;
+                    return next;
+                });
+            } else {
+                // Also notify parent item about the updated description
+                if (onUpdateItem && currentItem) {
+                    onUpdateItem(currentItem.id, { description: trimmed } as any);
+                }
+            }
+            setHasChanges(true);
+        }
+        setIsEditingTitle(false);
+    };
+
+    const handleSaveItemDesc = (ciId: string) => {
+        const trimmed = editingItemDescText.trim();
+        if (trimmed) {
+            setData((prev: any) => {
+                if (!prev || !prev.groups) return prev;
+                const updatedGroups = { ...prev.groups };
+                for (const groupKey of Object.keys(updatedGroups)) {
+                    updatedGroups[groupKey] = updatedGroups[groupKey].map((ci: any) => {
+                        if (ci.id === ciId) {
+                            const itemField = ci.item ? 'item' : 'auxiliaryComposition';
+                            return {
+                                ...ci,
+                                [itemField]: {
+                                    ...ci[itemField],
+                                    description: trimmed
+                                }
+                            };
+                        }
+                        return ci;
+                    });
+                }
+                return { ...prev, groups: updatedGroups };
+            });
+            setHasChanges(true);
+        }
+        setEditingItemDescId(null);
+    };
+
     const saveToBase = async () => {
         if (!data || !data.id || !currentItem) return;
         setIsSavingToBase(true);
@@ -1653,9 +1722,52 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 ? <>{currentItem.type === 'ETAPA' ? <FolderOpen size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} /> : <Folder size={13} style={{display:'inline',verticalAlign:-2,marginRight:3}} />}{currentItem.type === 'ETAPA' ? 'ETAPA' : 'SUBETAPA'} — Agrupador</>
                                 : 'CPU — Composição de Preços Unitários'}
                         </div>
-                        <h3 style={{ margin: '4px 0 0', fontSize: '1rem', fontWeight: 700 }}>
-                            {drillStack.length > 0 ? drillStack[drillStack.length - 1].description : currentItem.description}
-                        </h3>
+                        {(() => {
+                            const isRoot = drillStack.length === 0;
+                            const currentCompDesc = drillStack.length > 0 ? drillStack[drillStack.length - 1].description : (data?.description || currentItem.description);
+                            const isPropria = data?.database?.type === 'PROPRIA' || data?.database?.name === 'PROPRIA' || data?.database?.name?.startsWith('PROPRIA_');
+                            const canRenameHeader = isRoot || isPropria;
+                            
+                            return isEditingTitle ? (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
+                                    <input 
+                                        value={tempTitle} 
+                                        onChange={e => setTempTitle(e.target.value)} 
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleSaveTitle();
+                                            if (e.key === 'Escape') setIsEditingTitle(false);
+                                        }}
+                                        onBlur={handleSaveTitle}
+                                        autoFocus
+                                        style={{ 
+                                            fontSize: '0.95rem', fontWeight: 700, padding: '4px 8px', 
+                                            border: '1px solid var(--color-primary)', borderRadius: 4, 
+                                            width: '60%', textAlign: 'center', background: 'var(--color-bg-base)',
+                                            color: 'var(--color-text-primary)'
+                                        }} 
+                                    />
+                                </div>
+                            ) : (
+                                <h3 
+                                    onClick={() => {
+                                        if (canRenameHeader) {
+                                            setIsEditingTitle(true);
+                                            setTempTitle(currentCompDesc);
+                                        }
+                                    }}
+                                    style={{ 
+                                        margin: '4px 0 0', fontSize: '1rem', fontWeight: 700,
+                                        cursor: canRenameHeader ? 'pointer' : 'default',
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        justifyContent: 'center'
+                                    }}
+                                    title={canRenameHeader ? "Clique para renomear esta composição" : undefined}
+                                >
+                                    {currentCompDesc}
+                                    {canRenameHeader && <Pencil size={11} style={{ opacity: 0.5 }} />}
+                                </h3>
+                            );
+                        })()}
                         {!isGrouperType(currentItem.type) && (
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
                                 Código: <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> · {drillStack.length > 0 ? (data?.database?.name || '') : currentItem.sourceName}
@@ -2424,7 +2536,44 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                 {!itemData?.isObservation ? (
                                                                     <>
                                                                         <div style={{ fontSize: '0.8rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                                            {itemData?.description || '—'}
+                                                                            {editingItemDescId === ci.id ? (
+                                                                                <input 
+                                                                                    value={editingItemDescText} 
+                                                                                    onChange={e => setEditingItemDescText(e.target.value)} 
+                                                                                    onKeyDown={e => {
+                                                                                        if (e.key === 'Enter') handleSaveItemDesc(ci.id);
+                                                                                        if (e.key === 'Escape') setEditingItemDescId(null);
+                                                                                    }}
+                                                                                    onBlur={() => handleSaveItemDesc(ci.id)}
+                                                                                    autoFocus
+                                                                                    onClick={e => e.stopPropagation()}
+                                                                                    style={{ 
+                                                                                        width: '260px', maxWidth: '100%', padding: '2px 6px', fontSize: '0.78rem',
+                                                                                        border: '1px solid var(--color-primary)', borderRadius: 4, 
+                                                                                        background: 'var(--color-bg-base)', color: 'var(--color-text-primary)'
+                                                                                    }} 
+                                                                                />
+                                                                            ) : (
+                                                                                <span 
+                                                                                    onClick={(e) => {
+                                                                                        if (isProprietaryItem(itemData, ci)) {
+                                                                                            e.stopPropagation();
+                                                                                            setEditingItemDescId(ci.id);
+                                                                                            setEditingItemDescText(itemData?.description || '');
+                                                                                        }
+                                                                                    }}
+                                                                                    style={{ 
+                                                                                        cursor: isProprietaryItem(itemData, ci) ? 'pointer' : 'default', 
+                                                                                        display: 'inline-flex', alignItems: 'center', gap: 4 
+                                                                                    }}
+                                                                                    title={isProprietaryItem(itemData, ci) ? "Clique para renomear este insumo/composição" : undefined}
+                                                                                >
+                                                                                    {itemData?.description || '—'}
+                                                                                    {isProprietaryItem(itemData, ci) && (
+                                                                                        <Pencil size={10} color="var(--color-text-tertiary)" style={{ opacity: 0.4, flexShrink: 0 }} />
+                                                                                    )}
+                                                                                </span>
+                                                                            )}
                                                                             {/* Drill-down button for auxiliary compositions */}
                                                                             {ci.auxiliaryComposition && itemData?.code && (!itemData?.isNew || itemData?._isCasca) && (
                                                                                 <button

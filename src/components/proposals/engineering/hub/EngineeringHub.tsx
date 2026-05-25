@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter, Trash2, Edit3, Package, Wrench, Sparkles } from 'lucide-react';
+import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter, Trash2, Edit3, Pencil, Package, Wrench, Sparkles } from 'lucide-react';
 import { CompositionEditor } from '../CompositionEditor';
 import { apiFetch } from '../../../../services/apiClient';
 
@@ -59,6 +59,8 @@ export function EngineeringHub() {
     const [cleaningUp, setCleaningUp] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [editItemData, setEditItemData] = useState<{code: string; description: string; unit: string; price: string; type: string}>({code:'', description:'', unit:'', price:'', type:''});
+    const [editingHubCompId, setEditingHubCompId] = useState<string | null>(null);
+    const [editHubCompData, setEditHubCompData] = useState<{code: string; description: string; unit: string}>({code:'', description:'', unit:''});
 
     const hdrs = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
@@ -97,6 +99,31 @@ export function EngineeringHub() {
             const res = await fetch(`/api/engineering/items/${id}`, { method: 'PUT', headers: hdrs(), body: JSON.stringify(editItemData) });
             if (res.ok) { setEditingItemId(null); loadPropria(); } else { const e = await res.json(); alert(e.error || 'Erro ao salvar'); }
         } catch { alert('Erro de conexão'); }
+    };
+
+    const saveCompEdit = async (id: string) => {
+        try {
+            const res = await fetch(`/api/engineering/compositions/${id}`, {
+                method: 'PUT',
+                headers: hdrs(),
+                body: JSON.stringify({
+                    composition: {
+                        code: editHubCompData.code,
+                        description: editHubCompData.description,
+                        unit: editHubCompData.unit
+                    }
+                })
+            });
+            if (res.ok) {
+                setEditingHubCompId(null);
+                loadPropria();
+            } else {
+                const e = await res.json();
+                alert(e.error || 'Erro ao salvar');
+            }
+        } catch {
+            alert('Erro de conexão');
+        }
     };
 
     const runCleanup = async () => {
@@ -1047,11 +1074,30 @@ export function EngineeringHub() {
                                     <tbody>
                                         {propriaComps.map((comp, idx) => {
                                             const itemCount = comp._count?.items || 0;
+                                            const isEditing = editingHubCompId === comp.id;
                                             return (
                                                 <tr key={comp.id} style={{ borderBottom: '1px solid var(--color-border)', background: idx % 2 === 0 ? 'transparent' : 'var(--color-bg-base)' }}>
-                                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{comp.code}</td>
-                                                    <td style={{ padding: '10px 14px', fontWeight: 500, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comp.description}</td>
-                                                    <td style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{comp.unit}</td>
+                                                    <td style={{ padding: '10px 14px' }}>
+                                                        {isEditing ? (
+                                                            <input value={editHubCompData.code} onChange={e => setEditHubCompData(d => ({...d, code: e.target.value}))} style={{ width: 80, padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700 }} />
+                                                        ) : (
+                                                            <span style={{ fontWeight: 700, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{comp.code}</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px' }}>
+                                                        {isEditing ? (
+                                                            <input value={editHubCompData.description} onChange={e => setEditHubCompData(d => ({...d, description: e.target.value}))} style={{ width: '100%', padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem' }} />
+                                                        ) : (
+                                                            <span style={{ fontWeight: 500, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{comp.description}</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                                                        {isEditing ? (
+                                                            <input value={editHubCompData.unit} onChange={e => setEditHubCompData(d => ({...d, unit: e.target.value}))} style={{ width: 45, padding: '3px 6px', border: '1px solid var(--color-primary)', borderRadius: 4, fontSize: '0.8rem' }} />
+                                                        ) : (
+                                                            comp.unit
+                                                        )}
+                                                    </td>
                                                     <td style={{ padding: '10px 14px', textAlign: 'right' }}>
                                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, background: itemCount === 0 ? '#f59e0b15' : '#05966910', color: itemCount === 0 ? '#f59e0b' : '#059669' }}>
                                                             {itemCount === 0 && <AlertCircle size={11} />}
@@ -1059,17 +1105,29 @@ export function EngineeringHub() {
                                                         </span>
                                                     </td>
                                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.85rem' }}>{comp.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center' }}>
-                                                        <button onClick={() => setEditingComp({
-                                                            id: comp.id, code: comp.code, description: comp.description, 
-                                                            unit: comp.unit, quantity: 1, unitCost: comp.totalPrice, 
-                                                            itemNumber: '1', sourceName: 'PROPRIA'
-                                                        })} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                            <Edit3 size={11} /> Editar
-                                                        </button>
-                                                        <button onClick={() => deleteComp(comp.id, comp.code)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ef444440', background: '#ef44440a', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                            <Trash2 size={11} />
-                                                        </button>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                                                        {isEditing ? (
+                                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                                <button onClick={() => saveCompEdit(comp.id)} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #059669', background: '#05966910', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, color: '#059669' }}>Salvar</button>
+                                                                <button onClick={() => setEditingHubCompId(null)} style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>✕</button>
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                                <button onClick={() => { setEditingHubCompId(comp.id); setEditHubCompData({ code: comp.code, description: comp.description, unit: comp.unit }); }} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                    <Pencil size={11} /> Renomear
+                                                                </button>
+                                                                <button onClick={() => setEditingComp({
+                                                                    id: comp.id, code: comp.code, description: comp.description, 
+                                                                    unit: comp.unit, quantity: 1, unitCost: comp.totalPrice, 
+                                                                    itemNumber: '1', sourceName: 'PROPRIA'
+                                                                })} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                    <Layers size={11} /> Itens
+                                                                </button>
+                                                                <button onClick={() => deleteComp(comp.id, comp.code)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ef444440', background: '#ef44440a', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                    <Trash2 size={11} />
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );

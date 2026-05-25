@@ -933,7 +933,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         const targetDbId = (req.query.databaseId as string) || (req.body.databaseId as string) || (composition?.databaseId as string) || undefined;
         const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
 
-        if (!composition || !composition.groups) {
+        if (!composition) {
             return res.status(400).json({ error: 'Dados da composição inválidos' });
         }
 
@@ -958,17 +958,20 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
         // Flatten all items from groups to update, preserving their groupKey
         const flatItems: any[] = [];
-        for (const [groupKey, group] of Object.entries(composition.groups)) {
-            if (Array.isArray(group)) {
-                for (const item of group) {
-                    flatItems.push({
-                        ...item,
-                        groupKey: groupKey
-                    });
+        const hasGroups = !!composition.groups;
+        if (hasGroups) {
+            for (const [groupKey, group] of Object.entries(composition.groups)) {
+                if (Array.isArray(group)) {
+                    for (const item of group) {
+                        flatItems.push({
+                            ...item,
+                            groupKey: groupKey
+                        });
+                    }
                 }
             }
         }
-        logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} groups=${Object.keys(composition.groups).join(',')}`);
+        logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} hasGroups=${hasGroups}`);
 
         let targetCompId = id;
         const tenantId = req.user?.tenantId || composition.tenantId;
@@ -1046,223 +1049,288 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     where: { id },
                     data: {
                         code: newCode,
-                        totalPrice: composition.totalPrice,
-                        description: composition.description,
-                        unit: composition.unit,
+                        totalPrice: composition.totalPrice !== undefined ? composition.totalPrice : existing.totalPrice,
+                        description: composition.description || existing.description,
+                        unit: composition.unit || existing.unit,
                         metadata: metadata
                     }
                 });
             }
 
-            // Delete existing items
-            await tx.engineeringCompositionItem.deleteMany({
-                where: { compositionId: targetCompId }
-            });
-
-            // Create new items — use proposal-specific or global PROPRIA database
-            const basePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
-
-            for (const item of flatItems) {
-                let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                let itemId = item.item ? item.item.id : item.itemId;
-                let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
-                const dbName = item._matchedDatabase;
-                
-                // Helper: detect temporary/synthetic IDs that don't exist in DB
-                const isTempId = (id: string | null | undefined) => 
-                    !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
-
-                // 🔗 Look up item/composition in official database if _matchedDatabase is official!
-                if (dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA') {
-                    if (isAux) {
-                        const codeToFind = item.auxiliaryComposition?.code || item.code;
-                        if (codeToFind) {
-                            let matchedAux = null;
-                            if (targetDatabase) {
-                                matchedAux = await tx.engineeringComposition.findFirst({
-                                    where: {
-                                        code: { equals: codeToFind, mode: 'insensitive' },
-                                        database: {
-                                            name: dbName,
-                                            uf: targetDatabase.uf || undefined,
-                                            payrollExemption: targetDatabase.payrollExemption
-                                        }
-                                    },
-                                    orderBy: [
-                                        { database: { referenceYear: 'desc' } },
-                                        { database: { referenceMonth: 'desc' } }
-                                    ]
-                                });
-                            }
-                            if (!matchedAux) {
-                                matchedAux = await tx.engineeringComposition.findFirst({
-                                    where: {
-                                        code: { equals: codeToFind, mode: 'insensitive' },
-                                        database: { name: dbName }
-                                    },
-                                    orderBy: [
-                                        { database: { referenceYear: 'desc' } },
-                                        { database: { referenceMonth: 'desc' } }
-                                    ]
-                                });
-                            }
-                            if (matchedAux) {
-                                auxId = matchedAux.id;
-                                isAux = true;
-                                logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName} (UF=${matchedAux.database?.uf || 'default'})`);
-                            }
-                        }
-                    } else {
-                        const codeToFind = item.item?.code || item.code;
-                        if (codeToFind) {
-                            let matchedItem = null;
-                            if (targetDatabase) {
-                                matchedItem = await tx.engineeringItem.findFirst({
-                                    where: {
-                                        code: { equals: codeToFind, mode: 'insensitive' },
-                                        database: {
-                                            name: dbName,
-                                            uf: targetDatabase.uf || undefined,
-                                            payrollExemption: targetDatabase.payrollExemption
-                                        }
-                                    },
-                                    orderBy: [
-                                        { database: { referenceYear: 'desc' } },
-                                        { database: { referenceMonth: 'desc' } }
-                                    ]
-                                });
-                            }
-                            if (!matchedItem) {
-                                matchedItem = await tx.engineeringItem.findFirst({
-                                    where: {
-                                        code: { equals: codeToFind, mode: 'insensitive' },
-                                        database: { name: dbName }
-                                    },
-                                    orderBy: [
-                                        { database: { referenceYear: 'desc' } },
-                                        { database: { referenceMonth: 'desc' } }
-                                    ]
-                                });
-                            }
-                            if (matchedItem) {
-                                itemId = matchedItem.id;
-                                isAux = false;
-                                logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName} (UF=${matchedItem.database?.uf || 'default'})`);
-                            }
-                        }
-                    }
-                }
-
-                // Skip observation/etapa items that have no real item or composition data
-                if (!itemId && !auxId && !isAux) {
-                    logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId (likely observation/etapa): coef=${item.coefficient}`);
-                    continue;
-                }
-                
-                // Dynamically create AI-extracted proprietary inputs
-                if (!isAux && itemId && isTempId(itemId)) {
-                    let itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-                    if (itemCode === 'LIVRE') {
-                        itemCode = `LIVRE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-                    }
-                    if (itemCode === 'OBS' || item.item?.type === 'OBSERVACAO') {
-                        itemCode = `OBS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-                    }
-                    
-                    let existingItem = await tx.engineeringItem.findFirst({
-                        where: {
-                            databaseId: basePropria.id,
-                            code: itemCode
-                        }
-                    });
-
-                    if (!existingItem) {
-                        existingItem = await tx.engineeringItem.create({
-                            data: {
-                                databaseId: basePropria.id,
-                                code: itemCode,
-                                description: item.item?.description || 'Novo Insumo Próprio (IA)',
-                                unit: item.item?.unit || 'UN',
-                                type: item.item?.type || 'MATERIAL',
-                                price: item.item?.price || 0
-                            }
-                        });
-                        logger.info(`[CompositionSave] 🆕 Created own item: code=${itemCode} id=${existingItem.id}`);
-                    }
-                    itemId = existingItem.id;
-                }
-
-                // Dynamically create AI-extracted auxiliary compositions
-                if (isAux && auxId && isTempId(auxId)) {
-                    let auxCode = item.auxiliaryComposition?.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-                    if (auxCode === 'LIVRE') {
-                        auxCode = `LIVRE-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-                    }
-                    
-                    let existingAux = await tx.engineeringComposition.findFirst({
-                        where: {
-                            databaseId: basePropria.id,
-                            code: auxCode
-                        }
-                    });
-
-                    if (!existingAux) {
-                        existingAux = await tx.engineeringComposition.create({
-                            data: {
-                                databaseId: basePropria.id,
-                                code: auxCode,
-                                description: item.auxiliaryComposition?.description || 'Nova Composição Auxiliar Própria (IA)',
-                                unit: item.auxiliaryComposition?.unit || 'UN',
-                                totalPrice: item.auxiliaryComposition?.totalPrice || 0
-                            }
-                        });
-                        logger.info(`[CompositionSave] 🆕 Created own composition: code=${auxCode} id=${existingAux.id}`);
-                    }
-                    auxId = existingAux.id;
-                }
-
-                // Final validation: skip if we still don't have valid references
-                if (!isAux && !itemId) {
-                    logger.warn(`[CompositionSave] ⚠️ Skipping item with no valid itemId after resolution`);
-                    continue;
-                }
-                if (isAux && !auxId) {
-                    logger.warn(`[CompositionSave] ⚠️ Skipping aux comp with no valid auxId after resolution`);
-                    continue;
-                }
-                
-                // Verify FK references exist before inserting
-                if (!isAux && itemId) {
-                    const itemExists = await tx.engineeringItem.findUnique({ where: { id: itemId }, select: { id: true } });
-                    if (!itemExists) {
-                        logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist (FK would fail). Item code=${item.item?.code}`);
-                        continue;
-                    }
-                }
-                if (isAux && auxId) {
-                    const auxExists = await tx.engineeringComposition.findUnique({ where: { id: auxId }, select: { id: true } });
-                    if (!auxExists) {
-                        logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist (FK would fail). Aux code=${item.auxiliaryComposition?.code}`);
-                        continue;
-                    }
-                }
-
-                await tx.engineeringCompositionItem.create({
-                    data: {
-                        compositionId: targetCompId,
-                        itemId: isAux ? null : itemId,
-                        auxiliaryCompositionId: isAux ? auxId : null,
-                        coefficient: item.coefficient,
-                        price: item.price,
-                        groupKey: item.groupKey || null,
-                        coefficientExpression: item.coefficientExpression || null,
-                    }
+            if (hasGroups) {
+                // Delete existing items
+                await tx.engineeringCompositionItem.deleteMany({
+                    where: { compositionId: targetCompId }
                 });
+
+                // Create new items — use proposal-specific or global PROPRIA database
+                const basePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
+
+                for (const item of flatItems) {
+                    let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    let itemId = item.item ? item.item.id : item.itemId;
+                    let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                    const dbName = item._matchedDatabase;
+                    
+                    // Helper: detect temporary/synthetic IDs that don't exist in DB
+                    const isTempId = (id: string | null | undefined) => 
+                        !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
+
+                    // 🔗 Look up item/composition in official database if _matchedDatabase is official!
+                    if (dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA') {
+                        if (isAux) {
+                            const codeToFind = item.auxiliaryComposition?.code || item.code;
+                            if (codeToFind) {
+                                let matchedAux = null;
+                                if (targetDatabase) {
+                                    matchedAux = await tx.engineeringComposition.findFirst({
+                                        where: {
+                                            code: { equals: codeToFind, mode: 'insensitive' },
+                                            database: {
+                                                name: dbName,
+                                                uf: targetDatabase.uf || undefined,
+                                                payrollExemption: targetDatabase.payrollExemption
+                                            }
+                                        },
+                                        orderBy: [
+                                            { database: { referenceYear: 'desc' } },
+                                            { database: { referenceMonth: 'desc' } }
+                                        ]
+                                    });
+                                }
+                                if (!matchedAux) {
+                                    matchedAux = await tx.engineeringComposition.findFirst({
+                                        where: {
+                                            code: { equals: codeToFind, mode: 'insensitive' },
+                                            database: { name: dbName }
+                                        },
+                                        orderBy: [
+                                            { database: { referenceYear: 'desc' } },
+                                            { database: { referenceMonth: 'desc' } }
+                                        ]
+                                    });
+                                }
+                                if (matchedAux) {
+                                    auxId = matchedAux.id;
+                                    isAux = true;
+                                    logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName} (UF=${matchedAux.database?.uf || 'default'})`);
+                                }
+                            }
+                        } else {
+                            const codeToFind = item.item?.code || item.code;
+                            if (codeToFind) {
+                                let matchedItem = null;
+                                if (targetDatabase) {
+                                    matchedItem = await tx.engineeringItem.findFirst({
+                                        where: {
+                                            code: { equals: codeToFind, mode: 'insensitive' },
+                                            database: {
+                                                name: dbName,
+                                                uf: targetDatabase.uf || undefined,
+                                                payrollExemption: targetDatabase.payrollExemption
+                                            }
+                                        },
+                                        orderBy: [
+                                            { database: { referenceYear: 'desc' } },
+                                            { database: { referenceMonth: 'desc' } }
+                                        ]
+                                    });
+                                }
+                                if (!matchedItem) {
+                                    matchedItem = await tx.engineeringItem.findFirst({
+                                        where: {
+                                            code: { equals: codeToFind, mode: 'insensitive' },
+                                            database: { name: dbName }
+                                        },
+                                        orderBy: [
+                                            { database: { referenceYear: 'desc' } },
+                                            { database: { referenceMonth: 'desc' } }
+                                        ]
+                                    });
+                                }
+                                if (matchedItem) {
+                                    itemId = matchedItem.id;
+                                    isAux = false;
+                                    logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName} (UF=${matchedItem.database?.uf || 'default'})`);
+                                }
+                            }
+                        }
+                    }
+
+                    // Skip observation/etapa items that have no real item or composition data
+                    if (!itemId && !auxId && !isAux) {
+                        logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId (likely observation/etapa): coef=${item.coefficient}`);
+                        continue;
+                    }
+                    
+                    // Dynamically create AI-extracted proprietary inputs
+                    if (!isAux && itemId && isTempId(itemId)) {
+                        let itemCode = item.item?.code || `AI-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                        if (itemCode === 'LIVRE') {
+                            itemCode = `LIVRE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                        }
+                        if (itemCode === 'OBS' || item.item?.type === 'OBSERVACAO') {
+                            itemCode = `OBS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                        }
+                        
+                        let existingItem = await tx.engineeringItem.findFirst({
+                            where: {
+                                databaseId: basePropria.id,
+                                code: itemCode
+                            }
+                        });
+
+                        if (!existingItem) {
+                            existingItem = await tx.engineeringItem.create({
+                                data: {
+                                    databaseId: basePropria.id,
+                                    code: itemCode,
+                                    description: item.item?.description || 'Novo Insumo Próprio (IA)',
+                                    unit: item.item?.unit || 'UN',
+                                    type: item.item?.type || 'MATERIAL',
+                                    price: item.item?.price || 0
+                                }
+                            });
+                            logger.info(`[CompositionSave] 🆕 Created own item: code=${itemCode} id=${existingItem.id}`);
+                        } else {
+                            if (item.item?.description && item.item.description !== existingItem.description) {
+                                existingItem = await tx.engineeringItem.update({
+                                    where: { id: existingItem.id },
+                                    data: {
+                                        description: item.item.description,
+                                        unit: item.item.unit || existingItem.unit,
+                                        price: item.item.price !== undefined ? item.item.price : existingItem.price,
+                                    }
+                                });
+                                logger.info(`[CompositionSave] 📝 Updated own item description/unit: code=${itemCode} id=${existingItem.id}`);
+                            }
+                        }
+                        itemId = existingItem.id;
+                    }
+
+                    // Dynamically create AI-extracted auxiliary compositions
+                    if (isAux && auxId && isTempId(auxId)) {
+                        let auxCode = item.auxiliaryComposition?.code || `AI-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                        if (auxCode === 'LIVRE') {
+                            auxCode = `LIVRE-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+                        }
+                        
+                        let existingAux = await tx.engineeringComposition.findFirst({
+                            where: {
+                                databaseId: basePropria.id,
+                                code: auxCode
+                            }
+                        });
+
+                        if (!existingAux) {
+                            existingAux = await tx.engineeringComposition.create({
+                                data: {
+                                    databaseId: basePropria.id,
+                                    code: auxCode,
+                                    description: item.auxiliaryComposition?.description || 'Nova Composição Auxiliar Própria (IA)',
+                                    unit: item.auxiliaryComposition?.unit || 'UN',
+                                    totalPrice: item.auxiliaryComposition?.totalPrice || 0
+                                }
+                            });
+                            logger.info(`[CompositionSave] 🆕 Created own composition: code=${auxCode} id=${existingAux.id}`);
+                        } else {
+                            if (item.auxiliaryComposition?.description && item.auxiliaryComposition.description !== existingAux.description) {
+                                existingAux = await tx.engineeringComposition.update({
+                                    where: { id: existingAux.id },
+                                    data: {
+                                        description: item.auxiliaryComposition.description,
+                                        unit: item.auxiliaryComposition.unit || existingAux.unit,
+                                    }
+                                });
+                                logger.info(`[CompositionSave] 📝 Updated own composition description/unit: code=${auxCode} id=${existingAux.id}`);
+                            }
+                        }
+                        auxId = existingAux.id;
+                    }
+
+                    // Final validation: skip if we still don't have valid references
+                    if (!isAux && !itemId) {
+                        logger.warn(`[CompositionSave] ⚠️ Skipping item with no valid itemId after resolution`);
+                        continue;
+                    }
+                    if (isAux && !auxId) {
+                        logger.warn(`[CompositionSave] ⚠️ Skipping aux comp with no valid auxId after resolution`);
+                        continue;
+                    }
+
+                    // Update description of existing proprietary items if they have changed and are not temp
+                    if (!isAux && itemId && !isTempId(itemId)) {
+                        const dbItem = await tx.engineeringItem.findUnique({
+                            where: { id: itemId },
+                            include: { database: true }
+                        });
+                        if (dbItem && (dbItem.database.type === 'PROPRIA' || dbItem.database.name.startsWith('PROPRIA'))) {
+                            if (item.item?.description && item.item.description !== dbItem.description) {
+                                await tx.engineeringItem.update({
+                                    where: { id: itemId },
+                                    data: {
+                                        description: item.item.description,
+                                        unit: item.item.unit || dbItem.unit,
+                                        price: item.item.price !== undefined ? item.item.price : dbItem.price
+                                    }
+                                });
+                                logger.info(`[CompositionSave] 📝 Updated own item description: code=${dbItem.code} id=${itemId}`);
+                            }
+                        }
+                    }
+
+                    if (isAux && auxId && !isTempId(auxId)) {
+                        const dbAux = await tx.engineeringComposition.findUnique({
+                            where: { id: auxId },
+                            include: { database: true }
+                        });
+                        if (dbAux && (dbAux.database.type === 'PROPRIA' || dbAux.database.name.startsWith('PROPRIA'))) {
+                            if (item.auxiliaryComposition?.description && item.auxiliaryComposition.description !== dbAux.description) {
+                                await tx.engineeringComposition.update({
+                                    where: { id: auxId },
+                                    data: {
+                                        description: item.auxiliaryComposition.description,
+                                        unit: item.auxiliaryComposition.unit || dbAux.unit
+                                    }
+                                });
+                                logger.info(`[CompositionSave] 📝 Updated own aux comp description: code=${dbAux.code} id=${auxId}`);
+                            }
+                        }
+                    }
+                    
+                    // Verify FK references exist before inserting
+                    if (!isAux && itemId) {
+                        const itemExists = await tx.engineeringItem.findUnique({ where: { id: itemId }, select: { id: true } });
+                        if (!itemExists) {
+                            logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist (FK would fail). Item code=${item.item?.code}`);
+                            continue;
+                        }
+                    }
+                    if (isAux && auxId) {
+                        const auxExists = await tx.engineeringComposition.findUnique({ where: { id: auxId }, select: { id: true } });
+                        if (!auxExists) {
+                            logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist (FK would fail). Aux code=${item.auxiliaryComposition?.code}`);
+                            continue;
+                        }
+                    }
+
+                    await tx.engineeringCompositionItem.create({
+                        data: {
+                            compositionId: targetCompId,
+                            itemId: isAux ? null : itemId,
+                            auxiliaryCompositionId: isAux ? auxId : null,
+                            coefficient: item.coefficient,
+                            price: item.price,
+                            groupKey: item.groupKey || null,
+                            coefficientExpression: item.coefficientExpression || null,
+                        }
+                    });
+                }
             }
         });
 
         logger.info(`[CompositionSave] ✅ PUT complete: id=${targetCompId} code=${composition.code} items=${flatItems.length} saved`);
-        res.json({ message: 'Composição atualizada com sucesso', id: targetCompId });
+        res.json({ message: 'Composição updated com sucesso', id: targetCompId });
 
     } catch (e: any) {
         console.error('Error updating custom composition:', e);
