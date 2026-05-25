@@ -12,6 +12,7 @@ import https from 'https';
 import { submitJob } from '../services/backgroundJobService';
 import { classifyEngineeringAttachments } from '../services/engineering/documentClassifier';
 import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 
@@ -1199,10 +1200,13 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
             where: { compositionId: id }
         });
 
-        // Reset totalPrice to 0
+        // Reset totalPrice to 0 and clear metadata
         await prisma.engineeringComposition.update({
             where: { id },
-            data: { totalPrice: 0 }
+            data: { 
+                totalPrice: 0,
+                metadata: Prisma.DbNull
+            }
         });
 
         logger.info(`[CompositionClear] ✅ Cleared ${itemCount} items from composition id=${id} code=${existing.code}`);

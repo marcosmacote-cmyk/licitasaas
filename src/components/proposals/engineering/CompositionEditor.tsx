@@ -1218,6 +1218,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             } : prev);
             setHasChanges(false);
             setGroupNotes({});
+            setCustomGroupLabels({});
+            setGroupOrder([]);
+            setRefDivisorLabel('');
+            setRefDivisorValue('');
 
             // CASCADE: update planilha item unitCost to 0
             if (onUpdateItem && currentItem) {
