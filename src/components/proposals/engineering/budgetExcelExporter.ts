@@ -100,11 +100,19 @@ function fill(argb: string): ExcelJS.Fill {
   return { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 }
 
+let activePrecisionCasas = 2;
+
 function fmt(v: number) {
-  return `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+  return `R$ ${v.toFixed(activePrecisionCasas).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 }
 
 function fmtPct(v: number) { return `${v.toFixed(2).replace('.', ',')}%`; }
+
+function setGlobalPrecision(engConfig?: EngineeringConfig) {
+  activePrecisionCasas = typeof engConfig?.precision?.casasDecimais === 'number' 
+    ? engConfig.precision.casasDecimais 
+    : 2;
+}
 
 async function saveWb(wb: ExcelJS.Workbook, name: string, returnBuffer?: boolean): Promise<ArrayBuffer | void> {
   const buf = await wb.xlsx.writeBuffer();
@@ -332,6 +340,7 @@ function sectionHeaderRow(ws: ExcelJS.Worksheet, label: string, colCount: number
 
 // ── 1. ORÇAMENTO RESUMIDO — with numeric values & formulas ───────────────────
 export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Resumido');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -397,6 +406,7 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
 
 // ── 2. ORÇAMENTO SINTÉTICO — with Base column, toggles & formulas ────────────
 export async function xlsOrcamentoSintetico(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const rc = engConfig?.reportConfig || {} as any;
   const showCU = rc.showCustoUnit !== false;
   const showPU = rc.showPrecoUnit !== false;
@@ -770,6 +780,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
 
 // ── 2B. ORÇAMENTO ANALÍTICO — mirrors docOrcamentoAnalitico ──────────────────
 export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Orçamento Analítico');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -834,6 +845,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
 
 // ── 2C. CADERNO DE COMPOSIÇÕES (CPU) — mirrors docCpuBatch ───────────────────
 export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Composições');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -881,6 +893,7 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
 
 // ── 3. CURVA ABC SERVIÇOS — with numeric values & formulas ───────────────────
 export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const rc = engConfig?.reportConfig || {} as any;
   const showCU = rc.showCustoUnit !== false;
   const showPU = rc.showPrecoUnit !== false;
@@ -993,6 +1006,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
 
 // ── 4. BDI E ENCARGOS SOCIAIS ────────────────────────────────────────────────
 export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('BDI e Encargos');
   setupPrint(ws, false, engConfig?.reportConfig);
@@ -1102,6 +1116,7 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
 
 // ── 5. CRONOGRAMA FÍSICO-FINANCEIRO — with numeric values & formulas ─────────
 export async function xlsCronograma(result: any, engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const { meses, etapas, mensalTotal, percentMensal, percentAcumulado, totalGlobal } = result;
   const colCount = 2 + meses + 1;
 
@@ -1262,6 +1277,7 @@ export async function xlsCronograma(result: any, engConfig: EngineeringConfig | 
 
 // ── 6. CURVA ABC INSUMOS — with numeric values & formulas ────────────────────
 export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, true, engConfig?.reportConfig);
@@ -1331,6 +1347,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
 
 // ── 9. MEMÓRIA DE CÁLCULO — dedicated report ──────────────────────────────────
 export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConfig | undefined, returnBuffer?: boolean) {
+  setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Memória de Cálculo');
   setupPrint(ws, false, engConfig?.reportConfig);

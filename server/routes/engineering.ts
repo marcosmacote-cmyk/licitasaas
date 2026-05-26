@@ -148,6 +148,53 @@ async function downloadPncpPdfsForEngineering(biddingId: string): Promise<any[]>
 }
 
 // ═══════════════════════════════════════════════════════════
+// Helpers para validação de posse (Multi-tenancy)
+// ═══════════════════════════════════════════════════════════
+async function validateProposalOwnership(proposalId: string, tenantId: string) {
+    if (!proposalId || proposalId === 'undefined' || proposalId === 'null') {
+        const err = new Error('ID de proposta inválido');
+        (err as any).statusCode = 400;
+        throw err;
+    }
+    const proposal = await prisma.priceProposal.findUnique({
+        where: { id: proposalId },
+        select: { tenantId: true }
+    });
+    if (!proposal) {
+        const err = new Error('Proposta não encontrada');
+        (err as any).statusCode = 404;
+        throw err;
+    }
+    if (proposal.tenantId !== tenantId) {
+        const err = new Error('Acesso não autorizado a esta proposta');
+        (err as any).statusCode = 403;
+        throw err;
+    }
+}
+
+async function validateDatabaseOwnership(databaseId: string, tenantId: string) {
+    if (!databaseId || databaseId === 'undefined' || databaseId === 'null') {
+        const err = new Error('ID de base de dados inválido');
+        (err as any).statusCode = 400;
+        throw err;
+    }
+    const db = await prisma.engineeringDatabase.findUnique({
+        where: { id: databaseId },
+        select: { tenantId: true, type: true }
+    });
+    if (!db) {
+        const err = new Error('Base de dados não encontrada');
+        (err as any).statusCode = 404;
+        throw err;
+    }
+    if (db.type === 'PROPRIA' && db.tenantId && db.tenantId !== tenantId) {
+        const err = new Error('Acesso não autorizado a esta base de dados');
+        (err as any).statusCode = 403;
+        throw err;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/bases
 // Listar todas as tabelas oficiais e as próprias do Tenant
 // ═══════════════════════════════════════════════════════════
@@ -180,6 +227,9 @@ router.get('/bases', async (req: any, res: any) => {
 router.get('/bases/:id/items', async (req: any, res: any) => {
     try {
         const databaseId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateDatabaseOwnership(databaseId, tenantId);
+
         const query = req.query.q as string || '';
         const limit = parseInt(req.query.limit as string) || 50;
         const page = parseInt(req.query.page as string) || 1;
@@ -284,9 +334,10 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
         engineeringSearchCache.set(cacheKey, responseData);
         res.json(responseData);
 
-    } catch (e) {
+    } catch (e: any) {
         console.error('Error fetching engineering items', e);
-        res.status(500).json({ error: 'Erro ao buscar insumos' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao buscar insumos' });
     }
 });
 
@@ -592,10 +643,15 @@ router.get('/compositions/:code', async (req: any, res: any) => {
     try {
         const code = req.params.code;
         const databaseId = req.query.databaseId as string || undefined;
+        const tenantId = req.user?.tenantId || 'none';
+
+        if (databaseId) {
+            await validateDatabaseOwnership(databaseId, req.user?.tenantId);
+        }
+
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
         const proposalId = req.query.proposalId as string || undefined;
         const codeVariants = buildCompositionCodeVariants(code, sourceName);
-        const tenantId = req.user?.tenantId || 'none';
 
         const cacheKey = `comp:${code}:${databaseId || ''}:${sourceName || ''}:${tenantId}:${proposalId || ''}`;
         const cached = compositionCache.get(cacheKey);
@@ -847,11 +903,11 @@ router.get('/compositions/:code', async (req: any, res: any) => {
 
     } catch (e: any) {
         console.error('Error fetching composition:', e);
-        res.status(500).json({ error: 'Erro ao buscar composição' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao buscar composição' });
     }
 });
 
-// GET /api/engineering/compositions — Listar composições por database
 router.get('/compositions', async (req: any, res: any) => {
     try {
         const databaseId = req.query.databaseId as string;
@@ -865,7 +921,18 @@ router.get('/compositions', async (req: any, res: any) => {
         }
 
         const where: any = {};
-        if (databaseId) where.databaseId = databaseId;
+        if (databaseId) {
+            await validateDatabaseOwnership(databaseId, req.user?.tenantId);
+            where.databaseId = databaseId;
+        } else {
+            where.database = {
+                OR: [
+                    { type: 'OFICIAL' },
+                    { tenantId: req.user?.tenantId }
+                ]
+            };
+        }
+
         if (q) {
             where.OR = [
                 { code: { contains: q, mode: 'insensitive' } },
@@ -884,7 +951,8 @@ router.get('/compositions', async (req: any, res: any) => {
         res.json(compositions);
     } catch (e: any) {
         console.error('Error listing compositions:', e);
-        res.status(500).json({ error: 'Erro ao listar composições' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao listar composições' });
     }
 });
 
@@ -1765,6 +1833,9 @@ router.get('/items', async (req: any, res: any) => {
             return res.status(400).json({ error: 'databaseId é obrigatório' });
         }
 
+        const tenantId = req.user?.tenantId;
+        await validateDatabaseOwnership(databaseId, tenantId);
+
         const cacheKey = `items:list:${databaseId}:${q}:${limit}`;
         const cached = engineeringSearchCache.get(cacheKey);
         if (cached) {
@@ -1792,7 +1863,8 @@ router.get('/items', async (req: any, res: any) => {
         res.json(items);
     } catch (e: any) {
         console.error('Error listing items:', e);
-        res.status(500).json({ error: 'Erro ao listar insumos' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao listar insumos' });
     }
 });
 
@@ -1971,6 +2043,8 @@ router.post('/propria/cleanup', async (req: any, res: any) => {
 router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
 
         // 1. Load all engineering items for this proposal
         const proposalItems = await prisma.engineeringProposalItem.findMany({
@@ -2120,7 +2194,8 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
 
     } catch (e: any) {
         console.error('[Insumo Hub] Error:', e);
-        res.status(500).json({ error: 'Erro ao consolidar insumos', details: e.message });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: 'Erro ao consolidar insumos', details: e.message });
     }
 });
 
@@ -2139,6 +2214,9 @@ function normalizeInsumoType(type: string): string {
 router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
         const { items, bdi } = req.body || {};
         
         // Obter configuração de BDI ou Encargos
@@ -2155,7 +2233,8 @@ router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
         
     } catch (e: any) {
         console.error('[Analytical Report] Error:', e);
-        res.status(500).json({ error: 'Erro ao gerar relatório analítico', details: e.message });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: 'Erro ao gerar relatório analítico', details: e.message });
     }
 });
 
@@ -2335,6 +2414,9 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 router.get('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
         const metaOnly = req.query.metaOnly === '1';
 
         // PERF-01: metaOnly mode — skip heavy item fetch, only return extractionMeta + itemCount.
@@ -2394,14 +2476,17 @@ router.get('/proposals/:id/items', async (req: any, res: any) => {
         });
     } catch (e: any) {
         console.error('Error loading engineering items:', e);
-        res.status(500).json({ error: 'Erro ao carregar itens de engenharia' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao carregar itens de engenharia' });
     }
 });
 
-// POST /api/engineering/proposals/:id/items — Salvar/Sincronizar todos os itens
 router.post('/proposals/:id/items', async (req: any, res: any) => {
     try {
         const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
         const { items, bdiConfig, engineeringConfig, cronogramaData } = req.body;
 
         if (!Array.isArray(items)) {
@@ -2481,20 +2566,37 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
 
     } catch (e: any) {
         console.error('Error saving engineering items:', e);
-        res.status(500).json({ error: 'Erro ao salvar itens de engenharia', details: e.message });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao salvar itens de engenharia', details: e.message });
     }
 });
 
 // DELETE /api/engineering/proposals/:id/items/:itemId — Remover um item
 router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
     try {
+        const proposalId = req.params.id;
+        const itemId = req.params.itemId;
+        const tenantId = req.user?.tenantId;
+        
+        await validateProposalOwnership(proposalId, tenantId);
+
+        const item = await prisma.engineeringProposalItem.findUnique({
+            where: { id: itemId },
+            select: { proposalId: true }
+        });
+
+        if (!item || item.proposalId !== proposalId) {
+            return res.status(404).json({ error: 'Item não encontrado nesta proposta' });
+        }
+
         await prisma.engineeringProposalItem.delete({
-            where: { id: req.params.itemId }
+            where: { id: itemId }
         });
         res.json({ ok: true });
     } catch (e: any) {
         console.error('Error deleting engineering item:', e);
-        res.status(500).json({ error: 'Erro ao remover item' });
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao remover item' });
     }
 });
 

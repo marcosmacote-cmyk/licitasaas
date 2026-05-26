@@ -14,9 +14,22 @@ import type { CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig, EncargosSociaisConfig, ColorPalette } from './types';
 import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+let activePrecisionCasas = 2;
+
+const fmt = (v: number) => v.toLocaleString('pt-BR', { 
+    style: 'currency', 
+    currency: 'BRL',
+    minimumFractionDigits: activePrecisionCasas,
+    maximumFractionDigits: activePrecisionCasas
+});
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+function setGlobalPrecision(engineeringConfig?: any) {
+    activePrecisionCasas = typeof engineeringConfig?.precision?.casasDecimais === 'number' 
+        ? engineeringConfig.precision.casasDecimais 
+        : 2;
+}
 
 /** Resolve a paleta de cores: user overrides > defaults */
 function resolvePalette(reportConfig?: any): ColorPalette {
@@ -321,6 +334,7 @@ function groupByChapter(items: EngItem[]) {
 // 1. ORÇAMENTO RESUMIDO
 // ═══════════════════════════════════════════════════════════
 export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     const chapters = groupByChapter(items);
     // FIX B4: Only count billable items (not ETAPAs/SUBETAPAs)
     const billable = items.filter(i => !isGrouper(i.type as any));
@@ -344,6 +358,7 @@ ${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, false, e
 // 2. ORÇAMENTO SINTÉTICO
 // ═══════════════════════════════════════════════════════════
 export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     const rc = engineeringConfig?.reportConfig || {};
     const showCU = rc.showCustoUnit !== false;
     const showPU = rc.showPrecoUnit !== false;
@@ -371,6 +386,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 // 5. CURVA ABC DE SERVIÇOS
 // ═══════════════════════════════════════════════════════════
 export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     // FIX B8: Filter using isGrouper instead of unit check
     const validItems = items.filter(it => !isGrouper(it.type as any));
     const total = validItems.reduce((s, i) => s + i.totalPrice, 0);
@@ -398,6 +414,7 @@ ${renderConfigTable(engineeringConfig)}
 // 6. CURVA ABC DE INSUMOS
 // ═══════════════════════════════════════════════════════════
 export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     const total = insumos.reduce((s, i) => s + i.custoTotal, 0);
     const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
     let accum = 0;
@@ -422,6 +439,7 @@ ${renderConfigTable(engineeringConfig)}
 // 7. CRONOGRAMA FÍSICO-FINANCEIRO
 // ═══════════════════════════════════════════════════════════
 export function docCronograma(result: CronogramaResult, mode: DocMode = 'download') {
+    setGlobalPrecision((result as any).engineeringConfig);
     const { meses, etapas, mensalTotal, acumulado, percentMensal, percentAcumulado, totalGlobal } = result;
     let headerCols = '<th>Etapa</th><th class="r">Valor</th>';
     for (let m = 0; m < meses; m++) headerCols += `<th class="r">Mês ${m+1}</th>`;
@@ -615,6 +633,7 @@ BDI = { ${(p1*p2*p3/p4).toFixed(4)} − 1 } × 100<br>
 }
 
 export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?: EngineeringConfig, mode: DocMode = 'download') {
+    setGlobalPrecision(engConfig);
     const tcu = config.tcu;
     const isTcu = config.mode === 'TCU';
     const regime = engConfig?.regimeOneracao || 'DESONERADO';
@@ -792,6 +811,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
 // 3. ORÇAMENTO ANALÍTICO (Flattened TCU Standard - Only Principals)
 // ═══════════════════════════════════════════════════════════
 export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     // FIX B4: Only count billable items
     const billable = items.filter(i => !isGrouper(i.type as any));
     const total = billable.reduce((s, i) => s + i.totalPrice, 0);
@@ -857,6 +877,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
 // 4. CPU — COMPOSIÇÕES DE CUSTOS UNITÁRIOS (batch)
 // ═══════════════════════════════════════════════════════════
 export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: number, engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     // FIX B4/B7: Count only billable items and pass engineeringConfig to backend
     const billable = items.filter(i => !isGrouper(i.type as any));
     let html = `<h1>CADERNO DE COMPOSIÇÕES DE PREÇOS UNITÁRIOS</h1><div class="meta">${billable.length} serviços</div>${renderConfigTable(engineeringConfig)}`;
@@ -918,6 +939,7 @@ export interface PropostaCompletaParams {
 }
 
 export async function docPropostaCompleta(params: PropostaCompletaParams) {
+    setGlobalPrecision(params.engineeringConfig);
     const { sections, items, bdi, insumos, cronogramaResult, bdiConfig, proposalId, engineeringConfig } = params;
     const rc = engineeringConfig?.reportConfig || {};
     const billable = items.filter(i => !isGrouper(i.type as any));
@@ -1220,6 +1242,7 @@ ${renderConfigTable(engineeringConfig)}
 
 // ── 9. MEMÓRIA DE CÁLCULO — dedicated HTML/PDF report ─────────────────────────
 export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mode: DocMode = 'download') {
+    setGlobalPrecision(engineeringConfig);
     const rc = engineeringConfig?.reportConfig || {};
     const billable = items.filter(i => !isGrouper(i.type as any));
     let html = `<h1>RELATÓRIO DE MEMÓRIA DE CÁLCULO</h1><div class="meta">${billable.length} itens</div>${renderConfigTable(engineeringConfig)}`;
