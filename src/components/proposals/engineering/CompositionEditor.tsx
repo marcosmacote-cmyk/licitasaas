@@ -305,6 +305,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     // Hub-style search enhancements
     const searchDebounceRef = useRef<any>(null);
+    const hasAutoSelectedBaseRef = useRef(false);
     const [searchCoefficients, setSearchCoefficients] = useState<Record<string, number>>({});
     const [addedItemIds, setAddedItemIds] = useState<Set<string>>(new Set());
     const [addedCount, setAddedCount] = useState(0);
@@ -466,15 +467,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     }, [showSearch, bases.length]);
 
+    // Reset auto-select control when search modal is closed
+    useEffect(() => {
+        if (!showSearch) {
+            hasAutoSelectedBaseRef.current = false;
+        }
+    }, [showSearch]);
+
     // Auto-select selectedBaseId when search opens or currentItem/bases change
     useEffect(() => {
-        if (showSearch && bases.length > 0) {
+        if (showSearch && bases.length > 0 && !hasAutoSelectedBaseRef.current) {
             const { filtered } = filterBasesWithWarnings(bases, engineeringConfig);
             
             // 1. Try to match the current item's own database first
             const matchedDbId = currentItem?.priceAudit?.matchedDatabaseId;
             if (matchedDbId && filtered.some(b => b.id === matchedDbId)) {
                 setSelectedBaseId(matchedDbId);
+                hasAutoSelectedBaseRef.current = true;
                 return;
             } 
 
@@ -484,6 +493,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 const matchedBySource = filtered.find(b => b.name.toUpperCase().includes(sourceUpper));
                 if (matchedBySource) {
                     setSelectedBaseId(matchedBySource.id);
+                    hasAutoSelectedBaseRef.current = true;
                     return;
                 }
             }
@@ -492,6 +502,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const isCurrentBaseInFiltered = filtered.some(b => b.id === selectedBaseId);
             if (!isCurrentBaseInFiltered && filtered.length > 0) {
                 setSelectedBaseId(filtered[0].id);
+                hasAutoSelectedBaseRef.current = true;
+            } else if (isCurrentBaseInFiltered) {
+                hasAutoSelectedBaseRef.current = true;
             }
         }
     }, [showSearch, bases, currentItem, engineeringConfig]);
