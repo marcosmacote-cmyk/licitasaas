@@ -652,7 +652,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
     const showBanco = rc.showBancoOrigem !== false;
 
     // Grouping metadata
-    const metadata = comp.metadata || {};
+    const metadata = (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) || {};
     const customGroupLabels = metadata.customGroupLabels || {};
     const groupOrder = metadata.groupOrder || [];
     const groupNotes = metadata.groupNotes || {};
@@ -772,6 +772,12 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
         <span style="color:#475569;">Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b></span>
         <span style="color:#1e40af; font-weight:700; font-size:8.5px;">Preço Unitário (com BDI) => ${fmt(comp.valorComBdi || 0)}</span>
     </div>
+    ${metadata.referenceDivisor && metadata.referenceDivisor.value > 0 ? `
+    <div style="background:#f0fdf4; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #bbf7d0; border-top:none;">
+        <span style="color:#166534; font-weight:700;">Divisor de Referência: ${metadata.referenceDivisor.label || 'Referência'} (Qtd: ${metadata.referenceDivisor.value})</span>
+        <span style="color:#166534;">Custo/Ref: <b>${fmt((comp.totalPrice || 0) / metadata.referenceDivisor.value)}</b> &nbsp;&nbsp;|&nbsp;&nbsp; <span style="font-weight:700;">Preço/Ref (c/ BDI): ${fmt((comp.valorComBdi || 0) / metadata.referenceDivisor.value)}</span></span>
+    </div>
+    ` : ''}
     ${showQuantities && comp.proposalQuantity ? `
     <div style="background:#eff6ff; padding:5px 10px; font-size:8.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center; color:#1e40af; border:1px solid #bfdbfe; border-top:none;">
         <span>Quantidade: ${fmtQty(comp.proposalQuantity)}</span>

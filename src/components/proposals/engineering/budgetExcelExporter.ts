@@ -547,7 +547,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
 
   // Grouping metadata
-  const metadata = comp.metadata || {};
+  const metadata = (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) || {};
   const customGroupLabels = metadata.customGroupLabels || {};
   const groupOrder = metadata.groupOrder || [];
   const groupNotes = metadata.groupNotes || {};
@@ -717,6 +717,25 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
     bdiRow.getCell(1).border = border();
     bdiRow.getCell(1).font = { size: 8, color: { argb: C.TEXT_MID } };
     bdiRow.height = 14;
+  }
+
+  // Reference Divisor
+  const referenceDivisor = metadata.referenceDivisor || null;
+  if (referenceDivisor && referenceDivisor.value > 0) {
+    const divRn = ws.rowCount + 1;
+    const divLabel = referenceDivisor.label || 'Referência';
+    const divVal = referenceDivisor.value;
+    const unitCostRef = (comp.totalPrice || 0) / divVal;
+    const unitPriceRef = (comp.valorComBdi || 0) / divVal;
+    const divRow = ws.addRow([
+      `Divisor de Referência: ${divLabel} (Qtd: ${divVal})    |    Custo/Ref (sem BDI): ${fmt(unitCostRef)}    |    Preço/Ref (com BDI): ${fmt(unitPriceRef)}`,
+      '', '', '', '', '', '', ''
+    ]);
+    ws.mergeCells(divRn, 1, divRn, 8);
+    divRow.getCell(1).fill = fill('FFF0FDF4');
+    divRow.getCell(1).border = border('FFBBF7D0');
+    divRow.getCell(1).font = { size: 8, color: { argb: 'FF166534' }, bold: true };
+    divRow.height = 14;
   }
 
   // Quantity + Total (for analytical)

@@ -438,12 +438,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 ? updates.description
                 : (isRoot && !isGrouper && data?.description ? data.description : undefined);
 
+            let costToUse = updates.unitCost;
+            if (isRoot && !isGrouper && costToUse !== undefined) {
+                const parsedDiv = refDivisorValue ? (parseFloat(refDivisorValue.replace(',', '.')) || 1) : 1;
+                if (parsedDiv > 0) {
+                    costToUse = costToUse / parsedDiv;
+                }
+            }
+
             onUpdateItem(currentItem.id, {
                 ...updates,
-                ...(descToUse !== undefined ? { description: descToUse } : {})
+                ...(descToUse !== undefined ? { description: descToUse } : {}),
+                ...(costToUse !== undefined ? { unitCost: costToUse } : {})
             });
         }
-    }, [onUpdateItem, currentItem, drillStack.length, data?.description]);
+    }, [onUpdateItem, currentItem, drillStack.length, data?.description, refDivisorValue]);
 
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
@@ -732,6 +741,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
             const normalized = normalizeCompositionMath(d, engineeringConfig?.precision);
             setData(normalized);
+            // Expand all groups by default
+            if (normalized.groups) {
+                const groupKeys = Object.keys(normalized.groups);
+                setExpandedGroups(prev => {
+                    const newSet = new Set(prev);
+                    groupKeys.forEach(k => newSet.add(k));
+                    return newSet;
+                });
+            }
             // Restore GAP 2/3 data from composition
             if (normalized.groupNotes) setGroupNotes(normalized.groupNotes);
             if (normalized.customGroupLabels) setCustomGroupLabels(normalized.customGroupLabels);
@@ -789,7 +807,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     for (const ci of groupItems) {
                         if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
                             const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
-                            const priceChanged = ci.price !== currentData.totalPrice || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
+                            const expectedSubtotal = applyPrecision(currentData.totalPrice * getLineCoefficient(ci), { precision: engineeringConfig?.precision });
+                            const priceChanged = ci.price !== expectedSubtotal || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
                             const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
                             const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
                             
@@ -836,7 +855,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             const updatedItems = groupItems.map((ci: any) => {
                                 if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
                                     const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
-                                    const priceChanged = ci.price !== currentData.totalPrice || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
+                                    const expectedSubtotal = applyPrecision(currentData.totalPrice * getLineCoefficient(ci), { precision: engineeringConfig?.precision });
+                                    const priceChanged = ci.price !== expectedSubtotal || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
                                     const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
                                     const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
                                     
@@ -844,7 +864,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         levelFound = true;
                                         return {
                                             ...ci,
-                                            price: currentData.totalPrice,
+                                            price: expectedSubtotal,
                                             auxiliaryComposition: {
                                                 ...ci.auxiliaryComposition,
                                                 code: currentData.code || ci.auxiliaryComposition.code,
@@ -1411,13 +1431,16 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             } : prev);
             setHasChanges(false);
 
+            const divisor = refDivisorValue ? (parseFloat(refDivisorValue.replace(',', '.')) || 1) : 1;
+            const finalCost = divisor > 0 ? data.totalPrice / divisor : data.totalPrice;
+
             // Sync this composition's details (code, description, unit, cost, sourceName) to any matching spreadsheet items
             if (onUpdateItem && canonicalCode) {
                 (onUpdateItem as any)('__syncComposition__', {
                     code: canonicalCode,
                     description: data.description || currentItem.description,
                     unit: data.unit || currentItem.unit,
-                    unitCost: data.totalPrice,
+                    unitCost: finalCost,
                     sourceName: `PROPRIA`
                 });
             }
@@ -1426,7 +1449,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 // If at the root level, also trigger update for the parent item specifically
                 triggerUpdateItem({
                     code: canonicalCode,
-                    unitCost: data.totalPrice,
+                    unitCost: finalCost,
                     sourceName: `PROPRIA`,
                     priceAudit: {
                         ...currentItem.priceAudit,
@@ -1437,7 +1460,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 // If in drill-down, propagate the parent's recalculated totalPrice to the spreadsheet immediately
                 const rootSnapshot = drillStack[0]?.snapshot;
                 if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
-                    onUpdateItem(currentItem.id, { unitCost: rootSnapshot.totalPrice });
+                    const rootDivValue = drillStack[0]?.snapshotRefDivisorValue;
+                    const rootDiv = rootDivValue ? (parseFloat(rootDivValue.replace(',', '.')) || 1) : 1;
+                    const rootCost = rootDiv > 0 ? rootSnapshot.totalPrice / rootDiv : rootSnapshot.totalPrice;
+                    onUpdateItem(currentItem.id, { unitCost: rootCost });
                 }
             }
             
@@ -3281,7 +3307,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 <input
                                     type="text"
                                     className="form-input"
-                                    placeholder="Ex: Nº de Pontos Luminosos"
+                                    placeholder="Ex: Unidades, Área (m²), Extensão (m)"
                                     value={refDivisorLabel}
                                     onChange={e => { setRefDivisorLabel(e.target.value); setHasChanges(true); }}
                                     style={{ fontSize: '0.75rem', padding: '5px 8px' }}
