@@ -17,6 +17,7 @@ import { SimpleTtlCache } from '../lib/cache';
 
 const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
+const engineeringSearchCache = new SimpleTtlCache<string, any>(300); // 5 min TTL for searches
 
 function refreshSubmittedPriceAudit(item: any) {
     const audit = item?.priceAudit;
@@ -185,6 +186,12 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
         const kind = (req.query.kind as string || '').toUpperCase(); // 'COMPOSICAO' | 'INSUMO' | '' (all)
         const skip = (page - 1) * limit;
 
+        const cacheKey = `base:items:${databaseId}:${query}:${limit}:${page}:${kind}`;
+        const cached = engineeringSearchCache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
         const whereClause: any = { databaseId };
         const compWhereClause: any = { databaseId };
         
@@ -199,24 +206,51 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
             ];
         }
 
-        // Filter by kind: only query the relevant table(s)
-        const includeItems = kind !== 'COMPOSICAO'; // include insumos unless specifically asking for compositions
-        const includeComps = kind !== 'INSUMO';      // include compositions unless specifically asking for insumos
+        // Filter by kind: only query the relevant table(s) and apply database pagination (skip/take)
+        let items: any[] = [];
+        let compositions: any[] = [];
+        let itemTotal = 0;
+        let compositionTotal = 0;
 
-        const [items, compositions, itemTotal, compositionTotal] = await Promise.all([
-            includeItems ? prisma.engineeringItem.findMany({
-                where: whereClause,
-                take: skip + limit,
-                orderBy: { code: 'asc' }
-            }) : Promise.resolve([]),
-            includeComps ? prisma.engineeringComposition.findMany({
-                where: compWhereClause,
-                take: skip + limit,
-                orderBy: { code: 'asc' }
-            }) : Promise.resolve([]),
-            includeItems ? prisma.engineeringItem.count({ where: whereClause }) : Promise.resolve(0),
-            includeComps ? prisma.engineeringComposition.count({ where: compWhereClause }) : Promise.resolve(0)
-        ]);
+        if (kind === 'INSUMO') {
+            [items, itemTotal] = await Promise.all([
+                prisma.engineeringItem.findMany({
+                    where: whereClause,
+                    skip,
+                    take: limit,
+                    orderBy: { code: 'asc' }
+                }),
+                prisma.engineeringItem.count({ where: whereClause })
+            ]);
+        } else if (kind === 'COMPOSICAO') {
+            [compositions, compositionTotal] = await Promise.all([
+                prisma.engineeringComposition.findMany({
+                    where: compWhereClause,
+                    skip,
+                    take: limit,
+                    orderBy: { code: 'asc' }
+                }),
+                prisma.engineeringComposition.count({ where: compWhereClause })
+            ]);
+        } else {
+            // Fallback for when both are requested (both includeItems and includeComps are true)
+            const includeItems = kind !== 'COMPOSICAO';
+            const includeComps = kind !== 'INSUMO';
+            [items, compositions, itemTotal, compositionTotal] = await Promise.all([
+                includeItems ? prisma.engineeringItem.findMany({
+                    where: whereClause,
+                    take: skip + limit,
+                    orderBy: { code: 'asc' }
+                }) : Promise.resolve([]),
+                includeComps ? prisma.engineeringComposition.findMany({
+                    where: compWhereClause,
+                    take: skip + limit,
+                    orderBy: { code: 'asc' }
+                }) : Promise.resolve([]),
+                includeItems ? prisma.engineeringItem.count({ where: whereClause }) : Promise.resolve(0),
+                includeComps ? prisma.engineeringComposition.count({ where: compWhereClause }) : Promise.resolve(0)
+            ]);
+        }
 
         const combined = [
             ...items.map((item: any) => ({ ...item, recordKind: 'INSUMO', price: item.price })),
@@ -226,16 +260,29 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
                 price: composition.totalPrice,
                 type: 'SERVICO',
             })),
-        ].sort((a: any, b: any) => String(a.code).localeCompare(String(b.code)));
+        ];
 
+        // If kind was empty, we retrieved both tables up to skip + limit and need to slice in memory.
+        // Otherwise, the database already paginated using skip/take.
         const total = itemTotal + compositionTotal;
+        let finalItems = combined;
 
-        res.json({
-            items: combined.slice(skip, skip + limit),
+        if (!kind) {
+            finalItems.sort((a: any, b: any) => String(a.code).localeCompare(String(b.code)));
+            finalItems = finalItems.slice(skip, skip + limit);
+        } else {
+            finalItems.sort((a: any, b: any) => String(a.code).localeCompare(String(b.code)));
+        }
+
+        const responseData = {
+            items: finalItems,
             total,
             page,
             totalPages: Math.ceil(total / limit)
-        });
+        };
+
+        engineeringSearchCache.set(cacheKey, responseData);
+        res.json(responseData);
 
     } catch (e) {
         console.error('Error fetching engineering items', e);
@@ -763,6 +810,12 @@ router.get('/compositions', async (req: any, res: any) => {
         const q = req.query.q as string || '';
         const limit = parseInt(req.query.limit as string) || 50;
 
+        const cacheKey = `compositions:list:${databaseId || ''}:${q}:${limit}`;
+        const cached = engineeringSearchCache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
         const where: any = {};
         if (databaseId) where.databaseId = databaseId;
         if (q) {
@@ -779,6 +832,7 @@ router.get('/compositions', async (req: any, res: any) => {
             include: { _count: { select: { items: true } } }
         });
 
+        engineeringSearchCache.set(cacheKey, compositions);
         res.json(compositions);
     } catch (e: any) {
         console.error('Error listing compositions:', e);
@@ -795,6 +849,12 @@ router.get('/hub/search', async (req: any, res: any) => {
         const q = (req.query.q as string || '').trim();
         const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
         if (q.length < 2) return res.json({ compositions: [], items: [] });
+
+        const cacheKey = `hub:search:${q}:${limit}`;
+        const cached = engineeringSearchCache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
 
         const qFilter = [
             { code: { contains: q, mode: 'insensitive' as const } },
@@ -821,7 +881,9 @@ router.get('/hub/search', async (req: any, res: any) => {
             })
         ]);
 
-        res.json({ compositions, items });
+        const result = { compositions, items };
+        engineeringSearchCache.set(cacheKey, result);
+        res.json(result);
     } catch (e: any) {
         console.error('[Hub Search] Error:', e);
         res.status(500).json({ error: 'Erro na busca' });
@@ -834,6 +896,7 @@ router.get('/hub/search', async (req: any, res: any) => {
 router.post('/propria/create', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const tenantId = req.user?.tenantId || req.body.tenantId;
         const { code, description, unit, price, recordKind } = req.body;
 
@@ -933,6 +996,7 @@ router.post('/compositions', async (req: any, res: any) => {
         });
 
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         logger.info(`[CompositionSave] ✅ POST created PROPRIA: id=${comp.id} code=${comp.code} dbId=${propriaDb.id}`);
         res.json({ message: 'Composição criada com sucesso', composition: comp });
     } catch (e: any) {
@@ -996,6 +1060,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
         // Invalidate cache since we are writing changes
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
 
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
@@ -1493,6 +1558,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 router.delete('/compositions/:id/items', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const id = req.params.id;
         const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
 
@@ -1570,6 +1636,7 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
 router.delete('/compositions/:id', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const id = req.params.id;
 
         const existing = await prisma.engineeringComposition.findUnique({
@@ -1628,6 +1695,12 @@ router.get('/items', async (req: any, res: any) => {
             return res.status(400).json({ error: 'databaseId é obrigatório' });
         }
 
+        const cacheKey = `items:list:${databaseId}:${q}:${limit}`;
+        const cached = engineeringSearchCache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
         const where: any = { databaseId };
         if (q) {
             where.OR = [
@@ -1645,6 +1718,7 @@ router.get('/items', async (req: any, res: any) => {
             }
         });
 
+        engineeringSearchCache.set(cacheKey, items);
         res.json(items);
     } catch (e: any) {
         console.error('Error listing items:', e);
@@ -1658,6 +1732,7 @@ router.get('/items', async (req: any, res: any) => {
 router.put('/items/:id', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const id = req.params.id;
         const { code, description, unit, price, type } = req.body;
 
@@ -1704,6 +1779,7 @@ router.put('/items/:id', async (req: any, res: any) => {
 router.delete('/items/:id', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const id = req.params.id;
 
         const existing = await prisma.engineeringItem.findUnique({
@@ -1757,6 +1833,7 @@ router.delete('/items/:id', async (req: any, res: any) => {
 router.post('/propria/cleanup', async (req: any, res: any) => {
     try {
         compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
         const tenantId = req.user?.tenantId;
         if (!tenantId) return res.status(401).json({ error: 'Não autenticado' });
 
@@ -1835,20 +1912,30 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
             return res.json({ insumos: [], stats: { totalInsumos: 0, totalCusto: 0 } });
         }
 
-        // 2. For each item with a code, find its composition and drill down to insumos
+        // 2. Load compositions in batch to avoid N+1 queries
         const rawInsumos: any[] = [];
+        const uniqueCodes = Array.from(new Set(proposalItems.map(i => i.code).filter((c): c is string => !!c && c !== 'N/A')));
+
+        const compositions = uniqueCodes.length > 0 ? await prisma.engineeringComposition.findMany({
+            where: {
+                code: { in: uniqueCodes }
+            },
+            include: {
+                items: { include: { item: true } },
+                database: { select: { name: true, uf: true } },
+            }
+        }) : [];
+
+        // Map compositions by upper-case code for fast in-memory lookup
+        const compositionMap = new Map<string, any>();
+        for (const comp of compositions) {
+            compositionMap.set(comp.code.toUpperCase(), comp);
+        }
 
         for (const item of proposalItems) {
             if (!item.code || item.code === 'N/A') continue;
 
-            const composition = await prisma.engineeringComposition.findFirst({
-                where: { code: { equals: item.code, mode: 'insensitive' } },
-                include: {
-                    items: { include: { item: true } },
-                    database: { select: { name: true, uf: true } },
-                },
-            });
-
+            const composition = compositionMap.get(item.code.toUpperCase());
             if (!composition) continue;
 
             for (const ci of composition.items) {
