@@ -606,15 +606,43 @@ router.get('/compositions/:code', async (req: any, res: any) => {
 
         logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} proposalId=${proposalId || 'none'} codeVariants=${codeVariants.join(',')}`);
 
-        let composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
-        if (composition) {
-            logger.info(`[CompositionLookup] ✅ ANALYTICAL found: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
-        } else {
-            logger.info(`[CompositionLookup] ⚠️ No analytical found, trying fallback...`);
+        let composition = null;
+        if (sourceName === 'PROPRIA') {
+            const targetPropriaName = getPropriaDatabaseName(proposalId);
+            const propriaDatabaseWhere: any = { name: targetPropriaName };
+            if (req.user?.tenantId) propriaDatabaseWhere.tenantId = req.user.tenantId;
+
+            let foundPropria = await prisma.engineeringComposition.findFirst({
+                where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
+                include: compositionIncludes(),
+            });
+
+            if (!foundPropria && proposalId) {
+                const globalPropriaDatabaseWhere: any = { name: 'PROPRIA' };
+                if (req.user?.tenantId) globalPropriaDatabaseWhere.tenantId = req.user.tenantId;
+                foundPropria = await prisma.engineeringComposition.findFirst({
+                    where: { code: { in: codeVariants }, database: globalPropriaDatabaseWhere },
+                    include: compositionIncludes(),
+                });
+            }
+
+            if (foundPropria) {
+                logger.info(`[CompositionLookup] ⚡ Fast-path PROPRIA match (can be empty): db=${foundPropria.database?.name} code=${foundPropria.code} items=${foundPropria.items?.length || 0}`);
+                composition = foundPropria;
+            }
         }
-        if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
-        if (composition) {
-            logger.info(`[CompositionLookup] Fallback result: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
+
+        if (!composition) {
+            composition = await findBestAnalyticalComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
+            if (composition) {
+                logger.info(`[CompositionLookup] ✅ ANALYTICAL found: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
+            } else {
+                logger.info(`[CompositionLookup] ⚠️ No analytical found, trying fallback...`);
+            }
+            if (!composition) composition = await findFallbackComposition(codeVariants, databaseId, sourceName, req.user?.tenantId, proposalId);
+            if (composition) {
+                logger.info(`[CompositionLookup] Fallback result: db=${composition.database?.name} code=${composition.code} items=${composition.items?.length || 0}`);
+            }
         }
 
         if (!composition) {
@@ -1082,33 +1110,195 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         compositionCache.flushAll();
         engineeringSearchCache.flushAll();
 
-        // Start a transaction to delete old items and recreate
-        await prisma.$transaction(async (tx: any) => {
-            // Retrieve proposal's target database details if databaseId is provided
-            const targetDatabase = targetDbId
-                ? await tx.engineeringDatabase.findUnique({
-                    where: { id: targetDbId },
-                    select: { id: true, name: true, uf: true, payrollExemption: true }
+        // Helper: detect temporary/synthetic IDs that don't exist in DB
+        const isTempId = (valId: string | null | undefined) => 
+            !valId || valId.startsWith('new-') || valId.startsWith('temp-') || valId.startsWith('new-casca-') || valId.startsWith('new-aux-') || valId.startsWith('synthetic-') || valId.startsWith('etapa-');
+
+        // Retrieve proposal's target database details if databaseId is provided
+        const targetDatabase = targetDbId
+            ? await prisma.engineeringDatabase.findUnique({
+                where: { id: targetDbId },
+                select: { id: true, name: true, uf: true, payrollExemption: true }
+            })
+            : null;
+        if (targetDatabase) {
+            logger.info(`[CompositionSave] 🎯 Resolved target database context: name=${targetDatabase.name} uf=${targetDatabase.uf} payrollExemption=${targetDatabase.payrollExemption}`);
+        }
+
+        // Setup database and records lookups outside transaction to avoid locks/timeouts
+        let basePropria: any = null;
+        let officialItems: any[] = [];
+        let officialComps: any[] = [];
+        let propriaItems: any[] = [];
+        let propriaAuxs: any[] = [];
+        let existingNonTempItems: any[] = [];
+        let existingNonTempAuxs: any[] = [];
+
+        if (hasGroups) {
+            basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
+
+            const uniqueDbNames = [...new Set(flatItems.map(item => item._matchedDatabase).filter(name => name && name !== 'PRÓPRIO' && name !== 'PROPRIA'))];
+
+            const officialInputCodes = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const dbName = item._matchedDatabase;
+                    return !isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
                 })
-                : null;
-            if (targetDatabase) {
-                logger.info(`[CompositionSave] 🎯 Resolved target database context: name=${targetDatabase.name} uf=${targetDatabase.uf} payrollExemption=${targetDatabase.payrollExemption}`);
-            }
+                .map(item => item.item?.code || item.code)
+                .filter(Boolean);
 
-            const metadata = {
-                groupNotes: composition.groupNotes || null,
-                customGroupLabels: composition.customGroupLabels || null,
-                groupOrder: composition.groupOrder || null,
-                referenceDivisor: composition.referenceDivisor || null,
-                _officialRef: composition._officialRef || null,
-                observation: composition.observation || null,
-            };
+            const officialAuxCodes = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const dbName = item._matchedDatabase;
+                    return isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
+                })
+                .map(item => item.auxiliaryComposition?.code || item.code)
+                .filter(Boolean);
 
-            const newCode = composition.code || existing.code;
+            const propriaItemCodes = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const itemId = item.item ? item.item.id : item.itemId;
+                    return !isAux && itemId && isTempId(itemId) && item.item?.code;
+                })
+                .map(item => item.item.code)
+                .filter(c => c !== 'LIVRE' && c !== 'OBS');
 
+            const propriaAuxCodes = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                    return isAux && auxId && isTempId(auxId) && item.auxiliaryComposition?.code;
+                })
+                .map(item => item.auxiliaryComposition.code)
+                .filter(c => c !== 'LIVRE');
+
+            const nonTempItemIds = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const itemId = item.item ? item.item.id : item.itemId;
+                    return !isAux && itemId && !isTempId(itemId);
+                })
+                .map(item => item.item ? item.item.id : item.itemId);
+
+            const nonTempAuxIds = flatItems
+                .filter(item => {
+                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                    return isAux && auxId && !isTempId(auxId);
+                })
+                .map(item => item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId);
+
+            // Execute all lookups in parallel outside the transaction
+            const [
+                rOfficialItems,
+                rOfficialComps,
+                rPropriaItems,
+                rPropriaAuxs,
+                rExistingNonTempItems,
+                rExistingNonTempAuxs
+            ] = await Promise.all([
+                officialInputCodes.length > 0
+                    ? prisma.engineeringItem.findMany({
+                        where: {
+                            code: { in: officialInputCodes },
+                            database: { name: { in: uniqueDbNames } }
+                        },
+                        include: { database: true }
+                    })
+                    : Promise.resolve([]),
+                officialAuxCodes.length > 0
+                    ? prisma.engineeringComposition.findMany({
+                        where: {
+                            code: { in: officialAuxCodes },
+                            database: { name: { in: uniqueDbNames } }
+                        },
+                        include: { database: true }
+                    })
+                    : Promise.resolve([]),
+                propriaItemCodes.length > 0
+                    ? prisma.engineeringItem.findMany({
+                        where: {
+                            databaseId: basePropria.id,
+                            code: { in: propriaItemCodes }
+                        }
+                    })
+                    : Promise.resolve([]),
+                propriaAuxCodes.length > 0
+                    ? prisma.engineeringComposition.findMany({
+                        where: {
+                            databaseId: basePropria.id,
+                            code: { in: propriaAuxCodes }
+                        }
+                    })
+                    : Promise.resolve([]),
+                nonTempItemIds.length > 0
+                    ? prisma.engineeringItem.findMany({
+                        where: { id: { in: nonTempItemIds } },
+                        include: { database: true }
+                    })
+                    : Promise.resolve([]),
+                nonTempAuxIds.length > 0
+                    ? prisma.engineeringComposition.findMany({
+                        where: { id: { in: nonTempAuxIds } },
+                        include: { database: true }
+                    })
+                    : Promise.resolve([])
+            ]);
+
+            officialItems = rOfficialItems;
+            officialComps = rOfficialComps;
+            propriaItems = rPropriaItems;
+            propriaAuxs = rPropriaAuxs;
+            existingNonTempItems = rExistingNonTempItems;
+            existingNonTempAuxs = rExistingNonTempAuxs;
+        }
+
+        // Sort candidates to prefer newer reference databases (descending order)
+        const sortCandidates = (a: any, b: any) => {
+            const yearA = a.database?.referenceYear || 0;
+            const yearB = b.database?.referenceYear || 0;
+            if (yearA !== yearB) return yearB - yearA;
+            const monthA = a.database?.referenceMonth || 0;
+            const monthB = b.database?.referenceMonth || 0;
+            return monthB - monthA;
+        };
+        officialItems.sort(sortCandidates);
+        officialComps.sort(sortCandidates);
+
+        // Setup local maps for quick lookups
+        const localPropriaItems = new Map<string, any>();
+        for (const item of propriaItems) localPropriaItems.set(item.code, item);
+
+        const localPropriaAuxs = new Map<string, any>();
+        for (const aux of propriaAuxs) localPropriaAuxs.set(aux.code, aux);
+
+        const nonTempItemsMap = new Map<string, any>();
+        for (const item of existingNonTempItems) nonTempItemsMap.set(item.id, item);
+
+        const nonTempAuxsMap = new Map<string, any>();
+        for (const aux of existingNonTempAuxs) nonTempAuxsMap.set(aux.id, aux);
+
+        const metadata = {
+            groupNotes: composition.groupNotes || null,
+            customGroupLabels: composition.customGroupLabels || null,
+            groupOrder: composition.groupOrder || null,
+            referenceDivisor: composition.referenceDivisor || null,
+            _officialRef: composition._officialRef || null,
+            observation: composition.observation || null,
+        };
+
+        const newCode = composition.code || existing.code;
+        let txBasePropriaId = basePropria?.id;
+
+        // Start a transaction to delete old items and recreate (with expanded timeout of 30s)
+        await prisma.$transaction(async (tx: any) => {
             const isGlobalPropria = existing.database.name === 'PROPRIA';
             if (isGlobalPropria && proposalId) {
                 const targetDb = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
+                txBasePropriaId = targetDb.id;
                 let targetComp = await tx.engineeringComposition.findFirst({
                     where: { databaseId: targetDb.id, code: newCode }
                 });
@@ -1188,150 +1378,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 });
 
                 // Create new items — use proposal-specific or global PROPRIA database
-                const basePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
-
-                // Helper: detect temporary/synthetic IDs that don't exist in DB
-                const isTempId = (valId: string | null | undefined) => 
-                    !valId || valId.startsWith('new-') || valId.startsWith('temp-') || valId.startsWith('new-casca-') || valId.startsWith('new-aux-') || valId.startsWith('synthetic-') || valId.startsWith('etapa-');
-
-                // ────────────────────────────────────────────────────────────────
-                // BATCH LOOKUPS TO PREVENT N+1 QUERIES
-                // ────────────────────────────────────────────────────────────────
-                const uniqueDbNames = [...new Set(flatItems.map(item => item._matchedDatabase).filter(name => name && name !== 'PRÓPRIO' && name !== 'PROPRIA'))];
-
-                const officialInputCodes = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const dbName = item._matchedDatabase;
-                        return !isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
-                    })
-                    .map(item => item.item?.code || item.code)
-                    .filter(Boolean);
-
-                const officialAuxCodes = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const dbName = item._matchedDatabase;
-                        return isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
-                    })
-                    .map(item => item.auxiliaryComposition?.code || item.code)
-                    .filter(Boolean);
-
-                const propriaItemCodes = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const itemId = item.item ? item.item.id : item.itemId;
-                        return !isAux && itemId && isTempId(itemId) && item.item?.code;
-                    })
-                    .map(item => item.item.code)
-                    .filter(c => c !== 'LIVRE' && c !== 'OBS');
-
-                const propriaAuxCodes = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
-                        return isAux && auxId && isTempId(auxId) && item.auxiliaryComposition?.code;
-                    })
-                    .map(item => item.auxiliaryComposition.code)
-                    .filter(c => c !== 'LIVRE');
-
-                const nonTempItemIds = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const itemId = item.item ? item.item.id : item.itemId;
-                        return !isAux && itemId && !isTempId(itemId);
-                    })
-                    .map(item => item.item ? item.item.id : item.itemId);
-
-                const nonTempAuxIds = flatItems
-                    .filter(item => {
-                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
-                        const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
-                        return isAux && auxId && !isTempId(auxId);
-                    })
-                    .map(item => item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId);
-
-                // Execute all lookups in parallel
-                const [
-                    officialItems,
-                    officialComps,
-                    propriaItems,
-                    propriaAuxs,
-                    existingNonTempItems,
-                    existingNonTempAuxs
-                ] = await Promise.all([
-                    officialInputCodes.length > 0
-                        ? tx.engineeringItem.findMany({
-                            where: {
-                                code: { in: officialInputCodes },
-                                database: { name: { in: uniqueDbNames } }
-                            },
-                            include: { database: true }
-                        })
-                        : Promise.resolve([]),
-                    officialAuxCodes.length > 0
-                        ? tx.engineeringComposition.findMany({
-                            where: {
-                                code: { in: officialAuxCodes },
-                                database: { name: { in: uniqueDbNames } }
-                            },
-                            include: { database: true }
-                        })
-                        : Promise.resolve([]),
-                    propriaItemCodes.length > 0
-                        ? tx.engineeringItem.findMany({
-                            where: {
-                                databaseId: basePropria.id,
-                                code: { in: propriaItemCodes }
-                            }
-                        })
-                        : Promise.resolve([]),
-                    propriaAuxCodes.length > 0
-                        ? tx.engineeringComposition.findMany({
-                            where: {
-                                databaseId: basePropria.id,
-                                code: { in: propriaAuxCodes }
-                            }
-                        })
-                        : Promise.resolve([]),
-                    nonTempItemIds.length > 0
-                        ? tx.engineeringItem.findMany({
-                            where: { id: { in: nonTempItemIds } },
-                            include: { database: true }
-                        })
-                        : Promise.resolve([]),
-                    nonTempAuxIds.length > 0
-                        ? tx.engineeringComposition.findMany({
-                            where: { id: { in: nonTempAuxIds } },
-                            include: { database: true }
-                        })
-                        : Promise.resolve([])
-                ]);
-
-                // Sort candidates to prefer newer reference databases (descending order)
-                const sortCandidates = (a: any, b: any) => {
-                    const yearA = a.database?.referenceYear || 0;
-                    const yearB = b.database?.referenceYear || 0;
-                    if (yearA !== yearB) return yearB - yearA;
-                    const monthA = a.database?.referenceMonth || 0;
-                    const monthB = b.database?.referenceMonth || 0;
-                    return monthB - monthA;
-                };
-                officialItems.sort(sortCandidates);
-                officialComps.sort(sortCandidates);
-
-                // Setup local maps for quick lookups
-                const localPropriaItems = new Map<string, any>();
-                for (const item of propriaItems) localPropriaItems.set(item.code, item);
-
-                const localPropriaAuxs = new Map<string, any>();
-                for (const aux of propriaAuxs) localPropriaAuxs.set(aux.code, aux);
-
-                const nonTempItemsMap = new Map<string, any>();
-                for (const item of existingNonTempItems) nonTempItemsMap.set(item.id, item);
-
-                const nonTempAuxsMap = new Map<string, any>();
-                for (const aux of existingNonTempAuxs) nonTempAuxsMap.set(aux.id, aux);
+                const txBasePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
+                txBasePropriaId = txBasePropria.id;
 
                 // Loop through flatItems to sync database records
                 for (const item of flatItems) {
@@ -1416,7 +1464,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         if (!existingItem) {
                             existingItem = await tx.engineeringItem.create({
                                 data: {
-                                    databaseId: basePropria.id,
+                                    databaseId: txBasePropriaId,
                                     code: itemCode,
                                     description: item.item?.description || 'Novo Insumo Próprio (IA)',
                                     unit: item.item?.unit || 'UN',
@@ -1455,7 +1503,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         if (!existingAux) {
                             existingAux = await tx.engineeringComposition.create({
                                 data: {
-                                    databaseId: basePropria.id,
+                                    databaseId: txBasePropriaId,
                                     code: auxCode,
                                     description: item.auxiliaryComposition?.description || 'Nova Composição Auxiliar Própria (IA)',
                                     unit: item.auxiliaryComposition?.unit || 'UN',
@@ -1538,8 +1586,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     }
                     if (isAux && auxId) {
                         const auxExists = nonTempAuxsMap.has(auxId) || 
-                                          [...localPropriaAuxs.values()].some((a: any) => a.id === auxId) ||
-                                          officialComps.some((a: any) => a.id === auxId);
+                                           [...localPropriaAuxs.values()].some((a: any) => a.id === auxId) ||
+                                           officialComps.some((a: any) => a.id === auxId);
                         if (!auxExists) {
                             logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist. Aux code=${item.auxiliaryComposition?.code}`);
                             continue;
@@ -1559,6 +1607,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     });
                 }
             }
+        }, {
+            timeout: 30000 // 30s timeout
         });
 
         logger.info(`[CompositionSave] ✅ PUT complete: id=${targetCompId} code=${composition.code} items=${flatItems.length} saved`);
