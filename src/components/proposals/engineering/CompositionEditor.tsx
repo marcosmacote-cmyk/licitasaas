@@ -442,7 +442,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (isRoot && !isGrouper && costToUse !== undefined) {
                 const parsedDiv = refDivisorValue ? (parseFloat(refDivisorValue.replace(',', '.')) || 1) : 1;
                 if (parsedDiv > 0) {
-                    costToUse = costToUse / parsedDiv;
+                    costToUse = applyPrecision(costToUse / parsedDiv, { precision: engineeringConfig?.precision });
                 }
             }
 
@@ -452,7 +452,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 ...(costToUse !== undefined ? { unitCost: costToUse } : {})
             });
         }
-    }, [onUpdateItem, currentItem, drillStack.length, data?.description, refDivisorValue]);
+    }, [onUpdateItem, currentItem, drillStack.length, data?.description, refDivisorValue, engineeringConfig]);
 
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
@@ -1432,7 +1432,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setHasChanges(false);
 
             const divisor = refDivisorValue ? (parseFloat(refDivisorValue.replace(',', '.')) || 1) : 1;
-            const finalCost = divisor > 0 ? data.totalPrice / divisor : data.totalPrice;
+            const finalCost = divisor > 0 
+                ? applyPrecision(data.totalPrice / divisor, { precision: engineeringConfig?.precision }) 
+                : data.totalPrice;
 
             // Sync this composition's details (code, description, unit, cost, sourceName) to any matching spreadsheet items
             if (onUpdateItem && canonicalCode) {
@@ -1462,7 +1464,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
                     const rootDivValue = drillStack[0]?.snapshotRefDivisorValue;
                     const rootDiv = rootDivValue ? (parseFloat(rootDivValue.replace(',', '.')) || 1) : 1;
-                    const rootCost = rootDiv > 0 ? rootSnapshot.totalPrice / rootDiv : rootSnapshot.totalPrice;
+                    const rootCost = rootDiv > 0 
+                        ? applyPrecision(rootSnapshot.totalPrice / rootDiv, { precision: engineeringConfig?.precision }) 
+                        : rootSnapshot.totalPrice;
                     onUpdateItem(currentItem.id, { unitCost: rootCost });
                 }
             }
