@@ -3823,8 +3823,8 @@ import {
 // ═══════════════════════════════════════════════════════════
 router.post('/seed', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const ITEMS: Record<string, { name: string; uf: string; version: string; items: { code: string; desc: string; unit: string; price: number; type: string }[] }> = {
@@ -3991,8 +3991,8 @@ const xlsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 
 router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
@@ -4178,8 +4178,8 @@ let sinapiSyncJob: { startedAt: string; requestedBy?: string; description: strin
 
 router.post('/bases/sync-sinapi', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         if (sinapiSyncJob) {
@@ -4233,8 +4233,8 @@ import { syncSicro } from '../services/engineering/sicroCrawler';
 
 router.post('/bases/sync-sicro', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const { ufs = ['ALL'], months = 12 } = req.body;
@@ -4268,8 +4268,8 @@ import { syncSbc, getSbcRegions } from '../services/engineering/sbcCrawler';
 
 router.post('/bases/sync-sbc', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const sbcEmail = process.env.SBC_EMAIL;
@@ -4313,8 +4313,8 @@ import { syncCaern } from '../services/engineering/caernCrawler';
 
 router.post('/bases/sync-caern', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const currentYear = new Date().getFullYear();
@@ -4397,8 +4397,8 @@ router.get('/bases/orse/insumos/search', async (req: any, res: any) => {
 
 router.post('/bases/sync-orse', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
@@ -4430,8 +4430,8 @@ router.post('/bases/sync-orse', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.get('/bases/sicor-mg/status', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const hasCredentials = Boolean(
@@ -4457,8 +4457,8 @@ router.get('/bases/sicor-mg/status', async (req: any, res: any) => {
 
 router.get('/bases/sicor-mg/regions', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
         const authToken = String(req.headers['x-sicor-token'] || req.query.authToken || '') || undefined;
         const regions = await getSicorRegions(authToken);
@@ -4471,8 +4471,8 @@ router.get('/bases/sicor-mg/regions', async (req: any, res: any) => {
 
 router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
         const authToken = String(req.headers['x-sicor-token'] || req.query.authToken || '') || undefined;
         const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
@@ -4493,8 +4493,8 @@ router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
 
 router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
@@ -4547,8 +4547,8 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         const requestedRegime = String(req.body?.regime || 'ambas').toLowerCase();
@@ -4793,8 +4793,8 @@ router.post('/ai/extract-items-image', aiUpload.single('file'), async (req: any,
 // ═══════════════════════════════════════════════════════════
 router.post('/bases/import-excel', aiUpload.single('file'), async (req: any, res: any) => {
     try {
-        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        if (req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
         if (!req.file) {

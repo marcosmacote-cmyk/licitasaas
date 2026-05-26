@@ -162,6 +162,7 @@ export function EngineeringHub() {
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN';
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
     const fetchBases = async () => {
         try {
@@ -527,7 +528,7 @@ export function EngineeringHub() {
                     </p>
                 </div>
 
-                {isAdmin && (
+                {isSuperAdmin && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button 
                             onClick={() => handleSyncSinapi()}
@@ -908,7 +909,7 @@ export function EngineeringHub() {
                     <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
                         <FileSpreadsheet size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
                         <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Nenhuma base oficial instalada</h3>
-                        <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>{isAdmin ? 'Use os botões acima para sincronizar.' : 'Aguarde a equipe técnica instalar os catálogos.'}</p>
+                        <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>{isSuperAdmin ? 'Use os botões acima para sincronizar.' : 'Aguarde a equipe técnica instalar os catálogos.'}</p>
                     </div>
                 ) : groups.length === 0 ? (
                     <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
