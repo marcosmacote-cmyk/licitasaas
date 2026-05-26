@@ -720,8 +720,8 @@ export function validateEngineeringExtraction(
             // SINAPI codes are 5-6 digit numbers
             isValid = /^\d{4,7}$/.test(code.replace(/^0+/, ''));
         } else if (source === 'SEINFRA') {
-            // SEINFRA codes: C followed by digits, or just digits
-            isValid = /^C?\d{3,6}$/i.test(code);
+            // SEINFRA codes: C, I, G, R followed by digits, or just digits
+            isValid = /^[CIGR]?\d{3,6}$/i.test(code);
         } else if (source === 'ORSE') {
             // ORSE: digits or digits/ORSE
             isValid = /^\d{1,6}(\/ORSE)?$/i.test(code);

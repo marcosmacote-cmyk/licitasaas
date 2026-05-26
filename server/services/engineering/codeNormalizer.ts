@@ -35,6 +35,10 @@ export function normalizeCode(raw: string, source?: string): string {
 
         case 'SEINFRA': {
             const codeClean = code.toUpperCase();
+            // If it starts with G or R followed by digits: keep as is
+            if (/^[GR]\d{3,6}$/.test(codeClean)) {
+                return codeClean;
+            }
             // If it starts with I or 1 followed by digits: insumo
             if (/^[I1]\d{3,6}$/.test(codeClean)) {
                 return 'I' + codeClean.slice(1);
@@ -118,17 +122,19 @@ export function buildCodeVariants(code: string, source?: string): string[] {
     // Guard: do NOT generate for SINAPI (5-6 digit numbers) or ORSE codes.
     const srcUpper = source?.toUpperCase() || '';
     const isExplicitlySeinfra = srcUpper === 'SEINFRA';
-    const looksLikeSeinfra = /^C\d{3,5}$/i.test(code) || (/^I\d{3,5}$/i.test(code) && srcUpper !== 'ORSE');
+    const looksLikeSeinfra = /^C\d{3,5}$/i.test(code) || (/^[IGR]\d{3,5}$/i.test(code) && srcUpper !== 'ORSE');
     const isOtherKnownBase = ['SINAPI', 'ORSE', 'SICRO', 'SICRO3', 'SICOR', 'CAERN', 'SBC'].includes(srcUpper);
     if (isExplicitlySeinfra || (looksLikeSeinfra && !isOtherKnownBase)) {
         const clean = code.replace(/\s+/g, '').toUpperCase();
         let digits = clean;
-        if (clean.startsWith('C') || clean.startsWith('I')) {
+        if (clean.startsWith('C') || clean.startsWith('I') || clean.startsWith('G') || clean.startsWith('R')) {
             digits = clean.slice(1);
         }
         if (/^\d{3,6}$/.test(digits)) {
             variants.add(`C${digits}`);
             variants.add(`I${digits}`);
+            variants.add(`G${digits}`);
+            variants.add(`R${digits}`);
             variants.add(digits);
             if (digits.startsWith('1')) {
                 const rest = digits.slice(1);
@@ -162,8 +168,8 @@ export function validateCodeFormat(code: string, source: string): string | null 
         }
 
         case 'SEINFRA': {
-            if (!/^C?\d{3,6}$/i.test(trimmed)) {
-                return `Código SEINFRA inválido: "${trimmed}" — esperado C + 3-6 dígitos`;
+            if (!/^[CIGR]?\d{3,6}$/i.test(trimmed)) {
+                return `Código SEINFRA inválido: "${trimmed}" — esperado C, I, G, R + 3-6 dígitos`;
             }
             return null;
         }

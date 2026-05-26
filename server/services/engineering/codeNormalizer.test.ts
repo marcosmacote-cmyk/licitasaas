@@ -27,6 +27,13 @@ describe('normalizeCode', () => {
         expect(normalizeCode('11589', 'SEINFRA')).toBe('I1589');
     });
 
+    it('normalizes SEINFRA codes with G and R prefixes', () => {
+        expect(normalizeCode('G0698', 'SEINFRA')).toBe('G0698');
+        expect(normalizeCode('g0698', 'SEINFRA')).toBe('G0698');
+        expect(normalizeCode('R0003', 'SEINFRA')).toBe('R0003');
+        expect(normalizeCode('r0003', 'SEINFRA')).toBe('R0003');
+    });
+
     it('normalizes SEINFRA codes with internal spaces', () => {
         expect(normalizeCode('C 4495', 'SEINFRA')).toBe('C4495');
         expect(normalizeCode('1 7396', 'SEINFRA')).toBe('I7396');
@@ -82,6 +89,22 @@ describe('buildCodeVariants', () => {
         expect(variants).toContain('7396');
     });
 
+    it('generates cross variants for SEINFRA G and R codes', () => {
+        const variantsG = buildCodeVariants('G0698', 'SEINFRA');
+        expect(variantsG).toContain('G0698');
+        expect(variantsG).toContain('C0698');
+        expect(variantsG).toContain('I0698');
+        expect(variantsG).toContain('R0698');
+        expect(variantsG).toContain('0698');
+        
+        const variantsR = buildCodeVariants('R0003', 'SEINFRA');
+        expect(variantsR).toContain('R0003');
+        expect(variantsR).toContain('C0003');
+        expect(variantsR).toContain('I0003');
+        expect(variantsR).toContain('G0003');
+        expect(variantsR).toContain('0003');
+    });
+
     it('returns at least the original and normalized code', () => {
         const variants = buildCodeVariants('C4495', 'SEINFRA');
         expect(variants.length).toBeGreaterThanOrEqual(1);
@@ -103,6 +126,8 @@ describe('validateCodeFormat', () => {
     it('accepts valid SEINFRA codes', () => {
         expect(validateCodeFormat('C4495', 'SEINFRA')).toBeNull();
         expect(validateCodeFormat('4495', 'SEINFRA')).toBeNull();
+        expect(validateCodeFormat('G0698', 'SEINFRA')).toBeNull();
+        expect(validateCodeFormat('R0003', 'SEINFRA')).toBeNull();
     });
 
     it('rejects invalid SEINFRA codes', () => {

@@ -144,8 +144,8 @@ export function parseInsumosExcel(buffer: Buffer): ParsedInsumo[] {
             if (!row || row.length < 3) continue;
             
             const code = String(row[0] || '').trim();
-            // Valid insumo codes: I followed by digits, or just numeric codes
-            if (!code.match(/^I\d{3,5}$/i) && !code.match(/^\d{4,6}$/)) continue;
+            // Valid insumo codes: I, G or R followed by digits, or just numeric codes
+            if (!code.match(/^[IGR]\d{3,5}$/i) && !code.match(/^\d{4,6}$/)) continue;
 
             const description = String(row[1] || '').trim();
             const unit = String(row[2] || '').trim();
@@ -231,8 +231,8 @@ export function parseComposicoesExcel(buffer: Buffer): ParsedComposition[] {
             const col4 = String(row[4] || '').trim();
             if (col4 === 'Total:' || col3 === 'Encargos Sociais:' || col3 === 'Valor BDI:') continue;
 
-            // Detect item row: I-code or C-code | Description | Unit | Coefficient | Price | Total
-            const itemMatch = col0.match(/^([IC]\d{4,5})$/i);
+            // Detect item row: I-code, C-code, G-code or R-code | Description | Unit | Coefficient | Price | Total
+            const itemMatch = col0.match(/^([ICGR]\d{4,5})$/i);
             if (itemMatch) {
                 const insumoCode = itemMatch[1].toUpperCase();
                 const desc = String(row[1] || '').trim();
