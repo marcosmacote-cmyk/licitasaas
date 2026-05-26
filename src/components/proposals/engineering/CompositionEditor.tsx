@@ -3222,6 +3222,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 onChange={e => {
                                     const newVal = e.target.value;
                                     setObservation(newVal);
+                                    setHasChanges(true);
                                     if (!activeCode || !onUpdateItem || !engineeringConfig) return;
                                     const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [activeCode]: newVal };
                                     if (!newVal) delete notes[activeCode];
