@@ -112,7 +112,7 @@ router.post('/', authenticateToken, aiLimiter, async (req: any, res) => {
             logger.warn(`[AI] No valid files found for analysis among: ${fileNames.join(', ')}`);
             return res.status(400).json({
                 error: 'Nenhum arquivo válido encontrado para análise no servidor.',
-                details: `Foram processados ${fileNames.length} arquivos, mas nenhum pôde ser resgatado do armazenamento. Verifique se o bucket do Supabase está correto.`
+                details: `Foram processados ${fileNames.length} arquivos, mas nenhum pôde ser resgatado do armazenamento. Verifique se os arquivos existem no diretório de uploads.`
             });
         }
 

@@ -140,7 +140,7 @@ app.use('/api/auth', authRoutes);
 
 /**
  * Helper to fetch file buffer from multiple sources:
- * 1. Storage Service (Supabase/Local)
+ * 1. Storage Service (Local disk)
  * 2. Local File System Fallback
  * 3. Database Blob Fallback (if applicable)
  */
@@ -227,9 +227,9 @@ app.get('/uploads/:filename', async (req, res, next) => {
     }
 });
 
-// ── Supabase URL Proxy (migration safety net) ──
-// When the DB has old supabase.co URLs, the frontend requests go through this proxy.
-// The storageService (in RAILWAY mode) fetches from Supabase, caches locally, and serves.
+// ── Storage URL Proxy (legacy URL safety net) ──
+// When the DB has old external URLs, the frontend requests go through this proxy.
+// The storageService fetches the file from local disk by filename.
 app.get('/api/storage-proxy', async (req, res) => {
     try {
         const url = req.query.url as string;
@@ -319,9 +319,7 @@ app.get('/api/debug-uploads', authenticateToken, requireSuperAdmin, (req: any, r
         res.json({
             count: files.length,
             path: uploadDir,
-            version: '1.0.5-supabase-fix',
-            storageType: process.env.STORAGE_TYPE || 'LOCAL',
-            supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY),
+            storageType: 'LOCAL',
             node_env: process.env.NODE_ENV,
             cwd: process.cwd(),
             server_root: SERVER_ROOT

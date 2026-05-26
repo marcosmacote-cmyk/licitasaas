@@ -11,6 +11,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { captureError } from '../lib/sentry';
 
 // ── Classificação de erros ──────────────────────────────────
 
@@ -199,6 +200,12 @@ export function handleApiError(res: Response, error: any, context?: string): voi
         stack: error?.stack?.split('\n').slice(0, 3).join('\n'),
         timestamp: new Date().toISOString(),
     });
+
+    // F-15: Report to Sentry
+    captureError(
+        error instanceof Error ? error : new Error(String(error?.message || error)),
+        { context: context || 'API', code: translated.code }
+    );
 
     // Resposta limpa para o frontend
     if (!res.headersSent) {

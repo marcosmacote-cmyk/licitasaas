@@ -3,7 +3,7 @@
  * 🗄️ LicitaSaaS — Backup Automatizado do PostgreSQL
  * 
  * Este script faz pg_dump do banco, comprime com gzip,
- * e sobe para o Supabase Storage (bucket: backups).
+ * e salva em diretório persistente (Railway Volume).
  * 
  * Uso manual:
  *   npx ts-node server/scripts/backup-database.ts
@@ -12,17 +12,16 @@
  *   node dist/scripts/backup-database.js
  * 
  * Variáveis necessárias:
- *   DATABASE_URL        — Connection string do Postgres
- *   SUPABASE_URL        — URL do projeto Supabase  
- *   SUPABASE_KEY        — Service role key
- *   BACKUP_RETENTION_DAYS — Dias para manter backups (default: 7)
+ *   DATABASE_URL            — Connection string do Postgres
+ *   BACKUP_DIR              — Diretório persistente para backups (default: /app/backups)
+ *   BACKUP_RETENTION_DAYS   — Dias para manter backups (default: 7)
  */
 
 import { execSync } from 'child_process';
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { logger } from '../lib/logger';
 
 // Load env
 const SERVER_ROOT = __dirname.endsWith('dist/scripts')
@@ -31,10 +30,25 @@ const SERVER_ROOT = __dirname.endsWith('dist/scripts')
 dotenv.config({ path: path.join(SERVER_ROOT, '.env'), override: false });
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const BACKUP_BUCKET = process.env.BACKUP_BUCKET || 'backups';
 const RETENTION_DAYS = parseInt(process.env.BACKUP_RETENTION_DAYS || '7');
+
+/**
+ * Determines the backup directory. Priority:
+ *   1. BACKUP_DIR env var (explicit configuration)
+ *   2. /app/backups (Railway Volume mount — persistent across deploys)
+ *   3. {SERVER_ROOT}/backups (local development fallback)
+ */
+function getBackupDir(): string {
+    if (process.env.BACKUP_DIR) {
+        return process.env.BACKUP_DIR;
+    }
+    // Railway: use /app/backups (should be a mounted Volume)
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
+        return '/app/backups';
+    }
+    // Local dev fallback
+    return path.join(SERVER_ROOT, 'backups');
+}
 
 // ── Helpers ──
 
@@ -43,42 +57,41 @@ function timestamp(): string {
 }
 
 function log(msg: string) {
-    console.log(`[Backup ${new Date().toISOString()}] ${msg}`);
+    logger.info(`[Backup] ${msg}`);
 }
 
 function error(msg: string) {
-    console.error(`[Backup ERROR ${new Date().toISOString()}] ${msg}`);
+    logger.error(`[Backup] ${msg}`);
 }
 
 // ── Main ──
 
-async function runBackup(): Promise<{ success: boolean; fileName?: string; sizeKB?: number; error?: string }> {
+async function runBackup(): Promise<{ success: boolean; fileName?: string; sizeKB?: number; path?: string; error?: string }> {
     // Validate env
     if (!DATABASE_URL) {
         error('DATABASE_URL não configurada');
         return { success: false, error: 'DATABASE_URL not set' };
     }
 
-    const useSupabase = !!(SUPABASE_URL && SUPABASE_KEY);
+    const backupDir = getBackupDir();
     const fileName = `licitasaas-backup-${timestamp()}.sql.gz`;
-    const tmpDir = path.join(SERVER_ROOT, '.tmp-backups');
-    const tmpFile = path.join(tmpDir, fileName);
+    const filePath = path.join(backupDir, fileName);
 
     try {
-        // 1. Create temp dir
-        if (!fs.existsSync(tmpDir)) {
-            fs.mkdirSync(tmpDir, { recursive: true });
+        // 1. Ensure backup directory exists
+        if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+            log(`Diretório de backup criado: ${backupDir}`);
         }
 
         // 2. pg_dump → gzip
-        log(`Iniciando pg_dump...`);
+        log(`Iniciando pg_dump para ${backupDir}...`);
         const startTime = Date.now();
 
-        // Use pg_dump with DATABASE_URL, pipe through gzip
         // --no-owner --no-acl: makes restore easier across environments
         // --format=plain: SQL text format (compressible)
         execSync(
-            `pg_dump "${DATABASE_URL}" --no-owner --no-acl --clean --if-exists | gzip > "${tmpFile}"`,
+            `pg_dump "${DATABASE_URL}" --no-owner --no-acl --clean --if-exists | gzip > "${filePath}"`,
             {
                 timeout: 300_000, // 5 min max
                 stdio: ['pipe', 'pipe', 'pipe'],
@@ -87,93 +100,55 @@ async function runBackup(): Promise<{ success: boolean; fileName?: string; sizeK
         );
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-        const stats = fs.statSync(tmpFile);
+        const stats = fs.statSync(filePath);
         const sizeKB = Math.round(stats.size / 1024);
 
-        log(`pg_dump concluído em ${duration}s — ${sizeKB}KB comprimido`);
+        log(`✅ pg_dump concluído em ${duration}s — ${sizeKB}KB comprimido → ${filePath}`);
 
-        // 3. Upload to Supabase Storage (if configured)
-        if (useSupabase) {
-            log(`Enviando para Supabase Storage (bucket: ${BACKUP_BUCKET})...`);
-            const supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!);
+        // 3. Cleanup old backups (retention policy)
+        await cleanupOldBackups(backupDir);
 
-            // Ensure bucket exists
-            const { error: bucketError } = await supabase.storage.createBucket(BACKUP_BUCKET, {
-                public: false,
-                fileSizeLimit: 500 * 1024 * 1024, // 500MB max
-            });
-            // Ignore "already exists" error
-            if (bucketError && !bucketError.message?.includes('already exists')) {
-                log(`Aviso ao criar bucket: ${bucketError.message} (pode já existir)`);
-            }
-
-            const fileBuffer = fs.readFileSync(tmpFile);
-            const remotePath = `daily/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from(BACKUP_BUCKET)
-                .upload(remotePath, fileBuffer, {
-                    contentType: 'application/gzip',
-                    upsert: true
-                });
-
-            if (uploadError) {
-                error(`Falha no upload: ${uploadError.message}`);
-                return { success: false, error: `Upload failed: ${uploadError.message}` };
-            }
-
-            log(`✅ Upload concluído: ${BACKUP_BUCKET}/${remotePath}`);
-
-            // 4. Cleanup old backups (retention policy)
-            await cleanupOldBackups(supabase);
-        } else {
-            log(`⚠️ Supabase não configurado. Backup salvo localmente: ${tmpFile}`);
-            // Keep local file if no Supabase
-            return { success: true, fileName, sizeKB };
-        }
-
-        // 5. Remove local temp file (Supabase has it now)
-        fs.unlinkSync(tmpFile);
-        log(`Arquivo local temporário removido`);
-
-        return { success: true, fileName, sizeKB };
+        return { success: true, fileName, sizeKB, path: filePath };
 
     } catch (err: any) {
         error(`Falha no backup: ${err.message}`);
 
         // Cleanup on error
         try {
-            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         } catch (_) { }
 
         return { success: false, error: err.message };
     }
 }
 
-async function cleanupOldBackups(supabase: any): Promise<void> {
+/**
+ * Removes backup files older than RETENTION_DAYS.
+ * Only deletes files matching the naming pattern: licitasaas-backup-*.sql.gz
+ */
+async function cleanupOldBackups(backupDir: string): Promise<void> {
     try {
-        const { data: files } = await supabase.storage
-            .from(BACKUP_BUCKET)
-            .list('daily', { limit: 100, sortBy: { column: 'created_at', order: 'asc' } });
+        const files = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith('licitasaas-backup-') && f.endsWith('.sql.gz'));
 
-        if (!files || files.length === 0) return;
+        if (files.length === 0) return;
 
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
+        const cutoffMs = Date.now() - (RETENTION_DAYS * 24 * 60 * 60 * 1000);
+        let removed = 0;
 
-        const toDelete: string[] = [];
         for (const file of files) {
-            const fileDate = new Date(file.created_at);
-            if (fileDate < cutoffDate) {
-                toDelete.push(`daily/${file.name}`);
+            const filePath = path.join(backupDir, file);
+            const stat = fs.statSync(filePath);
+            if (stat.mtimeMs < cutoffMs) {
+                fs.unlinkSync(filePath);
+                removed++;
             }
         }
 
-        if (toDelete.length > 0) {
-            await supabase.storage.from(BACKUP_BUCKET).remove(toDelete);
-            log(`🗑️ Removidos ${toDelete.length} backups antigos (>${RETENTION_DAYS} dias)`);
+        if (removed > 0) {
+            log(`🗑️ Removidos ${removed} backups antigos (>${RETENTION_DAYS} dias)`);
         } else {
-            log(`Nenhum backup antigo para remover (retenção: ${RETENTION_DAYS} dias)`);
+            log(`Nenhum backup antigo para remover (retenção: ${RETENTION_DAYS} dias, ${files.length} arquivos)`);
         }
     } catch (err: any) {
         error(`Falha na limpeza: ${err.message}`);
@@ -187,11 +162,12 @@ export { runBackup };
 if (require.main === module) {
     log('═══════════════════════════════════════');
     log('  LicitaSaaS — Backup Automatizado');
+    log(`  Destino: ${getBackupDir()}`);
     log('═══════════════════════════════════════');
 
     runBackup().then(result => {
         if (result.success) {
-            log(`✅ BACKUP CONCLUÍDO: ${result.fileName} (${result.sizeKB}KB)`);
+            log(`✅ BACKUP CONCLUÍDO: ${result.fileName} (${result.sizeKB}KB) → ${result.path}`);
             process.exit(0);
         } else {
             error(`❌ BACKUP FALHOU: ${result.error}`);

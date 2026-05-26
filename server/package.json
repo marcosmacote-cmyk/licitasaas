@@ -21,7 +21,6 @@
     "@google/genai": "^1.42.0",
     "@prisma/client": "^5.22.0",
     "@sentry/node": "^10.48.0",
-    "@supabase/supabase-js": "^2.98.0",
     "@types/axios": "^0.9.36",
     "@types/cheerio": "^0.22.35",
     "adm-zip": "^0.5.17",

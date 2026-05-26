@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, ScanSearch, SignalHigh, CheckCircle, AlertTriangle, Building2, FileText, Paperclip, Link2, Pencil } from 'lucide-react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, ScanSearch, SignalHigh, CheckCircle, AlertTriangle, Building2, Link2, Pencil } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
 import { LiveCountdown, StatusBadge, NextStepBanner } from './ui';
@@ -231,7 +231,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 
                                 const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil || isPCP;
                                 
-                                const validLinksExt = link.split(',').filter(l => !l.includes('supabase.co'));
+                                const validLinksExt = link.split(',').filter(l => l.trim());
                                 const hasComprasNetLink = validLinksExt.some(l => l.includes('cnetmobile') || l.includes('comprasnet'));
                                 const needsComprasNetLink = isComprasNet && !hasComprasNetLink;
                                 const isOtherPlatform = link.includes('pncp.gov.br') && !isMonitorable;
@@ -422,8 +422,6 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                     // Classificar cada link
                                     const classifyLink = (url: string) => {
-                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', IconComp: FileText, color: '#ef4444', label: 'PDF do Edital' };
-                                        if (url.includes('supabase.co')) return { type: 'Arquivo', IconComp: Paperclip, color: '#8b5cf6', label: 'Arquivo Anexo' };
                                         if (url.includes('pncp.gov.br')) return { type: 'PNCP', IconComp: Building2, color: '#6366f1', label: 'Portal PNCP' };
                                         if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', IconComp: MessageSquare, color: '#22c55e', label: 'ComprasNet (Chat)' };
                                         if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', IconComp: MessageSquare, color: '#f59e0b', label: 'BLL Compras (Chat)' };

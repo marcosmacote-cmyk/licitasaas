@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { JWT_SECRET } from '../lib/constants';
+import { setSentryUser } from '../lib/sentry';
 
 // Extend Express Request type to include user
 export interface AuthenticatedRequest extends Request {
@@ -18,6 +19,10 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
         if (err) return res.status(403).json({ error: 'Token inválido ou expirado' });
         req.user = decoded;
+        // F-16: Set Sentry user context for error attribution
+        if (decoded?.userId && decoded?.tenantId) {
+            setSentryUser(decoded.userId, decoded.tenantId);
+        }
         next();
     });
 };
