@@ -585,9 +585,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             };
         }
 
+        const targetGroup = getLastTargetGroup() || typeKey;
         const updated = { ...data, groups: { ...data.groups } };
-        if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
-        updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
+        if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
+        updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
         updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
         updated.totalDirect = updated.totalPrice;
@@ -640,9 +641,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 item: { id: result.item.id, code: result.item.code, description: result.item.description, unit: result.item.unit, type: 'MATERIAL', price }
             };
 
+            const targetGroup = getLastTargetGroup() || typeKey;
             const updated = { ...data, groups: { ...data.groups } };
-            if (!updated.groups[typeKey]) updated.groups[typeKey] = [];
-            updated.groups[typeKey] = [...updated.groups[typeKey], newItem];
+            if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
+            updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
             updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
             updated.totalDirect = updated.totalPrice;
             setData(updated);
@@ -1056,6 +1058,20 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
         return Array.from(allKeys);
     }, [data, customGroupLabels, groupOrder]);
+
+    const getLastTargetGroup = useCallback(() => {
+        const keys = getEffectiveGroupKeys();
+        for (let i = keys.length - 1; i >= 0; i--) {
+            const key = keys[i];
+            if (key === 'OBSERVACAO') continue;
+            const groupItems = data?.groups?.[key] || [];
+            const isCustomGroup = !GROUP_META[key] || key.startsWith('CUSTOM_') || !!customGroupLabels[key];
+            if (groupItems.length > 0 || isCustomGroup) {
+                return key;
+            }
+        }
+        return null;
+    }, [data, customGroupLabels, getEffectiveGroupKeys]);
 
     const handleGroupDrop = (targetIdx: number, isDirectDrop: boolean = false) => {
         if (dragGroupKey === null) return;
@@ -1622,8 +1638,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             } : undefined
         };
 
+        const targetGroup = freeItemTargetGroup || getLastTargetGroup() || typeKey;
         const updated = { ...data, groups: { ...data.groups } };
-        const targetGroup = freeItemTargetGroup || typeKey;
         if (!updated.groups[targetGroup]) updated.groups[targetGroup] = [];
         updated.groups[targetGroup] = [...updated.groups[targetGroup], newItem];
 
