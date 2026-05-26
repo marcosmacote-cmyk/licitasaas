@@ -2133,7 +2133,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 )}
 
                 {/* AI Dropzone — collapsible, shown when user clicks "Extração IA" in toolbar */}
-                {!isGrouperType(currentItem.type) && data && !error && data.items?.length > 0 && showAiDropzone && (
+                {!isGrouperType(currentItem.type) && data && !error && (data.items?.length > 0 || Object.keys(customGroupLabels).length > 0) && showAiDropzone && (
                     <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--color-border)', background: 'rgba(139,92,246,0.03)' }}>
                         <SmartCpuDropzone onExtract={handleExtractAi} isExtracting={isExtractingAi} />
                         <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
@@ -2270,7 +2270,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </div>
                     )}
 
-                    {data && !error && data.items?.length === 0 && (
+                    {data && !error && data.items?.length === 0 && Object.keys(customGroupLabels).length === 0 && (
                         <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                             <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
                             <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--color-text-primary)' }}>Composição Vazia</div>
@@ -2290,7 +2290,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         </div>
                     )}
 
-                    {data && !error && data.items?.length > 0 && (
+                    {data && !error && (data.items?.length > 0 || Object.keys(customGroupLabels).length > 0) && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             {data.hasAnalyticalItems === false && (
                                 <div style={{
