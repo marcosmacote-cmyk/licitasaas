@@ -410,12 +410,29 @@ async function autoCleanCompositionMetadata(comp: any) {
     }
 }
 
+function sortCompositionsInMemory(comps: any[]) {
+    return comps.sort((a, b) => {
+        const yearA = a.database?.referenceYear ?? 0;
+        const yearB = b.database?.referenceYear ?? 0;
+        if (yearB !== yearA) return yearB - yearA;
+
+        const monthA = a.database?.referenceMonth ?? 0;
+        const monthB = b.database?.referenceMonth ?? 0;
+        if (monthB !== monthA) return monthB - monthA;
+
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateB - dateA;
+    });
+}
+
 async function findCompositionWithItems(codeVariants: string[], where: any) {
-    return prisma.engineeringComposition.findFirst({
+    const comps = await prisma.engineeringComposition.findMany({
         where: { ...where, code: { in: codeVariants }, items: { some: {} } },
         include: compositionIncludes(),
-        orderBy: compositionOrderBy(),
     });
+    if (comps.length === 0) return null;
+    return sortCompositionsInMemory(comps)[0];
 }
 
 async function findBestAnalyticalComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string, proposalId?: string) {
@@ -535,21 +552,23 @@ async function findFallbackComposition(codeVariants: string[], databaseId?: stri
         const targetPropriaName = getPropriaDatabaseName(proposalId);
         const propriaDatabaseWhere: any = { name: targetPropriaName };
         if (tenantId) propriaDatabaseWhere.tenantId = tenantId;
-        const propria = await prisma.engineeringComposition.findFirst({
+        const compsPropria = await prisma.engineeringComposition.findMany({
             where: { code: { in: codeVariants }, database: propriaDatabaseWhere },
             include,
-            orderBy: compositionOrderBy(),
         });
-        if (propria) return propria;
+        if (compsPropria.length > 0) {
+            return sortCompositionsInMemory(compsPropria)[0];
+        }
 
         if (proposalId) {
             const globalPropriaDatabaseWhere: any = { name: 'PROPRIA', tenantId };
-            const globalPropria = await prisma.engineeringComposition.findFirst({
+            const globalCompsPropria = await prisma.engineeringComposition.findMany({
                 where: { code: { in: codeVariants }, database: globalPropriaDatabaseWhere },
                 include,
-                orderBy: compositionOrderBy(),
             });
-            if (globalPropria) return globalPropria;
+            if (globalCompsPropria.length > 0) {
+                return sortCompositionsInMemory(globalCompsPropria)[0];
+            }
         }
     }
 
@@ -557,11 +576,12 @@ async function findFallbackComposition(codeVariants: string[], databaseId?: stri
     if (databaseId) where.databaseId = databaseId;
     else if (sourceName) where.database = { name: sourceName };
 
-    return prisma.engineeringComposition.findFirst({
+    const comps = await prisma.engineeringComposition.findMany({
         where,
         include,
-        orderBy: compositionOrderBy(),
     });
+    if (comps.length === 0) return null;
+    return sortCompositionsInMemory(comps)[0];
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -679,16 +699,16 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             String(resolvedComposition.database?.type || '').toUpperCase() === 'OFICIAL'
         ) {
             // ── RETRY: Try to find ANY composition with this code that HAS analytical items ──
-            analyticalFallback = await prisma.engineeringComposition.findFirst({
+            const fallbacks = await prisma.engineeringComposition.findMany({
                 where: {
                     code: { in: codeVariants },
                     items: { some: {} },
                 },
                 include: compositionIncludes(),
-                orderBy: compositionOrderBy(),
             });
 
-            if (analyticalFallback && analyticalFallback.items.length > 0) {
+            if (fallbacks.length > 0) {
+                analyticalFallback = sortCompositionsInMemory(fallbacks)[0];
                 logger.info(`[CompositionLookup] 🔄 Found analytical version in db=${analyticalFallback.database?.name} (${analyticalFallback.items.length} items) — using instead of empty composition`);
                 composition = analyticalFallback;
             } else {
