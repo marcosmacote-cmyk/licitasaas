@@ -776,7 +776,14 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
     // Inject compositionNotes from reportConfig
     const cNotes = engConfig?.reportConfig?.compositionNotes || {};
     for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
-      if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+      if (comp.code && cNotes[comp.code]) {
+        comp.observacao = cNotes[comp.code];
+      } else if (comp.metadata) {
+        const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+        if (meta?.observation) {
+          comp.observacao = meta.observation;
+        }
+      }
     }
 
     // Group compositions by chapter
@@ -829,7 +836,14 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
     // Inject compositionNotes from reportConfig
     const cNotes = engConfig?.reportConfig?.compositionNotes || {};
     for (const comp of [...report.principalCompositions, ...(report.auxiliaryCompositions || [])]) {
-      if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+      if (comp.code && cNotes[comp.code]) {
+        comp.observacao = cNotes[comp.code];
+      } else if (comp.metadata) {
+        const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+        if (meta?.observation) {
+          comp.observacao = meta.observation;
+        }
+      }
     }
 
     sectionHeaderRow(ws, 'Composições Principais', 8);

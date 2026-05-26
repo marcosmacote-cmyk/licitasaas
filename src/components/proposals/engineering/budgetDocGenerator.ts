@@ -798,7 +798,14 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
         for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
-            if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+            if (comp.code && cNotes[comp.code]) {
+                comp.observacao = cNotes[comp.code];
+            } else if (comp.metadata) {
+                const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                if (meta?.observation) {
+                    comp.observacao = meta.observation;
+                }
+            }
         }
 
         // FIX B6: Group compositions by etapa/chapter, using itemNumbers[0] for routing
@@ -854,7 +861,14 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
         for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
-            if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+            if (comp.code && cNotes[comp.code]) {
+                comp.observacao = cNotes[comp.code];
+            } else if (comp.metadata) {
+                const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                if (meta?.observation) {
+                    comp.observacao = meta.observation;
+                }
+            }
         }
 
         html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
@@ -1024,7 +1038,14 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             const report = await res.json();
             const cNotes = rc.compositionNotes || {};
             for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
-                if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+                if (comp.code && cNotes[comp.code]) {
+                    comp.observacao = cNotes[comp.code];
+                } else if (comp.metadata) {
+                    const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                    if (meta?.observation) {
+                        comp.observacao = meta.observation;
+                    }
+                }
             }
             const compMap = new Map<string, any[]>();
             for (const comp of report.principalCompositions) {
@@ -1064,7 +1085,14 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             const report = await res.json();
             const cNotes = rc.compositionNotes || {};
             for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
-                if (comp.code && cNotes[comp.code]) comp.observacao = cNotes[comp.code];
+                if (comp.code && cNotes[comp.code]) {
+                    comp.observacao = cNotes[comp.code];
+                } else if (comp.metadata) {
+                    const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                    if (meta?.observation) {
+                        comp.observacao = meta.observation;
+                    }
+                }
             }
             h += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
             for (const comp of report.principalCompositions) h += renderComposition(comp, false, rc);

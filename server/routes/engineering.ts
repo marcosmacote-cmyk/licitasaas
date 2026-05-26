@@ -995,6 +995,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 groupOrder: composition.groupOrder || null,
                 referenceDivisor: composition.referenceDivisor || null,
                 _officialRef: composition._officialRef || null,
+                observation: composition.observation || null,
             };
 
             const newCode = composition.code || existing.code;

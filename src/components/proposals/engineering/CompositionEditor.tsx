@@ -345,7 +345,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         snapshotRefDivisorLabel?: string;
         snapshotRefDivisorValue?: string;
         snapshotHasChanges?: boolean;
+        snapshotObservation?: string;
     }[]>([]);
+    const [observation, setObservation] = useState('');
     // Grouper editing states
     const [grouperDesc, setGrouperDesc] = useState('');
     const [grouperFactor, setGrouperFactor] = useState('1');
@@ -629,7 +631,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         snapshotGroupOrder?: string[],
         snapshotRefDivisorLabel?: string,
         snapshotRefDivisorValue?: string,
-        snapshotHasChanges?: boolean
+        snapshotHasChanges?: boolean,
+        snapshotObservation?: string
     ) => {
         setLoading(false);
         setError('');
@@ -640,6 +643,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setRefDivisorLabel(snapshotRefDivisorLabel || '');
         setRefDivisorValue(snapshotRefDivisorValue || '');
         setHasChanges(snapshotHasChanges ?? false);
+        setObservation(snapshotObservation || '');
     }, []);
 
     const loadComposition = useCallback(async (code: string, overrideSourceName?: string, overrideDatabaseId?: string) => {
@@ -713,11 +717,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 setRefDivisorLabel(normalized.referenceDivisor.label || '');
                 setRefDivisorValue(String(normalized.referenceDivisor.value || ''));
             }
+            const cachedNote = engineeringConfig?.reportConfig?.compositionNotes?.[code];
+            setObservation(cachedNote !== undefined ? cachedNote : (normalized.observation || ''));
         } catch {
             setError('not_found');
         }
         setLoading(false);
-    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig?.precision, proposalId]);
+    }, [currentItem?.priceAudit?.matchedDatabaseId, currentItem?.sourceName, currentItem?.insumos, engineeringConfig, proposalId]);
 
     useEffect(() => {
         if (currentItem) {
@@ -1349,7 +1355,18 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             const res = await fetch(`/api/engineering/compositions/${targetId}${qs ? `?${qs}` : ''}`, {
                 method: 'PUT',
                 headers: hdrs(),
-                body: JSON.stringify({ composition: { ...data, code: canonicalCode, _officialRef: officialRef, groupNotes, customGroupLabels, groupOrder, referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined } })
+                body: JSON.stringify({
+                    composition: {
+                        ...data,
+                        code: canonicalCode,
+                        _officialRef: officialRef,
+                        groupNotes,
+                        customGroupLabels,
+                        groupOrder,
+                        observation,
+                        referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined
+                    }
+                })
             });
             if (!res.ok) {
                 const errBody = await res.json().catch(() => ({}));
@@ -1907,7 +1924,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             rootEntry.snapshotGroupOrder,
                                             rootEntry.snapshotRefDivisorLabel,
                                             rootEntry.snapshotRefDivisorValue,
-                                            rootEntry.snapshotHasChanges
+                                            rootEntry.snapshotHasChanges,
+                                            rootEntry.snapshotObservation
                                         );
                                     } else {
                                         loadComposition(currentItem.code);
@@ -1933,7 +1951,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                         nextEntry.snapshotGroupOrder,
                                                         nextEntry.snapshotRefDivisorLabel,
                                                         nextEntry.snapshotRefDivisorValue,
-                                                        nextEntry.snapshotHasChanges
+                                                        nextEntry.snapshotHasChanges,
+                                                        nextEntry.snapshotObservation
                                                     );
                                                 } else {
                                                     loadComposition(newStack[newStack.length - 1].code);
@@ -2692,6 +2711,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                             snapshotRefDivisorLabel: refDivisorLabel,
                                                                                             snapshotRefDivisorValue: refDivisorValue,
                                                                                             snapshotHasChanges: hasChanges,
+                                                                                            snapshotObservation: observation,
                                                                                         }]);
                                                                                         // FIX CASCADE-02: Pass current composition's database context for correct lookup
                                                                                         loadComposition(itemData.code, data?.database?.name, data?.databaseId);
@@ -3198,11 +3218,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 Observação (aparece nos relatórios PDF/XLS)
                             </label>
                             <textarea
-                                value={activeCode ? (engineeringConfig?.reportConfig?.compositionNotes?.[activeCode] || '') : ''}
+                                value={observation}
                                 onChange={e => {
+                                    const newVal = e.target.value;
+                                    setObservation(newVal);
                                     if (!activeCode || !onUpdateItem || !engineeringConfig) return;
-                                    const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [activeCode]: e.target.value };
-                                    if (!e.target.value) delete notes[activeCode];
+                                    const notes = { ...(engineeringConfig.reportConfig?.compositionNotes || {}), [activeCode]: newVal };
+                                    if (!newVal) delete notes[activeCode];
                                     const rc = { ...(engineeringConfig.reportConfig || {}), compositionNotes: notes };
                                     // Propagate via onUpdateItem — trick: use a special key to signal config change
                                     (onUpdateItem as any)('__reportConfig__', rc);
