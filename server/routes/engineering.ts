@@ -9,6 +9,7 @@ import { downloadAndParseSeinfra, getSeinfraRegimeMeta, type SeinfraRegime } fro
 import { CompositionFlattener } from '../services/engineering/compositionFlattener';
 import axios from 'axios';
 import https from 'https';
+import fs from 'fs';
 import { submitJob } from '../services/backgroundJobService';
 import { classifyEngineeringAttachments } from '../services/engineering/documentClassifier';
 import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
@@ -4767,6 +4768,14 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
     } catch (e: any) {
         console.error('[AI Extract Composition] Error:', e);
         res.status(500).json({ error: 'Falha na extração por IA', details: e.message });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error('[AI Extract Composition] Error deleting temp file:', err);
+            }
+        }
     }
 });
 
@@ -4783,6 +4792,14 @@ router.post('/ai/extract-items-image', aiUpload.single('file'), async (req: any,
     } catch (e: any) {
         console.error('[AI Extract Items Image] Error:', e);
         res.status(500).json({ error: 'Falha na extração por IA', details: e.message });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error('[AI Extract Items Image] Error deleting temp file:', err);
+            }
+        }
     }
 });
 
@@ -4830,6 +4847,14 @@ router.post('/bases/import-excel', aiUpload.single('file'), async (req: any, res
     } catch (e: any) {
         console.error('[Base Import] Fatal:', e);
         res.status(500).json({ error: 'Erro na importação', details: e.message });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error('[Base Import] Error deleting temp file:', err);
+            }
+        }
     }
 });
 

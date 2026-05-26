@@ -348,6 +348,15 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         snapshotHasChanges?: boolean;
         snapshotObservation?: string;
     }[]>([]);
+
+    const checkCircularDependency = (targetCode: string): boolean => {
+        const rootCode = currentItem?.code;
+        if (rootCode && targetCode.trim().toUpperCase() === rootCode.trim().toUpperCase()) {
+            return true;
+        }
+        return drillStack.some(level => level.code.trim().toUpperCase() === targetCode.trim().toUpperCase());
+    };
+
     const [observation, setObservation] = useState('');
     // Grouper editing states
     const [grouperDesc, setGrouperDesc] = useState('');
@@ -552,6 +561,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const addFromSearch = (dbItem: any) => {
         if (!data) return;
         
+        if (searchType === 'composition') {
+            if (checkCircularDependency(dbItem.code)) {
+                alert(`Erro: Dependência Circular Detectada! Não é possível adicionar a composição auxiliar "${dbItem.code}", pois ela já é uma composição ancestral na estrutura atual.`);
+                return;
+            }
+        }
+        
         const coef = searchCoefficients[dbItem.id] || 1;
         let typeKey = 'MATERIAL';
         let newItem: any = null;
@@ -627,6 +643,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // Create proprietary item in PROPRIA database and add to composition
     const handleCreatePropria = async () => {
         if (!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || !data) return;
+        
+        if (searchType === 'composition') {
+            if (checkCircularDependency(propriaCode)) {
+                alert(`Erro: Dependência Circular Detectada! Não é possível criar e adicionar a composição auxiliar "${propriaCode}", pois ela já é uma composição ancestral na estrutura atual.`);
+                return;
+            }
+        }
+        
         setPropiaSaving(true);
         try {
             const qs = proposalId ? `?proposalId=${encodeURIComponent(proposalId)}` : '';
@@ -2785,6 +2809,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
+                                                                                        if (checkCircularDependency(itemData.code)) {
+                                                                                            alert(`Erro: Dependência Circular Detectada! Não é possível abrir a composição auxiliar "${itemData.code}", pois ela já é uma composição ancestral na estrutura atual.`);
+                                                                                            return;
+                                                                                        }
                                                                                         // FIX DRILL-SNAPSHOT: Save current data in stack so we can restore on back
                                                                                         setDrillStack(prev => [...prev, {
                                                                                             code: itemData.code,

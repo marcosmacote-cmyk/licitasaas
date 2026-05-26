@@ -289,6 +289,13 @@ export const DEFAULT_REPORT_CONFIG: ReportConfig = {
     colorPalette: { ...DEFAULT_COLOR_PALETTE },
 };
 
+export interface AuditChangeLog {
+    timestamp: string;
+    userEmail: string;
+    field: string; // "BDI", "Encargos", "Item 1.2", etc
+    description: string; // "BDI alterado de 22% para 24.5%"
+}
+
 export interface EngineeringConfig {
     objeto: string;
     basesConsideradas: string[];
@@ -306,6 +313,10 @@ export interface EngineeringConfig {
     bdiFornecimento?: number;
     /** Configuração de personalização dos relatórios */
     reportConfig?: ReportConfig;
+    /** Enfoque do projeto: Proposta de Preço (Licitação) vs Orçamento de Obra Geral */
+    enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA';
+    /** Histórico/Trilha de auditoria das alterações de configuração */
+    changeLogs?: AuditChangeLog[];
     /** Snapshot of AI-extracted config values — used for Config Consistency alerts */
     _aiExtractedRef?: {
         objeto?: string;
@@ -327,4 +338,5 @@ export const DEFAULT_ENGINEERING_CONFIG: EngineeringConfig = {
     precision: { tipo: 'ROUND', casasDecimais: 2 },
     bdiDiferenciado: false,
     bdiFornecimento: 0,
+    enfoque: 'PROPOSTA_PRECO',
 };

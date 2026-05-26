@@ -2,11 +2,11 @@
  * Step1ConfigPanel.tsx — Configuração do Orçamento (Step 1 do Wizard)
  * Agrupa: Dados do Orçamento, BDI (TCU 2622), Encargos Sociais
  */
-import React, { useState } from 'react';
-import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info, ClipboardList, RotateCcw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Wrench, Calculator, Wand2, Loader2, Split, ChevronDown, RefreshCw, Save, Users, Plus, Trash2, FileImage, CheckCircle2, AlertTriangle, Info, ClipboardList, RotateCcw, XCircle, Clock } from 'lucide-react';
 import { calculateBdiTCU, autoDistributeBdi, DEFAULT_TCU_FORNECIMENTO_PARAMS, type BdiConfig, type BdiTcuParams } from '../bdiEngine';
 import { applyPrecision } from '../precisionEngine';
-import type { EngineeringConfig, PrecisionConfig } from '../types';
+import type { EngineeringConfig, PrecisionConfig, AuditChangeLog } from '../types';
 
 // ═══════════════════════════════════════════════════════════
 // P0: Match System — compara valores atuais com o edital
@@ -51,10 +51,23 @@ function MatchBadge({ status, label, title }: { status: MatchStatus; label: stri
  * Match Badge for BDI fields.
  * Priority: Compare against AI-extracted edital values. Fallback to TCU ranges.
  */
-function bdiMatchBadge(field: string, value: number, aiRef?: any): React.ReactNode {
+function bdiMatchBadge(field: string, value: number, enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA', aiRef?: any): React.ReactNode {
     if (value === 0) return null;
 
-    // P1: Compare against AI-extracted edital reference
+    // Se o enfoque for Orçamento de Obra Geral, a prioridade máxima é a Legislação (TCU Ranges)
+    if (enfoque === 'ORCAMENTO_OBRA') {
+        const range = TCU_RANGES[field];
+        if (!range) return null;
+        if (value >= range.q1 && value <= range.q3) {
+            return <MatchBadge status="ok" label="Faixa TCU" title={`${range.label}: ${value.toFixed(2)}% está dentro da faixa TCU 2622 (${range.q1}% — ${range.q3}%)`} />;
+        }
+        if (value < range.q1) {
+            return <MatchBadge status="warn" label={`< Q1 (${range.q1}%)`} title={`${range.label}: ${value.toFixed(2)}% está ABAIXO do 1° quartil TCU 2622 (${range.q1}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
+        }
+        return <MatchBadge status="warn" label={`> Q3 (${range.q3}%)`} title={`${range.label}: ${value.toFixed(2)}% está ACIMA do 3° quartil TCU 2622 (${range.q3}%). Faixa: ${range.q1}% — ${range.q3}%`} />;
+    }
+
+    // P1: Compare against AI-extracted edital reference (para Proposta de Preço)
     if (aiRef && aiRef[field] != null && aiRef[field] !== undefined) {
         const editalVal = Number(aiRef[field]);
         if (editalVal === 0 && value === 0) return null;
@@ -84,7 +97,17 @@ function bdiMatchBadge(field: string, value: number, aiRef?: any): React.ReactNo
  * Match Badge for Encargos fields.
  * Compares current value against AI-extracted edital reference.
  */
-function encargosMatchBadge(field: string, value: number, aiRef?: any): React.ReactNode {
+function encargosMatchBadge(field: string, value: number, enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA', aiRef?: any): React.ReactNode {
+    if (enfoque === 'ORCAMENTO_OBRA') {
+        if (aiRef && aiRef[field] != null) {
+            const editalVal = Number(aiRef[field]);
+            const diff = Math.abs(value - editalVal);
+            if (diff < 0.005) return <MatchBadge status="ok" label="✓ Edital" title={`Confere com o edital: ${editalVal.toFixed(2)}%`} />;
+            return <MatchBadge status="info" label={`Edital: ${editalVal.toFixed(2)}%`} title={`Edital indica ${editalVal.toFixed(2)}%. Atual: ${value.toFixed(2)}%`} />;
+        }
+        return null;
+    }
+
     if (!aiRef || aiRef[field] == null) return null;
     const editalVal = Number(aiRef[field]);
     if (editalVal === 0 && value === 0) return null;
@@ -98,12 +121,18 @@ function encargosMatchBadge(field: string, value: number, aiRef?: any): React.Re
     return <MatchBadge status="divergent" label={`Edital: ${editalVal.toFixed(2)}%`} title={`⚠ DIVERGE do edital: ${editalVal.toFixed(2)}%. Atual: ${value.toFixed(2)}%`} />;
 }
 
-/** Compact icon-only badge for individual encargos item rows (no text, just colored dot with tooltip) */
-function encargosMatchIcon(field: string, value: number, aiRef?: any): React.ReactNode {
+/** Compact icon-only badge for individual encargos item rows */
+function encargosMatchIcon(field: string, value: number, enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA', aiRef?: any): React.ReactNode {
     if (!aiRef || aiRef[field] == null) return null;
     const editalVal = Number(aiRef[field]);
     if (editalVal === 0 && value === 0) return null;
     const diff = Math.abs(value - editalVal);
+
+    if (enfoque === 'ORCAMENTO_OBRA') {
+        if (diff < 0.005) return <span title={`✓ Confere com Edital: ${editalVal.toFixed(2)}%`} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}><CheckCircle2 size={11} color="#059669" /></span>;
+        return <span title={`Edital: ${editalVal.toFixed(2)}% (Atual: ${value.toFixed(2)}%)`} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}><Info size={11} color="#3b82f6" /></span>;
+    }
+
     const style = diff < 0.005 ? MATCH_STYLES.ok : diff <= 0.5 ? MATCH_STYLES.warn : MATCH_STYLES.divergent;
     const Icon = diff < 0.005 ? CheckCircle2 : AlertTriangle;
     const tip = diff < 0.005 ? `✓ Confere: ${editalVal.toFixed(2)}%` : `Edital: ${editalVal.toFixed(2)}% (dif: ${diff.toFixed(2)}%)`;
@@ -151,7 +180,7 @@ interface Props {
     onExtractConfig?: () => void;
     onExtractEncargos?: () => void;
     onSyncBases: () => void;
-    onSave: () => void;
+    onSave: (updatedConfig?: EngineeringConfig) => void;
     onNext: () => void;
     setHasUnsavedChanges?: (v: boolean) => void;
     saveMsg?: React.ReactNode;
@@ -195,7 +224,7 @@ const ITEMS_DEF = [
     ]},
 ];
 
-function EncargosDetailTable({ es, onChange, precision, aiRef }: { es: any, onChange: (newEs: any) => void, precision?: PrecisionConfig, aiRef?: any }) {
+function EncargosDetailTable({ es, onChange, precision, aiRef, enfoque }: { es: any, onChange: (newEs: any) => void, precision?: PrecisionConfig, aiRef?: any, enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA' }) {
     const p = (v: number) => applyPrecision(v, { precision });
     const updateItem = (key: string, val: number) => {
         const nextEs: any = { ...es, [key]: val };
@@ -233,27 +262,27 @@ function EncargosDetailTable({ es, onChange, precision, aiRef }: { es: any, onCh
                             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{item.code}</span>
                             <span style={{ fontSize: '0.72rem', color: 'var(--color-text-primary)' }}>{item.name}</span>
                             <input type="number" step="0.01" className="form-input" value={es?.[item.hKey] || 0} onChange={e => updateItem(item.hKey, parseLocaleNumber(e.target.value))} style={inputSty} />
-                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{encargosMatchIcon(item.hKey, es?.[item.hKey] || 0, aiRef)}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{encargosMatchIcon(item.hKey, es?.[item.hKey] || 0, enfoque, aiRef)}</span>
                             <input type="number" step="0.01" className="form-input" value={es?.[item.mKey] || 0} onChange={e => updateItem(item.mKey, parseLocaleNumber(e.target.value))} style={inputSty} />
-                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{encargosMatchIcon(item.mKey, es?.[item.mKey] || 0, aiRef)}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{encargosMatchIcon(item.mKey, es?.[item.mKey] || 0, enfoque, aiRef)}</span>
                         </div>
                     ))}
                     <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px auto 72px auto', gap: 4, padding: '4px 4px', borderBottom: '2px solid var(--color-border)', background: 'rgba(0,0,0,0.02)' }}>
                         <span></span>
                         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: grp.color, textAlign: 'right', paddingRight: 6 }}>TOTAL</span>
                         <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_horista`] as number || 0).toFixed(2)}</span>
-                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_horista`, es?.[`grupo${grp.group}_horista`] || 0, aiRef)}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_horista`, es?.[`grupo${grp.group}_horista`] || 0, enfoque, aiRef)}</span>
                         <span style={{ fontSize: '0.78rem', fontWeight: 800, color: grp.color, textAlign: 'right' }}>{(es?.[`grupo${grp.group}_mensalista`] as number || 0).toFixed(2)}</span>
-                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_mensalista`, es?.[`grupo${grp.group}_mensalista`] || 0, aiRef)}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge(`grupo${grp.group}_mensalista`, es?.[`grupo${grp.group}_mensalista`] || 0, enfoque, aiRef)}</span>
                     </div>
                 </div>
             ))}
             <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 72px auto 72px auto', gap: 4, padding: '8px 4px', borderTop: '3px double #6d28d9', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>
                 <span></span><span style={{ color: '#6d28d9' }}>A + B + C + D =</span>
                 <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.horista || 0).toFixed(2)}</span>
-                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('horista', es?.horista || 0, aiRef)}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('horista', es?.horista || 0, enfoque, aiRef)}</span>
                 <span style={{ textAlign: 'right', color: '#6d28d9' }}>{(es?.mensalista || 0).toFixed(2)}</span>
-                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('mensalista', es?.mensalista || 0, aiRef)}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{encargosMatchBadge('mensalista', es?.mensalista || 0, enfoque, aiRef)}</span>
             </div>
         </div>
     );
@@ -267,6 +296,185 @@ export function Step1ConfigPanel({
     const [localSaveMsg, setLocalSaveMsg] = useState<React.ReactNode>(null);
     const setSaveMsg = parentSetSaveMsg || setLocalSaveMsg;
     const setHasUnsavedChanges = parentSetHasUnsavedChanges || (() => {});
+    const [showHistory, setShowHistory] = useState(false);
+
+    const initialConfigRef = useRef<{
+        objeto: string;
+        ufReferencia?: string;
+        basesConsideradas: string[];
+        regimeOneracao: 'DESONERADO' | 'ONERADO';
+        bdiGlobal: number;
+        bdiFornecimento?: number;
+        horista?: number;
+        mensalista?: number;
+        enfoque?: 'PROPOSTA_PRECO' | 'ORCAMENTO_OBRA';
+    }>({
+        objeto: engineeringConfig.objeto || '',
+        ufReferencia: engineeringConfig.ufReferencia,
+        basesConsideradas: [...(engineeringConfig.basesConsideradas || [])],
+        regimeOneracao: engineeringConfig.regimeOneracao || 'DESONERADO',
+        bdiGlobal: bdiConfig.bdiGlobal || 0,
+        bdiFornecimento: engineeringConfig.bdiFornecimento,
+        horista: engineeringConfig.encargosSociais?.horista,
+        mensalista: engineeringConfig.encargosSociais?.mensalista,
+        enfoque: engineeringConfig.enfoque,
+    });
+
+    useEffect(() => {
+        initialConfigRef.current = {
+            objeto: engineeringConfig.objeto || '',
+            ufReferencia: engineeringConfig.ufReferencia,
+            basesConsideradas: [...(engineeringConfig.basesConsideradas || [])],
+            regimeOneracao: engineeringConfig.regimeOneracao || 'DESONERADO',
+            bdiGlobal: bdiConfig.bdiGlobal || 0,
+            bdiFornecimento: engineeringConfig.bdiFornecimento,
+            horista: engineeringConfig.encargosSociais?.horista,
+            mensalista: engineeringConfig.encargosSociais?.mensalista,
+            enfoque: engineeringConfig.enfoque,
+        };
+    }, [engineeringConfig.objeto, engineeringConfig.ufReferencia, engineeringConfig.regimeOneracao, bdiConfig.bdiGlobal, engineeringConfig.bdiFornecimento]);
+
+    const handleSaveWithLogs = () => {
+        const logs: AuditChangeLog[] = [];
+        const userEmail = localStorage.getItem('userEmail') || 'usuario@licitasaas.com';
+        const timestamp = new Date().toISOString();
+
+        const addLog = (field: string, description: string) => {
+            logs.push({ timestamp, userEmail, field, description });
+        };
+
+        const initial = initialConfigRef.current;
+
+        if (engineeringConfig.enfoque !== initial.enfoque) {
+            addLog('Enfoque', `Enfoque alterado de "${initial.enfoque || 'PROPOSTA_PRECO'}" para "${engineeringConfig.enfoque || 'PROPOSTA_PRECO'}"`);
+        }
+        if (engineeringConfig.objeto !== initial.objeto) {
+            addLog('Objeto', `Objeto alterado de "${initial.objeto}" para "${engineeringConfig.objeto || ''}"`);
+        }
+        if (engineeringConfig.ufReferencia !== initial.ufReferencia) {
+            addLog('UF', `UF alterada de "${initial.ufReferencia || 'Automático'}" para "${engineeringConfig.ufReferencia || 'Automático'}"`);
+        }
+        const bInit = [...initial.basesConsideradas].sort().join(',');
+        const bCur = [...(engineeringConfig.basesConsideradas || [])].sort().join(',');
+        if (bInit !== bCur) {
+            addLog('Bases', `Bases alteradas de [${initial.basesConsideradas.join(', ')}] para [${(engineeringConfig.basesConsideradas || []).join(', ')}]`);
+        }
+        if (engineeringConfig.regimeOneracao !== initial.regimeOneracao) {
+            addLog('Regime', `Regime alterado de "${initial.regimeOneracao}" para "${engineeringConfig.regimeOneracao || 'DESONERADO'}"`);
+        }
+        if (Math.abs((bdiConfig.bdiGlobal || 0) - initial.bdiGlobal) > 0.001) {
+            addLog('BDI', `BDI global alterado de ${initial.bdiGlobal.toFixed(2)}% para ${(bdiConfig.bdiGlobal || 0).toFixed(2)}%`);
+        }
+        if (engineeringConfig.bdiFornecimento !== initial.bdiFornecimento) {
+            addLog('BDI Fornecimento', `BDI de fornecimento alterado de ${(initial.bdiFornecimento || 0).toFixed(2)}% para ${(engineeringConfig.bdiFornecimento || 0).toFixed(2)}%`);
+        }
+        const initialH = initial.horista || 0;
+        const currentH = engineeringConfig.encargosSociais?.horista || 0;
+        if (Math.abs(currentH - initialH) > 0.001) {
+            addLog('Encargos Horista', `Encargos Horista total alterado de ${initialH.toFixed(2)}% para ${currentH.toFixed(2)}%`);
+        }
+        const initialM = initial.mensalista || 0;
+        const currentM = engineeringConfig.encargosSociais?.mensalista || 0;
+        if (Math.abs(currentM - initialM) > 0.001) {
+            addLog('Encargos Mensalista', `Encargos Mensalista total alterado de ${initialM.toFixed(2)}% para ${currentM.toFixed(2)}%`);
+        }
+
+        let nextConfig = engineeringConfig;
+        if (logs.length > 0) {
+            const currentLogs = engineeringConfig.changeLogs || [];
+            nextConfig = {
+                ...engineeringConfig,
+                changeLogs: [...currentLogs, ...logs],
+            };
+            onConfigChange(nextConfig);
+            initialConfigRef.current = {
+                objeto: nextConfig.objeto || '',
+                ufReferencia: nextConfig.ufReferencia,
+                basesConsideradas: [...(nextConfig.basesConsideradas || [])],
+                regimeOneracao: nextConfig.regimeOneracao || 'DESONERADO',
+                bdiGlobal: bdiConfig.bdiGlobal || 0,
+                bdiFornecimento: nextConfig.bdiFornecimento,
+                horista: nextConfig.encargosSociais?.horista,
+                mensalista: nextConfig.encargosSociais?.mensalista,
+                enfoque: nextConfig.enfoque,
+            };
+        }
+
+        onSave(nextConfig);
+    };
+
+    const getAuditAlerts = () => {
+        const alerts: { type: 'error' | 'warning' | 'info'; message: string; title: string }[] = [];
+
+        const uf = engineeringConfig.ufReferencia;
+        const bases = engineeringConfig.basesConsideradas || [];
+        if (uf) {
+            if (bases.includes('SEINFRA') && uf !== 'CE') {
+                alerts.push({
+                    type: 'warning',
+                    title: 'Inconsistência de Base Geográfica (SEINFRA)',
+                    message: `A base SEINFRA é nativa do Ceará (CE), mas a UF selecionada é ${uf}. Verifique se isso está correto.`
+                });
+            }
+            if (bases.includes('ORSE') && uf !== 'SE') {
+                alerts.push({
+                    type: 'warning',
+                    title: 'Inconsistência de Base Geográfica (ORSE)',
+                    message: `A base ORSE é nativa de Sergipe (SE), mas a UF selecionada é ${uf}. Verifique se isso está correto.`
+                });
+            }
+            if ((bases.includes('SICOR') || bases.includes('SICOR-MG')) && uf !== 'MG') {
+                alerts.push({
+                    type: 'warning',
+                    title: 'Inconsistência de Base Geográfica (SICOR-MG)',
+                    message: `A base SICOR é nativa de Minas Gerais (MG), mas a UF selecionada é ${uf}. Verifique se isso está correto.`
+                });
+            }
+        }
+
+        const regime = engineeringConfig.regimeOneracao;
+        const cprb = bdiConfig.tcu?.cprb || 0;
+        if (regime === 'DESONERADO' && cprb === 0) {
+            alerts.push({
+                type: 'error',
+                title: 'Desoneração sem CPRB no BDI',
+                message: 'O regime da obra está configurado como DESONERADO, mas a alíquota da CPRB no BDI é 0,00%. Geralmente deve ser 4,50%.'
+            });
+        } else if (regime === 'ONERADO' && cprb > 0) {
+            alerts.push({
+                type: 'error',
+                title: 'CPRB no BDI com Regime Onerado',
+                message: `O regime da obra é ONERADO, mas há uma alíquota de CPRB de ${cprb.toFixed(2)}% no BDI. Deveria ser 0,00%.`
+            });
+        }
+
+        const iss = bdiConfig.tcu?.iss || 0;
+        if (iss > 0 && (iss < 2.0 || iss > 5.0)) {
+            alerts.push({
+                type: 'error',
+                title: 'ISS fora do Limite Legal',
+                message: `A alíquota de ISS configurada (${iss.toFixed(2)}%) está fora do intervalo legal brasileiro estabelecido pela CF/LC 116 (entre 2,00% e 5,00%).`
+            });
+        }
+
+        const pisCofinsSoma = (bdiConfig.tcu?.pis || 0) + (bdiConfig.tcu?.cofins || 0);
+        if (pisCofinsSoma > 0) {
+            const diffPresumido = Math.abs(pisCofinsSoma - 3.65);
+            const diffReal = Math.abs(pisCofinsSoma - 9.25);
+            if (diffPresumido > 0.005 && diffReal > 0.005) {
+                alerts.push({
+                    type: 'info',
+                    title: 'Alíquota PIS/COFINS não usual',
+                    message: `A soma de PIS/COFINS é ${pisCofinsSoma.toFixed(2)}%. Os regimes usuais são: Lucro Presumido (3,65%) ou Lucro Real (9,25%).`
+                });
+            }
+        }
+
+        return alerts;
+    };
+
+    const auditAlerts = getAuditAlerts();
+
     const [showEncargosDetail, setShowEncargosDetail] = useState(false);
     const [showAdicionalDetail, setShowAdicionalDetail] = useState<Record<number, boolean>>({});
     const [showEncargos2, setShowEncargos2] = useState(!!engineeringConfig.encargosSociais?.encargos2);
@@ -365,6 +573,77 @@ export function Step1ConfigPanel({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* Seletor de Enfoque de Trabalho */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 'var(--space-4)',
+                marginBottom: 'var(--space-2)'
+            }}>
+                <div 
+                    onClick={() => {
+                        onConfigChange({ ...engineeringConfig, enfoque: 'PROPOSTA_PRECO' });
+                        setHasUnsavedChanges(true);
+                    }}
+                    style={{
+                        padding: 16,
+                        borderRadius: 'var(--radius-lg)',
+                        border: `2px solid ${engineeringConfig.enfoque === 'PROPOSTA_PRECO' ? '#6d28d9' : 'var(--color-border)'}`,
+                        background: engineeringConfig.enfoque === 'PROPOSTA_PRECO' ? 'rgba(109,40,217,0.04)' : 'var(--color-bg-surface)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: engineeringConfig.enfoque === 'PROPOSTA_PRECO' ? '0 4px 12px rgba(109,40,217,0.08)' : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: engineeringConfig.enfoque === 'PROPOSTA_PRECO' ? '#6d28d9' : 'var(--color-text-tertiary)'
+                        }} />
+                        <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Proposta de Preços (Licitação)</h4>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                        Prioriza as regras específicas do Edital. Alertas de desvios com o edital são marcados como críticos (vermelhos).
+                    </p>
+                </div>
+                <div 
+                    onClick={() => {
+                        onConfigChange({ ...engineeringConfig, enfoque: 'ORCAMENTO_OBRA' });
+                        setHasUnsavedChanges(true);
+                    }}
+                    style={{
+                        padding: 16,
+                        borderRadius: 'var(--radius-lg)',
+                        border: `2px solid ${engineeringConfig.enfoque === 'ORCAMENTO_OBRA' ? '#6d28d9' : 'var(--color-border)'}`,
+                        background: engineeringConfig.enfoque === 'ORCAMENTO_OBRA' ? 'rgba(109,40,217,0.04)' : 'var(--color-bg-surface)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: engineeringConfig.enfoque === 'ORCAMENTO_OBRA' ? '0 4px 12px rgba(109,40,217,0.08)' : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: engineeringConfig.enfoque === 'ORCAMENTO_OBRA' ? '#6d28d9' : 'var(--color-text-tertiary)'
+                        }} />
+                        <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Orçamento de Obra Geral</h4>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                        Prioriza os limites legais da Legislação (TCU 2622/2013). Desvios em relação ao edital são notas informativas.
+                    </p>
+                </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
 
                 {/* ═══ LEFT COLUMN: Dados do Orçamento ═══ */}
@@ -607,6 +886,111 @@ export function Step1ConfigPanel({
                         </div>
                     </div>
 
+                    {/* Painel de Auditoria de Consistência */}
+                    <div style={{
+                        borderTop: '1px solid var(--color-border)',
+                        paddingTop: 16,
+                        marginTop: 8
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                            <AlertTriangle size={15} color="var(--color-primary)" />
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Auditoria de Parametrização</span>
+                        </div>
+                        
+                        {auditAlerts.length === 0 ? (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '10px 12px',
+                                background: 'rgba(34,197,94,0.06)',
+                                border: '1px solid rgba(34,197,94,0.15)',
+                                borderRadius: 'var(--radius-md)'
+                            }}>
+                                <CheckCircle2 size={14} color="#059669" />
+                                <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>Nenhuma inconsistência de parametrização detectada.</span>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {auditAlerts.map((alert, i) => {
+                                    const colorMap = {
+                                        error: { border: 'rgba(239, 68, 68, 0.2)', bg: 'rgba(239, 68, 68, 0.05)', text: '#dc2626', iconColor: '#dc2626' },
+                                        warning: { border: 'rgba(245, 158, 11, 0.2)', bg: 'rgba(245, 158, 11, 0.05)', text: '#d97706', iconColor: '#d97706' },
+                                        info: { border: 'rgba(59, 130, 246, 0.2)', bg: 'rgba(59, 130, 246, 0.05)', text: '#2563eb', iconColor: '#2563eb' }
+                                    };
+                                    const style = colorMap[alert.type];
+                                    return (
+                                        <div key={i} style={{
+                                            padding: '10px 12px',
+                                            background: style.bg,
+                                            border: `1px solid ${style.border}`,
+                                            borderRadius: 'var(--radius-md)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 2
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                    {alert.type === 'error' ? <XCircle size={13} color={style.iconColor} /> : alert.type === 'warning' ? <AlertTriangle size={13} color={style.iconColor} /> : <Info size={13} color={style.iconColor} />}
+                                                </span>
+                                                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: style.text }}>{alert.title}</span>
+                                            </div>
+                                            <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                                                {alert.message}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Histórico de Alterações (Change Logs) */}
+                    <div style={{
+                        borderTop: '1px solid var(--color-border)',
+                        paddingTop: 16,
+                        marginTop: 8
+                    }}>
+                        <button 
+                            onClick={() => setShowHistory(!showHistory)}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', outline: 'none', padding: 0 }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Clock size={15} color="var(--color-primary)" />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Histórico de Alterações</span>
+                                <span style={{ fontSize: '0.68rem', background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 10, fontWeight: 700 }}>
+                                    {engineeringConfig.changeLogs?.length || 0}
+                                </span>
+                            </div>
+                            <ChevronDown size={15} style={{ color: 'var(--color-text-tertiary)', transform: showHistory ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        </button>
+                        
+                        {showHistory && (
+                            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
+                                {!engineeringConfig.changeLogs || engineeringConfig.changeLogs.length === 0 ? (
+                                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: 0, fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                                        Nenhuma alteração registrada.
+                                    </p>
+                                ) : (
+                                    [...engineeringConfig.changeLogs].reverse().map((log, i) => (
+                                        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 8, background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)' }}>{log.field}</span>
+                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                                                    {new Date(log.timestamp).toLocaleString('pt-BR')}
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{log.description}</p>
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', alignSelf: 'flex-end' }}>
+                                                por <strong>{log.userEmail}</strong>
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                 </div>
 
 
@@ -712,7 +1096,7 @@ export function Step1ConfigPanel({
                                     <div key={key}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>{label}</label>
-                                            {bdiMatchBadge(key, bdiConfig.tcu[key], (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge(key, bdiConfig.tcu[key], engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu[key]}
                                             onChange={e => updateTcu(key, parseLocaleNumber(e.target.value))}
@@ -725,7 +1109,7 @@ export function Step1ConfigPanel({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <label style={smallLabelStyle}>Desp. Financeiras (%)</label>
-                                        {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras, (engineeringConfig as any)._aiExtractedBdi)}
+                                        {bdiMatchBadge('despFinanceiras', bdiConfig.tcu.despFinanceiras, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
                                         onChange={e => updateTcu('despFinanceiras', parseLocaleNumber(e.target.value))}
@@ -734,7 +1118,7 @@ export function Step1ConfigPanel({
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <label style={smallLabelStyle}>Lucro / Remuneração (%)</label>
-                                        {bdiMatchBadge('lucro', bdiConfig.tcu.lucro, (engineeringConfig as any)._aiExtractedBdi)}
+                                        {bdiMatchBadge('lucro', bdiConfig.tcu.lucro, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                     </div>
                                     <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
                                         onChange={e => updateTcu('lucro', parseLocaleNumber(e.target.value))}
@@ -747,7 +1131,7 @@ export function Step1ConfigPanel({
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>PIS (%)</label>
-                                            {bdiMatchBadge('pis', bdiConfig.tcu.pis, (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge('pis', bdiConfig.tcu.pis, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.pis}
                                             onChange={e => updateTcu('pis', parseLocaleNumber(e.target.value))}
@@ -756,7 +1140,7 @@ export function Step1ConfigPanel({
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>COFINS (%)</label>
-                                            {bdiMatchBadge('cofins', bdiConfig.tcu.cofins, (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge('cofins', bdiConfig.tcu.cofins, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.cofins}
                                             onChange={e => updateTcu('cofins', parseLocaleNumber(e.target.value))}
@@ -765,7 +1149,7 @@ export function Step1ConfigPanel({
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>ISS (%)</label>
-                                            {bdiMatchBadge('iss', bdiConfig.tcu.iss, (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge('iss', bdiConfig.tcu.iss, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.iss}
                                             onChange={e => updateTcu('iss', parseLocaleNumber(e.target.value))}
@@ -774,7 +1158,7 @@ export function Step1ConfigPanel({
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>CSLL (%)</label>
-                                            {bdiMatchBadge('csll', bdiConfig.tcu.csll || 0, (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge('csll', bdiConfig.tcu.csll || 0, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.csll || 0}
                                             onChange={e => updateTcu('csll', parseLocaleNumber(e.target.value))}
@@ -783,7 +1167,7 @@ export function Step1ConfigPanel({
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <label style={smallLabelStyle}>CPRB (%)</label>
-                                            {bdiMatchBadge('cprb', bdiConfig.tcu.cprb || 0, (engineeringConfig as any)._aiExtractedBdi)}
+                                            {bdiMatchBadge('cprb', bdiConfig.tcu.cprb || 0, engineeringConfig.enfoque, (engineeringConfig as any)._aiExtractedBdi)}
                                         </div>
                                         <input type="number" className="form-input" value={bdiConfig.tcu.cprb || 0}
                                             onChange={e => updateTcu('cprb', parseLocaleNumber(e.target.value))}
@@ -1018,6 +1402,7 @@ export function Step1ConfigPanel({
                                     es={engineeringConfig.encargosSociais || {}} 
                                     precision={engineeringConfig.precision}
                                     aiRef={(engineeringConfig as any)._aiExtractedEncargos}
+                                    enfoque={engineeringConfig.enfoque}
                                     onChange={newEs => {
                                         onConfigChange({ ...engineeringConfig, encargosSociais: newEs });
                                         setHasUnsavedChanges(true);
@@ -1173,6 +1558,7 @@ export function Step1ConfigPanel({
                                                 es={sheet || {}} 
                                                 precision={engineeringConfig.precision}
                                                 aiRef={(engineeringConfig as any)._aiExtractedEncargosAdicionais?.[idx] || null}
+                                                enfoque={engineeringConfig.enfoque}
                                                 onChange={newEs => {
                                                     const sheets = [...(engineeringConfig.encargosSociais?.encargosAdicionais || [])];
                                                     sheets[idx] = newEs;
@@ -1220,7 +1606,7 @@ export function Step1ConfigPanel({
 
             {/* Footer: Save + Next */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0' }}>
-                <button className="btn btn-outline" onClick={onSave} disabled={isSaving}
+                <button className="btn btn-outline" onClick={() => handleSaveWithLogs()} disabled={isSaving}
                     style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                     Salvar Configuração

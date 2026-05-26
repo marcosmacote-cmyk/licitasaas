@@ -11,7 +11,7 @@
  * FIX F4.3: Adicionar/Remover etapas manuais + edição de valor total
  */
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw, Cpu } from 'lucide-react';
+import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw, Cpu, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { calcularCronograma, gerarEtapasPadrao, type CronogramaEtapa } from './cronogramaEngine';
 import { isGrouper } from './types';
 import { CronogramaImportModal } from './CronogramaImportModal';
@@ -175,6 +175,17 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
 
     const result = useMemo(() => calcularCronograma(etapas, meses), [etapas, meses]);
 
+    const etapasInvalidas = useMemo(() => {
+        return etapas
+            .filter(e => e.valorTotal > 0)
+            .map(e => {
+                const soma = e.percentuais.slice(0, meses).reduce((s, p) => s + p, 0);
+                const diff = Math.abs(soma - 100);
+                return { etapa: e, soma, invalida: diff > 0.005 };
+            })
+            .filter(x => x.invalida);
+    }, [etapas, meses]);
+
     if (items.length === 0) {
         return (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)', border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-xl)' }}>
@@ -190,6 +201,33 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
     return (
         <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+
+            {etapasInvalidas.length > 0 && (
+                <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(239,68,68,0.06)',
+                    border: '1px solid rgba(239,68,68,0.15)',
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626', fontWeight: 700, fontSize: '0.85rem' }}>
+                        <AlertTriangle size={16} />
+                        Aviso: Inconsistência nos Percentuais de Execução
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                        As seguintes etapas não somam exatamente 100,00% de execução ao longo dos meses ativos. Ajuste os valores para garantir a consistência do cronograma físico-financeiro:
+                    </p>
+                    <ul style={{ margin: '4px 0 0 0', paddingLeft: 20, fontSize: '0.72rem', color: '#dc2626', fontWeight: 600 }}>
+                        {etapasInvalidas.map(x => (
+                            <li key={x.etapa.id}>
+                                {x.etapa.nome}: soma atual é <strong>{x.soma.toFixed(2)}%</strong> (deve ser 100,00%)
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
 
             {/* Controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>

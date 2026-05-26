@@ -43,11 +43,19 @@ export function calcularCronograma(etapas: CronogramaEtapa[], meses: number): Cr
     const percentMensal = Array(meses).fill(0);
     const percentAcumulado = Array(meses).fill(0);
 
+    let percentSoma = 0;
     for (let m = 0; m < meses; m++) {
         mensalTotal[m] = etapasResult.reduce((s, e) => s + e.valoresMensais[m], 0);
         acumulado[m] = (m > 0 ? acumulado[m - 1] : 0) + mensalTotal[m];
-        percentMensal[m] = totalGlobal > 0 ? Math.round((mensalTotal[m] / totalGlobal) * 10000) / 100 : 0;
-        percentAcumulado[m] = totalGlobal > 0 ? Math.round((acumulado[m] / totalGlobal) * 10000) / 100 : 0;
+        
+        if (m === meses - 1) {
+            percentMensal[m] = totalGlobal > 0 ? Math.round((100 - percentSoma) * 100) / 100 : 0;
+            percentAcumulado[m] = totalGlobal > 0 ? 100.00 : 0;
+        } else {
+            percentMensal[m] = totalGlobal > 0 ? Math.round((mensalTotal[m] / totalGlobal) * 10000) / 100 : 0;
+            percentSoma += percentMensal[m];
+            percentAcumulado[m] = totalGlobal > 0 ? Math.round((acumulado[m] / totalGlobal) * 10000) / 100 : 0;
+        }
     }
 
     return { meses, etapas: etapasResult, mensalTotal, acumulado, percentMensal, percentAcumulado, totalGlobal };

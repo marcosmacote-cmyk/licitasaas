@@ -144,15 +144,16 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // ══════════════════════════════════════════
     // SAVE
     // ══════════════════════════════════════════
-    const handleSave = async () => {
+    const handleSave = async (updatedConfig?: EngineeringConfig) => {
         setIsSaving(true); setSaveMsg(null);
         try {
+            const activeConfig = updatedConfig || engineeringConfig;
             const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
-            const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
+            const itemsToSave = recalcAll(items, effectiveBdi, activeConfig);
             setItems(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig, cronogramaData })
+                body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig: activeConfig, cronogramaData })
             });
             if (res.ok) {
                 const d = await res.json();
@@ -525,7 +526,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                         </span>
                     )}
                     {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
-                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={handleSave} disabled={isSaving}>
+                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }} onClick={() => handleSave()} disabled={isSaving}>
                         {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                         {isSaving ? 'Salvando...' : 'Salvar'}
                         {hasUnsavedChanges && !isSaving && (
