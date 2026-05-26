@@ -404,6 +404,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
     const [refDivisorValue, setRefDivisorValue] = useState('');
 
+    const [prevCurrentItemCode, setPrevCurrentItemCode] = useState<string | null>(null);
+    const [prevCurrentItemId, setPrevCurrentItemId] = useState<string | null>(null);
+    if (currentItem && (currentItem.code !== prevCurrentItemCode || currentItem.id !== prevCurrentItemId)) {
+        setPrevCurrentItemCode(currentItem.code || null);
+        setPrevCurrentItemId(currentItem.id || null);
+        const isGrouper = isGrouperType(currentItem.type);
+        setLoading(!isGrouper);
+        setError('');
+        setData(null);
+        setHasChanges(false);
+        setGroupNotes({});
+        setCustomGroupLabels({});
+        setGroupOrder([]);
+        setRefDivisorLabel('');
+        setRefDivisorValue('');
+        setDrillStack([]);
+        if (isGrouper) {
+            setGrouperDesc(currentItem.description || '');
+            setGrouperFactor(String(currentItem.multiplicationFactor || 1));
+            setGrouperFactorSaved(false);
+        }
+    }
+
     const activeCode = drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem?.code;
 
     const triggerUpdateItem = useCallback((updates: Partial<EngItem>) => {
@@ -716,6 +739,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (normalized.referenceDivisor) {
                 setRefDivisorLabel(normalized.referenceDivisor.label || '');
                 setRefDivisorValue(String(normalized.referenceDivisor.value || ''));
+            } else {
+                setRefDivisorLabel('');
+                setRefDivisorValue('');
             }
             const cachedNote = engineeringConfig?.reportConfig?.compositionNotes?.[code];
             setObservation(cachedNote !== undefined ? cachedNote : (normalized.observation || ''));
@@ -1364,7 +1390,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         customGroupLabels,
                         groupOrder,
                         observation,
-                        referenceDivisor: refDivisorLabel && refDivisorValue ? { label: refDivisorLabel, value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined
+                        referenceDivisor: refDivisorValue ? { label: refDivisorLabel || '', value: parseFloat(refDivisorValue.replace(',', '.')) || 0 } : undefined
                     }
                 })
             });
@@ -2567,7 +2593,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                             </div>
                                         )}
 
-                                        {isExpanded && (
+                                        {isExpanded && (groupItems.length > 0 || (!dragItem && !dragGroupKey)) && (
                                             <>
                                                 {groupItems.length > 0 ? (
                                                     <>
@@ -3268,10 +3294,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                     onChange={e => { setRefDivisorValue(e.target.value); setHasChanges(true); }}
                                     style={{ fontSize: '0.75rem', padding: '5px 8px', textAlign: 'center', fontWeight: 700 }}
                                 />
-                                {refDivisorLabel && refDivisorValue && parseFloat(refDivisorValue.replace(',', '.')) > 0 && (
+                                {refDivisorValue && parseFloat(refDivisorValue.replace(',', '.')) > 0 && (
                                     <div style={{ padding: '4px 10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(124,58,237,0.06))', border: '1px solid rgba(37,99,235,0.12)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>
-                                            Custo/{refDivisorLabel.substring(0, 20)}
+                                            Custo/{(refDivisorLabel || 'Ref.').substring(0, 20)}
                                         </div>
                                         <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
                                             {fmt(compositionTotal / (parseFloat(refDivisorValue.replace(',', '.')) || 1))}
