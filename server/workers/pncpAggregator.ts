@@ -12,11 +12,9 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import axios from 'axios';
 import https from 'https';
-
-const prisma = new PrismaClient();
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 const PNCP_SEARCH = 'https://pncp.gov.br/api/search';
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });

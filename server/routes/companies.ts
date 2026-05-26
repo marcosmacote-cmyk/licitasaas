@@ -452,7 +452,7 @@ router.post('/config/alerts', authenticateToken, async (req: any, res) => {
         res.json({ success: true, config: JSON.parse(config.config) });
     } catch (error: any) {
         console.error("Config save error:", error);
-        res.status(500).json({ error: error.message || 'Failed to update config' });
+        res.status(500).json({ error: 'Falha ao atualizar configurações' });
     }
 });
 

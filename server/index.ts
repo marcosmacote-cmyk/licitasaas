@@ -53,7 +53,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import https from 'https';
-import { PrismaClient } from '@prisma/client';
+// PrismaClient singleton imported at line ~95 via './lib/prisma'
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -92,7 +92,7 @@ const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') :
 dotenv.config({ path: path.join(SERVER_ROOT, '.env'), override: false });
 
 const app = express();
-const prisma = new PrismaClient();
+import prisma from './lib/prisma';
 const PORT = process.env.PORT || 3001;
 import { JWT_SECRET, BCRYPT_COST } from './lib/constants';
 
@@ -309,7 +309,7 @@ app.get('/api/debug-db', authenticateToken, async (req: any, res) => {
 });
 
 // Diagnostic route to check if files actually exist on disk
-app.get('/api/debug-uploads', (req, res) => {
+app.get('/api/debug-uploads', authenticateToken, requireSuperAdmin, (req: any, res) => {
     try {
         const fs = require('fs');
         if (!fs.existsSync(uploadDir)) {
@@ -332,7 +332,7 @@ app.get('/api/debug-uploads', (req, res) => {
 });
 
 // Recovery endpoint: finds docs missing from disk and recovers from DB fileContent
-app.get('/api/debug-recovery', async (req, res) => {
+app.get('/api/debug-recovery', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
         const recover = req.query.recover === 'true';
         const cleanup = req.query.cleanup === 'true';
@@ -401,7 +401,7 @@ app.get('/api/debug-recovery', async (req, res) => {
             missingFiles: missingNoContent.map(m => m.fname).slice(0, 20),
         });
     } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Erro ao executar diagnóstico de recovery' });
     }
 });
 
@@ -611,6 +611,7 @@ for (const p of possibleDistPaths) {
 if (frontendDist) {
     logger.info(`[Frontend] Found and serving static UI from: ${frontendDist}`);
     const assetsDir = path.join(frontendDist, 'assets');
+    const GZIP_CACHE_MAX = 200; // ~100MB worst case (500KB avg per compressed asset)
     const gzipAssetCache = new Map<string, Buffer>();
     app.use('/assets', (req, res, next) => {
         if (!['GET', 'HEAD'].includes(req.method) || !req.headers['accept-encoding']?.includes('gzip')) {
@@ -629,6 +630,11 @@ if (frontendDist) {
         if (!gzipped) {
             gzipped = zlib.gzipSync(fs.readFileSync(assetPath), { level: zlib.constants.Z_BEST_SPEED });
             gzipAssetCache.set(assetPath, gzipped);
+            // LRU eviction: remove oldest entry if over limit
+            if (gzipAssetCache.size > GZIP_CACHE_MAX) {
+                const oldest = gzipAssetCache.keys().next().value;
+                if (oldest) gzipAssetCache.delete(oldest);
+            }
         }
 
         res.type(path.extname(assetPath));
@@ -668,6 +674,10 @@ if (frontendDist) {
     logger.error(`[Frontend] CRITICAL: UI Build (dist) not found in any expected location!`);
     logger.error(`Tested paths: ${possibleDistPaths.join(', ')}`);
 }
+
+// ── Error handlers (must be registered AFTER all routes) ──
+app.use(sentryErrorHandler);
+app.use(globalErrorHandler);
 
 app.listen(PORT, async () => {
     logger.info(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
@@ -1144,5 +1154,14 @@ async function gracefulShutdown(signal: string) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Keep event loop alive (required in this environment)
-setInterval(() => { }, 1 << 30);
+// F-11: Catch unhandled errors to prevent silent crashes
+process.on('uncaughtException', (err) => {
+    logger.error(`[Server] ❌ UNCAUGHT EXCEPTION: ${err.message}`, { stack: err.stack });
+    captureError(err, { context: 'uncaughtException' });
+    gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason: any) => {
+    logger.error(`[Server] ❌ UNHANDLED REJECTION: ${reason?.message || reason}`, { stack: reason?.stack });
+    captureError(reason instanceof Error ? reason : new Error(String(reason)), { context: 'unhandledRejection' });
+});

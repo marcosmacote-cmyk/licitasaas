@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from '../../lib/prisma';
 import OpenAI from "openai";
 import { logger } from '../../lib/logger';
 const pdfParse = require("pdf-parse");
-
-const prisma = new PrismaClient();
 
 // Divide um texto grande em blocos/parágrafos menores
 export function chunkText(text: string, maxTokens: number = 800): string[] {

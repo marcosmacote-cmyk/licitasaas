@@ -10,10 +10,8 @@
  *   3. checkDriftAlerts() — alarmes automáticos de degradação
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
-
-const prisma = new PrismaClient();
 
 // ── Types ──
 

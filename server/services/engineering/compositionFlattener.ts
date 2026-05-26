@@ -1,6 +1,5 @@
-import { PrismaClient, EngineeringComposition, EngineeringCompositionItem, EngineeringItem } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { EngineeringComposition, EngineeringCompositionItem, EngineeringItem } from '@prisma/client';
+import prisma from '../../lib/prisma';
 
 export interface FlattenedItem {
   type: string; // 'MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'COMPOSICAO_AUXILIAR'

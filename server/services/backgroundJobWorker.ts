@@ -93,6 +93,14 @@ export function startJobWorker(): void {
     cleanupIntervalId = setInterval(async () => {
         try {
             await cleanupStalledJobs();
+            // F-18: Clean up expired user sessions
+            const { default: prisma } = await import('../lib/prisma');
+            const deleted = await prisma.userSession.deleteMany({
+                where: { expiresAt: { lt: new Date() } }
+            });
+            if (deleted.count > 0) {
+                logger.info(`[JobWorker] 🧹 Cleaned ${deleted.count} expired user sessions`);
+            }
         } catch (err: any) {
             logger.warn('[JobWorker] Cleanup error:', err.message);
         }
@@ -113,8 +121,7 @@ export function startJobWorker(): void {
  */
 async function recoverInterruptedJobs(): Promise<void> {
     try {
-        const { PrismaClient } = await import('@prisma/client');
-        const prisma = new PrismaClient();
+        const { default: prisma } = await import('../lib/prisma');
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
         const interrupted = await prisma.backgroundJob.findMany({
@@ -162,7 +169,7 @@ async function recoverInterruptedJobs(): Promise<void> {
             logger.info(`[JobWorker] ✅ Recovered ${recovered}/${interrupted.length} interrupted job(s) from previous deploy`);
         }
 
-        await prisma.$disconnect();
+        // Singleton — do not disconnect
     } catch (err: any) {
         logger.warn(`[JobWorker] ⚠️ Recovery check failed: ${err.message}`);
     }

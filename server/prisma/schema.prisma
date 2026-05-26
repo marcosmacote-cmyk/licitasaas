@@ -771,6 +771,7 @@ model EngineeringItem {
   updatedAt       DateTime @updatedAt
 
   @@unique([databaseId, code])
+  @@index([code])
 }
 
 model EngineeringComposition {
@@ -791,6 +792,7 @@ model EngineeringComposition {
   updatedAt       DateTime @updatedAt
 
   @@unique([databaseId, code])
+  @@index([code])
 }
 
 model EngineeringCompositionItem {

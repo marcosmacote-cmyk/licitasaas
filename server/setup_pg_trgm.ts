@@ -17,6 +17,18 @@ async function main() {
         CREATE INDEX IF NOT EXISTS eng_comp_desc_trgm_idx 
         ON "EngineeringComposition" USING gin (description gin_trgm_ops);
     `);
+
+    console.log("Creating functional B-Tree index on LOWER(EngineeringItem.code)...");
+    await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS eng_item_lower_code_idx 
+        ON "EngineeringItem" (LOWER(code));
+    `);
+
+    console.log("Creating functional B-Tree index on LOWER(EngineeringComposition.code)...");
+    await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS eng_comp_lower_code_idx 
+        ON "EngineeringComposition" (LOWER(code));
+    `);
     
     console.log("Success! pg_trgm and indexes created.");
 }

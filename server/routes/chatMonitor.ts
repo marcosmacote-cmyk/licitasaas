@@ -541,7 +541,7 @@ router.post('/process-close/:processId', authenticateToken, async (req: any, res
         });
     } catch (error: any) {
         logger.error('[ChatMonitor] Error closing process:', error?.message || error);
-        res.status(500).json({ error: 'Failed to close process', detail: error?.message });
+        res.status(500).json({ error: 'Failed to close process' });
     }
 });
 
@@ -1138,7 +1138,7 @@ router.get('/internal/notification-diag', authenticateWorker, async (req: any, r
             })),
         });
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Failed to run notification diagnostics' });
     }
 });
 
@@ -1167,7 +1167,7 @@ router.post('/internal/reprocess-notifications', authenticateWorker, async (req:
             message: `Reset ${resetResult.count} failed notifications and reprocessed. ${remaining} still pending.`,
         });
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Failed to reprocess notifications' });
     }
 });
 

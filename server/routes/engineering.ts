@@ -13,8 +13,10 @@ import { submitJob } from '../services/backgroundJobService';
 import { classifyEngineeringAttachments } from '../services/engineering/documentClassifier';
 import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
 import { Prisma } from '@prisma/client';
+import { SimpleTtlCache } from '../lib/cache';
 
 const router = Router();
+const compositionCache = new SimpleTtlCache<string, any>(1800);
 
 function refreshSubmittedPriceAudit(item: any) {
     const audit = item?.priceAudit;
@@ -526,6 +528,14 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const sourceName = normalizeCompositionSource(req.query.sourceName as string | undefined);
         const proposalId = req.query.proposalId as string || undefined;
         const codeVariants = buildCompositionCodeVariants(code, sourceName);
+        const tenantId = req.user?.tenantId || 'none';
+
+        const cacheKey = `comp:${code}:${databaseId || ''}:${sourceName || ''}:${tenantId}:${proposalId || ''}`;
+        const cached = compositionCache.get(cacheKey);
+        if (cached) {
+            logger.info(`[CompositionLookup] ⚡ Cache HIT: ${cacheKey}`);
+            return res.json(cached);
+        }
 
         logger.info(`[CompositionLookup] code=${code} databaseId=${databaseId || 'none'} sourceName=${sourceName || 'none'} proposalId=${proposalId || 'none'} codeVariants=${codeVariants.join(',')}`);
 
@@ -574,7 +584,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             if (!syntheticGroups[groupKey]) syntheticGroups[groupKey] = [];
             syntheticGroups[groupKey].push(syntheticRow);
 
-            return res.json({
+            const syntheticItemRes = {
                 id: `synthetic-${syntheticItem.id}`,
                 databaseId: syntheticItem.databaseId,
                 code: syntheticItem.code,
@@ -588,7 +598,9 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                 hasAnalyticalItems: false,
                 synthetic: true,
                 message: 'Preço sintético encontrado, mas a composição analítica não está importada nesta base.',
-            });
+            };
+            compositionCache.set(cacheKey, syntheticItemRes);
+            return res.json(syntheticItemRes);
         }
 
         if (
@@ -647,7 +659,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                         type: 'SERVICO',
                     },
                 };
-                return res.json({
+                const syntheticCompRes = {
                     ...resolvedComposition,
                     items: [syntheticRow],
                     groups: { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], SERVICO: [syntheticRow], AUXILIAR: [] },
@@ -655,7 +667,9 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                     hasAnalyticalItems: false,
                     synthetic: true,
                     message: 'Composição oficial encontrada, mas sem itens analíticos importados nesta base.',
-                });
+                };
+                compositionCache.set(cacheKey, syntheticCompRes);
+                return res.json(syntheticCompRes);
             }
         }
 
@@ -716,7 +730,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                 : finalComposition.metadata)
             : {};
 
-        res.json({
+        const finalEnrichedRes = {
             ...finalComposition,
             ...metadataObj,
             items: enrichedItems,
@@ -732,7 +746,9 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                     note: `Composição analítica obtida de ${analyticalFallback.database?.name || 'outra base'} (${analyticalFallback.items.length} insumos)`,
                 },
             } : {}),
-        });
+        };
+        compositionCache.set(cacheKey, finalEnrichedRes);
+        res.json(finalEnrichedRes);
 
     } catch (e: any) {
         console.error('Error fetching composition:', e);
@@ -817,6 +833,7 @@ router.get('/hub/search', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/propria/create', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const tenantId = req.user?.tenantId || req.body.tenantId;
         const { code, description, unit, price, recordKind } = req.body;
 
@@ -915,6 +932,7 @@ router.post('/compositions', async (req: any, res: any) => {
             }
         });
 
+        compositionCache.flushAll();
         logger.info(`[CompositionSave] ✅ POST created PROPRIA: id=${comp.id} code=${comp.code} dbId=${propriaDb.id}`);
         res.json({ message: 'Composição criada com sucesso', composition: comp });
     } catch (e: any) {
@@ -975,6 +993,9 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
         let targetCompId = id;
         const tenantId = req.user?.tenantId || composition.tenantId;
+
+        // Invalidate cache since we are writing changes
+        compositionCache.flushAll();
 
         // Start a transaction to delete old items and recreate
         await prisma.$transaction(async (tx: any) => {
@@ -1084,92 +1105,206 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 // Create new items — use proposal-specific or global PROPRIA database
                 const basePropria = await getOrCreatePropriaDatabase(tx, tenantId, proposalId);
 
+                // Helper: detect temporary/synthetic IDs that don't exist in DB
+                const isTempId = (valId: string | null | undefined) => 
+                    !valId || valId.startsWith('new-') || valId.startsWith('temp-') || valId.startsWith('new-casca-') || valId.startsWith('new-aux-') || valId.startsWith('synthetic-') || valId.startsWith('etapa-');
+
+                // ────────────────────────────────────────────────────────────────
+                // BATCH LOOKUPS TO PREVENT N+1 QUERIES
+                // ────────────────────────────────────────────────────────────────
+                const uniqueDbNames = [...new Set(flatItems.map(item => item._matchedDatabase).filter(name => name && name !== 'PRÓPRIO' && name !== 'PROPRIA'))];
+
+                const officialInputCodes = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const dbName = item._matchedDatabase;
+                        return !isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
+                    })
+                    .map(item => item.item?.code || item.code)
+                    .filter(Boolean);
+
+                const officialAuxCodes = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const dbName = item._matchedDatabase;
+                        return isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
+                    })
+                    .map(item => item.auxiliaryComposition?.code || item.code)
+                    .filter(Boolean);
+
+                const propriaItemCodes = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const itemId = item.item ? item.item.id : item.itemId;
+                        return !isAux && itemId && isTempId(itemId) && item.item?.code;
+                    })
+                    .map(item => item.item.code)
+                    .filter(c => c !== 'LIVRE' && c !== 'OBS');
+
+                const propriaAuxCodes = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                        return isAux && auxId && isTempId(auxId) && item.auxiliaryComposition?.code;
+                    })
+                    .map(item => item.auxiliaryComposition.code)
+                    .filter(c => c !== 'LIVRE');
+
+                const nonTempItemIds = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const itemId = item.item ? item.item.id : item.itemId;
+                        return !isAux && itemId && !isTempId(itemId);
+                    })
+                    .map(item => item.item ? item.item.id : item.itemId);
+
+                const nonTempAuxIds = flatItems
+                    .filter(item => {
+                        const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                        const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
+                        return isAux && auxId && !isTempId(auxId);
+                    })
+                    .map(item => item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId);
+
+                // Execute all lookups in parallel
+                const [
+                    officialItems,
+                    officialComps,
+                    propriaItems,
+                    propriaAuxs,
+                    existingNonTempItems,
+                    existingNonTempAuxs
+                ] = await Promise.all([
+                    officialInputCodes.length > 0
+                        ? tx.engineeringItem.findMany({
+                            where: {
+                                code: { in: officialInputCodes },
+                                database: { name: { in: uniqueDbNames } }
+                            },
+                            include: { database: true }
+                        })
+                        : Promise.resolve([]),
+                    officialAuxCodes.length > 0
+                        ? tx.engineeringComposition.findMany({
+                            where: {
+                                code: { in: officialAuxCodes },
+                                database: { name: { in: uniqueDbNames } }
+                            },
+                            include: { database: true }
+                        })
+                        : Promise.resolve([]),
+                    propriaItemCodes.length > 0
+                        ? tx.engineeringItem.findMany({
+                            where: {
+                                databaseId: basePropria.id,
+                                code: { in: propriaItemCodes }
+                            }
+                        })
+                        : Promise.resolve([]),
+                    propriaAuxCodes.length > 0
+                        ? tx.engineeringComposition.findMany({
+                            where: {
+                                databaseId: basePropria.id,
+                                code: { in: propriaAuxCodes }
+                            }
+                        })
+                        : Promise.resolve([]),
+                    nonTempItemIds.length > 0
+                        ? tx.engineeringItem.findMany({
+                            where: { id: { in: nonTempItemIds } },
+                            include: { database: true }
+                        })
+                        : Promise.resolve([]),
+                    nonTempAuxIds.length > 0
+                        ? tx.engineeringComposition.findMany({
+                            where: { id: { in: nonTempAuxIds } },
+                            include: { database: true }
+                        })
+                        : Promise.resolve([])
+                ]);
+
+                // Sort candidates to prefer newer reference databases (descending order)
+                const sortCandidates = (a: any, b: any) => {
+                    const yearA = a.database?.referenceYear || 0;
+                    const yearB = b.database?.referenceYear || 0;
+                    if (yearA !== yearB) return yearB - yearA;
+                    const monthA = a.database?.referenceMonth || 0;
+                    const monthB = b.database?.referenceMonth || 0;
+                    return monthB - monthA;
+                };
+                officialItems.sort(sortCandidates);
+                officialComps.sort(sortCandidates);
+
+                // Setup local maps for quick lookups
+                const localPropriaItems = new Map<string, any>();
+                for (const item of propriaItems) localPropriaItems.set(item.code, item);
+
+                const localPropriaAuxs = new Map<string, any>();
+                for (const aux of propriaAuxs) localPropriaAuxs.set(aux.code, aux);
+
+                const nonTempItemsMap = new Map<string, any>();
+                for (const item of existingNonTempItems) nonTempItemsMap.set(item.id, item);
+
+                const nonTempAuxsMap = new Map<string, any>();
+                for (const aux of existingNonTempAuxs) nonTempAuxsMap.set(aux.id, aux);
+
+                // Loop through flatItems to sync database records
                 for (const item of flatItems) {
                     let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
                     let itemId = item.item ? item.item.id : item.itemId;
                     let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
                     const dbName = item._matchedDatabase;
-                    
-                    // Helper: detect temporary/synthetic IDs that don't exist in DB
-                    const isTempId = (id: string | null | undefined) => 
-                        !id || id.startsWith('new-') || id.startsWith('temp-') || id.startsWith('new-casca-') || id.startsWith('new-aux-') || id.startsWith('synthetic-') || id.startsWith('etapa-');
 
                     // 🔗 Look up item/composition in official database if _matchedDatabase is official!
                     if (dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA') {
                         if (isAux) {
                             const codeToFind = item.auxiliaryComposition?.code || item.code;
                             if (codeToFind) {
+                                const codeLower = codeToFind.toLowerCase();
                                 let matchedAux = null;
                                 if (targetDatabase) {
-                                    matchedAux = await tx.engineeringComposition.findFirst({
-                                        where: {
-                                            code: { equals: codeToFind, mode: 'insensitive' },
-                                            database: {
-                                                name: dbName,
-                                                uf: targetDatabase.uf || undefined,
-                                                payrollExemption: targetDatabase.payrollExemption
-                                            }
-                                        },
-                                        orderBy: [
-                                            { database: { referenceYear: 'desc' } },
-                                            { database: { referenceMonth: 'desc' } }
-                                        ]
-                                    });
+                                    matchedAux = officialComps.find((c: any) =>
+                                        c.code.toLowerCase() === codeLower &&
+                                        c.database?.name === dbName &&
+                                        (targetDatabase.uf ? c.database?.uf === targetDatabase.uf : true) &&
+                                        (typeof targetDatabase.payrollExemption === 'boolean' ? c.database?.payrollExemption === targetDatabase.payrollExemption : true)
+                                    );
                                 }
                                 if (!matchedAux) {
-                                    matchedAux = await tx.engineeringComposition.findFirst({
-                                        where: {
-                                            code: { equals: codeToFind, mode: 'insensitive' },
-                                            database: { name: dbName }
-                                        },
-                                        orderBy: [
-                                            { database: { referenceYear: 'desc' } },
-                                            { database: { referenceMonth: 'desc' } }
-                                        ]
-                                    });
+                                    matchedAux = officialComps.find((c: any) =>
+                                        c.code.toLowerCase() === codeLower &&
+                                        c.database?.name === dbName
+                                    );
                                 }
                                 if (matchedAux) {
                                     auxId = matchedAux.id;
                                     isAux = true;
-                                    logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName} (UF=${matchedAux.database?.uf || 'default'})`);
+                                    logger.info(`[CompositionSave] 🔗 Linked temporary aux code=${codeToFind} to official ID=${auxId} in database ${dbName}`);
                                 }
                             }
                         } else {
                             const codeToFind = item.item?.code || item.code;
                             if (codeToFind) {
+                                const codeLower = codeToFind.toLowerCase();
                                 let matchedItem = null;
                                 if (targetDatabase) {
-                                    matchedItem = await tx.engineeringItem.findFirst({
-                                        where: {
-                                            code: { equals: codeToFind, mode: 'insensitive' },
-                                            database: {
-                                                name: dbName,
-                                                uf: targetDatabase.uf || undefined,
-                                                payrollExemption: targetDatabase.payrollExemption
-                                            }
-                                        },
-                                        orderBy: [
-                                            { database: { referenceYear: 'desc' } },
-                                            { database: { referenceMonth: 'desc' } }
-                                        ]
-                                    });
+                                    matchedItem = officialItems.find((i: any) =>
+                                        i.code.toLowerCase() === codeLower &&
+                                        i.database?.name === dbName &&
+                                        (targetDatabase.uf ? i.database?.uf === targetDatabase.uf : true) &&
+                                        (typeof targetDatabase.payrollExemption === 'boolean' ? i.database?.payrollExemption === targetDatabase.payrollExemption : true)
+                                    );
                                 }
                                 if (!matchedItem) {
-                                    matchedItem = await tx.engineeringItem.findFirst({
-                                        where: {
-                                            code: { equals: codeToFind, mode: 'insensitive' },
-                                            database: { name: dbName }
-                                        },
-                                        orderBy: [
-                                            { database: { referenceYear: 'desc' } },
-                                            { database: { referenceMonth: 'desc' } }
-                                        ]
-                                    });
+                                    matchedItem = officialItems.find((i: any) =>
+                                        i.code.toLowerCase() === codeLower &&
+                                        i.database?.name === dbName
+                                    );
                                 }
                                 if (matchedItem) {
                                     itemId = matchedItem.id;
                                     isAux = false;
-                                    logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName} (UF=${matchedItem.database?.uf || 'default'})`);
+                                    logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName}`);
                                 }
                             }
                         }
@@ -1177,7 +1312,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                     // Skip observation/etapa items that have no real item or composition data
                     if (!itemId && !auxId && !isAux) {
-                        logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId (likely observation/etapa): coef=${item.coefficient}`);
+                        logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId: coef=${item.coefficient}`);
                         continue;
                     }
                     
@@ -1191,12 +1326,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             itemCode = `OBS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                         }
                         
-                        let existingItem = await tx.engineeringItem.findFirst({
-                            where: {
-                                databaseId: basePropria.id,
-                                code: itemCode
-                            }
-                        });
+                        let existingItem = localPropriaItems.get(itemCode);
 
                         if (!existingItem) {
                             existingItem = await tx.engineeringItem.create({
@@ -1209,6 +1339,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                     price: item.item?.price || 0
                                 }
                             });
+                            localPropriaItems.set(itemCode, existingItem);
                             logger.info(`[CompositionSave] 🆕 Created own item: code=${itemCode} id=${existingItem.id}`);
                         } else {
                             if (item.item?.description && item.item.description !== existingItem.description) {
@@ -1220,6 +1351,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                         price: item.item.price !== undefined ? item.item.price : existingItem.price,
                                     }
                                 });
+                                localPropriaItems.set(itemCode, existingItem);
                                 logger.info(`[CompositionSave] 📝 Updated own item description/unit: code=${itemCode} id=${existingItem.id}`);
                             }
                         }
@@ -1233,12 +1365,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             auxCode = `LIVRE-COMP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                         }
                         
-                        let existingAux = await tx.engineeringComposition.findFirst({
-                            where: {
-                                databaseId: basePropria.id,
-                                code: auxCode
-                            }
-                        });
+                        let existingAux = localPropriaAuxs.get(auxCode);
 
                         if (!existingAux) {
                             existingAux = await tx.engineeringComposition.create({
@@ -1250,6 +1377,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                     totalPrice: item.auxiliaryComposition?.totalPrice || 0
                                 }
                             });
+                            localPropriaAuxs.set(auxCode, existingAux);
                             logger.info(`[CompositionSave] 🆕 Created own composition: code=${auxCode} id=${existingAux.id}`);
                         } else {
                             if (item.auxiliaryComposition?.description && item.auxiliaryComposition.description !== existingAux.description) {
@@ -1260,6 +1388,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                         unit: item.auxiliaryComposition.unit || existingAux.unit,
                                     }
                                 });
+                                localPropriaAuxs.set(auxCode, existingAux);
                                 logger.info(`[CompositionSave] 📝 Updated own composition description/unit: code=${auxCode} id=${existingAux.id}`);
                             }
                         }
@@ -1278,13 +1407,10 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                     // Update description of existing proprietary items if they have changed and are not temp
                     if (!isAux && itemId && !isTempId(itemId)) {
-                        const dbItem = await tx.engineeringItem.findUnique({
-                            where: { id: itemId },
-                            include: { database: true }
-                        });
-                        if (dbItem && (dbItem.database.type === 'PROPRIA' || dbItem.database.name.startsWith('PROPRIA'))) {
+                        const dbItem = nonTempItemsMap.get(itemId);
+                        if (dbItem && (dbItem.database?.type === 'PROPRIA' || dbItem.database?.name?.startsWith('PROPRIA'))) {
                             if (item.item?.description && item.item.description !== dbItem.description) {
-                                await tx.engineeringItem.update({
+                                const updatedItem = await tx.engineeringItem.update({
                                     where: { id: itemId },
                                     data: {
                                         description: item.item.description,
@@ -1292,42 +1418,45 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                         price: item.item.price !== undefined ? item.item.price : dbItem.price
                                     }
                                 });
+                                nonTempItemsMap.set(itemId, { ...dbItem, ...updatedItem });
                                 logger.info(`[CompositionSave] 📝 Updated own item description: code=${dbItem.code} id=${itemId}`);
                             }
                         }
                     }
 
                     if (isAux && auxId && !isTempId(auxId)) {
-                        const dbAux = await tx.engineeringComposition.findUnique({
-                            where: { id: auxId },
-                            include: { database: true }
-                        });
-                        if (dbAux && (dbAux.database.type === 'PROPRIA' || dbAux.database.name.startsWith('PROPRIA'))) {
+                        const dbAux = nonTempAuxsMap.get(auxId);
+                        if (dbAux && (dbAux.database?.type === 'PROPRIA' || dbAux.database?.name?.startsWith('PROPRIA'))) {
                             if (item.auxiliaryComposition?.description && item.auxiliaryComposition.description !== dbAux.description) {
-                                await tx.engineeringComposition.update({
+                                const updatedAux = await tx.engineeringComposition.update({
                                     where: { id: auxId },
                                     data: {
                                         description: item.auxiliaryComposition.description,
                                         unit: item.auxiliaryComposition.unit || dbAux.unit
                                     }
                                 });
+                                nonTempAuxsMap.set(auxId, { ...dbAux, ...updatedAux });
                                 logger.info(`[CompositionSave] 📝 Updated own aux comp description: code=${dbAux.code} id=${auxId}`);
                             }
                         }
                     }
                     
-                    // Verify FK references exist before inserting
+                    // Verify FK references exist in memory before inserting (eliminates DB roundtrips)
                     if (!isAux && itemId) {
-                        const itemExists = await tx.engineeringItem.findUnique({ where: { id: itemId }, select: { id: true } });
+                        const itemExists = nonTempItemsMap.has(itemId) || 
+                                           [...localPropriaItems.values()].some((i: any) => i.id === itemId) ||
+                                           officialItems.some((i: any) => i.id === itemId);
                         if (!itemExists) {
-                            logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist (FK would fail). Item code=${item.item?.code}`);
+                            logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist. Item code=${item.item?.code}`);
                             continue;
                         }
                     }
                     if (isAux && auxId) {
-                        const auxExists = await tx.engineeringComposition.findUnique({ where: { id: auxId }, select: { id: true } });
+                        const auxExists = nonTempAuxsMap.has(auxId) || 
+                                          [...localPropriaAuxs.values()].some((a: any) => a.id === auxId) ||
+                                          officialComps.some((a: any) => a.id === auxId);
                         if (!auxExists) {
-                            logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist (FK would fail). Aux code=${item.auxiliaryComposition?.code}`);
+                            logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist. Aux code=${item.auxiliaryComposition?.code}`);
                             continue;
                         }
                     }
@@ -1363,6 +1492,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.delete('/compositions/:id/items', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const id = req.params.id;
         const proposalId = req.query.proposalId as string || req.body.proposalId as string || undefined;
 
@@ -1439,6 +1569,7 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.delete('/compositions/:id', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const id = req.params.id;
 
         const existing = await prisma.engineeringComposition.findUnique({
@@ -1526,6 +1657,7 @@ router.get('/items', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.put('/items/:id', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const id = req.params.id;
         const { code, description, unit, price, type } = req.body;
 
@@ -1571,6 +1703,7 @@ router.put('/items/:id', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.delete('/items/:id', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const id = req.params.id;
 
         const existing = await prisma.engineeringItem.findUnique({
@@ -1623,6 +1756,7 @@ router.delete('/items/:id', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/propria/cleanup', async (req: any, res: any) => {
     try {
+        compositionCache.flushAll();
         const tenantId = req.user?.tenantId;
         if (!tenantId) return res.status(401).json({ error: 'Não autenticado' });
 
@@ -3000,7 +3134,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
 
     } catch (e: any) {
         console.error('Error in AI engineering extraction:', e);
-        res.status(500).json({ error: e.message || 'Falha ao extrair itens via Inteligência Artificial' });
+        res.status(500).json({ error: 'Falha ao extrair itens via Inteligência Artificial' });
     }
 });
 

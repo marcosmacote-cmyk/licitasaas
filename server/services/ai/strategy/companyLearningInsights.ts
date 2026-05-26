@@ -41,8 +41,7 @@ export interface CompanyLearningReport {
 }
 
 // ── Storage ──
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../../../lib/prisma';
 
 export async function recordMatchHistory(companyId: string, processId: string, scores: { doc: number; tech: number; ef: number; prop: number; overall: number }, recommendation: string): Promise<void> {
     try {

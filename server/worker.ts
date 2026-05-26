@@ -19,7 +19,7 @@
 
 import dotenv from 'dotenv';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
+import prisma from './lib/prisma';
 import { startAllPollers } from './services/monitoring/pollers';
 import { startOpportunityScanner } from './services/monitoring/opportunity-scanner.service';
 import { runPncpSync, getPncpAggregatorStats } from './workers/pncpAggregator';
@@ -29,7 +29,7 @@ import { logger } from './lib/logger';
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
 dotenv.config({ path: path.join(SERVER_ROOT, '.env'), override: false });
 
-const prisma = new PrismaClient();
+// Prisma singleton imported from ./lib/prisma
 
 // ── Health Check (simple HTTP for Docker/Railway) ──
 import http from 'http';

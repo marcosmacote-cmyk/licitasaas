@@ -1,12 +1,10 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../lib/prisma';
 import { callGeminiWithRetry } from '../ai/gemini.service';
 import axios from 'axios';
 import https from 'https';
 import { classifyEngineeringAttachments } from './documentClassifier';
 import { downloadWithRetry } from './downloadUtils';
-
-const prisma = new PrismaClient();
 
 function scoreDocForBdi(doc: any): number {
     const haystack = `${doc.title || ''} ${doc.purpose || ''}`.toLowerCase();
