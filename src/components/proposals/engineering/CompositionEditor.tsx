@@ -2406,7 +2406,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 const groupItems = data.groups?.[groupKey] || [];
                                 // Show custom groups (or labeled ones) always, even if empty. Standard groups only show if they have items or during drag.
                                 const isCustomGroup = !GROUP_META[groupKey] || groupKey.startsWith('CUSTOM_') || !!customGroupLabels[groupKey];
-                                if (groupItems.length === 0 && !isCustomGroup && !dragItem && !dragGroupKey) return null;
+                                if (groupItems.length === 0 && !isCustomGroup) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
                                 const isExpanded = expandedGroups.has(groupKey);
