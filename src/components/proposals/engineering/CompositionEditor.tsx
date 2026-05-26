@@ -1449,7 +1449,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 // If at the root level, also trigger update for the parent item specifically
                 triggerUpdateItem({
                     code: canonicalCode,
-                    unitCost: finalCost,
+                    unitCost: data.totalPrice,
                     sourceName: `PROPRIA`,
                     priceAudit: {
                         ...currentItem.priceAudit,
