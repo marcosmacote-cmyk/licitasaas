@@ -633,7 +633,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 const res = await fetch('/api/engineering/insumos-hub-resolve', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ items: payload }),
+                    body: JSON.stringify({ items: payload, proposalId }),
                 });
                 const data = await res.json();
                 if (data.insumos && data.insumos.length > 0) {

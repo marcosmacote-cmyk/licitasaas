@@ -91,7 +91,7 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
             const res = await fetch('/api/engineering/insumos-hub-resolve', {
                 method: 'POST',
                 headers: hdrs(),
-                body: JSON.stringify({ items: payload }),
+                body: JSON.stringify({ items: payload, proposalId }),
             });
             const data = await res.json();
 

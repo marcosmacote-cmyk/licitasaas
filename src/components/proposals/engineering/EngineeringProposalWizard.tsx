@@ -260,7 +260,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
 
                 const res = await fetch('/api/engineering/insumos-hub-resolve', {
                     method: 'POST', headers: hdrs(),
-                    body: JSON.stringify({ items: payload }),
+                    body: JSON.stringify({ items: payload, proposalId }),
                 });
                 const data = await res.json();
                 if (data.insumos && data.insumos.length > 0) {

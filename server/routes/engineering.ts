@@ -2481,7 +2481,7 @@ router.post('/proposals/:id/analytical-report', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/insumos-hub-resolve', async (req: any, res: any) => {
     try {
-        const { items } = req.body; // [{ code, quantity, sourceName }]
+        const { items, proposalId } = req.body; // [{ code, quantity, sourceName }], optional proposalId
 
         if (!Array.isArray(items) || items.length === 0) {
             return res.json({ insumos: [], stats: { totalInsumos: 0, totalCusto: 0 }, mode: 'empty' });
@@ -2504,19 +2504,13 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const code = (clientItem.code || '').trim();
             if (!code || code === 'N/A') { itemsWithoutComposition++; continue; }
 
-            // Search composition by code across all databases
-            const composition = await prisma.engineeringComposition.findFirst({
-                where: { code: { equals: code, mode: 'insensitive' } },
-                include: {
-                    items: {
-                        include: {
-                            item: true,
-                            // FIX-04: Include auxiliary compositions with their items for recursive resolution
-                        },
-                    },
-                    database: { select: { name: true, uf: true } },
-                },
-            });
+            // Search composition by code across all databases, prioritizing proposal-specific PROPRIA db
+            const codeVariants = buildCompositionCodeVariants(code, clientItem.sourceName);
+            const tenantId = req.user?.tenantId;
+            let composition = await findBestAnalyticalComposition(codeVariants, undefined, clientItem.sourceName, tenantId, proposalId);
+            if (!composition) {
+                composition = await findFallbackComposition(codeVariants, undefined, clientItem.sourceName, tenantId, proposalId);
+            }
 
             if (!composition) {
                 itemsWithoutComposition++;
