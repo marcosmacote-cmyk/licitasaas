@@ -1486,10 +1486,10 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, true, engConfig?.reportConfig);
   ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 10 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
-  logoRow(wb, ws, 8, engConfig?.reportConfig);
+  logoRow(wb, ws, 9, engConfig?.reportConfig);
 
-  titleRow(ws, 'CURVA ABC DE INSUMOS', 8);
-  metaRows(ws, engConfig, insumos, 8);
+  titleRow(ws, 'CURVA ABC DE INSUMOS', 9);
+  metaRows(ws, engConfig, insumos, 9);
   headRow(ws, ['Nº', 'CÓDIGO', 'CATEGORIA', 'DESCRIÇÃO', 'BASE', 'UN.', 'CUSTO TOTAL', '% ITEM', '% ACUM.']);
 
   const list = [...(insumos || [])].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));

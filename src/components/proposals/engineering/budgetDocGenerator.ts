@@ -1168,14 +1168,14 @@ ${renderConfigTable(engineeringConfig)}
             const pct = insTotal > 0 ? (ins.custoTotal / insTotal * 100) : 0;
             const pctAccum = insTotal > 0 ? (accum / insTotal * 100) : 0;
             const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
-            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${ins.base || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(insTotal)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
+<table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="7">TOTAL</td><td class="r">${fmt(insTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(insTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
     }
 
     // ── Cronograma ──

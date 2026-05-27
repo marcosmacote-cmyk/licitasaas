@@ -438,10 +438,17 @@ function resolveDisplayBase(dbName: string | undefined, sourceName: string | und
     }
 
     // 3. Detect base from composition code patterns
-    const code = (compositionCode || '').trim().toUpperCase();
+    let code = (compositionCode || '').trim().toUpperCase();
     if (code) {
-        // SEINFRA patterns: CPMH06, CPEL03, CPTO01, C0054, C1614, I0001
-        if (/^C[A-Z]{0,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
+        // Clear common collision/variant prefix and suffixes (ex: INS-, -C1, -H-AJ)
+        code = code.replace(/-C\d+$/, '');
+        code = code.replace(/-(H|M)-(AJ|EL)$/, '');
+        if (code.startsWith('INS-')) {
+            code = code.replace(/^INS-/, '').replace(/-\d+$/, '');
+        }
+
+        // SEINFRA patterns: CPMH06, CPEL03, CPTO01, C0054, C1614, I0001, PMH07 (supports standard letters/codes)
+        if (/^[A-Z]{1,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
         // SINAPI: 5-6 digit numbers (88316, 93566, 74209/1)
         if (/^\d{5,6}(\/\d+)?$/.test(code)) return 'SINAPI';
         // ORSE: numeric with possible /ORSE suffix
@@ -2921,6 +2928,9 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                     const finalCategoria = (dbType === 'MATERIAL' && classification.type !== 'MATERIAL' && classification.confidence !== 'LOW')
                         ? classification.type
                         : dbType;
+
+                    const insumoBaseName = resolveDisplayBase(insumo.database?.name, undefined, insumo.code);
+
                     consolidated.set(insumoKey, {
                         id: insumoKey,
                         codigo: insumo.code,
@@ -2931,7 +2941,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         tipoOrigem: classification.source,
                         unidade: insumo.unit,
                         precoOriginal: priceToUse,
-                        base: baseName,
+                        base: insumoBaseName,
                         composicoesVinculadas: [parentCompCode],
                         coeficientesPorComposicao: [{
                             compCode: parentCompCode,
