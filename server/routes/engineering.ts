@@ -2814,6 +2814,8 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
         const consolidated = new Map<string, {
             id: string; codigo: string; descricao: string; categoria: string;
             tipoDetalhado?: string;
+            tipoConfianca?: string;
+            tipoOrigem?: string;
             unidade: string; precoOriginal: number; base: string;
             composicoesVinculadas: string[];
             coeficientesPorComposicao: { compCode: string; coef: number; qty: number }[];
