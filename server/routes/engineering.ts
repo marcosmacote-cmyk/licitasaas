@@ -2342,6 +2342,10 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
 
             if (existing) {
                 existing.coeficienteTotal += weightedCoef;
+                // FIX-05: Track custoTotal as running sum to handle same insumo with different prices across compositions
+                existing.custoTotal += raw.insumoPrice * weightedCoef;
+                existing.precoOriginal = existing.custoTotal / existing.coeficienteTotal;
+                existing.precoFinal = existing.precoOriginal;
                 if (!existing.composicoesVinculadas.includes(raw.compositionCode)) {
                     existing.composicoesVinculadas.push(raw.compositionCode);
                 }
@@ -2358,15 +2362,15 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
                     base: raw.base,
                     composicoesVinculadas: [raw.compositionCode],
                     coeficienteTotal: weightedCoef,
-                    custoTotal: Math.round(raw.insumoPrice * weightedCoef * 100) / 100,
+                    custoTotal: raw.insumoPrice * weightedCoef,
                 });
             }
         }
 
-        // Recalculate custoTotal and sort
+        // Build final array with already-tracked custoTotal rounded
         const insumos = Array.from(consolidated.values()).map(ins => ({
             ...ins,
-            custoTotal: Math.round(ins.precoFinal * ins.coeficienteTotal * 100) / 100,
+            custoTotal: Math.round(ins.custoTotal * 100) / 100,
         }));
         insumos.sort((a: any, b: any) => b.custoTotal - a.custoTotal);
 
@@ -2542,6 +2546,9 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 
                 if (existing) {
                     existing.coeficienteTotal += weightedCoef;
+                    // FIX-05: Track custoTotal as running sum to handle same insumo with different prices across compositions
+                    existing.custoTotal += priceToUse * weightedCoef;
+                    existing.precoOriginal = existing.custoTotal / existing.coeficienteTotal;
                     existing.coeficientesPorComposicao.push({
                         compCode: parentCompCode,
                         coef,
@@ -2549,9 +2556,6 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                     });
                     if (!existing.composicoesVinculadas.includes(parentCompCode)) {
                         existing.composicoesVinculadas.push(parentCompCode);
-                    }
-                    if (Math.abs(existing.precoOriginal - priceToUse) > 0.01) {
-                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${insumo.code}: R$${existing.precoOriginal} vs R$${priceToUse} — usando preço da primeira ocorrência`);
                     }
                 } else {
                     consolidated.set(insumoKey, {
@@ -2570,6 +2574,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                             qty: effectiveServiceQty,
                         }],
                         coeficienteTotal: weightedCoef,
+                        custoTotal: priceToUse * weightedCoef,
                     });
                 }
             };
@@ -2628,7 +2633,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             ...ins,
             desconto: 0,
             precoFinal: ins.precoOriginal,
-            custoTotal: Math.round(ins.precoOriginal * ins.coeficienteTotal * 100) / 100,
+            custoTotal: Math.round(ins.custoTotal * 100) / 100,
         }));
 
         // Sort by custoTotal descending

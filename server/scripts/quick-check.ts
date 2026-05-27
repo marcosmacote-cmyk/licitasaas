@@ -7,64 +7,56 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  console.log("\n=== Scanning for Inconsistent Composition Items ===");
-  const compItems = await prisma.engineeringCompositionItem.findMany({
+  const proposalId = "614215bf-a2f3-4bc8-8b15-c9ccaf21bac3";
+  const dbName = `PROPRIA_${proposalId}`;
+
+  console.log(`\n=== Checking CPMH06 items in database ${dbName} ===`);
+  const composition = await prisma.engineeringComposition.findFirst({
     where: {
-      composition: {
-        database: {
-          name: { startsWith: "PROPRIA" }
-        }
-      }
+      code: "CPMH06",
+      database: { name: dbName }
     },
     include: {
-      composition: {
-        include: { database: true }
-      },
-      item: true
+      database: true
     }
   });
 
-  console.log(`Found ${compItems.length} total composition items in PROPRIA databases.`);
-  let inconsistentCount = 0;
-  for (const ci of compItems) {
-    let unitPrice = 0;
-    let description = '';
-    let itemCode = '';
-    
-    if (ci.itemId && ci.item) {
-      unitPrice = ci.item.price;
-      description = ci.item.description;
-      itemCode = ci.item.code;
-    } else if (ci.auxiliaryCompositionId) {
+  if (!composition) {
+    console.error("❌ Error: Composition CPMH06 not found!");
+    return;
+  }
+
+  const items = await prisma.engineeringCompositionItem.findMany({
+    where: { compositionId: composition.id },
+    include: { item: true }
+  });
+
+  for (const it of items) {
+    if (it.item) {
+      console.log(`- Item: Code=${it.item.code}, Desc=${it.item.description.substring(0, 50)}, Coef=${it.coefficient}, Price=${it.price}, ItemPrice=${it.item.price}`);
+    } else if (it.auxiliaryCompositionId) {
       const aux = await prisma.engineeringComposition.findUnique({
-        where: { id: ci.auxiliaryCompositionId }
+        where: { id: it.auxiliaryCompositionId }
       });
+      console.log(`- Aux: Code=${aux?.code}, Desc=${aux?.description.substring(0, 50)}, Coef=${it.coefficient}, Price=${it.price}, AuxPrice=${aux?.totalPrice}`);
+      
+      // Let's dump this aux's items
       if (aux) {
-        unitPrice = aux.totalPrice;
-        description = aux.description;
-        itemCode = aux.code;
+        const auxItems = await prisma.engineeringCompositionItem.findMany({
+          where: { compositionId: aux.id },
+          include: { item: true }
+        });
+        for (const ai of auxItems) {
+          if (ai.item) {
+            console.log(`    * Item: Code=${ai.item.code}, Desc=${ai.item.description.substring(0, 40)}, Coef=${ai.coefficient}, Price=${ai.price}, ItemPrice=${ai.item.price}`);
+          } else if (ai.auxiliaryCompositionId) {
+            const nested = await prisma.engineeringComposition.findUnique({ where: { id: ai.auxiliaryCompositionId } });
+            console.log(`    * Aux: Code=${nested?.code}, Coef=${ai.coefficient}, Price=${ai.price}, AuxPrice=${nested?.totalPrice}`);
+          }
+        }
       }
     }
-    
-    const expectedSubtotal = ci.coefficient * unitPrice;
-    const diff = Math.abs(ci.price - expectedSubtotal);
-    
-    // If the difference is significant (more than 0.05 BRL)
-    if (diff > 0.05 && ci.coefficient > 0) {
-      inconsistentCount++;
-      console.log(`Inconsistency #${inconsistentCount}:`);
-      console.log(`  Composition: ${ci.composition.code} (${ci.composition.description.substring(0, 50)})`);
-      console.log(`  Database: ${ci.composition.database?.name}`);
-      console.log(`  Item: Code=${itemCode}, Desc=${description.substring(0, 50)}`);
-      console.log(`  Stored Coefficient: ${ci.coefficient}`);
-      console.log(`  Stored Subtotal: R$ ${ci.price}`);
-      console.log(`  Backing Item Unit Price: R$ ${unitPrice}`);
-      console.log(`  Expected Subtotal: R$ ${expectedSubtotal} (Diff: R$ ${diff.toFixed(2)})`);
-      console.log(`  Implied Unit Price: R$ ${(ci.price / ci.coefficient).toFixed(5)}`);
-      console.log("--------------------------------------------------");
-    }
   }
-  console.log(`Scan complete. Found ${inconsistentCount} inconsistent items.`);
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
