@@ -22,6 +22,7 @@ export interface CockpitData {
     contractDuration: string;
     executionLocation: string;
     proposalDate: string;       // YYYY-MM-DD override ou '' = data de geração
+    proposalType?: 'INITIAL' | 'READJUSTED';
 }
 
 const COCKPIT_DEFAULTS: CockpitData = {
@@ -30,6 +31,7 @@ const COCKPIT_DEFAULTS: CockpitData = {
     contractDuration: '',
     executionLocation: '',
     proposalDate: '',
+    proposalType: 'INITIAL',
 };
 
 // ── Helper: restaura blocos salvos com pricing atualizado ──
@@ -83,7 +85,17 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
     // ── Data Cockpit state ──
     const [cockpit, setCockpit] = useState<CockpitData>(COCKPIT_DEFAULTS);
     const updateCockpit = useCallback((patch: Partial<CockpitData>) => {
-        setCockpit(prev => ({ ...prev, ...patch }));
+        setCockpit(prev => {
+            const next = { ...prev, ...patch };
+            if (patch.proposalType && patch.proposalType !== prev.proposalType) {
+                if (patch.proposalType === 'READJUSTED') {
+                    next.proposalTitle = 'PROPOSTA DE PREÇOS READEQUADA';
+                } else {
+                    next.proposalTitle = 'PROPOSTA DE PREÇOS';
+                }
+            }
+            return next;
+        });
     }, []);
 
     // ── Declarações inline ──
@@ -388,6 +400,10 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
             plainText: letterResult.plainText,
             cockpit,
             declarations,
+            sigLegal: props.sigLegal,
+            sigTech: props.sigTech,
+            sigCompany: props.sigCompany,
+            bankData: props.bankData,
         };
 
         const envelopeStr = JSON.stringify(envelope);
