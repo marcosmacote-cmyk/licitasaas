@@ -177,6 +177,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
             });
             if (res.ok) {
                 const d = await res.json();
+                if (d.items && Array.isArray(d.items)) {
+                    setItems(d.items);
+                }
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>);
                 setHasUnsavedChanges(false);
             } else {

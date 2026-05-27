@@ -952,6 +952,65 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             return ci;
         }));
 
+        // Se for composição própria, re-enriquecemos os subitens oficiais de acordo com o regime da proposta
+        if (sourceName === 'PROPRIA' && enrichedItems.length > 0) {
+            const queryRegime = req.query.regime as string | undefined;
+            let targetRegime = queryRegime;
+            if (proposalId) {
+                const proposal = await prisma.priceProposal.findUnique({
+                    where: { id: proposalId },
+                    select: { engineeringConfig: true }
+                });
+                const config = (proposal?.engineeringConfig as any) || {};
+                if (config.regimeOneracao) {
+                    targetRegime = config.regimeOneracao;
+                }
+            }
+            if (!targetRegime) targetRegime = 'DESONERADO';
+
+            const officialItemsToEnrich = enrichedItems
+                .filter((ci: any) => {
+                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
+                    return code && ci.type !== 'OBSERVACAO' && String(code).length > 0;
+                })
+                .map((ci: any) => {
+                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
+                    const src = ci.item?.database?.name || ci.item?.source || ci.auxiliaryComposition?.database?.name || ci.auxiliaryComposition?.source || 'SINAPI';
+                    const unitCost = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                    return { code, sourceName: src, unitCost };
+                });
+
+            if (officialItemsToEnrich.length > 0) {
+                const tempConfig = {
+                    regimeOneracao: targetRegime,
+                    basesConsideradas: Array.from(new Set(officialItemsToEnrich.map(i => i.sourceName))),
+                };
+
+                await enrichWithOfficialPrices(officialItemsToEnrich, tempConfig, { tenantId: req.user?.tenantId });
+
+                const enrichMap = new Map<string, number>();
+                for (const enriched of officialItemsToEnrich) {
+                    if (enriched.priceAudit?.matchedUnitCost && enriched.priceAudit.matchedUnitCost > 0) {
+                        enrichMap.set(enriched.code, enriched.priceAudit.matchedUnitCost);
+                    }
+                }
+
+                // Atualiza os preços e subtotais no enrichedItems
+                for (const ci of enrichedItems) {
+                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
+                    if (code && enrichMap.has(code)) {
+                        const newUnitPrice = enrichMap.get(code)!;
+                        if (ci.item) {
+                            ci.item = { ...ci.item, price: newUnitPrice };
+                        } else if (ci.auxiliaryComposition) {
+                            ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: newUnitPrice };
+                        }
+                        ci.price = newUnitPrice * ci.coefficient;
+                    }
+                }
+            }
+        }
+
         // Group by groupKey if present, otherwise fallback by type for nice display
         const groups: Record<string, any[]> = {};
         const hasGroupKeys = enrichedItems.some((ci: any) => ci.groupKey);
@@ -4029,8 +4088,67 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
 
         const { items, bdiConfig, engineeringConfig, cronogramaData } = req.body;
 
-        if (!Array.isArray(items)) {
-            return res.status(400).json({ error: 'items deve ser um array' });
+        const oldProposal = await prisma.priceProposal.findUnique({
+            where: { id: proposalId },
+            select: { engineeringConfig: true, bdiPercentage: true }
+        });
+        const oldConfig = (oldProposal?.engineeringConfig as any) || {};
+        const oldRegime = oldConfig.regimeOneracao || 'DESONERADO';
+        const newRegime = engineeringConfig?.regimeOneracao || 'DESONERADO';
+
+        let activeItems = items;
+        if (oldRegime !== newRegime && Array.isArray(items) && items.length > 0) {
+            const officialItems = items.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.sourceName !== 'PROPRIA');
+            if (officialItems.length > 0) {
+                const tempItems = officialItems.map((it: any) => ({
+                    code: it.code,
+                    sourceName: it.sourceName,
+                    unitCost: it.unitCost,
+                }));
+
+                await enrichWithOfficialPrices(tempItems, engineeringConfig, { tenantId, proposalId });
+
+                const costMap = new Map<string, number>();
+                for (const enriched of tempItems) {
+                    if (enriched.priceAudit?.matchedUnitCost && enriched.priceAudit.matchedUnitCost > 0) {
+                        costMap.set(enriched.code, enriched.priceAudit.matchedUnitCost);
+                    }
+                }
+
+                activeItems = items.map((it: any) => {
+                    if (it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.sourceName !== 'PROPRIA' && costMap.has(it.code)) {
+                        const newCost = costMap.get(it.code)!;
+                        const bdiGlobal = Number(bdiConfig?.bdiGlobal) || Number(oldProposal?.bdiPercentage) || 0;
+                        const bdiDiferenciado = !!engineeringConfig?.bdiDiferenciado;
+                        const bdiFornecimento = Number(engineeringConfig?.bdiFornecimento) || 0;
+                        const itemBdi = bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO' ? bdiFornecimento : bdiGlobal;
+                        
+                        const precisionConfig = engineeringConfig?.precision || { tipo: 'ROUND', casasDecimais: 2 };
+                        
+                        const applyPrecision = (value: number, config: any) => {
+                            const dec = config?.casasDecimais ?? 2;
+                            const factor = Math.pow(10, dec);
+                            if (config?.tipo === 'TRUNCATE') {
+                                return Math.floor(value * factor + 1e-9) / factor;
+                            }
+                            return Math.round(value * factor) / factor;
+                        };
+
+                        const upWithoutDiscount = applyPrecision(newCost * (1 + itemBdi / 100), precisionConfig);
+                        const unitPrice = applyPrecision(upWithoutDiscount * (1 - (it.discount || 0) / 100), precisionConfig);
+                        const totalPrice = applyPrecision(it.quantity * unitPrice, precisionConfig);
+
+                        return {
+                            ...it,
+                            unitCost: newCost,
+                            unitPrice,
+                            totalPrice,
+                            priceOrigin: 'BASE',
+                        };
+                    }
+                    return it;
+                });
+            }
         }
 
         // Transaction: delete all old items + insert new ones + update BDI config
@@ -4044,7 +4162,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
 
             // Insert all items
             const created = await tx.engineeringProposalItem.createMany({
-                data: items.map((item: any, index: number) => ({
+                data: activeItems.map((item: any, index: number) => ({
                     proposalId,
                     itemNumber: item.itemNumber || String(index + 1),
                     code: item.code || null,
@@ -4087,7 +4205,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 // Compute subtotals per etapa from child items
                 const etapaTotals = new Map<string, { name: string; total: number }>();
                 let currentEtapa = '';
-                for (const it of items) {
+                for (const it of activeItems) {
                     if (it.type === 'ETAPA') {
                         currentEtapa = (it.itemNumber || '').split('.')[0] || it.itemNumber || '';
                         if (currentEtapa) {
@@ -4147,7 +4265,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
             }
 
             // Calculate and update proposal totals (excluding groupers)
-            const totalValue = items
+            const totalValue = activeItems
                 .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
                 .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
 
@@ -4178,7 +4296,10 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
         res.json({
             count: result.count,
             totalValue: result.totalValue,
-            message: `${result.count} itens salvos com sucesso`
+            items: activeItems,
+            message: oldRegime !== newRegime
+                ? `Regime alterado para ${newRegime}. Custos de mão de obra e composições atualizados.`
+                : `${result.count} itens salvos com sucesso`
         });
 
     } catch (e: any) {
