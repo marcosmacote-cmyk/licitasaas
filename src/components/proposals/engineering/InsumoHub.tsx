@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText, Microscope, ClipboardList } from 'lucide-react';
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
-import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats } from './insumoEngine';
+import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats, EXPANDED_TYPES_META, resolveMetaCategory } from './insumoEngine';
 import { exportHubExcel, exportHubPdf } from './exportEngine';
 
 interface ClientItem {
@@ -47,6 +47,30 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
     const [catFilter, setCatFilter] = useState<InsumoCategoria | 'TODOS'>('TODOS');
     const [searchQuery, setSearchQuery] = useState('');
     const [abcFilter, setAbcFilter] = useState<'A' | 'B' | 'C' | 'TODOS'>('TODOS');
+    const [editingInsumoId, setEditingInsumoId] = useState<string | null>(null);
+    const [reclassifying, setReclassifying] = useState(false);
+
+    const handleReclassify = async (insumoCode: string, newType: string) => {
+        setReclassifying(true);
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/reclassify-insumo`, {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ insumoCode, newType }),
+            });
+            if (res.ok) {
+                await loadInsumos();
+            } else {
+                alert('Erro ao reclassificar insumo.');
+            }
+        } catch (e) {
+            console.error('Reclassify error:', e);
+            alert('Erro ao reclassificar insumo.');
+        } finally {
+            setReclassifying(false);
+            setEditingInsumoId(null);
+        }
+    };
 
     const loadInsumos = useCallback(async () => {
         if (!clientItems || clientItems.length === 0) {
@@ -234,8 +258,8 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                    {['', 'Código', 'Descrição', 'Unid.', 'Preço Unit.', 'Desc%', 'Preço Final', 'Qtd', 'Custo Total', 'ABC'].map((h, i) => (
-                                        <th key={i} style={{ padding: '10px 8px', textAlign: i >= 4 ? 'right' : 'left', fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '0.72rem' }}>{h}</th>
+                                    {['Tipo', 'Código', 'Descrição', 'Unid.', 'Preço Unit.', 'Desc%', 'Preço Final', 'Qtd', 'Custo Total', 'ABC'].map((h, i) => (
+                                        <th key={i} style={{ padding: '10px 8px', textAlign: i >= 4 ? 'right' : (i === 3 ? 'center' : 'left'), fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '0.72rem', width: i === 0 ? 110 : undefined }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -244,10 +268,67 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                     const meta = CATEGORIA_META[ins.categoria];
                                     return (
                                         <tr key={ins.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td style={{ padding: '6px 8px', width: 28 }}>
-                                                <span title={meta.label} style={{ display: 'inline-flex', alignItems: 'center' }}>
-                                                    {(() => { const Ico = CAT_ICON[ins.categoria]; return <Ico size={16} color={meta.color} />; })()}
-                                                </span>
+                                            <td style={{ padding: '6px 8px', width: 110 }}>
+                                                {(() => {
+                                                    const rawType = ins.tipoDetalhado || ins.categoria;
+                                                    const typeMeta = EXPANDED_TYPES_META[rawType] || { label: rawType, color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' };
+                                                    const badgeStyle: React.CSSProperties = {
+                                                        fontSize: '0.62rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                                                        cursor: 'pointer', position: 'relative' as const,
+                                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                        background: typeMeta.bgLight, color: typeMeta.color,
+                                                        border: `1px solid ${typeMeta.color}25`,
+                                                        whiteSpace: 'nowrap',
+                                                    };
+                                                    return (
+                                                        <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                                            <span
+                                                                onClick={(e) => { e.stopPropagation(); setEditingInsumoId(editingInsumoId === ins.id ? null : ins.id); }}
+                                                                title="Alterar tipo/categoria deste insumo"
+                                                                style={badgeStyle}
+                                                            >
+                                                                {typeMeta.label}
+                                                                <span style={{ fontSize: '0.5rem', opacity: 0.5 }}>▾</span>
+                                                            </span>
+                                                            {editingInsumoId === ins.id && (
+                                                                <>
+                                                                <div onClick={(e) => { e.stopPropagation(); setEditingInsumoId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                                <div style={{
+                                                                    position: 'absolute', left: 0, top: '100%', zIndex: 1000, marginTop: 2,
+                                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                                    borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
+                                                                    minWidth: 180, fontSize: '0.7rem', maxHeight: 200, overflowY: 'auto'
+                                                                }}>
+                                                                    <div style={{ padding: '3px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.6rem', textTransform: 'uppercase' }}>
+                                                                        Reclassificar tipo:
+                                                                    </div>
+                                                                    {['Material', 'Mão de Obra', 'Equipamento', 'Equipamento para Aquisição Permanente', 'Serviços', 'Taxas', 'Administração', 'Aluguel', 'Verba', 'Consultoria', 'Transporte', 'Encargos Complementares', 'Franquia', 'Outros'].map(typeName => {
+                                                                        const isActive = rawType === typeName;
+                                                                        return (
+                                                                            <button key={typeName} disabled={reclassifying} onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleReclassify(ins.codigo, typeName);
+                                                                            }} style={{
+                                                                                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                                                                padding: '4px 8px', border: 'none',
+                                                                                background: isActive ? 'var(--color-primary-bg)' : 'none',
+                                                                                cursor: 'pointer', borderRadius: 4, textAlign: 'left',
+                                                                                color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                                                fontWeight: isActive ? 700 : 500, fontSize: '0.68rem',
+                                                                            }}
+                                                                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
+                                                                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
+                                                                            >
+                                                                                {isActive && <span>✓</span>} {typeName}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
                                             <td style={{ padding: '6px 8px' }}>
                                                 <span style={{ fontWeight: 700, color: meta.color, fontSize: '0.75rem' }}>{ins.codigo}</span>

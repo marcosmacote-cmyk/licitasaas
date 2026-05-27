@@ -26,9 +26,10 @@ interface Props {
     estimatedValue?: number;
     onPrev: () => void;
     onNext: () => void;
+    onReloadProposal?: () => void;
 }
 
-export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, estimatedValue, onPrev, onNext }: Props) {
+export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, estimatedValue, onPrev, onNext, onReloadProposal }: Props) {
     // Track whether items have been loaded (from AI extraction or saved data)
     const [hasLoadedItems, setHasLoadedItems] = useState(false);
 
@@ -60,6 +61,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 onItemsChange={handleItemsChange}
                 wizardItems={items}
                 estimatedValue={estimatedValue}
+                onReloadProposal={onReloadProposal}
             />
 
             {/* Step navigation footer */}

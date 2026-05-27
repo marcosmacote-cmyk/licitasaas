@@ -1504,9 +1504,42 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                     );
                                 }
                                 if (matchedItem) {
-                                    itemId = matchedItem.id;
-                                    isAux = false;
-                                    logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName}`);
+                                    const typeModified = item.item?.type && item.item.type !== matchedItem.type;
+                                    if (typeModified) {
+                                        let existingOwnItem = localPropriaItems.get(matchedItem.code);
+                                        if (!existingOwnItem) {
+                                            existingOwnItem = await tx.engineeringItem.create({
+                                                data: {
+                                                    databaseId: txBasePropriaId,
+                                                    code: matchedItem.code,
+                                                    description: item.item?.description || matchedItem.description,
+                                                    unit: item.item?.unit || matchedItem.unit,
+                                                    type: item.item.type,
+                                                    price: item.item?.price !== undefined ? item.item.price : matchedItem.price
+                                                }
+                                            });
+                                            localPropriaItems.set(matchedItem.code, existingOwnItem);
+                                            logger.info(`[CompositionSave] 🐑 Cloned official item ${matchedItem.code} to PROPRIA with new type=${item.item.type}`);
+                                        } else {
+                                            existingOwnItem = await tx.engineeringItem.update({
+                                                where: { id: existingOwnItem.id },
+                                                data: {
+                                                    type: item.item.type,
+                                                    description: item.item?.description || existingOwnItem.description,
+                                                    unit: item.item?.unit || existingOwnItem.unit,
+                                                    price: item.item?.price !== undefined ? item.item.price : existingOwnItem.price
+                                                }
+                                            });
+                                            localPropriaItems.set(matchedItem.code, existingOwnItem);
+                                            logger.info(`[CompositionSave] 📝 Updated type of own item ${matchedItem.code} to type=${item.item.type}`);
+                                        }
+                                        itemId = existingOwnItem.id;
+                                        isAux = false;
+                                    } else {
+                                        itemId = matchedItem.id;
+                                        isAux = false;
+                                        logger.info(`[CompositionSave] 🔗 Linked temporary item code=${codeToFind} to official ID=${itemId} in database ${dbName}`);
+                                    }
                                 }
                             }
                         }
@@ -2201,11 +2234,43 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
 });
 
 function normalizeInsumoType(type: string): string {
-    const upper = (type || '').toUpperCase();
-    if (upper.includes('MAO') || upper.includes('MÃO')) return 'MAO_DE_OBRA';
-    if (upper.includes('EQUIP')) return 'EQUIPAMENTO';
-    if (upper.includes('MATERIAL')) return 'MATERIAL';
-    return 'SERVICO';
+    const upper = (type || '').toUpperCase().trim();
+    switch (upper) {
+        case 'MÃO DE OBRA':
+        case 'MAO DE OBRA':
+        case 'MAO_DE_OBRA':
+            return 'MAO_DE_OBRA';
+            
+        case 'MATERIAL':
+        case 'EQUIPAMENTO PARA AQUISIÇÃO PERMANENTE':
+        case 'EQUIPAMENTO PARA AQUISICAO PERMANENTE':
+            return 'MATERIAL';
+            
+        case 'EQUIPAMENTO':
+        case 'ALUGUEL':
+        case 'TRANSPORTE':
+            return 'EQUIPAMENTO';
+            
+        case 'SERVIÇOS':
+        case 'SERVICOS':
+        case 'SERVICO':
+        case 'TAXAS':
+        case 'ADMINISTRAÇÃO':
+        case 'ADMINISTRACAO':
+        case 'VERBA':
+        case 'CONSULTORIA':
+        case 'ENCARGOS COMPLEMENTARES':
+        case 'FRANQUIA':
+        case 'OUTROS':
+            return 'SERVICO';
+            
+        default:
+            // Fallback rules for legacy values
+            if (upper.includes('MAO') || upper.includes('MÃO')) return 'MAO_DE_OBRA';
+            if (upper.includes('EQUIP') && !upper.includes('PERMANENTE')) return 'EQUIPAMENTO';
+            if (upper.includes('MATERIAL')) return 'MATERIAL';
+            return 'SERVICO';
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2317,6 +2382,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         codigo: insumo.code,
                         descricao: insumo.description,
                         categoria: normalizeInsumoType(insumo.type),
+                        tipoDetalhado: insumo.type,
                         unidade: insumo.unit,
                         precoOriginal: insumo.price,
                         base: baseName,
@@ -2407,9 +2473,775 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════
-// CRUD — Engineering Proposal Items (linked to PriceProposal)
-// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/proposals/:proposalId/reclassify-insumo
+// Reclassifica o tipo de um insumo consolidated e propaga para todas as composições
+router.post('/proposals/:proposalId/reclassify-insumo', async (req: any, res: any) => {
+    try {
+        const { proposalId } = req.params;
+        const { insumoCode, newType } = req.body;
+        const tenantId = req.user?.tenantId;
+
+        await validateProposalOwnership(proposalId, tenantId);
+
+        if (!insumoCode || !newType) {
+            return res.status(400).json({ error: 'Código do insumo e novo tipo são obrigatórios' });
+        }
+
+        const basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
+
+        const result = await prisma.$transaction(async (tx: any) => {
+            let propriaItem = await tx.engineeringItem.findFirst({
+                where: { databaseId: basePropria.id, code: insumoCode }
+            });
+
+            if (!propriaItem) {
+                const officialItem = await tx.engineeringItem.findFirst({
+                    where: { code: insumoCode, database: { type: 'OFICIAL' } },
+                    include: { database: true }
+                });
+
+                if (officialItem) {
+                    propriaItem = await tx.engineeringItem.create({
+                        data: {
+                            databaseId: basePropria.id,
+                            code: insumoCode,
+                            description: officialItem.description,
+                            unit: officialItem.unit,
+                            type: newType,
+                            price: officialItem.price
+                        }
+                    });
+                    logger.info(`[Reclassify] Cloned official item ${insumoCode} to own item with type=${newType}`);
+                } else {
+                    propriaItem = await tx.engineeringItem.create({
+                        data: {
+                            databaseId: basePropria.id,
+                            code: insumoCode,
+                            description: 'Insumo Reclassificado',
+                            unit: 'UN',
+                            type: newType,
+                            price: 0
+                        }
+                    });
+                }
+            } else {
+                propriaItem = await tx.engineeringItem.update({
+                    where: { id: propriaItem.id },
+                    data: { type: newType }
+                });
+                logger.info(`[Reclassify] Updated existing own item ${insumoCode} type to ${newType}`);
+            }
+
+            const compositionItems = await tx.engineeringCompositionItem.findMany({
+                where: {
+                    item: { code: insumoCode }
+                },
+                include: {
+                    composition: {
+                        include: { database: true }
+                    },
+                    item: {
+                        include: { database: true }
+                    }
+                }
+            });
+
+            for (const ci of compositionItems) {
+                const comp = ci.composition;
+                const db = comp.database;
+
+                if (db.type === 'PROPRIA' && db.tenantId === tenantId && db.name !== `PROPRIA_${proposalId}`) {
+                    continue;
+                }
+
+                if (db.type === 'OFICIAL') {
+                    let clonedComp = await tx.engineeringComposition.findFirst({
+                        where: { databaseId: basePropria.id, code: comp.code }
+                    });
+
+                    if (!clonedComp) {
+                        clonedComp = await tx.engineeringComposition.create({
+                            data: {
+                                databaseId: basePropria.id,
+                                code: comp.code,
+                                description: comp.description,
+                                unit: comp.unit,
+                                totalPrice: comp.totalPrice,
+                                metadata: comp.metadata || undefined
+                            }
+                        });
+
+                        const siblingItems = await tx.engineeringCompositionItem.findMany({
+                            where: { compositionId: comp.id }
+                        });
+
+                        for (const sib of siblingItems) {
+                            const isTarget = sib.itemId === ci.itemId;
+                            await tx.engineeringCompositionItem.create({
+                                data: {
+                                    compositionId: clonedComp.id,
+                                    itemId: isTarget ? propriaItem.id : sib.itemId,
+                                    auxiliaryCompositionId: sib.auxiliaryCompositionId,
+                                    coefficient: sib.coefficient,
+                                    price: sib.price,
+                                    groupKey: sib.groupKey,
+                                    coefficientExpression: sib.coefficientExpression
+                                }
+                            });
+                        }
+
+                        await tx.engineeringProposalItem.updateMany({
+                            where: { proposalId, code: comp.code },
+                            data: { sourceName: 'PROPRIA' }
+                        });
+                        logger.info(`[Reclassify] Cloned composition ${comp.code} because of insumo reclassification`);
+                    } else {
+                        await tx.engineeringCompositionItem.updateMany({
+                            where: { compositionId: clonedComp.id, itemId: ci.itemId },
+                            data: { itemId: propriaItem.id }
+                        });
+                    }
+                } else if (db.name === `PROPRIA_${proposalId}`) {
+                    await tx.engineeringCompositionItem.updateMany({
+                        where: { compositionId: comp.id, itemId: ci.itemId },
+                        data: { itemId: propriaItem.id }
+                    });
+                }
+            }
+
+            return propriaItem;
+        });
+
+        compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
+
+        res.json({ success: true, insumoId: result.id, type: result.type });
+
+    } catch (e: any) {
+        console.error('[Reclassify Insumo] Error:', e);
+        res.status(500).json({ error: 'Erro ao reclassificar insumo', details: e.message });
+    }
+});
+
+});
+
+// POST /api/engineering/proposals/:proposalId/ajuste-inteligente
+// Motor de descontos e ajustes baseado em jurisprudência do TCU/TST
+router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: any) => {
+    try {
+        const { proposalId } = req.params;
+        const { targetValue, strategy } = req.body; // strategy: 'LINEAR_SEGURO' | 'CURVA_ABC' | 'COEFICIENTES' | 'BDI'
+        const tenantId = req.user?.tenantId;
+
+        await validateProposalOwnership(proposalId, tenantId);
+
+        if (!targetValue || isNaN(targetValue) || targetValue <= 0) {
+            return res.status(400).json({ error: 'Valor alvo inválido' });
+        }
+
+        const proposal = await prisma.priceProposal.findUnique({
+            where: { id: proposalId },
+            include: { engineeringItems: true }
+        });
+
+        if (!proposal) {
+            return res.status(404).json({ error: 'Proposta não encontrada' });
+        }
+
+        const engineeringConfig = proposal.engineeringConfig ? (typeof proposal.engineeringConfig === 'string' ? JSON.parse(proposal.engineeringConfig) : proposal.engineeringConfig) as any : {};
+        const bdiConfig = proposal.bdiConfig ? (typeof proposal.bdiConfig === 'string' ? JSON.parse(proposal.bdiConfig) : proposal.bdiConfig) as any : {};
+        
+        const bdiGlobal = Number(bdiConfig?.bdiGlobal) || Number(proposal.bdiPercentage) || 0;
+        const bdiDiferenciado = !!engineeringConfig?.bdiDiferenciado;
+        const bdiFornecimento = Number(engineeringConfig?.bdiFornecimento) || 0;
+        const precisionConfig = engineeringConfig?.precision || { tipo: 'ROUND', casasDecimais: 2 };
+        
+        const getBdi = (item: any) => {
+            if (bdiDiferenciado && item.bdiCategoria === 'FORNECIMENTO') {
+                return bdiFornecimento;
+            }
+            return bdiGlobal;
+        };
+
+        const applyPrecision = (value: number, config: any) => {
+            const dec = config?.casasDecimais ?? 2;
+            if (config?.tipo === 'TRUNCATE') {
+                const factor = Math.pow(10, dec);
+                return Math.floor(value * factor) / factor;
+            }
+            return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
+        };
+
+        const applyBdi = (cost: number, bdi: number, config: any) => {
+            return applyPrecision(cost * (1 + bdi / 100), config);
+        };
+
+        // 1. STRATEGY: BDI
+        if (strategy === 'BDI') {
+            let sumFornecimentoPrice = 0;
+            let sumObraCost = 0;
+            for (const item of proposal.engineeringItems) {
+                if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+                const cost = item.unitCost || 0;
+                const qty = item.quantity || 0;
+                const disc = item.discount || 0;
+                const isFornecimento = bdiDiferenciado && item.bdiCategoria === 'FORNECIMENTO';
+                
+                if (isFornecimento) {
+                    const itemUnitPrice = applyBdi(cost, bdiFornecimento, precisionConfig) * (1 - disc / 100);
+                    sumFornecimentoPrice += qty * itemUnitPrice;
+                } else {
+                    const itemFactor = qty * cost * (1 - disc / 100);
+                    sumObraCost += itemFactor;
+                }
+            }
+
+            if (sumObraCost === 0) {
+                return res.status(400).json({ error: 'Não há itens com BDI de Obra para reajustar' });
+            }
+
+            const targetObraValue = targetValue - sumFornecimentoPrice;
+            if (targetObraValue <= 0) {
+                return res.status(400).json({ error: 'O valor alvo é muito baixo para o BDI configurado de fornecimento' });
+            }
+
+            const newBdiGlobal = ((targetObraValue / sumObraCost) - 1) * 100;
+            if (newBdiGlobal < 0) {
+                return res.status(400).json({ error: 'O valor alvo resultaria em um BDI negativo. Proposta inexequível!' });
+            }
+
+            const updatedBdiConfig = { ...bdiConfig, bdiGlobal: applyPrecision(newBdiGlobal, { tipo: 'ROUND', casasDecimais: 2 }) };
+
+            await prisma.priceProposal.update({
+                where: { id: proposalId },
+                data: {
+                    bdiConfig: updatedBdiConfig,
+                    bdiPercentage: updatedBdiConfig.bdiGlobal
+                }
+            });
+
+            await prisma.$transaction(async (tx: any) => {
+                for (const item of proposal.engineeringItems) {
+                    if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+                    const itemBdi = bdiDiferenciado && item.bdiCategoria === 'FORNECIMENTO' ? bdiFornecimento : updatedBdiConfig.bdiGlobal;
+                    const unitPrice = applyPrecision(applyBdi(item.unitCost, itemBdi, precisionConfig) * (1 - (item.discount || 0) / 100), precisionConfig);
+                    await tx.engineeringProposalItem.update({
+                        where: { id: item.id },
+                        data: {
+                            unitPrice,
+                            totalPrice: applyPrecision(item.quantity * unitPrice, precisionConfig)
+                        }
+                    });
+                }
+            });
+
+            compositionCache.flushAll();
+            engineeringSearchCache.flushAll();
+
+            return res.json({ success: true, message: 'BDI reajustado com sucesso' });
+        }
+
+        // 2. STRATEGIES THAT MODIFY INSUMOS: LINEAR_SEGURO, CURVA_ABC, COEFICIENTES
+        const basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
+
+        const leafInsumos = new Map<string, {
+            code: string;
+            description: string;
+            unit: string;
+            type: string;
+            price: number;
+            totalWeightedQty: number;
+            totalCostInProposal: number;
+            abcClass?: 'A' | 'B' | 'C';
+        }>();
+
+        const visitedComps = new Set<string>();
+
+        const resolveLeafInsumosRecursive = async (compCode: string, parentQty: number, itemBdi: number, itemDiscount: number) => {
+            const compKey = compCode.toUpperCase();
+            if (visitedComps.has(compKey)) return;
+            visitedComps.add(compKey);
+
+            const composition = await prisma.engineeringComposition.findFirst({
+                where: {
+                    code: compCode,
+                    database: {
+                        OR: [
+                            { type: 'OFICIAL' },
+                            { name: `PROPRIA_${proposalId}` }
+                        ]
+                    }
+                },
+                include: {
+                    items: {
+                        include: { item: true }
+                    }
+                }
+            });
+
+            if (!composition) return;
+
+            for (const ci of composition.items) {
+                if (ci.item) {
+                    const insumo = ci.item;
+                    const codeKey = insumo.code.toUpperCase();
+                    const coef = ci.coefficient || 0;
+                    const weightedQty = parentQty * coef;
+
+                    const existing = leafInsumos.get(codeKey);
+                    if (existing) {
+                        existing.totalWeightedQty += weightedQty;
+                        existing.totalCostInProposal += weightedQty * insumo.price;
+                    } else {
+                        leafInsumos.set(codeKey, {
+                            code: insumo.code,
+                            description: insumo.description,
+                            unit: insumo.unit,
+                            type: insumo.type,
+                            price: insumo.price,
+                            totalWeightedQty: weightedQty,
+                            totalCostInProposal: weightedQty * insumo.price
+                        });
+                    }
+                } else if (ci.auxiliaryCompositionId) {
+                    const auxComp = await prisma.engineeringComposition.findUnique({
+                        where: { id: ci.auxiliaryCompositionId }
+                    });
+                    if (auxComp) {
+                        await resolveLeafInsumosRecursive(auxComp.code, parentQty * ci.coefficient, itemBdi, itemDiscount);
+                    }
+                }
+            }
+        };
+
+        for (const item of proposal.engineeringItems) {
+            if (item.type !== 'COMPOSICAO' || !item.code) continue;
+            await resolveLeafInsumosRecursive(item.code, item.quantity, getBdi(item), item.discount || 0);
+        }
+
+        const insumosList = Array.from(leafInsumos.values());
+
+        insumosList.sort((a, b) => b.totalCostInProposal - a.totalCostInProposal);
+        const totalInsumosCost = insumosList.reduce((s, i) => s + i.totalCostInProposal, 0);
+        if (totalInsumosCost > 0) {
+            let accum = 0;
+            for (const ins of insumosList) {
+                accum += ins.totalCostInProposal;
+                const pct = (accum / totalInsumosCost) * 100;
+                ins.abcClass = pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C';
+            }
+        }
+
+        const insumoPriceImpacts = new Map<string, number>();
+        const insumoIsLaborOrEncargo = new Map<string, boolean>();
+
+        const calculatePriceImpactsRecursive = async (compCode: string, parentQty: number, itemBdi: number, itemDiscount: number) => {
+            const comp = await prisma.engineeringComposition.findFirst({
+                where: {
+                    code: compCode,
+                    database: {
+                        OR: [
+                            { type: 'OFICIAL' },
+                            { name: `PROPRIA_${proposalId}` }
+                        ]
+                    }
+                },
+                include: { items: { include: { item: true } } }
+            });
+            if (!comp) return;
+
+            for (const ci of comp.items) {
+                if (ci.item) {
+                    const ins = ci.item;
+                    const codeKey = ins.code.toUpperCase();
+                    const coef = ci.coefficient || 0;
+                    
+                    const metaCat = normalizeInsumoType(ins.type);
+                    const isLabor = metaCat === 'MAO_DE_OBRA' || ins.type === 'Encargos Complementares';
+                    insumoIsLaborOrEncargo.set(codeKey, isLabor);
+
+                    const factor = (1 + itemBdi / 100) * (1 - itemDiscount / 100);
+                    const impact = parentQty * coef * ins.price * factor;
+
+                    insumoPriceImpacts.set(codeKey, (insumoPriceImpacts.get(codeKey) || 0) + impact);
+                } else if (ci.auxiliaryCompositionId) {
+                    const aux = await prisma.engineeringComposition.findUnique({
+                        where: { id: ci.auxiliaryCompositionId }
+                    });
+                    if (aux) {
+                        await calculatePriceImpactsRecursive(aux.code, parentQty * ci.coefficient, itemBdi, itemDiscount);
+                    }
+                }
+            }
+        };
+
+        for (const item of proposal.engineeringItems) {
+            if (item.type !== 'COMPOSICAO' || !item.code) continue;
+            await calculatePriceImpactsRecursive(item.code, item.quantity, getBdi(item), item.discount || 0);
+        }
+
+        let totalPriceLabor = 0;
+        let totalPriceNonLabor = 0;
+        let totalPriceNonLaborA = 0;
+        let totalPriceNonLaborB = 0;
+        let totalPriceNonLaborC = 0;
+
+        for (const ins of insumosList) {
+            const codeKey = ins.code.toUpperCase();
+            const impact = insumoPriceImpacts.get(codeKey) || 0;
+            const isLabor = insumoIsLaborOrEncargo.get(codeKey) || false;
+
+            if (isLabor) {
+                totalPriceLabor += impact;
+            } else {
+                totalPriceNonLabor += impact;
+                if (ins.abcClass === 'A') totalPriceNonLaborA += impact;
+                else if (ins.abcClass === 'B') totalPriceNonLaborB += impact;
+                else totalPriceNonLaborC += impact;
+            }
+        }
+
+        const currentTotalPrice = totalPriceLabor + totalPriceNonLabor;
+        const totalDiscountRequired = currentTotalPrice - targetValue;
+
+        if (totalDiscountRequired <= 0) {
+            return res.json({ success: true, message: 'Nenhum reajuste necessário, a proposta já está dentro ou abaixo do valor alvo.' });
+        }
+
+        if (targetValue < totalPriceLabor) {
+            return res.status(400).json({
+                error: `O valor alvo é menor que o custo total da mão de obra obrigatória + encargos (R$ ${totalPriceLabor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Reduzir além deste valor causará desclassificação automática por inexequibilidade trabalhista (Acórdão TCU 1097/2019-Plenário).`
+            });
+        }
+
+        const insumoDiscountsToApply = new Map<string, number>();
+        let coefficientDiscountFactor = 0;
+
+        if (strategy === 'LINEAR_SEGURO') {
+            if (totalPriceNonLabor === 0) {
+                return res.status(400).json({ error: 'Não há insumos de materiais/equipamentos/serviços para aplicar desconto' });
+            }
+            const discountPercent = (totalDiscountRequired / totalPriceNonLabor) * 100;
+            for (const ins of insumosList) {
+                const codeKey = ins.code.toUpperCase();
+                const isLabor = insumoIsLaborOrEncargo.get(codeKey) || false;
+                insumoDiscountsToApply.set(codeKey, isLabor ? 0 : discountPercent);
+            }
+        } else if (strategy === 'CURVA_ABC') {
+            let discA = totalDiscountRequired * 0.80;
+            let discB = totalDiscountRequired * 0.15;
+            let discC = totalDiscountRequired * 0.05;
+
+            if (discA > totalPriceNonLaborA) {
+                const excess = discA - totalPriceNonLaborA;
+                discA = totalPriceNonLaborA;
+                discB += excess * 0.75;
+                discC += excess * 0.25;
+            }
+            if (discB > totalPriceNonLaborB) {
+                const excess = discB - totalPriceNonLaborB;
+                discB = totalPriceNonLaborB;
+                discC += excess;
+            }
+            if (discC > totalPriceNonLaborC) {
+                return res.status(400).json({ error: 'O desconto solicitado é muito alto para ser absorvido na curva ABC sem zerar os insumos!' });
+            }
+
+            const pctA = totalPriceNonLaborA > 0 ? (discA / totalPriceNonLaborA) * 100 : 0;
+            const pctB = totalPriceNonLaborB > 0 ? (discB / totalPriceNonLaborB) * 100 : 0;
+            const pctC = totalPriceNonLaborC > 0 ? (discC / totalPriceNonLaborC) * 100 : 0;
+
+            for (const ins of insumosList) {
+                const codeKey = ins.code.toUpperCase();
+                const isLabor = insumoIsLaborOrEncargo.get(codeKey) || false;
+                if (isLabor) {
+                    insumoDiscountsToApply.set(codeKey, 0);
+                } else {
+                    insumoDiscountsToApply.set(codeKey, ins.abcClass === 'A' ? pctA : ins.abcClass === 'B' ? pctB : pctC);
+                }
+            }
+        } else if (strategy === 'COEFICIENTES') {
+            if (totalPriceNonLabor === 0) {
+                return res.status(400).json({ error: 'Não há insumos de materiais/equipamentos/serviços para aplicar otimização de coeficientes' });
+            }
+            coefficientDiscountFactor = totalDiscountRequired / totalPriceNonLabor;
+        }
+
+        await prisma.$transaction(async (tx: any) => {
+            if (strategy === 'LINEAR_SEGURO' || strategy === 'CURVA_ABC') {
+                for (const ins of insumosList) {
+                    const codeKey = ins.code.toUpperCase();
+                    const discount = insumoDiscountsToApply.get(codeKey) || 0;
+                    if (discount === 0) continue;
+
+                    let ownItem = await tx.engineeringItem.findFirst({
+                        where: { databaseId: basePropria.id, code: ins.code }
+                    });
+
+                    if (!ownItem) {
+                        const official = await tx.engineeringItem.findFirst({
+                            where: { code: ins.code, database: { type: 'OFICIAL' } }
+                        });
+                        const basePrice = official ? official.price : ins.price;
+                        const newPrice = applyPrecision(basePrice * (1 - discount / 100), precisionConfig);
+                        ownItem = await tx.engineeringItem.create({
+                            data: {
+                                databaseId: basePropria.id,
+                                code: ins.code,
+                                description: ins.description,
+                                unit: ins.unit,
+                                type: ins.type,
+                                price: newPrice
+                            }
+                        });
+                    } else {
+                        const newPrice = applyPrecision(ins.price * (1 - discount / 100), precisionConfig);
+                        ownItem = await tx.engineeringItem.update({
+                            where: { id: ownItem.id },
+                            data: { price: newPrice }
+                        });
+                    }
+
+                    const compsToUpdate = await tx.engineeringCompositionItem.findMany({
+                        where: {
+                            item: { code: ins.code },
+                            composition: {
+                                database: {
+                                    OR: [
+                                        { type: 'OFICIAL' },
+                                        { name: `PROPRIA_${proposalId}` }
+                                    ]
+                                }
+                            }
+                        },
+                        include: { composition: { include: { database: true } } }
+                    });
+
+                    for (const ci of compsToUpdate) {
+                        const comp = ci.composition;
+                        if (comp.database.type === 'OFICIAL') {
+                            let clonedComp = await tx.engineeringComposition.findFirst({
+                                where: { databaseId: basePropria.id, code: comp.code }
+                            });
+
+                            if (!clonedComp) {
+                                clonedComp = await tx.engineeringComposition.create({
+                                    data: {
+                                        databaseId: basePropria.id,
+                                        code: comp.code,
+                                        description: comp.description,
+                                        unit: comp.unit,
+                                        totalPrice: comp.totalPrice,
+                                        metadata: comp.metadata || undefined
+                                    }
+                                });
+
+                                const siblingItems = await tx.engineeringCompositionItem.findMany({
+                                    where: { compositionId: comp.id }
+                                });
+
+                                for (const sib of siblingItems) {
+                                    const isTarget = sib.itemId === ci.itemId;
+                                    await tx.engineeringCompositionItem.create({
+                                        data: {
+                                            compositionId: clonedComp.id,
+                                            itemId: isTarget ? ownItem.id : sib.itemId,
+                                            auxiliaryCompositionId: sib.auxiliaryCompositionId,
+                                            coefficient: sib.coefficient,
+                                            price: isTarget ? applyPrecision(sib.coefficient * ownItem.price, precisionConfig) : sib.price,
+                                            groupKey: sib.groupKey,
+                                            coefficientExpression: sib.coefficientExpression
+                                        }
+                                    });
+                                }
+
+                                await tx.engineeringProposalItem.updateMany({
+                                    where: { proposalId, code: comp.code },
+                                    data: { sourceName: 'PROPRIA' }
+                                });
+                            } else {
+                                await tx.engineeringCompositionItem.updateMany({
+                                    where: { compositionId: clonedComp.id, itemId: ci.itemId },
+                                    data: {
+                                        itemId: ownItem.id,
+                                        price: applyPrecision(ci.coefficient * ownItem.price, precisionConfig)
+                                    }
+                                });
+                            }
+                        } else if (comp.database.name === `PROPRIA_${proposalId}`) {
+                            await tx.engineeringCompositionItem.updateMany({
+                                where: { compositionId: comp.id, itemId: ci.itemId },
+                                data: {
+                                    itemId: ownItem.id,
+                                    price: applyPrecision(ci.coefficient * ownItem.price, precisionConfig)
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (strategy === 'COEFICIENTES') {
+                for (const item of proposal.engineeringItems) {
+                    if (item.type !== 'COMPOSICAO' || !item.code) continue;
+
+                    const comp = await tx.engineeringComposition.findFirst({
+                        where: {
+                            code: item.code,
+                            database: {
+                                OR: [
+                                    { type: 'OFICIAL' },
+                                    { name: `PROPRIA_${proposalId}` }
+                                ]
+                            }
+                        },
+                        include: { database: true }
+                    });
+
+                    if (!comp) continue;
+
+                    let targetCompId = comp.id;
+
+                    if (comp.database.type === 'OFICIAL') {
+                        let cloned = await tx.engineeringComposition.findFirst({
+                            where: { databaseId: basePropria.id, code: comp.code }
+                        });
+
+                        if (!cloned) {
+                            cloned = await tx.engineeringComposition.create({
+                                data: {
+                                    databaseId: basePropria.id,
+                                    code: comp.code,
+                                    description: comp.description,
+                                    unit: comp.unit,
+                                    totalPrice: comp.totalPrice,
+                                    metadata: comp.metadata || undefined
+                                }
+                            });
+
+                            const siblings = await tx.engineeringCompositionItem.findMany({
+                                where: { compositionId: comp.id },
+                                include: { item: true }
+                            });
+
+                            for (const sib of siblings) {
+                                const isLabor = sib.item ? (normalizeInsumoType(sib.item.type) === 'MAO_DE_OBRA' || sib.item.type === 'Encargos Complementares') : false;
+                                const newCoef = isLabor ? sib.coefficient : applyPrecision(sib.coefficient * (1 - coefficientDiscountFactor), { tipo: 'ROUND', casasDecimais: 4 });
+                                await tx.engineeringCompositionItem.create({
+                                    data: {
+                                        compositionId: cloned.id,
+                                        itemId: sib.itemId,
+                                        auxiliaryCompositionId: sib.auxiliaryCompositionId,
+                                        coefficient: newCoef,
+                                        price: applyPrecision(newCoef * sib.price / sib.coefficient, precisionConfig),
+                                        groupKey: sib.groupKey,
+                                        coefficientExpression: sib.coefficientExpression
+                                    }
+                                });
+                            }
+
+                            await tx.engineeringProposalItem.updateMany({
+                                where: { proposalId, code: comp.code },
+                                data: { sourceName: 'PROPRIA' }
+                            });
+                            targetCompId = cloned.id;
+                        } else {
+                            targetCompId = cloned.id;
+                        }
+                    }
+
+                    const ownItems = await tx.engineeringCompositionItem.findMany({
+                        where: { compositionId: targetCompId },
+                        include: { item: true }
+                    });
+
+                    for (const ownCi of ownItems) {
+                        const isLabor = ownCi.item ? (normalizeInsumoType(ownCi.item.type) === 'MAO_DE_OBRA' || ownCi.item.type === 'Encargos Complementares') : false;
+                        if (isLabor) continue;
+
+                        const newCoef = applyPrecision(ownCi.coefficient * (1 - coefficientDiscountFactor), { tipo: 'ROUND', casasDecimais: 4 });
+                        const unitPrice = ownCi.item ? ownCi.item.price : (ownCi.price / ownCi.coefficient || 0);
+
+                        await tx.engineeringCompositionItem.update({
+                            where: { id: ownCi.id },
+                            data: {
+                                coefficient: newCoef,
+                                price: applyPrecision(newCoef * unitPrice, precisionConfig)
+                            }
+                        });
+                    }
+                }
+            }
+
+            const ownComps = await tx.engineeringComposition.findMany({
+                where: { databaseId: basePropria.id },
+                include: { items: true }
+            });
+
+            for (const oc of ownComps) {
+                const totalPrice = oc.items.reduce((s: number, i: any) => s + (i.price || 0), 0);
+                await tx.engineeringComposition.update({
+                    where: { id: oc.id },
+                    data: { totalPrice: applyPrecision(totalPrice, precisionConfig) }
+                });
+            }
+
+            const updatedProposalItems = await tx.engineeringProposalItem.findMany({
+                where: { proposalId }
+            });
+
+            let newProposalTotal = 0;
+
+            for (const item of updatedProposalItems) {
+                if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+                
+                const comp = await tx.engineeringComposition.findFirst({
+                    where: {
+                        code: item.code,
+                        database: {
+                            OR: [
+                                { type: 'OFICIAL' },
+                                { name: `PROPRIA_${proposalId}` }
+                            ]
+                        }
+                    }
+                });
+
+                if (comp) {
+                    const itemBdi = getBdi(item);
+                    const unitCost = comp.totalPrice;
+                    const unitPrice = applyPrecision(applyBdi(unitCost, itemBdi, precisionConfig) * (1 - (item.discount || 0) / 100), precisionConfig);
+                    const totalPrice = applyPrecision(item.quantity * unitPrice, precisionConfig);
+
+                    await tx.engineeringProposalItem.update({
+                        where: { id: item.id },
+                        data: {
+                            unitCost,
+                            unitPrice,
+                            totalPrice
+                        }
+                    });
+
+                    newProposalTotal += totalPrice;
+                }
+            }
+
+            await tx.priceProposal.update({
+                where: { id: proposalId },
+                data: { totalValue: newProposalTotal }
+            });
+        });
+
+        compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
+
+        res.json({ success: true, message: 'Ajuste inteligente concluído com sucesso' });
+
+    } catch (e: any) {
+        console.error('[Ajuste Inteligente] Error:', e);
+        res.status(500).json({ error: 'Erro ao aplicar ajuste inteligente', details: e.message });
+    }
+});
 
 // GET /api/engineering/proposals/:id/items — Carregar todos os itens
 router.get('/proposals/:id/items', async (req: any, res: any) => {

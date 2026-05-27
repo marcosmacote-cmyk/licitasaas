@@ -11,6 +11,22 @@
 
 export type EngItemType = 'ETAPA' | 'SUBETAPA' | 'COMPOSICAO' | 'INSUMO';
 
+export type ExpandedInsumoType =
+    | 'Equipamento'
+    | 'Equipamento para Aquisição Permanente'
+    | 'Mão de Obra'
+    | 'Material'
+    | 'Serviços'
+    | 'Taxas'
+    | 'Administração'
+    | 'Aluguel'
+    | 'Verba'
+    | 'Consultoria'
+    | 'Transporte'
+    | 'Encargos Complementares'
+    | 'Franquia'
+    | 'Outros';
+
 /** Categorias de BDI conforme Acórdão TCU 2622/2013 */
 export type BdiCategoria = 'OBRA' | 'FORNECIMENTO';
 

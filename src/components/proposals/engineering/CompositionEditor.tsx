@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, Chevron
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
+import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -409,6 +410,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     // ── Change item base classification ──
     const [editingBaseItemId, setEditingBaseItemId] = useState<string | null>(null);
+    const [editingTypeItemId, setEditingTypeItemId] = useState<string | null>(null);
 
     // ── GAP 3: Reference Divisor ──
     const [refDivisorLabel, setRefDivisorLabel] = useState('');
@@ -2844,6 +2846,97 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             {itemData?.code && (
                                                                                 <span style={{ fontSize: '0.65rem', color: meta.color, fontWeight: 600 }}>{itemData.code}</span>
                                                                             )}
+                                                                            {/* ── Interactive Category/Type Badge with reclassification dropdown ── */}
+                                                                            {(!ci.auxiliaryComposition && itemData?.type) && (() => {
+                                                                                const rawType = itemData.type;
+                                                                                const typeMeta = EXPANDED_TYPES_META[rawType] || { label: rawType, color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' };
+                                                                                const badgeStyle: React.CSSProperties = {
+                                                                                    fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, fontWeight: 700,
+                                                                                    cursor: 'pointer', position: 'relative' as const,
+                                                                                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                                                    background: typeMeta.bgLight, color: typeMeta.color,
+                                                                                    border: `1px solid ${typeMeta.color}25`,
+                                                                                };
+
+                                                                                return (
+                                                                                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                                                                        <span
+                                                                                            onClick={(e) => { e.stopPropagation(); setEditingTypeItemId(editingTypeItemId === ci.id ? null : ci.id); }}
+                                                                                            title="Alterar tipo/categoria do insumo"
+                                                                                            style={badgeStyle}
+                                                                                        >
+                                                                                            {typeMeta.label}
+                                                                                            <span style={{ fontSize: '0.5rem', opacity: 0.5 }}>▾</span>
+                                                                                        </span>
+                                                                                        {editingTypeItemId === ci.id && (
+                                                                                            <>
+                                                                                            <div onClick={(e) => { e.stopPropagation(); setEditingTypeItemId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                                                            <div style={{
+                                                                                                position: 'absolute', left: 0, top: '100%', zIndex: 1000, marginTop: 2,
+                                                                                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                                                                borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
+                                                                                                minWidth: 180, fontSize: '0.7rem', maxHeight: 200, overflowY: 'auto'
+                                                                                            }}>
+                                                                                                <div style={{ padding: '3px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.6rem', textTransform: 'uppercase' }}>
+                                                                                                    Reclassificar tipo:
+                                                                                                </div>
+                                                                                                {['Material', 'Mão de Obra', 'Equipamento', 'Equipamento para Aquisição Permanente', 'Serviços', 'Taxas', 'Administração', 'Aluguel', 'Verba', 'Consultoria', 'Transporte', 'Encargos Complementares', 'Franquia', 'Outros'].map(typeName => {
+                                                                                                    const isActive = rawType === typeName;
+                                                                                                    return (
+                                                                                                        <button key={typeName} onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            const updated = { ...data, groups: { ...data.groups } };
+                                                                                                            const newMeta = resolveMetaCategory(typeName);
+                                                                                                            
+                                                                                                            let targetItem: any = null;
+                                                                                                            for (const gk of Object.keys(updated.groups)) {
+                                                                                                                const idx = updated.groups[gk].findIndex((item: any) => item.id === ci.id);
+                                                                                                                if (idx !== -1) {
+                                                                                                                    targetItem = { ...updated.groups[gk][idx] };
+                                                                                                                    updated.groups[gk].splice(idx, 1);
+                                                                                                                    break;
+                                                                                                                }
+                                                                                                            }
+                                                                                                            
+                                                                                                            if (targetItem) {
+                                                                                                                targetItem.groupKey = newMeta;
+                                                                                                                if (targetItem.item) {
+                                                                                                                    targetItem.item = { ...targetItem.item, type: typeName };
+                                                                                                                }
+                                                                                                                if (!updated.groups[newMeta]) {
+                                                                                                                    updated.groups[newMeta] = [];
+                                                                                                                }
+                                                                                                                updated.groups[newMeta].push(targetItem);
+                                                                                                            }
+                                                                                                            
+                                                                                                            updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                                                                                            updated.totalDirect = updated.totalPrice;
+                                                                                                            
+                                                                                                            setData(updated);
+                                                                                                            setHasChanges(true);
+                                                                                                            triggerUpdateItem({ unitCost: updated.totalPrice });
+                                                                                                            setEditingTypeItemId(null);
+                                                                                                        }} style={{
+                                                                                                            display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                                                                                            padding: '4px 8px', border: 'none',
+                                                                                                            background: isActive ? 'var(--color-primary-bg)' : 'none',
+                                                                                                            cursor: 'pointer', borderRadius: 4, textAlign: 'left',
+                                                                                                            color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                                                                            fontWeight: isActive ? 700 : 500, fontSize: '0.68rem',
+                                                                                                        }}
+                                                                                                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
+                                                                                                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
+                                                                                                        >
+                                                                                                            {isActive && <span>✓</span>} {typeName}
+                                                                                                        </button>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
                                                                             {/* ── Interactive Base Badge with change dropdown ── */}
                                                                             {(() => {
                                                                                 const displayBase = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';

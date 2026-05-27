@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, autoDistributeBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
+import { AjusteInteligenteModal } from './AjusteInteligenteModal';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
 import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
@@ -93,6 +94,7 @@ interface Props {
     wizardItems?: EngItem[];
     /** FIX F2.3: Estimated value from the bidding for comparison */
     estimatedValue?: number;
+    onReloadProposal?: () => void;
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -393,7 +395,7 @@ function renderPriceAudit(item: EngItem, onApplyBase?: () => void) {
     );
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems, estimatedValue }: Props) {
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems, estimatedValue, onReloadProposal }: Props) {
     // FIX F1.2: Undo/Redo integration — replaces plain useState<EngItem[]>
     // - setItems: tracked changes (user edits) → pushed to undo stack
     // - setItemsSilent: system changes (recalc, load, save) → no undo stack
@@ -447,6 +449,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [showImageImportModal, setShowImageImportModal] = useState(false);
     const [globalDragOver, setGlobalDragOver] = useState(false);
     const [initialImportFile, setInitialImportFile] = useState<File | null>(null);
+    const [showAjusteModal, setShowAjusteModal] = useState(false);
 
     // Global paste listener to auto-open Image extraction modal
     useEffect(() => {
@@ -800,6 +803,33 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             else { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>); }
         } catch { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro de rede</span>); }
         finally { setIsSaving(false); setTimeout(() => setSaveMsg(null), 4000); }
+    };
+
+    const handleReloadFromDb = async () => {
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setItemsSilent(data);
+                hasPersistedItemsRef.current = data.length > 0;
+            } else if (data && data.items) {
+                const loadedItems = Array.isArray(data.items) ? data.items : [];
+                setItemsSilent(loadedItems);
+                hasPersistedItemsRef.current = loadedItems.length > 0;
+                if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
+                if (data.engineeringConfig) {
+                    const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
+                    setEngineeringConfig(engConfig);
+                    if (savedCronograma) setCronogramaData(savedCronograma);
+                }
+                setExtractionMeta(data.extractionMeta || null);
+            }
+            if (onReloadProposal) {
+                onReloadProposal();
+            }
+        } catch (e) {
+            console.error('[Editor] Error reloading proposal items:', e);
+        }
     };
     // FIX F5.1: Keep ref in sync for Ctrl+S shortcut
     handleSaveRef.current = handleSave;
@@ -1934,6 +1964,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem', padding: '6px 12px' }} onClick={handleExportExcel}>
                         <Download size={14} /> Exportar
+                    </button>
+
+                    <button className="btn btn-outline" onClick={() => setShowAjusteModal(true)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: '0.82rem',
+                            padding: '6px 12px',
+                            borderColor: 'var(--color-primary-light)',
+                            color: 'var(--color-primary)',
+                            background: 'rgba(59, 130, 246, 0.05)',
+                        }}>
+                        <Wand2 size={14} /> Ajuste Inteligente
                     </button>
 
                     <div style={{ width: 1, height: 24, background: 'var(--color-border)' }} />
@@ -3214,6 +3258,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     engineeringConfig={dashConfig}
                     initialFile={initialImportFile}
                     onClearInitialFile={() => setInitialImportFile(null)}
+                />
+            )}
+            {showAjusteModal && (
+                <AjusteInteligenteModal
+                    proposalId={proposalId}
+                    currentValue={total}
+                    estimatedValue={estimatedValue}
+                    onClose={() => setShowAjusteModal(false)}
+                    onSuccess={handleReloadFromDb}
                 />
             )}
             {globalDragOver && (

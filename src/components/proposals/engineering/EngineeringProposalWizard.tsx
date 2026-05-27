@@ -141,6 +141,26 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
             }).catch(console.error);
     }, [proposalId]);
 
+    const reloadProposalData = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setItems(data);
+            } else if (data && data.items) {
+                setItems(Array.isArray(data.items) ? data.items : []);
+                if (data.bdiConfig) setBdiConfig(data.bdiConfig);
+                if (data.engineeringConfig) {
+                    const { cronogramaData: saved, ...engConfig } = data.engineeringConfig;
+                    setEngineeringConfig(engConfig);
+                    if (saved) setCronogramaData(saved);
+                }
+            }
+        } catch (e) {
+            console.error('[Wizard] Error reloading proposal data:', e);
+        }
+    }, [proposalId]);
+
     // ══════════════════════════════════════════
     // SAVE
     // ══════════════════════════════════════════
@@ -579,6 +599,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     estimatedValue={estimatedValue}
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}
+                    onReloadProposal={reloadProposalData}
                 />
             )}
 

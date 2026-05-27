@@ -16,6 +16,7 @@ export interface InsumoConsolidado {
     codigo: string;
     descricao: string;
     categoria: InsumoCategoria;
+    tipoDetalhado?: string;           // Categoria expandida/detalhada (14 tipos)
     unidade: string;
     precoOriginal: number;            // Preço da base oficial
     desconto: number;                 // % de desconto aplicado
@@ -68,6 +69,63 @@ export const CATEGORIA_META: Record<InsumoCategoria, { label: string; color: str
     SERVICO:      { label: 'Serviço',         color: '#059669', icon: '', bgLight: 'rgba(5,150,105,0.08)' },
 };
 
+export const EXPANDED_TYPES_META: Record<string, { label: string; color: string; bgLight: string }> = {
+    'Equipamento': { label: 'Equipamento', color: '#0891b2', bgLight: 'rgba(8,145,178,0.08)' },
+    'Equipamento para Aquisição Permanente': { label: 'Equip. Aquisição Perm.', color: '#0369a1', bgLight: 'rgba(3,105,161,0.08)' },
+    'Mão de Obra': { label: 'Mão de Obra', color: '#7c3aed', bgLight: 'rgba(124,58,237,0.08)' },
+    'Material': { label: 'Material', color: '#2563eb', bgLight: 'rgba(37,99,235,0.08)' },
+    'Serviços': { label: 'Serviços', color: '#059669', bgLight: 'rgba(5,150,105,0.08)' },
+    'Taxas': { label: 'Taxas', color: '#b45309', bgLight: 'rgba(180,83,9,0.08)' },
+    'Administração': { label: 'Administração', color: '#475569', bgLight: 'rgba(71,85,105,0.08)' },
+    'Aluguel': { label: 'Aluguel', color: '#0d9488', bgLight: 'rgba(13,148,136,0.08)' },
+    'Verba': { label: 'Verba', color: '#db2777', bgLight: 'rgba(219,39,119,0.08)' },
+    'Consultoria': { label: 'Consultoria', color: '#4f46e5', bgLight: 'rgba(79,70,229,0.08)' },
+    'Transporte': { label: 'Transporte', color: '#ea580c', bgLight: 'rgba(234,88,12,0.08)' },
+    'Encargos Complementares': { label: 'Encargos Comp.', color: '#65a30d', bgLight: 'rgba(101,163,13,0.08)' },
+    'Franquia': { label: 'Franquia', color: '#9333ea', bgLight: 'rgba(147,51,234,0.08)' },
+    'Outros': { label: 'Outros', color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' }
+};
+
+export function resolveMetaCategory(type: string): InsumoCategoria {
+    const upper = (type || '').toUpperCase().trim();
+    switch (upper) {
+        case 'MÃO DE OBRA':
+        case 'MAO DE OBRA':
+        case 'MAO_DE_OBRA':
+            return 'MAO_DE_OBRA';
+            
+        case 'MATERIAL':
+        case 'EQUIPAMENTO PARA AQUISIÇÃO PERMANENTE':
+        case 'EQUIPAMENTO PARA AQUISICAO PERMANENTE':
+            return 'MATERIAL';
+            
+        case 'EQUIPAMENTO':
+        case 'ALUGUEL':
+        case 'TRANSPORTE':
+            return 'EQUIPAMENTO';
+            
+        case 'SERVIÇOS':
+        case 'SERVICOS':
+        case 'SERVICO':
+        case 'TAXAS':
+        case 'ADMINISTRAÇÃO':
+        case 'ADMINISTRACAO':
+        case 'VERBA':
+        case 'CONSULTORIA':
+        case 'ENCARGOS COMPLEMENTARES':
+        case 'FRANQUIA':
+        case 'OUTROS':
+            return 'SERVICO';
+            
+        default:
+            // Fallback rules for legacy values
+            if (upper.includes('MAO') || upper.includes('MÃO')) return 'MAO_DE_OBRA';
+            if (upper.includes('EQUIP') && !upper.includes('PERMANENTE')) return 'EQUIPAMENTO';
+            if (upper.includes('MATERIAL')) return 'MATERIAL';
+            return 'SERVICO';
+    }
+}
+
 export const DEFAULT_DESCONTO_CONFIG: DescontoConfig = {
     descontoGlobal: 0,
     descontoPorCategoria: { MATERIAL: 0, MAO_DE_OBRA: 0, EQUIPAMENTO: 0, SERVICO: 0 },
@@ -107,6 +165,7 @@ export function consolidateInsumos(
                 codigo: raw.insumoCode,
                 descricao: raw.insumoDescription,
                 categoria,
+                tipoDetalhado: raw.insumoType,
                 unidade: raw.insumoUnit,
                 precoOriginal: raw.insumoPrice,
                 desconto: 0,
@@ -200,11 +259,7 @@ export function calculateHubStats(
 // ═══════════════════════════════════════════════════════════
 
 function normalizeCategoria(type: string): InsumoCategoria {
-    const upper = (type || '').toUpperCase();
-    if (upper.includes('MAO') || upper.includes('MÃO') || upper === 'MAO_DE_OBRA') return 'MAO_DE_OBRA';
-    if (upper.includes('EQUIP')) return 'EQUIPAMENTO';
-    if (upper.includes('MATERIAL') || upper === 'MATERIAL') return 'MATERIAL';
-    return 'SERVICO';
+    return resolveMetaCategory(type);
 }
 
 /**
