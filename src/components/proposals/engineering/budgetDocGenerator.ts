@@ -13,15 +13,20 @@ import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig, EncargosSociaisConfig, ColorPalette } from './types';
 import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
+import { applyPrecision } from './precisionEngine';
 
 let activePrecisionCasas = 2;
+let activePrecisionTipo: 'ROUND' | 'TRUNCATE' = 'ROUND';
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { 
-    style: 'currency', 
-    currency: 'BRL',
-    minimumFractionDigits: activePrecisionCasas,
-    maximumFractionDigits: activePrecisionCasas
-});
+const fmt = (v: number) => {
+    const rounded = applyPrecision(v, { precision: { tipo: activePrecisionTipo, casasDecimais: activePrecisionCasas } });
+    return rounded.toLocaleString('pt-BR', { 
+        style: 'currency', 
+        currency: 'BRL',
+        minimumFractionDigits: activePrecisionCasas,
+        maximumFractionDigits: activePrecisionCasas
+    });
+};
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
@@ -29,6 +34,7 @@ function setGlobalPrecision(engineeringConfig?: any) {
     activePrecisionCasas = typeof engineeringConfig?.precision?.casasDecimais === 'number' 
         ? engineeringConfig.precision.casasDecimais 
         : 2;
+    activePrecisionTipo = engineeringConfig?.precision?.tipo || 'ROUND';
 }
 
 /** Resolve a paleta de cores: user overrides > defaults */

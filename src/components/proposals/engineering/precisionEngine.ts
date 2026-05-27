@@ -9,7 +9,7 @@ export function applyPrecision(value: number, config?: { precision?: PrecisionCo
     const factor = Math.pow(10, casas);
 
     if (tipo === 'TRUNCATE') {
-        return Math.trunc(value * factor) / factor;
+        return Math.trunc(value * factor + 1e-9) / factor;
     }
     return Math.round(value * factor) / factor;
 }

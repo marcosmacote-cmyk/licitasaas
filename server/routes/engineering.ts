@@ -1554,7 +1554,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         const dec = config?.casasDecimais ?? 2;
                         if (config?.tipo === 'TRUNCATE') {
                             const factor = Math.pow(10, dec);
-                            return Math.floor(value * factor) / factor;
+                            return Math.floor(value * factor + 1e-9) / factor;
                         }
                         return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
                     };
@@ -3365,7 +3365,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
             const dec = config?.casasDecimais ?? 2;
             if (config?.tipo === 'TRUNCATE') {
                 const factor = Math.pow(10, dec);
-                return Math.floor(value * factor) / factor;
+                return Math.floor(value * factor + 1e-9) / factor;
             }
             return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
         };

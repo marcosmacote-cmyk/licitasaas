@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import type { EngineeringConfig, ColorPalette } from './types';
 import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
 import type { BdiConfig } from './bdiEngine';
+import { applyPrecision as applyPrecisionNum } from './precisionEngine';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -670,7 +671,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
       const rawCoef = Number(ci.coefficient) || 0;
       const coef = hasRateio ? rawCoef / rateioFactor : rawCoef;
       const up = Number(ci.unitPrice) || 0;
-      const tp = hasRateio ? coef * up : (Number(ci.totalPrice) || 0);
+      const tp = hasRateio ? applyPrecisionNum(coef * up, engConfig) : (Number(ci.totalPrice) || 0);
 
       let coefVal: any = coef;
       if (ci.coefficientExpression) {
