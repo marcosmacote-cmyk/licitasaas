@@ -834,6 +834,83 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // FIX F5.1: Keep ref in sync for Ctrl+S shortcut
     handleSaveRef.current = handleSave;
 
+    // Reactive sync between items and cronogramaData (prevents stale values in Step 5/PDFs)
+    useEffect(() => {
+        if (items.length === 0) return;
+
+        setCronogramaData(prev => {
+            if (!prev) return prev;
+
+            // Build current etapa totals from items
+            const etapaTotals = new Map<string, { name: string; total: number }>();
+            let currentEtapa = '';
+            for (const it of items) {
+                if (it.type === 'ETAPA') {
+                    currentEtapa = it.itemNumber.split('.')[0] || it.itemNumber;
+                    etapaTotals.set(currentEtapa, { name: it.description, total: 0 });
+                } else if (!isGrouper(it.type as any) && currentEtapa) {
+                    const entry = etapaTotals.get(currentEtapa);
+                    if (entry) entry.total += it.totalPrice || 0;
+                }
+            }
+
+            const isAutomaticEtapaId = (id: string) => {
+                const num = Number(id);
+                return !isNaN(num) && num < 1000000;
+            };
+
+            let changed = false;
+            const prevEtapas = prev.etapas || [];
+
+            // Filter out automatic stages that no longer exist
+            const filtered = prevEtapas.filter(e => {
+                if (isAutomaticEtapaId(e.id)) {
+                    const exists = etapaTotals.has(e.id);
+                    if (!exists) changed = true;
+                    return exists;
+                }
+                return true;
+            });
+
+            // Map and update existing stages
+            const updated = filtered.map(e => {
+                const match = etapaTotals.get(e.id);
+                if (match) {
+                    const hasNameChange = match.name && match.name !== e.nome;
+                    const hasValueChange = match.total !== e.valorTotal;
+                    if (hasNameChange || hasValueChange) {
+                        changed = true;
+                        return { ...e, valorTotal: match.total, nome: match.name || e.nome };
+                    }
+                }
+                return e;
+            });
+
+            // Add new stages
+            const existingIds = new Set(prevEtapas.map(e => e.id));
+            for (const [id, data] of etapaTotals) {
+                if (!existingIds.has(id)) {
+                    changed = true;
+                    updated.push({
+                        id,
+                        nome: data.name,
+                        valorTotal: data.total,
+                        percentuais: Array(12).fill(0),
+                    });
+                }
+            }
+
+            if (changed) {
+                setTimeout(() => setHasUnsavedChanges(true), 0);
+                return {
+                    meses: prev.meses,
+                    etapas: updated,
+                };
+            }
+            return prev;
+        });
+    }, [items]);
+
     // Warn on page leave with unsaved changes
     useEffect(() => {
         const handler = (e: BeforeUnloadEvent) => { if (hasUnsavedChanges) { e.preventDefault(); } };

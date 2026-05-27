@@ -75,9 +75,22 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
 
         if (etapaTotals.size === 0) return;
 
+        const isAutomaticEtapaId = (id: string) => {
+            const num = Number(id);
+            return !isNaN(num) && num < 1000000;
+        };
+
         setEtapas(prev => {
+            // Filter out automatic stages that no longer exist in the spreadsheet items
+            const filtered = prev.filter(e => {
+                if (isAutomaticEtapaId(e.id)) {
+                    return etapaTotals.has(e.id);
+                }
+                return true; // Keep manual/custom stages
+            });
+
             // Match existing etapas by id, update valorTotal only
-            const updated = prev.map(e => {
+            const updated = filtered.map(e => {
                 const match = etapaTotals.get(e.id);
                 if (match) {
                     return { ...e, valorTotal: match.total, nome: match.name || e.nome };

@@ -4059,15 +4059,92 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 }))
             });
 
+            // Load existing proposal to get previous cronogramaData if not sent in request
+            let activeCronogramaData = cronogramaData;
+            if (!activeCronogramaData) {
+                const existingProposal = await tx.priceProposal.findUnique({
+                    where: { id: proposalId },
+                    select: { engineeringConfig: true }
+                });
+                const existingConfig = (existingProposal?.engineeringConfig as any) || {};
+                if (existingConfig.cronogramaData) {
+                    activeCronogramaData = existingConfig.cronogramaData;
+                }
+            }
+
+            if (activeCronogramaData && Array.isArray(activeCronogramaData.etapas)) {
+                // Compute subtotals per etapa from child items
+                const etapaTotals = new Map<string, { name: string; total: number }>();
+                let currentEtapa = '';
+                for (const it of items) {
+                    if (it.type === 'ETAPA') {
+                        currentEtapa = (it.itemNumber || '').split('.')[0] || it.itemNumber || '';
+                        if (currentEtapa) {
+                            etapaTotals.set(currentEtapa, { name: it.description || '', total: 0 });
+                        }
+                    } else if (it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && currentEtapa) {
+                        const entry = etapaTotals.get(currentEtapa);
+                        if (entry) entry.total += Number(it.totalPrice) || 0;
+                    }
+                }
+
+                const isAutomaticEtapaId = (id: string) => {
+                    const num = Number(id);
+                    return !isNaN(num) && num < 1000000;
+                };
+
+                const prevEtapas = activeCronogramaData.etapas || [];
+
+                // Filter out automatic stages that no longer exist
+                const filtered = prevEtapas.filter((e: any) => {
+                    if (isAutomaticEtapaId(String(e.id))) {
+                        return etapaTotals.has(String(e.id));
+                    }
+                    return true; // Keep manual stages
+                });
+
+                // Update existing stages' valorTotal and name
+                const updated = filtered.map((e: any) => {
+                    const match = etapaTotals.get(String(e.id));
+                    if (match) {
+                        return {
+                            ...e,
+                            valorTotal: match.total,
+                            nome: match.name || e.nome,
+                        };
+                    }
+                    return e;
+                });
+
+                // Add any missing new automatic stages
+                const existingIds = new Set(prevEtapas.map((e: any) => String(e.id)));
+                for (const [id, data] of etapaTotals) {
+                    if (!existingIds.has(id)) {
+                        updated.push({
+                            id,
+                            nome: data.name,
+                            valorTotal: data.total,
+                            percentuais: Array(12).fill(0),
+                        });
+                    }
+                }
+
+                activeCronogramaData = {
+                    ...activeCronogramaData,
+                    etapas: updated,
+                };
+            }
+
             // Calculate and update proposal totals (excluding groupers)
             const totalValue = items
                 .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
                 .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
 
             // FIX ARQ-04: Persist cronograma data alongside engineering config
-            const engConfigToSave = cronogramaData 
-                ? { ...(engineeringConfig || {}), cronogramaData }
-                : (engineeringConfig || undefined);
+            const engConfigToSave = {
+                ...(engineeringConfig || {}),
+                ...(activeCronogramaData ? { cronogramaData: activeCronogramaData } : {})
+            };
 
             await tx.priceProposal.update({
                 where: { id: proposalId },
