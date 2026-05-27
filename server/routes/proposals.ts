@@ -191,28 +191,60 @@ router.post('/', authenticateToken, async (req: any, res) => {
 router.put('/:id', authenticateToken, async (req: any, res) => {
     try {
         const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity,
-            adjustedBdi, adjustedDiscount, adjustedTotalValue, adjustedLetterContent } = req.body;
+            adjustedBdi, adjustedDiscount, adjustedTotalValue, adjustedLetterContent, companyProfileId } = req.body;
 
         const existing = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
         });
         if (!existing) return res.status(404).json({ error: 'Proposal not found' });
 
+        let nextLetterContent = letterContent !== undefined ? letterContent : existing.letterContent;
+        let nextHeaderImage = headerImage !== undefined ? headerImage : existing.headerImage;
+        let nextFooterImage = footerImage !== undefined ? footerImage : existing.footerImage;
+        let nextHeaderHeight = headerImageHeight ?? existing.headerImageHeight;
+        let nextFooterHeight = footerImageHeight ?? existing.footerImageHeight;
+
+        if (companyProfileId && companyProfileId !== existing.companyProfileId) {
+            const newCompany = await prisma.companyProfile.findFirst({
+                where: { id: companyProfileId, tenantId: req.user.tenantId }
+            });
+            if (!newCompany) return res.status(404).json({ error: 'Company profile not found for this tenant' });
+
+            nextHeaderImage = newCompany.defaultProposalHeader || null;
+            nextFooterImage = newCompany.defaultProposalFooter || null;
+            nextHeaderHeight = newCompany.defaultProposalHeaderHeight || 80;
+            nextFooterHeight = newCompany.defaultProposalFooterHeight || 60;
+
+            if (nextLetterContent) {
+                try {
+                    const parsed = JSON.parse(nextLetterContent);
+                    if (parsed && typeof parsed === 'object') {
+                        delete parsed.sigLegal;
+                        delete parsed.sigTech;
+                        delete parsed.sigCompany;
+                        delete parsed.bankData;
+                        nextLetterContent = JSON.stringify(parsed);
+                    }
+                } catch { /* ignore */ }
+            }
+        }
+
         const updated = await prisma.priceProposal.update({
             where: { id: req.params.id },
             data: {
+                companyProfileId: companyProfileId ?? existing.companyProfileId,
                 bdiPercentage: bdiPercentage ?? existing.bdiPercentage,
                 taxPercentage: taxPercentage ?? existing.taxPercentage,
                 socialCharges: socialCharges ?? existing.socialCharges,
                 validityDays: validityDays ?? existing.validityDays,
                 notes: notes !== undefined ? notes : existing.notes,
                 status: status ?? existing.status,
-                letterContent: letterContent !== undefined ? letterContent : existing.letterContent,
+                letterContent: nextLetterContent,
                 companyLogo: companyLogo !== undefined ? companyLogo : existing.companyLogo,
-                headerImage: headerImage !== undefined ? headerImage : existing.headerImage,
-                footerImage: footerImage !== undefined ? footerImage : existing.footerImage,
-                headerImageHeight: headerImageHeight ?? existing.headerImageHeight,
-                footerImageHeight: footerImageHeight ?? existing.footerImageHeight,
+                headerImage: nextHeaderImage,
+                footerImage: nextFooterImage,
+                headerImageHeight: nextHeaderHeight,
+                footerImageHeight: nextFooterHeight,
                 signatureMode: signatureMode ?? existing.signatureMode,
                 signatureCity: signatureCity !== undefined ? signatureCity : existing.signatureCity,
                 // Cenário Proposta Ajustada

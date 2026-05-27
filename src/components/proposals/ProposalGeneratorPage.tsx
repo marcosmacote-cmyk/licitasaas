@@ -110,7 +110,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
                                     <Building2 size={11} /> Empresa Proponente
                                 </label>
-                                <select value={p.selectedCompanyId} onChange={e => p.setSelectedCompanyId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
+                                <select value={p.selectedCompanyId} onChange={e => p.handleCompanyChange(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
                                     <option value="">Selecione a empresa...</option>
                                     {companies.map(c => (
                                         <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>

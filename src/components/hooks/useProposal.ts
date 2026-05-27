@@ -839,11 +839,99 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }));
     };
 
+    // Função para tratar a alteração de empresa proponente na proposta ativa com segurança
+    const handleCompanyChange = async (newCompanyId: string) => {
+        if (!newCompanyId) {
+            setSelectedCompanyId('');
+            return;
+        }
+
+        if (proposal && proposal.companyProfileId !== newCompanyId) {
+            const newCo = companies.find(c => c.id === newCompanyId);
+            const newCoName = newCo ? newCo.razaoSocial : 'a nova empresa';
+
+            const confirmChange = window.confirm(
+                `Deseja alterar a empresa proponente da proposta atual para "${newCoName}"?\n\n` +
+                `Isso irá atualizar o cabeçalho/rodapé e redefinir os dados específicos de assinaturas e banco para os padrões dessa nova empresa.\n\n` +
+                `Clique em Cancelar se deseja apenas selecionar a empresa para criar uma nova proposta ou copiar outra versão.`
+            );
+
+            if (confirmChange) {
+                setIsSaving(true);
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
+                        method: 'PUT',
+                        headers,
+                        body: JSON.stringify({ companyProfileId: newCompanyId }),
+                    });
+                    if (res.ok) {
+                        const updatedProposal = await res.json();
+                        applyProposalData(updatedProposal);
+
+                        // Atualizar na lista de propostas
+                        setProposals(prev => prev.map(p => p.id === updatedProposal.id ? updatedProposal : p));
+
+                        // Recarregar as assinaturas/bancos locais
+                        const co = companies.find(c => c.id === newCompanyId);
+                        if (co) {
+                            let loaded = false;
+                            if ((co as any).defaultSignatureConfig) {
+                                try {
+                                    const sig = JSON.parse((co as any).defaultSignatureConfig);
+                                    if (sig.sigLegal) setSigLegal(sig.sigLegal);
+                                    if (sig.sigTech) setSigTech(sig.sigTech);
+                                    if (sig.sigCompany) setSigCompany(sig.sigCompany);
+                                    if (sig.bankData) setBankData(sig.bankData);
+                                    if (sig.signatureMode) setSignatureMode(sig.signatureMode);
+                                    if (sig.validityDays) setValidityDays(sig.validityDays);
+                                    loaded = true;
+                                } catch { /* ignore */ }
+                            }
+                            if (!loaded) {
+                                setSigLegal({
+                                    name: (co as any).contactName || '',
+                                    cpf: (co as any).contactCpf || '',
+                                    role: (co as any).contactCargo || 'Representante Legal',
+                                });
+                                setSigCompany({
+                                    razaoSocial: co.razaoSocial || '',
+                                    cnpj: co.cnpj || '',
+                                });
+                                const techName = (co as any).techName || '';
+                                const techReg = (co as any).techRegistration || '';
+                                setSigTech({ name: techName, registration: techReg, role: (co as any).techTitle || 'Responsável Técnico' });
+                                setBankData({
+                                    bank: (co as any).bankName || '',
+                                    agency: (co as any).bankAgency || '',
+                                    account: (co as any).bankAccount || '',
+                                    accountType: (co as any).bankAccountType || 'Conta Corrente',
+                                    pix: (co as any).bankPix || '',
+                                });
+                            }
+                        }
+
+                        toast.success('Empresa da proposta alterada com sucesso!');
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        toast.error(err.error || 'Erro ao alterar empresa da proposta.');
+                    }
+                } catch (e) {
+                    toast.error('Erro ao conectar ao servidor para alterar empresa.');
+                } finally {
+                    setIsSaving(false);
+                }
+            }
+        } else {
+            setSelectedCompanyId(newCompanyId);
+        }
+    };
+
     return {
         // Selection
         selectedBiddingId, setSelectedBiddingId,
         selectedCompanyId, setSelectedCompanyId,
         availableBiddings, selectedBidding, selectedCompany,
+        handleCompanyChange,
         // Proposal
         proposal, proposals, items, setItems, selectVersion,
         bdi, setBdi, discount, setDiscount,
