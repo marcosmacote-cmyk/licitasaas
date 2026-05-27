@@ -676,6 +676,10 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
     const groupOrder = metadata.groupOrder || [];
     const groupNotes = metadata.groupNotes || {};
 
+    const rateio = metadata.rateio;
+    const hasRateio = rateio && typeof rateio === 'object' && Number(rateio.prazo) > 0 && Number(rateio.fracao) > 0;
+    const rateioFactor = hasRateio ? (Number(rateio.prazo) / Number(rateio.fracao)) : 1;
+
     const GROUP_META_PDF: Record<string, { label: string; color: string }> = {
         MATERIAL: { label: 'Materiais', color: '#2563eb' },
         MAO_DE_OBRA: { label: 'Mão de Obra', color: '#16a34a' },
@@ -747,21 +751,25 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
             else if (ci.type === 'SERVICO') tipo = 'Serviço';
             else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
 
+            const displayCoef = ci.type === 'OBSERVACAO' ? 0 : (ci.coefficient / rateioFactor);
+            const displayRowTotal = ci.type === 'OBSERVACAO' ? 0 : (displayCoef * (ci.unitPrice || 0));
+
             ch += `<tr>
                 <td>${tipo}</td>
                 <td class="mono">${ci.code || ''}</td>
                 ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
                 <td>${ci.description || '—'}</td>
                 <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
-                ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(7)}` : ci.coefficient.toFixed(7))}</td>` : ''}
+                ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${displayCoef.toFixed(7)}` : displayCoef.toFixed(7))}</td>` : ''}
                 <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
-                <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.totalPrice || 0)}</td>
+                <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(displayRowTotal)}</td>
             </tr>`;
         }
 
+        const displayGroupTotal = groupTotal / rateioFactor;
         ch += `<tr class="total-row" style="background:#f8fafc; font-weight:700;">
             <td colspan="${showBanco ? 5 : 4}" class="r" style="font-size:7.5px;">Subtotal ${label}</td>
-            <td class="r" style="font-size:7.5px; color:${color};" colspan="${(showCoef ? 1 : 0) + 2}">${fmt(groupTotal)}</td>
+            <td class="r" style="font-size:7.5px; color:${color};" colspan="${(showCoef ? 1 : 0) + 2}">${fmt(displayGroupTotal)}</td>
         </tr>`;
         ch += `</tbody></table>`;
 
@@ -773,24 +781,58 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
         }
     }
 
-    ch += `
-    <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
-        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
-            <div style="color:#475569;">
-                MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-                MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
+    if (hasRateio) {
+        const totalSimples = comp.totalPrice / rateioFactor;
+        const totalPrazo = totalSimples * Number(rateio.prazo);
+        const bdiPct = comp.totalPrice > 0 ? (comp.valorBdi / comp.totalPrice) * 100 : 0;
+
+        ch += `
+        <table style="width:100%; border-collapse:collapse; border:1px solid #e2e8f0; border-top:none; page-break-inside:avoid;">
+            <tbody>
+                <tr style="background:#f8fafc; font-weight:700; font-size:8px;">
+                    <td style="padding:4px 8px; text-align:right; border-bottom:1px solid #e2e8f0; color:#475569;">TOTAL SIMPLES:</td>
+                    <td style="padding:4px 8px; text-align:right; width:120px; font-family:monospace; border-bottom:1px solid #e2e8f0;">${fmt(totalSimples)}</td>
+                </tr>
+                <tr style="background:#f8fafc; font-weight:700; font-size:8px;">
+                    <td style="padding:4px 8px; text-align:right; border-bottom:1px solid #e2e8f0; color:#475569;">TOTAL P/ ${rateio.prazo} MESES:</td>
+                    <td style="padding:4px 8px; text-align:right; font-family:monospace; border-bottom:1px solid #e2e8f0;">${fmt(totalPrazo)}</td>
+                </tr>
+                <tr style="background:#f8fafc; font-weight:700; font-size:8px;">
+                    <td style="padding:4px 8px; text-align:right; border-bottom:1px solid #e2e8f0; color:#475569;">FRAÇÃO DE ${rateio.fracao}% (Sem BDI):</td>
+                    <td style="padding:4px 8px; text-align:right; font-family:monospace; border-bottom:1px solid #e2e8f0;">${fmt(comp.totalPrice || 0)}</td>
+                </tr>
+                <tr style="background:#f8fafc; font-weight:700; font-size:8px;">
+                    <td style="padding:4px 8px; text-align:right; border-bottom:1px solid #e2e8f0; color:#475569;">BDI ${bdiPct.toFixed(2)}%:</td>
+                    <td style="padding:4px 8px; text-align:right; font-family:monospace; border-bottom:1px solid #e2e8f0;">${fmt(comp.valorBdi || 0)}</td>
+                </tr>
+                <tr style="background:#1e40af; color:white; font-weight:700; font-size:9px;">
+                    <td style="padding:6px 8px; text-align:right;">TOTAL GERAL:</td>
+                    <td style="padding:6px 8px; text-align:right; font-family:monospace; font-size:10px;">${fmt(comp.valorComBdi || 0)}</td>
+                </tr>
+            </tbody>
+        </table>
+        `;
+    } else {
+        ch += `
+        <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
+            <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                <div style="color:#475569;">
+                    MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                    LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                    MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
+                </div>
             </div>
         </div>
-    </div>
-    <div style="background:#1e40af; color:white; padding:7px 10px; font-size:9.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
-        <span>CUSTO UNITÁRIO TOTAL</span>
-        <span style="font-size:11px;">${fmt(comp.totalPrice || 0)}</span>
-    </div>
-    <div style="background:#f1f5f9; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0; border-top:none;">
-        <span style="color:#475569;">Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b></span>
-        <span style="color:#1e40af; font-weight:700; font-size:8.5px;">Preço Unitário (com BDI) => ${fmt(comp.valorComBdi || 0)}</span>
-    </div>
+        <div style="background:#1e40af; color:white; padding:7px 10px; font-size:9.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>CUSTO UNITÁRIO TOTAL</span>
+            <span style="font-size:11px;">${fmt(comp.totalPrice || 0)}</span>
+        </div>
+        <div style="background:#f1f5f9; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0; border-top:none;">
+            <span style="color:#475569;">Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b></span>
+            <span style="color:#1e40af; font-weight:700; font-size:8.5px;">Preço Unitário (com BDI) => ${fmt(comp.valorComBdi || 0)}</span>
+        </div>`;
+    }
+    ch += `
     ${metadata.referenceDivisor && metadata.referenceDivisor.value > 0 ? `
     <div style="background:#f0fdf4; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #bbf7d0; border-top:none;">
         <span style="color:#166534; font-weight:700;">Divisor de Referência: ${metadata.referenceDivisor.label || 'Referência'} (Qtd: ${metadata.referenceDivisor.value})</span>

@@ -3236,6 +3236,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     items={items}
                     initialIndex={compositionEditorIndex}
                     proposalId={proposalId}
+                    bdiConfig={bdiConfig}
                     onClose={() => setCompositionEditorIndex(null)}
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea

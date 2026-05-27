@@ -52,6 +52,7 @@ interface Props {
     onUpdateItem: (itemId: string, updates: Partial<EngItem>) => void;
     engineeringConfig?: any;
     proposalId?: string;
+    bdiConfig?: any;
 }
 
 const GROUP_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -257,7 +258,7 @@ const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precisi
     return applyPrecision(total, { precision });
 };
 
-export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig, proposalId }: Props) {
+export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig, proposalId, bdiConfig }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -570,7 +571,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             }
         }
         
-        const coef = searchCoefficients[dbItem.id] || 1;
+        const rawCoef = searchCoefficients[dbItem.id] || 1;
+        const coef = hasRateio ? rawCoef * rateioFactor : rawCoef;
         let typeKey = 'MATERIAL';
         let newItem: any = null;
 
@@ -670,7 +672,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (!res.ok) throw new Error(result.error || 'Erro ao criar item');
 
             const price = Number(result.item.price) || 0;
-            const coef = parseFloat(propriaCoef.replace(',', '.')) || 1;
+            const rawCoef = parseFloat(propriaCoef.replace(',', '.')) || 1;
+            const coef = hasRateio ? rawCoef * rateioFactor : rawCoef;
             const typeKey = searchType === 'composition' ? 'AUXILIAR' : 'MATERIAL';
             const newItem = searchType === 'composition' ? {
                 id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, coefficient: coef, price,
@@ -1263,11 +1266,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 if (ci.id !== editingField.id) return ci;
                 found = true;
                 if (editingField.field === 'coef') {
-                    const newCoef = newVal;
+                    const originalCoef = newVal;
+                    const newCoef = hasRateio ? (originalCoef * rateioFactor) : originalCoef;
                     const unitPrice = getLineUnitPrice(ci);
                     // GAP 1: preserve expression when it contains operators
                     const rawExpr = editValue.trim();
-                    const hasExpression = /[*\/+\-]/.test(rawExpr) && rawExpr !== String(newCoef);
+                    const hasExpression = /[*\/+\-]/.test(rawExpr) && rawExpr !== String(originalCoef);
                     return {
                         ...ci,
                         coefficient: newCoef,
@@ -1652,11 +1656,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         const rawCoefExpr = freeItemData.coefficient.trim();
         const hasExpr = !isObs && /[*\/+\-]/.test(rawCoefExpr) && rawCoefExpr !== String(coefNum);
         
+        const finalCoef = isObs ? 0 : (hasRateio ? coefNum * rateioFactor : coefNum);
         const newItem = {
             id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            coefficient: coefNum,
+            coefficient: finalCoef,
             coefficientExpression: hasExpr ? rawCoefExpr : undefined,
-            price: isObs ? 0 : applyPrecision(coefNum * priceNum, { precision: engineeringConfig?.precision }),
+            price: isObs ? 0 : applyPrecision(finalCoef * priceNum, { precision: engineeringConfig?.precision }),
             item: !isAux ? {
                 id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 code: isObs ? 'OBS' : 'LIVRE',
@@ -1787,7 +1792,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         
         const factor = prazoNum / fracaoNum;
 
-        const updated = { ...data, groups: { ...data.groups } };
+        const updated = { ...data, groups: { ...data.groups }, rateio: { prazo: prazoNum, fracao: fracaoNum } };
         
         // Ensure OBSERVACAO group exists
         if (!updated.groups['OBSERVACAO']) updated.groups['OBSERVACAO'] = [];
@@ -1838,6 +1843,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // edital extraction remains only as comparison/audit evidence.
     const compositionTotal = data ? sumCompositionGroups(data.groups, engineeringConfig?.precision) : 0;
     const compositionItemsCount = data ? Object.values(data.groups || {}).reduce((acc: number, group: any) => acc + (Array.isArray(group) ? group.length : 0), 0) : 0;
+
+    const rateio = data?.rateio;
+    const hasRateio = rateio && typeof rateio === 'object' && Number(rateio.prazo) > 0 && Number(rateio.fracao) > 0;
+    const rateioFactor = hasRateio ? (Number(rateio.prazo) / Number(rateio.fracao)) : 1;
 
     if (!currentItem) return null;
 
@@ -2435,6 +2444,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 if (groupItems.length === 0 && !isCustomGroup) return null;
                                 const Icon = meta.icon;
                                 const groupTotal = groupItems.reduce((s: number, ci: any) => s + getLineSubtotal(ci, engineeringConfig?.precision), 0);
+                                 const displayGroupTotal = hasRateio ? (groupTotal / rateioFactor) : groupTotal;
                                 const isExpanded = expandedGroups.has(groupKey);
 
                                 return (
@@ -2662,7 +2672,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     </>
                                                 )}
 
-                                                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color, marginLeft: 8 }}>{fmt(groupTotal)}</span>
+                                                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: meta.color, marginLeft: 8 }}>{fmt(displayGroupTotal)}</span>
                                             </div>
                                         </div>
 
@@ -2702,6 +2712,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                     const itemData = ci.item || ci.auxiliaryComposition;
                                                     const unitPrice = getLineUnitPrice(ci);
                                                     const lineSubtotal = getLineSubtotal(ci, engineeringConfig?.precision);
+                                                    const displayCoef = hasRateio ? (ci.coefficient / rateioFactor) : ci.coefficient;
+                                                    const displaySubtotal = hasRateio ? (displayCoef * unitPrice) : lineSubtotal;
                                                     const isEditingCoef = editingField?.id === ci.id && editingField?.field === 'coef';
                                                     const isEditingPrice = editingField?.id === ci.id && editingField?.field === 'price';
 
@@ -3110,14 +3122,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                         <>
                                                                             <span
                                                                                 style={{ fontSize: '0.78rem', fontFamily: 'monospace', cursor: ci.coefficientExpression ? 'help' : 'default' }}
-                                                                                title={ci.coefficientExpression ? `${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(ci.coefficient)}` : undefined}
+                                                                                title={ci.coefficientExpression ? `${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(displayCoef)}` : undefined}
                                                                             >
                                                                                 {ci.coefficientExpression
-                                                                                    ? <><span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>{ci.coefficientExpression.replace(/\*/g, '×')} = </span>{fmtCoef(ci.coefficient)}</>
-                                                                                    : fmtCoef(ci.coefficient)
+                                                                                    ? <><span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.68rem' }}>{ci.coefficientExpression.replace(/\*/g, '×')} = </span>{fmtCoef(displayCoef)}</>
+                                                                                    : fmtCoef(displayCoef)
                                                                                 }
                                                                             </span>
-                                                                            <button onClick={() => startEdit(ci.id, 'coef', ci.coefficient, ci.coefficientExpression)}
+                                                                            <button onClick={() => startEdit(ci.id, 'coef', displayCoef, ci.coefficientExpression)}
                                                                                 style={{ padding: 2, border: 'none', background: 'none', cursor: 'pointer', opacity: 0.3 }}
                                                                                 title="Editar coeficiente (aceita expressões: 1*220, 2*3.5)">
                                                                                 <Pencil size={10} />
@@ -3158,7 +3170,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             )}
 
                                                             <span style={{ fontSize: '0.78rem', textAlign: 'right', fontWeight: 700, color: itemData?.isObservation ? 'transparent' : meta.color }}>
-                                                                {!itemData?.isObservation && fmt(lineSubtotal)}
+                                                                {!itemData?.isObservation && fmt(displaySubtotal)}
                                                             </span>
                                                             
                                                             <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
@@ -3418,6 +3430,75 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </div>
                             </div>
                         </div>
+                        {/* Rateio Breakdown Panel */}
+                        {hasRateio && (
+                            <div style={{
+                                marginTop: 12, marginBottom: 12, padding: 12, borderRadius: 'var(--radius-md)',
+                                background: 'var(--color-bg-base)', border: '1px dashed var(--color-border)',
+                                fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: 6
+                            }}>
+                                <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: 4, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Divide size={13} /> Memória de Cálculo (Rateio/Fração)
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            const updated = { ...data, groups: { ...data.groups } };
+                                            for (const k of Object.keys(updated.groups)) {
+                                                if (k === 'OBSERVACAO') continue;
+                                                updated.groups[k] = updated.groups[k].map((ci: any) => {
+                                                    if (ci.item?.isObservation) return ci;
+                                                    const origCoef = ci.coefficient / rateioFactor;
+                                                    const unitPrice = getLineUnitPrice(ci);
+                                                    return {
+                                                        ...ci,
+                                                        coefficient: origCoef,
+                                                        price: applyPrecision(origCoef * unitPrice, { precision: engineeringConfig?.precision })
+                                                    };
+                                                });
+                                            }
+                                            if (updated.groups['OBSERVACAO']) {
+                                                updated.groups['OBSERVACAO'] = updated.groups['OBSERVACAO'].filter((ci: any) => {
+                                                    return !ci.item?.description?.includes('Rateio aplicado');
+                                                });
+                                            }
+                                            updated.rateio = null;
+                                            updated.totalPrice = sumCompositionGroups(updated.groups, engineeringConfig?.precision);
+                                            updated.totalDirect = updated.totalPrice;
+                                            setData(updated);
+                                            setHasChanges(true);
+                                            triggerUpdateItem({ unitCost: updated.totalPrice });
+                                        }}
+                                        style={{ fontSize: '0.7rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                                    >
+                                        Remover Rateio
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>TOTAL SIMPLES:</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{fmt(compositionTotal / rateioFactor)}</span>
+                                    
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>TOTAL P/ {rateio.prazo} MESES:</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{fmt((compositionTotal / rateioFactor) * Number(rateio.prazo))}</span>
+                                    
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>FRAÇÃO DE {rateio.fracao}% (Sem BDI):</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-primary)' }}>{fmt(compositionTotal)}</span>
+                                    
+                                    {(() => {
+                                        const bdiPct = bdiConfig?.bdiGlobal !== undefined ? Number(bdiConfig.bdiGlobal) : 25;
+                                        return (
+                                            <>
+                                                <span style={{ color: 'var(--color-text-secondary)' }}>BDI ({bdiPct.toFixed(2)}%):</span>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{fmt(compositionTotal * (bdiPct / 100))}</span>
+                                                
+                                                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 700 }}>TOTAL GERAL (Com BDI):</span>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#16a34a' }}>{fmt(compositionTotal * (1 + bdiPct / 100))}</span>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        )}
                         {/* Observação da composição (para relatórios) */}
                         <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
                             <label style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 3 }}>

@@ -589,6 +589,10 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   const groupOrder = metadata.groupOrder || [];
   const groupNotes = metadata.groupNotes || {};
 
+  const rateio = metadata.rateio;
+  const hasRateio = rateio && typeof rateio === 'object' && Number(rateio.prazo) > 0 && Number(rateio.fracao) > 0;
+  const rateioFactor = hasRateio ? (Number(rateio.prazo) / Number(rateio.fracao)) : 1;
+
   const GROUP_META: Record<string, { label: string; color: string }> = {
     MATERIAL: { label: 'Materiais', color: 'FF2563EB' },
     MAO_DE_OBRA: { label: 'Mão de Obra', color: 'FF16A34A' },
@@ -663,9 +667,10 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
       else if (ci.type === 'SERVICO') tipo = 'Serviço';
       else if (ci.type === 'OBSERVACAO') tipo = 'Observação';
 
-      const coef = Number(ci.coefficient) || 0;
+      const rawCoef = Number(ci.coefficient) || 0;
+      const coef = hasRateio ? rawCoef / rateioFactor : rawCoef;
       const up = Number(ci.unitPrice) || 0;
-      const tp = Number(ci.totalPrice) || 0;
+      const tp = hasRateio ? coef * up : (Number(ci.totalPrice) || 0);
 
       let coefVal: any = coef;
       if (ci.coefficientExpression) {
@@ -693,7 +698,8 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
 
     // Group Subtotal Row
     const subRn = ws.rowCount + 1;
-    const groupTotal = items.reduce((s, ci) => s + (ci.totalPrice || 0), 0);
+    const rawGroupTotal = items.reduce((s, ci) => s + (ci.totalPrice || 0), 0);
+    const groupTotal = hasRateio ? rawGroupTotal / rateioFactor : rawGroupTotal;
     let subtotalVal: any = groupTotal;
     if (engConfig?.reportConfig?.exportExcelWithFormulas && items.length > 0) {
       subtotalVal = { formula: `SUM(H${firstGroupRow}:H${lastGroupRow})` };
@@ -726,60 +732,148 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   }
 
   // Footer: Custo Unitário Total
-  const costRn = ws.rowCount + 1;
   const totalPriceVal = Number(comp.totalPrice) || 0;
-  
-  let costVal: any = totalPriceVal;
-  if (engConfig?.reportConfig?.exportExcelWithFormulas && subtotalRowNums.length > 0) {
-    costVal = { formula: subtotalRowNums.map(rn => `H${rn}`).join('+') };
-  }
-
-  const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', costVal]);
-  ws.mergeCells(costRn, 1, costRn, 7);
-  costRow.getCell(8).numFmt = '#,##0.00';
-  costRow.height = 18;
-  for (let i = 1; i <= 8; i++) {
-    costRow.getCell(i).fill = fill(C.BLUE_MED);
-    costRow.getCell(i).border = border(C.BLUE_MED);
-    costRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
-    costRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
-  }
-
-  // BDI + Preço com BDI (fórmulas dinâmicas)
   const bdiRate = typeof bdi === 'number' 
     ? (bdi > 1 ? bdi / 100 : bdi) 
     : (comp.totalPrice > 0 ? (comp.valorBdi || 0) / comp.totalPrice : 0.25);
 
-  const bdiValRn = ws.rowCount + 1;
-  const bdiValRow = ws.addRow([
-    `Valor do BDI (${(bdiRate * 100).toFixed(2)}%)`, 
-    '', '', '', '', '', '', 
-    { formula: `ROUND(H${costRn}*${bdiRate}, 2)` }
-  ]);
-  ws.mergeCells(bdiValRn, 1, bdiValRn, 7);
-  bdiValRow.getCell(8).numFmt = '#,##0.00';
-  bdiValRow.height = 14;
-  for (let i = 1; i <= 8; i++) {
-    bdiValRow.getCell(i).fill = fill(C.GRAY_SUB);
-    bdiValRow.getCell(i).border = border();
-    bdiValRow.getCell(i).font = { size: 8, color: { argb: C.TEXT_MID }, bold: true };
-    bdiValRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
-  }
+  let costRn = 0;
+  let bdiPriceRn = ws.rowCount + 1;
 
-  const bdiPriceRn = ws.rowCount + 1;
-  const bdiPriceRow = ws.addRow([
-    'Preço Unitário (com BDI)', 
-    '', '', '', '', '', '', 
-    { formula: `ROUND(H${costRn}+H${bdiValRn}, 2)` }
-  ]);
-  ws.mergeCells(bdiPriceRn, 1, bdiPriceRn, 7);
-  bdiPriceRow.getCell(8).numFmt = '#,##0.00';
-  bdiPriceRow.height = 14;
-  for (let i = 1; i <= 8; i++) {
-    bdiPriceRow.getCell(i).fill = fill(C.GRAY_SUB);
-    bdiPriceRow.getCell(i).border = border();
-    bdiPriceRow.getCell(i).font = { size: 8.5, color: { argb: C.BLUE_DARK }, bold: true };
-    bdiPriceRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+  if (hasRateio) {
+    // 1. TOTAL SIMPLES
+    const totalSimplesRn = ws.rowCount + 1;
+    let simplesVal: any = totalPriceVal / rateioFactor;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas && subtotalRowNums.length > 0) {
+      simplesVal = { formula: subtotalRowNums.map(rn => `H${rn}`).join('+') };
+    }
+    const simplesRow = ws.addRow(['TOTAL SIMPLES', '', '', '', '', '', '', simplesVal]);
+    ws.mergeCells(totalSimplesRn, 1, totalSimplesRn, 7);
+    simplesRow.getCell(8).numFmt = '#,##0.00';
+    simplesRow.height = 15;
+    for (let i = 1; i <= 8; i++) {
+      simplesRow.getCell(i).fill = fill('FFF8FAFC');
+      simplesRow.getCell(i).border = border();
+      simplesRow.getCell(i).font = { bold: true, size: 8, color: { argb: C.TEXT_MID } };
+      simplesRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    // 2. TOTAL P/ X MESES
+    const totalPrazoRn = ws.rowCount + 1;
+    let prazoVal: any = (totalPriceVal / rateioFactor) * Number(rateio.prazo);
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      prazoVal = { formula: `H${totalSimplesRn}*${Number(rateio.prazo)}` };
+    }
+    const prazoRow = ws.addRow([`TOTAL P/ ${rateio.prazo} MESES`, '', '', '', '', '', '', prazoVal]);
+    ws.mergeCells(totalPrazoRn, 1, totalPrazoRn, 7);
+    prazoRow.getCell(8).numFmt = '#,##0.00';
+    prazoRow.height = 15;
+    for (let i = 1; i <= 8; i++) {
+      prazoRow.getCell(i).fill = fill('FFF8FAFC');
+      prazoRow.getCell(i).border = border();
+      prazoRow.getCell(i).font = { bold: true, size: 8, color: { argb: C.TEXT_MID } };
+      prazoRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    // 3. FRAÇÃO DE Y%
+    const fracaoRn = ws.rowCount + 1;
+    costRn = fracaoRn;
+    let fracaoVal: any = totalPriceVal;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas) {
+      fracaoVal = { formula: `H${totalPrazoRn}/${Number(rateio.fracao)}` };
+    }
+    const fracaoRow = ws.addRow([`FRAÇÃO DE ${rateio.fracao}% (sem BDI)`, '', '', '', '', '', '', fracaoVal]);
+    ws.mergeCells(fracaoRn, 1, fracaoRn, 7);
+    fracaoRow.getCell(8).numFmt = '#,##0.00';
+    fracaoRow.height = 16;
+    for (let i = 1; i <= 8; i++) {
+      fracaoRow.getCell(i).fill = fill(C.BLUE_LIGHT);
+      fracaoRow.getCell(i).border = border(C.BLUE_MED);
+      fracaoRow.getCell(i).font = { bold: true, size: 8.5, color: { argb: C.BLUE_DARK } };
+      fracaoRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    // 4. BDI
+    const bdiValRn = ws.rowCount + 1;
+    const bdiValRow = ws.addRow([
+      `Valor do BDI (${(bdiRate * 100).toFixed(2)}%)`, 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${fracaoRn}*${bdiRate}, 2)` }
+    ]);
+    ws.mergeCells(bdiValRn, 1, bdiValRn, 7);
+    bdiValRow.getCell(8).numFmt = '#,##0.00';
+    bdiValRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      bdiValRow.getCell(i).fill = fill(C.GRAY_SUB);
+      bdiValRow.getCell(i).border = border();
+      bdiValRow.getCell(i).font = { size: 8, color: { argb: C.TEXT_MID }, bold: true };
+      bdiValRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    // 5. TOTAL GERAL
+    bdiPriceRn = ws.rowCount + 1;
+    const bdiPriceRow = ws.addRow([
+      'TOTAL GERAL', 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${fracaoRn}+H${bdiValRn}, 2)` }
+    ]);
+    ws.mergeCells(bdiPriceRn, 1, bdiPriceRn, 7);
+    bdiPriceRow.getCell(8).numFmt = '#,##0.00';
+    bdiPriceRow.height = 18;
+    for (let i = 1; i <= 8; i++) {
+      bdiPriceRow.getCell(i).fill = fill(C.BLUE_MED);
+      bdiPriceRow.getCell(i).border = border(C.BLUE_MED);
+      bdiPriceRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
+      bdiPriceRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+  } else {
+    costRn = ws.rowCount + 1;
+    let costVal: any = totalPriceVal;
+    if (engConfig?.reportConfig?.exportExcelWithFormulas && subtotalRowNums.length > 0) {
+      costVal = { formula: subtotalRowNums.map(rn => `H${rn}`).join('+') };
+    }
+    const costRow = ws.addRow(['CUSTO UNITÁRIO TOTAL (sem BDI)', '', '', '', '', '', '', costVal]);
+    ws.mergeCells(costRn, 1, costRn, 7);
+    costRow.getCell(8).numFmt = '#,##0.00';
+    costRow.height = 18;
+    for (let i = 1; i <= 8; i++) {
+      costRow.getCell(i).fill = fill(C.BLUE_MED);
+      costRow.getCell(i).border = border(C.BLUE_MED);
+      costRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
+      costRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    const bdiValRn = ws.rowCount + 1;
+    const bdiValRow = ws.addRow([
+      `Valor do BDI (${(bdiRate * 100).toFixed(2)}%)`, 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${costRn}*${bdiRate}, 2)` }
+    ]);
+    ws.mergeCells(bdiValRn, 1, bdiValRn, 7);
+    bdiValRow.getCell(8).numFmt = '#,##0.00';
+    bdiValRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      bdiValRow.getCell(i).fill = fill(C.GRAY_SUB);
+      bdiValRow.getCell(i).border = border();
+      bdiValRow.getCell(i).font = { size: 8, color: { argb: C.TEXT_MID }, bold: true };
+      bdiValRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    bdiPriceRn = ws.rowCount + 1;
+    const bdiPriceRow = ws.addRow([
+      'Preço Unitário (com BDI)', 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${costRn}+H${bdiValRn}, 2)` }
+    ]);
+    ws.mergeCells(bdiPriceRn, 1, bdiPriceRn, 7);
+    bdiPriceRow.getCell(8).numFmt = '#,##0.00';
+    bdiPriceRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      bdiPriceRow.getCell(i).fill = fill(C.GRAY_SUB);
+      bdiPriceRow.getCell(i).border = border();
+      bdiPriceRow.getCell(i).font = { size: 8.5, color: { argb: C.BLUE_DARK }, bold: true };
+      bdiPriceRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
   }
 
   // Reference Divisor

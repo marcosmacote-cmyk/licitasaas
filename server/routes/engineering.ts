@@ -1460,6 +1460,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
             referenceDivisor: composition.referenceDivisor || null,
             _officialRef: composition._officialRef || null,
             observation: composition.observation || null,
+            rateio: composition.rateio || null,
         };
 
         const newCode = composition.code || existing.code;
