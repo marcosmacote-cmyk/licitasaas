@@ -1728,6 +1728,11 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                     if (typeModified) {
                                         let existingOwnItem = localPropriaItems.get(matchedItem.code);
                                         if (!existingOwnItem) {
+                                            existingOwnItem = await tx.engineeringItem.findFirst({
+                                                where: { databaseId: txBasePropriaId, code: matchedItem.code }
+                                            });
+                                        }
+                                        if (!existingOwnItem) {
                                             existingOwnItem = await tx.engineeringItem.create({
                                                 data: {
                                                     databaseId: txBasePropriaId,
@@ -1802,6 +1807,11 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         }
                         
                         let existingAux = localPropriaAuxs.get(auxCode);
+                        if (!existingAux) {
+                            existingAux = await tx.engineeringComposition.findFirst({
+                                where: { databaseId: txBasePropriaId, code: auxCode }
+                            });
+                        }
 
                         if (!existingAux) {
                             existingAux = await tx.engineeringComposition.create({
