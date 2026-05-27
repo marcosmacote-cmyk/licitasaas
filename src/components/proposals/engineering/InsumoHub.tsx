@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText, Microscope, ClipboardList } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDown, BarChart3, Info, Download, FileText, Microscope, ClipboardList, Pencil, Check, X, ChevronDown } from 'lucide-react';
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats, EXPANDED_TYPES_META, resolveMetaCategory } from './insumoEngine';
 import { exportHubExcel, exportHubPdf } from './exportEngine';
@@ -27,13 +27,61 @@ const ABC_COLORS: Record<string, { bg: string; color: string }> = {
     C: { bg: 'rgba(34,197,94,0.1)', color: '#16a34a' },
 };
 
-function inferCategory(desc: string, unit: string): InsumoCategoria {
-    const d = (desc || '').toUpperCase();
-    const u = (unit || '').toUpperCase();
-    if (['H', 'HORA', 'MES', 'DIA'].includes(u) && (d.includes('PEDREIRO') || d.includes('SERVENTE') || d.includes('MESTRE') || d.includes('ELETRICISTA') || d.includes('PINTOR'))) return 'MAO_DE_OBRA';
-    if (d.includes('BETONEIRA') || d.includes('CAMINHAO') || d.includes('RETROESCAVADEIRA') || d.includes('COMPACTADOR') || d.includes('VIBRADOR')) return 'EQUIPAMENTO';
-    if (d.includes('CIMENTO') || d.includes('AREIA') || d.includes('BRITA') || d.includes('TIJOLO') || d.includes('BLOCO') || d.includes('TINTA') || d.includes('TUBO') || d.includes('FIO ') || d.includes('ACO ') || d.includes('PREGO')) return 'MATERIAL';
-    return 'SERVICO';
+// Macro categories for simplified dropdown
+const MACRO_CATEGORIES: { value: string; label: string; color: string; icon: any }[] = [
+    { value: 'Material', label: 'Material', color: '#2563eb', icon: Package },
+    { value: 'Mão de Obra', label: 'Mão de Obra', color: '#7c3aed', icon: Users },
+    { value: 'Equipamento', label: 'Equipamento', color: '#0891b2', icon: Wrench },
+    { value: 'Serviços', label: 'Serviços', color: '#059669', icon: BarChart3 },
+];
+
+// Confidence dot colors
+const CONFIDENCE_COLORS: Record<string, string> = {
+    HIGH: '#22c55e',    // Green
+    MEDIUM: '#f59e0b',  // Yellow
+    LOW: '#9ca3af',     // Gray
+};
+
+/**
+ * Clean display code: strip internal suffixes (-C1, -C2, -H-AJ, -M-EL, -INS-N)
+ * and show only the meaningful part.
+ */
+function cleanDisplayCode(code: string): { display: string; full: string; isSuffixed: boolean } {
+    const full = code;
+    // Remove collision suffixes like -C1, -C2
+    let display = code.replace(/-C\d+$/, '');
+    // Remove suffixed variants like -H-AJ, -M-EL, -M-AJ
+    display = display.replace(/-(H|M)-(AJ|EL)$/, '');
+    // Remove INS- prefix patterns like INS-CPMH06-1
+    if (display.match(/^INS-/i)) {
+        // Show the description instead — will be handled by caller
+        display = display.replace(/^INS-/, '').replace(/-\d+$/, '');
+    }
+    const isSuffixed = display !== full;
+    return { display, full, isSuffixed };
+}
+
+// Toast notification component
+function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div style={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 10000,
+            padding: '12px 20px', borderRadius: 'var(--radius-md)',
+            background: type === 'success' ? '#059669' : '#dc2626',
+            color: 'white', fontWeight: 600, fontSize: '0.82rem',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: 8,
+            animation: 'slideInRight 0.3s ease-out',
+        }}>
+            {type === 'success' ? <Check size={16} /> : <X size={16} />}
+            {message}
+        </div>
+    );
 }
 
 export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props) {
@@ -47,8 +95,15 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
     const [catFilter, setCatFilter] = useState<InsumoCategoria | 'TODOS'>('TODOS');
     const [searchQuery, setSearchQuery] = useState('');
     const [abcFilter, setAbcFilter] = useState<'A' | 'B' | 'C' | 'TODOS'>('TODOS');
+
+    // Inline editing states
     const [editingInsumoId, setEditingInsumoId] = useState<string | null>(null);
     const [reclassifying, setReclassifying] = useState(false);
+    const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+    const [editingPriceValue, setEditingPriceValue] = useState('');
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type });
 
     const handleReclassify = async (insumoCode: string, newType: string) => {
         setReclassifying(true);
@@ -59,16 +114,40 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                 body: JSON.stringify({ insumoCode, newType }),
             });
             if (res.ok) {
+                showToast(`Tipo alterado para "${newType}"`, 'success');
                 await loadInsumos();
             } else {
-                alert('Erro ao reclassificar insumo.');
+                const data = await res.json().catch(() => ({}));
+                showToast(data.error || 'Erro ao reclassificar insumo.', 'error');
             }
         } catch (e) {
             console.error('Reclassify error:', e);
-            alert('Erro ao reclassificar insumo.');
+            showToast('Erro de conexão ao reclassificar.', 'error');
         } finally {
             setReclassifying(false);
             setEditingInsumoId(null);
+        }
+    };
+
+    const handleUpdatePrice = async (insumoCode: string, newPrice: number) => {
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/update-insumo`, {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ insumoCode, updates: { price: newPrice } }),
+            });
+            if (res.ok) {
+                showToast('Preço atualizado', 'success');
+                await loadInsumos();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                showToast(data.error || 'Erro ao atualizar preço.', 'error');
+            }
+        } catch (e) {
+            console.error('Update price error:', e);
+            showToast('Erro de conexão ao atualizar preço.', 'error');
+        } finally {
+            setEditingPriceId(null);
         }
     };
 
@@ -80,8 +159,6 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
 
         setLoading(true);
         try {
-            // Send item codes to server — it will resolve compositions
-            // and return individual INSUMOS (materials, labor, equipment)
             const payload = clientItems.map(it => ({
                 code: it.code,
                 quantity: it.quantity,
@@ -109,7 +186,6 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
         }
         setLoading(false);
     }, [clientItems]);
-
 
     useEffect(() => { loadInsumos(); }, [loadInsumos]);
 
@@ -163,8 +239,16 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
-            {/* Export bar */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+            {/* Toast notifications */}
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+            {/* Export bar + Refresh */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
+                    onClick={() => { loadInsumos(); showToast('Insumos recarregados', 'success'); }}
+                    title="Recarregar dados do Hub">
+                    <RefreshCw size={13} /> Atualizar
+                </button>
                 <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
                     onClick={() => exportHubExcel(insumos, stats, descontoConfig, engineeringConfig)}>
                     <Download size={13} /> Excel
@@ -266,98 +350,190 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                             <tbody>
                                 {filtered.map(ins => {
                                     const meta = CATEGORIA_META[ins.categoria];
+                                    const insAny = ins as any;
+                                    const confidence = insAny.tipoConfianca || 'LOW';
+                                    const rawType = insAny.tipoDetalhado || ins.categoria;
+                                    const typeMeta = EXPANDED_TYPES_META[rawType] || meta || { label: rawType, color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' };
+                                    const { display: displayCode, full: fullCode, isSuffixed } = cleanDisplayCode(ins.codigo);
+
+                                    // Use description as primary identifier for INS- codes
+                                    const isInternalCode = ins.codigo.startsWith('INS-') || ins.codigo.match(/-C\d+$/);
+                                    const composicoesDetalhes = insAny.composicoesDetalhes || [];
+
                                     return (
                                         <tr key={ins.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            {/* Type Badge with confidence dot */}
                                             <td style={{ padding: '6px 8px', width: 110 }}>
-                                                {(() => {
-                                                    const rawType = ins.tipoDetalhado || ins.categoria;
-                                                    const typeMeta = EXPANDED_TYPES_META[rawType] || { label: rawType, color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' };
-                                                    const badgeStyle: React.CSSProperties = {
-                                                        fontSize: '0.62rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                                                        cursor: 'pointer', position: 'relative' as const,
-                                                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                                                        background: typeMeta.bgLight, color: typeMeta.color,
-                                                        border: `1px solid ${typeMeta.color}25`,
-                                                        whiteSpace: 'nowrap',
-                                                    };
-                                                    return (
-                                                        <div style={{ position: 'relative', display: 'inline-flex' }}>
-                                                            <span
-                                                                onClick={(e) => { e.stopPropagation(); setEditingInsumoId(editingInsumoId === ins.id ? null : ins.id); }}
-                                                                title="Alterar tipo/categoria deste insumo"
-                                                                style={badgeStyle}
-                                                            >
-                                                                {typeMeta.label}
-                                                                <span style={{ fontSize: '0.5rem', opacity: 0.5 }}>▾</span>
-                                                            </span>
-                                                            {editingInsumoId === ins.id && (
-                                                                <>
-                                                                <div onClick={(e) => { e.stopPropagation(); setEditingInsumoId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
-                                                                <div style={{
-                                                                    position: 'absolute', left: 0, top: '100%', zIndex: 1000, marginTop: 2,
-                                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                                                                    borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: 4,
-                                                                    minWidth: 180, fontSize: '0.7rem', maxHeight: 200, overflowY: 'auto'
-                                                                }}>
-                                                                    <div style={{ padding: '3px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.6rem', textTransform: 'uppercase' }}>
-                                                                        Reclassificar tipo:
-                                                                    </div>
-                                                                    {['Material', 'Mão de Obra', 'Equipamento', 'Equipamento para Aquisição Permanente', 'Serviços', 'Taxas', 'Administração', 'Aluguel', 'Verba', 'Consultoria', 'Transporte', 'Encargos Complementares', 'Franquia', 'Outros'].map(typeName => {
-                                                                        const isActive = rawType === typeName;
-                                                                        return (
-                                                                            <button key={typeName} disabled={reclassifying} onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleReclassify(ins.codigo, typeName);
-                                                                            }} style={{
-                                                                                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                                                                                padding: '4px 8px', border: 'none',
-                                                                                background: isActive ? 'var(--color-primary-bg)' : 'none',
-                                                                                cursor: 'pointer', borderRadius: 4, textAlign: 'left',
-                                                                                color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                                                                fontWeight: isActive ? 700 : 500, fontSize: '0.68rem',
-                                                                            }}
-                                                                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
-                                                                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
-                                                                            >
-                                                                                {isActive && <span>✓</span>} {typeName}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                                </>
-                                                            )}
+                                                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                                    <span
+                                                        onClick={(e) => { e.stopPropagation(); setEditingInsumoId(editingInsumoId === ins.id ? null : ins.id); }}
+                                                        title={`Tipo: ${typeMeta.label} (confiança: ${confidence})\nClique para alterar`}
+                                                        style={{
+                                                            fontSize: '0.62rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                            background: typeMeta.bgLight, color: typeMeta.color,
+                                                            border: `1px solid ${typeMeta.color}25`,
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {/* Confidence dot */}
+                                                        <span style={{
+                                                            width: 5, height: 5, borderRadius: '50%',
+                                                            background: CONFIDENCE_COLORS[confidence] || CONFIDENCE_COLORS.LOW,
+                                                            display: 'inline-block', flexShrink: 0,
+                                                        }} />
+                                                        {meta?.label || typeMeta.label}
+                                                        <ChevronDown size={8} style={{ opacity: 0.5 }} />
+                                                    </span>
+
+                                                    {/* Simplified Dropdown: 4 macro categories */}
+                                                    {editingInsumoId === ins.id && (
+                                                        <>
+                                                        <div onClick={(e) => { e.stopPropagation(); setEditingInsumoId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                                                        <div style={{
+                                                            position: 'absolute', left: 0, top: '100%', zIndex: 1000, marginTop: 2,
+                                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                            borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 6,
+                                                            minWidth: 180, fontSize: '0.72rem',
+                                                        }}>
+                                                            <div style={{ padding: '3px 8px', fontWeight: 700, color: 'var(--color-text-tertiary)', fontSize: '0.6rem', textTransform: 'uppercase', marginBottom: 2 }}>
+                                                                Alterar categoria:
+                                                            </div>
+                                                            {MACRO_CATEGORIES.map(cat => {
+                                                                const CatIcon = cat.icon;
+                                                                const isActive = ins.categoria === resolveMetaCategory(cat.value);
+                                                                return (
+                                                                    <button key={cat.value} disabled={reclassifying} onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleReclassify(ins.codigo, cat.value);
+                                                                    }} style={{
+                                                                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                                                        padding: '6px 10px', border: 'none',
+                                                                        background: isActive ? `${cat.color}10` : 'none',
+                                                                        cursor: 'pointer', borderRadius: 6, textAlign: 'left',
+                                                                        color: isActive ? cat.color : 'var(--color-text-secondary)',
+                                                                        fontWeight: isActive ? 700 : 500, fontSize: '0.74rem',
+                                                                        transition: 'all 0.1s',
+                                                                    }}
+                                                                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
+                                                                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
+                                                                    >
+                                                                        <CatIcon size={14} color={cat.color} />
+                                                                        {cat.label}
+                                                                        {isActive && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
-                                                    );
-                                                })()}
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
+
+                                            {/* Code — clean display */}
                                             <td style={{ padding: '6px 8px' }}>
-                                                <span style={{ fontWeight: 700, color: meta.color, fontSize: '0.75rem' }}>{ins.codigo}</span>
+                                                <span
+                                                    style={{ fontWeight: 700, color: meta?.color || '#6b7280', fontSize: '0.75rem' }}
+                                                    title={isSuffixed || isInternalCode ? `Código completo: ${fullCode}` : undefined}
+                                                >
+                                                    {isInternalCode ? '—' : displayCode}
+                                                </span>
+                                                {isSuffixed && (
+                                                    <span style={{ fontSize: '0.55rem', color: 'var(--color-text-tertiary)', marginLeft: 3, opacity: 0.6 }}>⊕</span>
+                                                )}
                                             </td>
+
+                                            {/* Description + linked compositions */}
                                             <td style={{ padding: '6px 8px', maxWidth: 280 }}>
                                                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }} title={ins.descricao}>
                                                     {ins.descricao}
                                                 </div>
-                                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
-                                                    {ins.base}{mode === 'compositions' ? ` · ${ins.composicoesVinculadas.length} comp.` : ''}
+                                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                                    <span style={{ background: 'var(--color-bg-base)', padding: '0 4px', borderRadius: 3 }}>{ins.base}</span>
+                                                    {mode === 'compositions' && ins.composicoesVinculadas.length > 0 && (
+                                                        <span title={composicoesDetalhes.length > 0
+                                                            ? composicoesDetalhes.map((c: any) => `${c.code} — ${(c.description || '').substring(0, 50)}`).join('\n')
+                                                            : ins.composicoesVinculadas.join(', ')}
+                                                            style={{ cursor: 'help' }}>
+                                                            · {ins.composicoesVinculadas.length} comp.
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
+
+                                            {/* Unit */}
                                             <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>{ins.unidade}</td>
-                                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>{fmt(ins.precoOriginal)}</td>
+
+                                            {/* Price — inline editable */}
+                                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                                                {editingPriceId === ins.id ? (
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        autoFocus
+                                                        value={editingPriceValue}
+                                                        onChange={e => setEditingPriceValue(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') {
+                                                                const val = parseFloat(editingPriceValue);
+                                                                if (!isNaN(val) && val >= 0) handleUpdatePrice(ins.codigo, val);
+                                                                else setEditingPriceId(null);
+                                                            }
+                                                            if (e.key === 'Escape') setEditingPriceId(null);
+                                                        }}
+                                                        onBlur={() => {
+                                                            const val = parseFloat(editingPriceValue);
+                                                            if (!isNaN(val) && val >= 0 && val !== ins.precoOriginal) {
+                                                                handleUpdatePrice(ins.codigo, val);
+                                                            } else {
+                                                                setEditingPriceId(null);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            width: 80, padding: '3px 6px', border: '2px solid var(--color-primary)',
+                                                            borderRadius: 4, fontSize: '0.75rem', textAlign: 'right',
+                                                            background: 'var(--color-bg-surface)', outline: 'none',
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        onDoubleClick={() => {
+                                                            setEditingPriceId(ins.id);
+                                                            setEditingPriceValue(ins.precoOriginal.toFixed(2));
+                                                        }}
+                                                        title="Duplo clique para editar"
+                                                        style={{ cursor: 'text', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                                    >
+                                                        {fmt(ins.precoOriginal)}
+                                                        <Pencil size={9} style={{ opacity: 0.2 }} />
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            {/* Discount % */}
                                             <td style={{ padding: '6px 4px', textAlign: 'right', width: 65 }}>
                                                 <input type="number" min={0} max={100} step={0.5}
                                                     value={descontoConfig.descontosPorInsumo[ins.id] ?? ins.desconto}
                                                     onChange={e => updateInsumoDesconto(ins.id, parseFloat(e.target.value) || 0)}
                                                     style={{ width: 55, padding: '3px 4px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: '0.75rem', textAlign: 'right', background: 'var(--color-bg-base)' }} />
                                             </td>
+
+                                            {/* Final Price */}
                                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: ins.desconto > 0 ? '#16a34a' : 'inherit' }}>
                                                 {fmt(ins.precoFinal)}
                                             </td>
+
+                                            {/* Quantity */}
                                             <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>
                                                 {ins.coeficienteTotal % 1 === 0 ? ins.coeficienteTotal : ins.coeficienteTotal.toFixed(4)}
                                             </td>
+
+                                            {/* Total Cost */}
                                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>
                                                 {fmt(ins.custoTotal)}
                                             </td>
+
+                                            {/* ABC */}
                                             <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                                                 {ins.abcClass && (
                                                     <span style={{
@@ -397,12 +573,12 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
 
                         <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
                             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', display: 'block', marginBottom: 8 }}>Por Categoria</span>
-                            {(Object.entries(CATEGORIA_META) as [InsumoCategoria, typeof CATEGORIA_META[InsumoCategoria]][]).map(([key, meta]) => (
+                            {(Object.entries(CATEGORIA_META) as [InsumoCategoria, typeof CATEGORIA_META[InsumoCategoria]][]).map(([key, catMeta]) => (
                                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                                     <span style={{ fontSize: '0.85rem', width: 20, display: 'inline-flex', alignItems: 'center' }}>
-                                        {(() => { const Ico = CAT_ICON[key]; return <Ico size={14} color={meta.color} />; })()}
+                                        {(() => { const Ico = CAT_ICON[key]; return <Ico size={14} color={catMeta.color} />; })()}
                                     </span>
-                                    <span style={{ flex: 1, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{meta.label}</span>
+                                    <span style={{ flex: 1, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{catMeta.label}</span>
                                     <input type="number" min={0} max={100} step={0.5}
                                         value={descontoConfig.descontoPorCategoria[key]}
                                         onChange={e => updateCatDesconto(key, parseFloat(e.target.value) || 0)}

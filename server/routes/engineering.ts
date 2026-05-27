@@ -15,6 +15,7 @@ import { classifyEngineeringAttachments } from '../services/engineering/document
 import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../services/engineering/resultNormalizer';
 import { Prisma } from '@prisma/client';
 import { SimpleTtlCache } from '../lib/cache';
+import { classifyInsumoType } from '../services/engineering/insumoClassifier';
 
 const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
@@ -2454,18 +2455,31 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
                 if (!existing.composicoesVinculadas.includes(raw.compositionCode)) {
                     existing.composicoesVinculadas.push(raw.compositionCode);
                 }
+                if (!existing.composicoesDetalhes) existing.composicoesDetalhes = [];
+                existing.composicoesDetalhes.push({ code: raw.compositionCode, description: raw.compositionDescription });
             } else {
+                // FIX-HUB-03: Use intelligent classifier instead of raw normalizeInsumoType
+                const dbType = normalizeInsumoType(raw.insumoType);
+                const classification = classifyInsumoType(raw.insumoDescription, raw.insumoUnit, raw.insumoType);
+                // Use classifier result when DB type is default MATERIAL but classifier found something better
+                const finalCategoria = (dbType === 'MATERIAL' && classification.type !== 'MATERIAL' && classification.confidence !== 'LOW')
+                    ? classification.type
+                    : dbType;
                 consolidated.set(key, {
                     id: key,
                     codigo: raw.insumoCode,
                     descricao: raw.insumoDescription,
-                    categoria: normalizeInsumoType(raw.insumoType),
+                    categoria: finalCategoria,
+                    tipoDetalhado: raw.insumoType,
+                    tipoConfianca: classification.confidence,
+                    tipoOrigem: classification.source,
                     unidade: raw.insumoUnit,
                     precoOriginal: raw.insumoPrice,
                     desconto: 0,
                     precoFinal: raw.insumoPrice,
                     base: raw.base,
                     composicoesVinculadas: [raw.compositionCode],
+                    composicoesDetalhes: [{ code: raw.compositionCode, description: raw.compositionDescription }],
                     coeficienteTotal: weightedCoef,
                     custoTotal: raw.insumoPrice * weightedCoef,
                 });
@@ -2857,12 +2871,20 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         existing.composicoesVinculadas.push(parentCompCode);
                     }
                 } else {
+                    // FIX-HUB-03: Use intelligent classifier for better type detection
+                    const dbType = normalizeInsumoType(insumo.type);
+                    const classification = classifyInsumoType(insumo.description, insumo.unit, insumo.type);
+                    const finalCategoria = (dbType === 'MATERIAL' && classification.type !== 'MATERIAL' && classification.confidence !== 'LOW')
+                        ? classification.type
+                        : dbType;
                     consolidated.set(insumoKey, {
                         id: insumoKey,
                         codigo: insumo.code,
                         descricao: insumo.description,
-                        categoria: normalizeInsumoType(insumo.type),
+                        categoria: finalCategoria,
                         tipoDetalhado: insumo.type,
+                        tipoConfianca: classification.confidence,
+                        tipoOrigem: classification.source,
                         unidade: insumo.unit,
                         precoOriginal: priceToUse,
                         base: baseName,
@@ -2989,9 +3011,30 @@ router.post('/proposals/:proposalId/reclassify-insumo', async (req: any, res: an
         const basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
 
         const result = await prisma.$transaction(async (tx: any) => {
+            // FIX-HUB-04: Try exact match first, then fuzzy match for suffixed codes (-C1, -H-AJ, etc.)
             let propriaItem = await tx.engineeringItem.findFirst({
                 where: { databaseId: basePropria.id, code: insumoCode }
             });
+
+            // If not found by exact match, try searching by code prefix (handles suffixed codes)
+            if (!propriaItem) {
+                propriaItem = await tx.engineeringItem.findFirst({
+                    where: { databaseId: basePropria.id, code: { startsWith: insumoCode } }
+                });
+                if (propriaItem) {
+                    logger.info(`[Reclassify] Found suffixed item: searched "${insumoCode}" → found "${propriaItem.code}"`);
+                }
+            }
+
+            // Also try across ALL databases for the insumo (not just PROPRIA)
+            if (!propriaItem) {
+                const anyItem = await tx.engineeringItem.findFirst({
+                    where: { code: { equals: insumoCode, mode: 'insensitive' } }
+                });
+                if (anyItem) {
+                    logger.info(`[Reclassify] Item "${insumoCode}" found in other database, cloning to PROPRIA`);
+                }
+            }
 
             if (!propriaItem) {
                 const officialItem = await tx.engineeringItem.findFirst({
@@ -3117,6 +3160,101 @@ router.post('/proposals/:proposalId/reclassify-insumo', async (req: any, res: an
     } catch (e: any) {
         console.error('[Reclassify Insumo] Error:', e);
         res.status(500).json({ error: 'Erro ao reclassificar insumo', details: e.message });
+    }
+});
+
+// POST /api/engineering/proposals/:proposalId/update-insumo
+// Lightweight endpoint for inline editing of insumo price/type/unit from the Hub
+router.post('/proposals/:proposalId/update-insumo', async (req: any, res: any) => {
+    try {
+        const { proposalId } = req.params;
+        const { insumoCode, updates } = req.body; // updates: { price?, type?, unit? }
+        const tenantId = req.user?.tenantId;
+
+        await validateProposalOwnership(proposalId, tenantId);
+
+        if (!insumoCode || !updates || typeof updates !== 'object') {
+            return res.status(400).json({ error: 'Código do insumo e atualizações são obrigatórios' });
+        }
+
+        const basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
+
+        // Find the item in PROPRIA db (exact or fuzzy match for suffixed codes)
+        let item = await prisma.engineeringItem.findFirst({
+            where: { databaseId: basePropria.id, code: insumoCode }
+        });
+
+        if (!item) {
+            item = await prisma.engineeringItem.findFirst({
+                where: { databaseId: basePropria.id, code: { startsWith: insumoCode } }
+            });
+        }
+
+        // If not found in PROPRIA, clone from any database
+        if (!item) {
+            const sourceItem = await prisma.engineeringItem.findFirst({
+                where: { code: { equals: insumoCode, mode: 'insensitive' } },
+                include: { database: true }
+            });
+
+            if (sourceItem) {
+                const resolved = await getOrCreateEngineeringItemWithCollisionCheck(prisma, {
+                    databaseId: basePropria.id,
+                    code: insumoCode,
+                    description: sourceItem.description,
+                    unit: updates.unit || sourceItem.unit,
+                    price: updates.price !== undefined ? updates.price : sourceItem.price,
+                    type: updates.type || sourceItem.type,
+                });
+                item = await prisma.engineeringItem.findUnique({ where: { id: resolved.id } });
+                logger.info(`[Update Insumo] Cloned item ${insumoCode} from ${sourceItem.database?.name} to PROPRIA`);
+            }
+        }
+
+        if (!item) {
+            return res.status(404).json({ error: `Insumo com código "${insumoCode}" não encontrado` });
+        }
+
+        // Build update data
+        const updateData: any = {};
+        if (updates.price !== undefined && updates.price !== null) updateData.price = Number(updates.price);
+        if (updates.type) updateData.type = updates.type;
+        if (updates.unit) updateData.unit = updates.unit;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: 'Nenhuma atualização fornecida' });
+        }
+
+        // Update the item
+        const updated = await prisma.engineeringItem.update({
+            where: { id: item.id },
+            data: updateData,
+        });
+
+        // Recalculate price snapshots in all composition items that reference this insumo
+        if (updateData.price !== undefined) {
+            const compositionItems = await prisma.engineeringCompositionItem.findMany({
+                where: { itemId: item.id },
+            });
+            for (const ci of compositionItems) {
+                const newPrice = ci.coefficient * updateData.price;
+                await prisma.engineeringCompositionItem.update({
+                    where: { id: ci.id },
+                    data: { price: newPrice },
+                });
+            }
+            logger.info(`[Update Insumo] Updated ${compositionItems.length} composition item snapshots for ${insumoCode}`);
+        }
+
+        compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
+
+        logger.info(`[Update Insumo] ✅ Updated ${insumoCode}: ${JSON.stringify(updateData)}`);
+        res.json({ success: true, item: updated });
+
+    } catch (e: any) {
+        console.error('[Update Insumo] Error:', e);
+        res.status(500).json({ error: 'Erro ao atualizar insumo', details: e.message });
     }
 });
 
@@ -4701,20 +4839,32 @@ router.post('/ai-populate', async (req: any, res: any) => {
                                 : await prisma.engineeringComposition.create({ data: { code: comp.code || comp.item, description: comp.description, unit: comp.unit || 'UN', databaseId: propriaDb.id, totalPrice: compTotal } });
 
                             await prisma.engineeringCompositionItem.deleteMany({ where: { compositionId: compRecord.id } });
+                             let insumoIndex = 0;
                              for (const ins of (comp.insumos || [])) {
-                                 const insCode = `INS-${comp.code || comp.item}-${saved + 1}`;
+                                 // FIX-HUB-01: Preserve original insumo code when available; generate meaningful code otherwise
+                                 const rawInsCode = (ins.code || '').trim();
+                                 const insCode = rawInsCode && rawInsCode !== 'PROPRIO' && rawInsCode.length > 1
+                                     ? rawInsCode  // Use real insumo code (e.g., "40918", "I6519")
+                                     : `${comp.code || comp.item}-INS-${insumoIndex + 1}`;  // Readable code with per-insumo index
+                                 // FIX-HUB-02: Use intelligent classifier instead of fallback to MATERIAL
                                  const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL', 'OBSERVACAO': 'OBSERVACAO' };
+                                 let resolvedType = typeMap[ins.type] || '';
+                                 if (!resolvedType || resolvedType === 'MATERIAL') {
+                                     const classification = classifyInsumoType(ins.description || '', ins.unit || 'UN', ins.type);
+                                     resolvedType = classification.type;
+                                 }
                                  const resolvedInsumo = await getOrCreateEngineeringItemWithCollisionCheck(prisma, {
                                      databaseId: propriaDb.id,
                                      code: insCode,
                                      description: ins.description || '',
                                      unit: ins.unit || 'UN',
                                      price: ins.unitPrice || 0,
-                                     type: typeMap[ins.type] || 'MATERIAL'
+                                     type: resolvedType || 'MATERIAL'
                                  });
                                  await prisma.engineeringCompositionItem.create({
                                      data: { compositionId: compRecord.id, itemId: resolvedInsumo.id, coefficient: ins.coefficient || 0, price: ins.type === 'OBSERVACAO' ? 0 : (ins.coefficient || 0) * (ins.unitPrice || 0) }
                                  });
+                                 insumoIndex++;
                              }
                             saved++;
                         } catch (e: any) {

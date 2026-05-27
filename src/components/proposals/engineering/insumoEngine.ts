@@ -17,12 +17,15 @@ export interface InsumoConsolidado {
     descricao: string;
     categoria: InsumoCategoria;
     tipoDetalhado?: string;           // Categoria expandida/detalhada (14 tipos)
+    tipoConfianca?: 'HIGH' | 'MEDIUM' | 'LOW';  // Confidence of type classification
+    tipoOrigem?: string;              // Source of classification (DICTIONARY, UNIT_HEURISTIC, DATABASE, DEFAULT)
     unidade: string;
     precoOriginal: number;            // Preço da base oficial
     desconto: number;                 // % de desconto aplicado
     precoFinal: number;               // precoOriginal × (1 - desconto/100)
     base: string;                     // SINAPI, SEINFRA, PRÓPRIA
     composicoesVinculadas: string[];  // Codes das composições que usam
+    composicoesDetalhes?: Array<{ code: string; description: string }>;  // Detailed composition info
     coeficienteTotal: number;         // Soma de coeficientes em todas as composições
     custoTotal: number;               // precoFinal × coeficienteTotal (across all compositions × quantities)
     abcClass?: 'A' | 'B' | 'C';      // Classificação ABC
