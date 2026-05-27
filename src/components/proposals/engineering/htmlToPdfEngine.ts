@@ -198,9 +198,16 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
     const activeSections = sections.filter(sec => sec.length > 0);
     const headHtml = parsedDoc.head.innerHTML;
 
-    // Initialize unified jsPDF document
+    // Determine the orientation of the very first section to initialize jsPDF correctly
+    const firstSecElements = activeSections[0] || [];
+    const firstSecLandscape = firstSecElements.some(el => 
+        el.getAttribute('data-orientation') === 'landscape' ||
+        el.querySelector('[data-orientation="landscape"]') !== null
+    ) || (orientation === 'landscape');
+
+    // Initialize unified jsPDF document with the first page's orientation
     const pdf = new jsPDF({
-        orientation: isLandscape ? 'l' : 'p',
+        orientation: firstSecLandscape ? 'l' : 'p',
         unit: 'mm',
         format: 'a4',
     });
@@ -212,6 +219,30 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
     // Process each section sequentially to keep canvas size small
     for (let sIdx = 0; sIdx < activeSections.length; sIdx++) {
         const sectionElements = activeSections[sIdx];
+        
+        // Detect specific orientation for this section
+        const isSecLandscape = sectionElements.some(el => 
+            el.getAttribute('data-orientation') === 'landscape' ||
+            el.querySelector('[data-orientation="landscape"]') !== null
+        ) || (sIdx === 0 && firstSecLandscape);
+
+        const secPageWidthMm = isSecLandscape ? 297 : 210;
+        const secPageHeightMm = isSecLandscape ? 210 : 297;
+        const secContentWidthMm = secPageWidthMm - (marginX * 2);
+        const secRenderWidthPx = isSecLandscape ? 1123 : 794;
+
+        // Recalculate header & footer heights in mm for this section's width
+        const secHeaderHeightMm = headerCanvas
+            ? (headerCanvas.height / headerCanvas.width) * secContentWidthMm
+            : 0;
+        const secFooterHeightMm = footerCanvas
+            ? (footerCanvas.height / footerCanvas.width) * secContentWidthMm
+            : 0;
+
+        const secBodyTopMm = marginY + secHeaderHeightMm + (secHeaderHeightMm > 0 ? 2 : 0);
+        const secBodyBottomMm = marginY + secFooterHeightMm + (secFooterHeightMm > 0 ? 2 : 0);
+        const secBodyHeightMm = secPageHeightMm - secBodyTopMm - secBodyBottomMm;
+
         const sectionContentHtml = sectionElements.map(el => el.outerHTML).join('\n');
         
         const sectionDocHtml = `<!DOCTYPE html><html><head>${headHtml}</head><body>
@@ -224,7 +255,7 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
             </table>
         </body></html>`;
 
-        const sectionFrame = await createIframe(renderWidthPx, sectionDocHtml);
+        const sectionFrame = await createIframe(secRenderWidthPx, sectionDocHtml);
         const sectionDoc = sectionFrame.contentDocument!;
 
         try {
@@ -247,11 +278,11 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
                 sectionScale = 1.25;
             }
 
-            const sectionCanvas = await captureToCanvas(wrapperEl, renderWidthPx, sectionScale);
+            const sectionCanvas = await captureToCanvas(wrapperEl, secRenderWidthPx, sectionScale);
 
-            const bodyImgTotalMm = (sectionCanvas.height / sectionCanvas.width) * contentWidthMm;
+            const bodyImgTotalMm = (sectionCanvas.height / sectionCanvas.width) * secContentWidthMm;
             const pxPerMm = sectionCanvas.height / bodyImgTotalMm;
-            const safeBodyHeightMm = bodyHeightMm - 2;
+            const safeBodyHeightMm = secBodyHeightMm - 2;
             const maxSlicePx = Math.floor(safeBodyHeightMm * pxPerMm);
 
             // ── Row-boundary scanner ──
@@ -311,12 +342,12 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
                 if (isFirstPage) {
                     isFirstPage = false;
                 } else {
-                    pdf.addPage();
+                    pdf.addPage('a4', isSecLandscape ? 'l' : 'p');
                 }
 
                 // ── Draw header ──
                 if (hdrData) {
-                    pdf.addImage(hdrData, 'PNG', marginX, marginY, contentWidthMm, headerHeightMm);
+                    pdf.addImage(hdrData, 'PNG', marginX, marginY, secContentWidthMm, secHeaderHeightMm);
                 }
 
                 // ── Draw body slice ──
@@ -334,14 +365,14 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
                     ctx.drawImage(sectionCanvas, 0, sliceStartPx, canvasWidth, sliceHeightPx, 0, 0, canvasWidth, sliceHeightPx);
 
                     const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-                    const sliceHeightMm = (sliceHeightPx / canvasWidth) * contentWidthMm;
-                    pdf.addImage(sliceData, 'JPEG', marginX, bodyTopMm, contentWidthMm, sliceHeightMm);
+                    const sliceHeightMm = (sliceHeightPx / canvasWidth) * secContentWidthMm;
+                    pdf.addImage(sliceData, 'JPEG', marginX, secBodyTopMm, secContentWidthMm, sliceHeightMm);
                 }
 
                 // ── Draw footer ──
                 if (ftrData) {
-                    const footerY = pageHeightMm - marginY - footerHeightMm;
-                    pdf.addImage(ftrData, 'PNG', marginX, footerY, contentWidthMm, footerHeightMm);
+                    const footerY = secPageHeightMm - marginY - secFooterHeightMm;
+                    pdf.addImage(ftrData, 'PNG', marginX, footerY, secContentWidthMm, secFooterHeightMm);
                 }
             }
         } finally {
@@ -358,8 +389,12 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
         pdf.setTextColor(100, 116, 139); // Slate-500
         const pageText = `${i}/${totalPages}`;
         
-        const xPos = pageWidthMm - marginX - 12;
-        const yPos = pageHeightMm - marginY - 6;
+        // Dynamically read page size since pages can have mixed orientations
+        const currWidth = pdf.internal.pageSize.getWidth();
+        const currHeight = pdf.internal.pageSize.getHeight();
+        
+        const xPos = currWidth - marginX - 12;
+        const yPos = currHeight - marginY - 6;
         
         pdf.text(pageText, xPos, yPos, { align: 'right' });
     }

@@ -1206,10 +1206,12 @@ ${renderConfigTable(engineeringConfig)}
         rows += `<tr class="total"><td>% ACUMULADO</td><td></td>`;
         for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentAcumulado[m])}</td>`;
         rows += `<td class="r">100%</td></tr>`;
-        parts.push(`<h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
+        parts.push(`<div data-orientation="landscape">
+<h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`);
+<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>
+</div>`);
     }
 
     // ── BDI e Encargos ──

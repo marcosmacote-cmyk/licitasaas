@@ -251,7 +251,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                         if (localCronogramaResult) xlsCronograma(localCronogramaResult, engConfigWithLogo);
                         else alert('Configure o cronograma primeiro.');
                         break;
-                    case 'bdi': xlsBdiEncargos(engConfigWithLogo, effectiveBdi); break;
+                    case 'bdi': xlsBdiEncargos(engConfigWithLogo, effectiveBdi, bdiConfig); break;
                     case 'memoria': xlsMemoriaCalculo(items, engConfigWithLogo); break;
                 }
             } else {
@@ -290,7 +290,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'orcamento-analitico.xlsx',   gen: () => xlsOrcamentoAnalitico(proposalId, items, ec, effectiveBdi, true) },
                 { name: 'composicoes-cpu.xlsx',       gen: () => xlsCpuBatch(proposalId, items, ec, effectiveBdi, true) },
                 { name: 'abc-servicos.xlsx',          gen: () => xlsCurvaAbcServicos(items, ec, effectiveBdi, true) },
-                { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, true) },
+                { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, bdiConfig, true) },
                 { name: 'memoria-calculo.xlsx',       gen: () => xlsMemoriaCalculo(items, ec, true) },
             ];
             if (localInsumos.length > 0) {

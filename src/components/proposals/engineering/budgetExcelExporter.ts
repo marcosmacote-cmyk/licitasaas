@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { EngineeringConfig, ColorPalette } from './types';
 import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
+import type { BdiConfig } from './bdiEngine';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -246,7 +247,7 @@ function grandRow(ws: ExcelJS.Worksheet, label: string, values: string[], colCou
 }
 
 // BDI tripé — matches PDF renderGlobalTotals exactly
-function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: number) {
+function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: number, totalCellRef?: string) {
   // Same logic as PDF: Sem BDI = unitCost * quantity, Com BDI = totalPrice
   const billable = items.filter((i: any) => !isGrouper(i.type));
   const totalComBdi = billable.reduce((s: number, i: any) => s + (Number(i.totalPrice) || 0), 0);
@@ -255,11 +256,9 @@ function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: num
   }, 0);
   const valorBdi = totalComBdi - totalSemBdi;
   const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const bdiColLetter = colToLetter(colCount);
 
-  const mkRow = (label: string, value: string, isGrand = false) => {
-    const rn = ws.rowCount + 1;
-    const r = ws.addRow([label, ...Array(Math.max(0, colCount - 2)).fill(''), value]);
-    if (colCount > 2) ws.mergeCells(rn, 1, rn, colCount - 1);
+  const formatBdiRow = (r: ExcelJS.Row, isGrand: boolean) => {
     r.height = isGrand ? 20 : 16;
     for (let i = 1; i <= colCount; i++) {
       const c = r.getCell(i);
@@ -269,10 +268,38 @@ function bdiRows(ws: ExcelJS.Worksheet, items: any[], bdi: number, colCount: num
       c.alignment = { horizontal: 'right', vertical: 'middle' };
     }
   };
+
   ws.addRow([]);
-  mkRow('VALOR GLOBAL SEM BDI', fmt(totalSemBdi));
-  mkRow(`VALOR DO BDI (${(bdiRate * 100).toFixed(2)}%)`, fmt(valorBdi));
-  mkRow('VALOR GLOBAL COM BDI', fmt(totalComBdi), true);
+  
+  const rnSem = ws.rowCount + 1;
+  const rSem = ws.addRow([
+    'VALOR GLOBAL SEM BDI', 
+    ...Array(Math.max(0, colCount - 2)).fill(''), 
+    totalCellRef ? { formula: `ROUND(${totalCellRef}/(1+${bdiRate}), 2)` } : totalSemBdi
+  ]);
+  ws.mergeCells(rnSem, 1, rnSem, colCount - 1);
+  rSem.getCell(colCount).numFmt = '#,##0.00';
+  formatBdiRow(rSem, false);
+
+  const rnVal = ws.rowCount + 1;
+  const rVal = ws.addRow([
+    `VALOR DO BDI (${(bdiRate * 100).toFixed(2)}%)`, 
+    ...Array(Math.max(0, colCount - 2)).fill(''), 
+    totalCellRef ? { formula: `ROUND(${totalCellRef}-${bdiColLetter}${rnSem}, 2)` } : valorBdi
+  ]);
+  ws.mergeCells(rnVal, 1, rnVal, colCount - 1);
+  rVal.getCell(colCount).numFmt = '#,##0.00';
+  formatBdiRow(rVal, false);
+
+  const rnCom = ws.rowCount + 1;
+  const rCom = ws.addRow([
+    'VALOR GLOBAL COM BDI', 
+    ...Array(Math.max(0, colCount - 2)).fill(''), 
+    totalCellRef ? { formula: totalCellRef } : totalComBdi
+  ]);
+  ws.mergeCells(rnCom, 1, rnCom, colCount - 1);
+  rCom.getCell(colCount).numFmt = '#,##0.00';
+  formatBdiRow(rCom, true);
 }
 
 /** Insert company logo as embedded image in the worksheet header area */
@@ -400,7 +427,7 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
     c.alignment = { horizontal: 'right', vertical: 'middle' };
   }
 
-  bdiRows(ws, items, bdi, 5);
+  bdiRows(ws, items, bdi, 5, `D${totalRowIndex}`);
   return saveWb(wb, 'orcamento-resumido.xlsx', returnBuffer);
 }
 
@@ -471,7 +498,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       const r = dataRow(ws, vals, idx++, Array.from({ length: colCount - 5 }, (_, i) => 6 + i));
       // Apply number format to numeric cells
       const qtyCol = 6;
-      r.getCell(qtyCol).numFmt = '#,##0.00';
+      r.getCell(qtyCol).numFmt = '#,##0.00##';
       let ci = qtyCol + 1;
       if (showCU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
       if (showPU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
@@ -523,7 +550,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
     c.alignment = { horizontal: 'right', vertical: 'middle' };
   }
 
-  bdiRows(ws, items, bdi, colCount);
+  bdiRows(ws, items, bdi, colCount, `${totalColLetter}${gRn}`);
   return saveWb(wb, 'orcamento-sintetico.xlsx', returnBuffer);
 }
 
@@ -540,7 +567,7 @@ async function fetchAnalyticalReport(proposalId: string, items: any[], bdi: numb
 }
 
 // Helper: render one composition as Excel rows
-function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engConfig?: EngineeringConfig) {
+function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engConfig?: EngineeringConfig, bdi?: number) {
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
@@ -718,15 +745,41 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
     costRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
   }
 
-  // BDI + Preço com BDI
-  if (comp.valorBdi != null) {
-    const bdiRn = ws.rowCount + 1;
-    const bdiRow = ws.addRow([`Valor do BDI: ${fmt(comp.valorBdi)}    |    Preço Unitário (com BDI): ${fmt(comp.valorComBdi || 0)}`, '', '', '', '', '', '', '']);
-    ws.mergeCells(bdiRn, 1, bdiRn, 8);
-    bdiRow.getCell(1).fill = fill(C.GRAY_SUB);
-    bdiRow.getCell(1).border = border();
-    bdiRow.getCell(1).font = { size: 8, color: { argb: C.TEXT_MID } };
-    bdiRow.height = 14;
+  // BDI + Preço com BDI (fórmulas dinâmicas)
+  const bdiRate = typeof bdi === 'number' 
+    ? (bdi > 1 ? bdi / 100 : bdi) 
+    : (comp.totalPrice > 0 ? (comp.valorBdi || 0) / comp.totalPrice : 0.25);
+
+  const bdiValRn = ws.rowCount + 1;
+  const bdiValRow = ws.addRow([
+    `Valor do BDI (${(bdiRate * 100).toFixed(2)}%)`, 
+    '', '', '', '', '', '', 
+    { formula: `ROUND(H${costRn}*${bdiRate}, 2)` }
+  ]);
+  ws.mergeCells(bdiValRn, 1, bdiValRn, 7);
+  bdiValRow.getCell(8).numFmt = '#,##0.00';
+  bdiValRow.height = 14;
+  for (let i = 1; i <= 8; i++) {
+    bdiValRow.getCell(i).fill = fill(C.GRAY_SUB);
+    bdiValRow.getCell(i).border = border();
+    bdiValRow.getCell(i).font = { size: 8, color: { argb: C.TEXT_MID }, bold: true };
+    bdiValRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+  }
+
+  const bdiPriceRn = ws.rowCount + 1;
+  const bdiPriceRow = ws.addRow([
+    'Preço Unitário (com BDI)', 
+    '', '', '', '', '', '', 
+    { formula: `ROUND(H${costRn}+H${bdiValRn}, 2)` }
+  ]);
+  ws.mergeCells(bdiPriceRn, 1, bdiPriceRn, 7);
+  bdiPriceRow.getCell(8).numFmt = '#,##0.00';
+  bdiPriceRow.height = 14;
+  for (let i = 1; i <= 8; i++) {
+    bdiPriceRow.getCell(i).fill = fill(C.GRAY_SUB);
+    bdiPriceRow.getCell(i).border = border();
+    bdiPriceRow.getCell(i).font = { size: 8.5, color: { argb: C.BLUE_DARK }, bold: true };
+    bdiPriceRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
   }
 
   // Reference Divisor
@@ -735,32 +788,42 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
     const divRn = ws.rowCount + 1;
     const divLabel = referenceDivisor.label || 'Referência';
     const divVal = referenceDivisor.value;
-    const unitCostRef = (comp.totalPrice || 0) / divVal;
-    const unitPriceRef = (comp.valorComBdi || 0) / divVal;
     const divRow = ws.addRow([
-      `Divisor de Referência: ${divLabel} (Qtd: ${divVal})    |    Custo/Ref (sem BDI): ${fmt(unitCostRef)}    |    Preço/Ref (com BDI): ${fmt(unitPriceRef)}`,
-      '', '', '', '', '', '', ''
+      `Divisor de Referência: ${divLabel} (Qtd: ${divVal})    |    Custo/Ref (sem BDI):`, 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${costRn}/${divVal}, 2)` }
     ]);
-    ws.mergeCells(divRn, 1, divRn, 8);
-    divRow.getCell(1).fill = fill('FFF0FDF4');
-    divRow.getCell(1).border = border('FFBBF7D0');
-    divRow.getCell(1).font = { size: 8, color: { argb: 'FF166534' }, bold: true };
+    ws.mergeCells(divRn, 1, divRn, 7);
+    divRow.getCell(8).numFmt = '#,##0.00';
     divRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      divRow.getCell(i).fill = fill('FFF0FDF4');
+      divRow.getCell(i).border = border('FFBBF7D0');
+      divRow.getCell(i).font = { size: 8, color: { argb: 'FF166534' }, bold: true };
+      divRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
   }
 
   // Quantity + Total (for analytical)
   if (showQty && comp.proposalQuantity) {
     const qRn = ws.rowCount + 1;
-    const proposalTotalVal = Number(comp.proposalTotal) || 0;
-    const qRow = ws.addRow([`Quantidade: ${fmtQty(comp.proposalQuantity)}`, '', '', '', '', '', 'PREÇO TOTAL =>', proposalTotalVal]);
-    ws.mergeCells(qRn, 1, qRn, 6);
+    const proposalQty = Number(comp.proposalQuantity) || 0;
+    const qRow = ws.addRow([
+      'Quantidade de Serviço:', 
+      '', '', '', '', 
+      proposalQty, 
+      'PREÇO TOTAL =>', 
+      { formula: `ROUND(F${qRn}*H${bdiPriceRn}, 2)` }
+    ]);
+    ws.mergeCells(qRn, 1, qRn, 5);
+    qRow.getCell(6).numFmt = '#,##0.00##';
     qRow.getCell(8).numFmt = '#,##0.00';
-    qRow.height = 16;
+    qRow.height = 18;
     for (let i = 1; i <= 8; i++) {
       qRow.getCell(i).fill = fill(C.BLUE_LIGHT);
       qRow.getCell(i).border = border(C.BLUE_MED);
       qRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_DARK } };
-      qRow.getCell(i).alignment = { horizontal: i >= 7 ? 'right' : 'left', vertical: 'middle' };
+      qRow.getCell(i).alignment = { horizontal: i === 6 || i === 8 ? 'right' : 'left', vertical: 'middle' };
     }
   }
 
@@ -831,7 +894,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
       const ch = chapters.get(prefix);
       const chTitle = ch ? ch.title : `Etapa ${prefix}`;
       sectionHeaderRow(ws, chTitle, 8);
-      for (const comp of chComps) renderCompXls(ws, comp, true, engConfig);
+      for (const comp of chComps) renderCompXls(ws, comp, true, engConfig, bdi);
       const chTotal = chComps.reduce((s: number, c: any) => s + (c.proposalTotal || 0), 0);
       subtotalRow(ws, `Subtotal ${chTitle}`, fmt(chTotal), 8);
     }
@@ -878,11 +941,11 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
     }
 
     sectionHeaderRow(ws, 'Composições Principais', 8);
-    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false, engConfig);
+    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false, engConfig, bdi);
 
     if (report.auxiliaryCompositions?.length > 0) {
       sectionHeaderRow(ws, 'Composições Auxiliares', 8);
-      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false, engConfig);
+      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false, engConfig, bdi);
     }
   } catch (e: any) {
     ws.addRow([`Erro: ${e.message}`]);
@@ -932,7 +995,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
     const v = Number(item.totalPrice) || 0;
     const pct = total > 0 ? v / total : 0;
     acum += pct;
-    const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
+    const cls = (acum * 100) <= 80 ? C.RED : (acum * 100) <= 95 ? C.AMBER : C.GREEN;
 
     const qty = Number(item.quantity) || 0;
     const uc = Number(item.unitCost) || 0;
@@ -971,7 +1034,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
 
     const r = dataRow(ws, vals, idx, Array.from({ length: colCount - 4 }, (_, i) => 6 + i));
     // Number formats
-    r.getCell(6).numFmt = '#,##0.00'; // QTD
+    r.getCell(6).numFmt = '#,##0.00##'; // QTD
     let ci = 7;
     if (showCU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
     if (showPU) { r.getCell(ci).numFmt = '#,##0.00'; ci++; }
@@ -1000,20 +1063,157 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
     c.alignment = { horizontal: 'right', vertical: 'middle' };
   }
 
-  bdiRows(ws, items, bdi, colCount);
+  bdiRows(ws, items, bdi, colCount, `${tLetter}${gRn}`);
   return saveWb(wb, 'abc-servicos.xlsx', returnBuffer);
 }
 
 // ── 4. BDI E ENCARGOS SOCIAIS ────────────────────────────────────────────────
-export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, bdi: number, returnBuffer?: boolean) {
+export async function xlsBdiEncargos(
+  engConfig: EngineeringConfig | undefined,
+  bdi: number,
+  bdiConfig?: BdiConfig,
+  returnBuffer?: boolean
+) {
   setGlobalPrecision(engConfig);
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('BDI e Encargos');
-  setupPrint(ws, false, engConfig?.reportConfig);
-  ws.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
-  logoRow(wb, ws, 4, engConfig?.reportConfig);
 
-  titleRow(ws, 'BDI E ENCARGOS SOCIAIS', 4);
+  // ═══════════════════════════════════════════════════════════
+  // PLANILHA 1: COMPOSIÇÃO DE BDI
+  // ═══════════════════════════════════════════════════════════
+  const wsBdi = wb.addWorksheet('Composição de BDI');
+  setupPrint(wsBdi, false, engConfig?.reportConfig);
+  wsBdi.columns = [{ width: 48 }, { width: 12 }, { width: 16 }];
+  logoRow(wb, wsBdi, 3, engConfig?.reportConfig);
+
+  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const isTcu = bdiConfig?.mode === 'TCU' && bdiConfig?.tcu;
+
+  titleRow(wsBdi, isTcu ? 'COMPOSIÇÃO DO BDI ( TCU )' : 'COMPOSIÇÃO DO BDI', 3);
+  metaRows(wsBdi, engConfig, [], 3);
+
+  if (isTcu && bdiConfig?.tcu) {
+    const tcu = bdiConfig.tcu;
+    headRow(wsBdi, ['COMPONENTE', 'SIGLA', 'TAXA (%)']);
+
+    const compRows = [
+      { name: 'Administração Central (AC)', sigla: 'AC', val: (tcu.adminCentral || 0) / 100 },
+      { name: 'Seguros (S)', sigla: 'S', val: (tcu.seguros || 0) / 100 },
+      { name: 'Garantias (G)', sigla: 'G', val: (tcu.garantias || 0) / 100 },
+      { name: 'Riscos (R)', sigla: 'R', val: (tcu.riscos || 0) / 100 },
+      { name: 'Despesas Financeiras (DF)', sigla: 'DF', val: (tcu.despFinanceiras || 0) / 100 },
+      { name: 'Lucro / Remuneração (L)', sigla: 'L', val: (tcu.lucro || 0) / 100 },
+    ];
+
+    let acRn = 0, sRn = 0, gRn = 0, rRn = 0, dfRn = 0, lRn = 0;
+
+    compRows.forEach((c, idx) => {
+      const r = wsBdi.addRow([c.name, c.sigla, c.val]);
+      const rn = wsBdi.rowCount;
+      if (c.sigla === 'AC') acRn = rn;
+      else if (c.sigla === 'S') sRn = rn;
+      else if (c.sigla === 'G') gRn = rn;
+      else if (c.sigla === 'R') rRn = rn;
+      else if (c.sigla === 'DF') dfRn = rn;
+      else if (c.sigla === 'L') lRn = rn;
+
+      r.getCell(3).numFmt = '0.00%';
+      r.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
+      r.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+      r.height = 15;
+      for (let i = 1; i <= 3; i++) {
+        r.getCell(i).fill = fill(idx % 2 === 0 ? C.WHITE : C.GRAY_ROW);
+        r.getCell(i).border = border();
+        r.getCell(i).font = { size: 9, color: { argb: C.TEXT_DARK } };
+      }
+    });
+
+    // Detalhamento dos tributos (I)
+    sectionHeaderRow(wsBdi, 'Detalhamento dos Tributos (I)', 3);
+    headRow(wsBdi, ['TRIBUTO', '', 'TAXA (%)']);
+
+    const pis = (tcu.pis || 0) / 100;
+    const cofins = (tcu.cofins || 0) / 100;
+    const iss = (tcu.iss || 0) / 100;
+    const csll = (tcu.csll || 0) / 100;
+    const cprb = (tcu.cprb || 0) / 100;
+
+    const tribRows = [
+      ['PIS (Programa de Integração Social)', '', pis],
+      ['COFINS (Contribuição p/ Financiamento da Seg. Social)', '', cofins],
+      ['ISS (Imposto Sobre Serviços)', '', iss],
+      ['CSLL (Contribuição Social sobre Lucro Líquido)', '', csll],
+      ['CPRB (Contribuição Previdenciária sobre a Receita Bruta)', '', cprb],
+    ];
+
+    const firstTribRow = wsBdi.rowCount + 1;
+    tribRows.forEach((tr, idx) => {
+      const rn = wsBdi.rowCount + 1;
+      const r = wsBdi.addRow(tr);
+      wsBdi.mergeCells(rn, 1, rn, 2);
+      r.getCell(3).numFmt = '0.00%';
+      r.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+      r.height = 15;
+      for (let i = 1; i <= 3; i++) {
+        r.getCell(i).fill = fill(idx % 2 === 0 ? C.WHITE : C.GRAY_ROW);
+        r.getCell(i).border = border();
+        r.getCell(i).font = { size: 9, color: { argb: C.TEXT_DARK } };
+      }
+    });
+    const lastTribRow = wsBdi.rowCount;
+
+    // Total Tributos
+    const totalTribRn = wsBdi.rowCount + 1;
+    const totalTribRow = wsBdi.addRow(['Total Tributos (I = PIS + COFINS + ISS + CSLL + CPRB)', '', { formula: `SUM(C${firstTribRow}:C${lastTribRow})` }]);
+    wsBdi.mergeCells(totalTribRn, 1, totalTribRn, 2);
+    totalTribRow.getCell(3).numFmt = '0.00%';
+    totalTribRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+    totalTribRow.height = 16;
+    for (let i = 1; i <= 3; i++) {
+      totalTribRow.getCell(i).fill = fill(C.GRAY_SUB);
+      totalTribRow.getCell(i).border = border(C.BORDER);
+      totalTribRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
+    }
+
+    // BDI TCU Calculado final
+    wsBdi.addRow([]);
+    const bdiFinalRn = wsBdi.rowCount + 1;
+    const bdiFormula = `ROUND((((1+C${acRn}+C${sRn}+C${gRn}+C${rRn})*(1+C${dfRn})*(1+C${lRn}))/(1-C${totalTribRn}))-1, 4)`;
+    const bdiFinalRow = wsBdi.addRow(['BDI TCU CALCULADO (FÓRMULA TCU)', '', { formula: bdiFormula }]);
+    wsBdi.mergeCells(bdiFinalRn, 1, bdiFinalRn, 2);
+    bdiFinalRow.getCell(3).numFmt = '0.00%';
+    bdiFinalRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+    bdiFinalRow.height = 20;
+    for (let i = 1; i <= 3; i++) {
+      bdiFinalRow.getCell(i).fill = fill(C.BLUE_DARK);
+      bdiFinalRow.getCell(i).border = border(C.BLUE_DARK);
+      bdiFinalRow.getCell(i).font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    }
+
+  } else {
+    // STANDARD / SIMPLIFICADO BDI
+    headRow(wsBdi, ['TIPO DE BDI', '', 'TAXA (%)']);
+    const rnRow = wsBdi.rowCount + 1;
+    const bRow = wsBdi.addRow(['BDI Simplificado do Orçamento', '', bdiRate]);
+    wsBdi.mergeCells(rnRow, 1, rnRow, 2);
+    bRow.getCell(3).numFmt = '0.00%';
+    bRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+    bRow.height = 18;
+    for (let i = 1; i <= 3; i++) {
+      bRow.getCell(i).fill = fill(C.BLUE_DARK);
+      bRow.getCell(i).border = border(C.BLUE_DARK);
+      bRow.getCell(i).font = { bold: true, size: 10, color: { argb: C.WHITE } };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PLANILHA 2: ENCARGOS SOCIAIS
+  // ═══════════════════════════════════════════════════════════
+  const wsEs = wb.addWorksheet('Encargos Sociais');
+  setupPrint(wsEs, false, engConfig?.reportConfig);
+  wsEs.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
+  logoRow(wb, wsEs, 4, engConfig?.reportConfig);
+
+  titleRow(wsEs, 'ENCARGOS SOCIAIS SOBRE MÃO DE OBRA', 4);
 
   const isDesonerado = (engConfig?.regimeOneracao || 'DESONERADO') === 'DESONERADO';
   const es = engConfig?.encargosSociais || {} as any;
@@ -1051,30 +1251,30 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
     ]},
   ];
 
-  headRow(ws, ['CÓD', 'DESCRIÇÃO', 'HORISTA %', 'MENSALISTA %']);
+  headRow(wsEs, ['CÓD', 'DESCRIÇÃO', 'HORISTA %', 'MENSALISTA %']);
   const subtotalRowNums: number[] = [];
 
   for (const g of groups) {
-    const secRow = ws.addRow([g.label]);
-    ws.mergeCells(secRow.number, 1, secRow.number, 4);
+    const secRow = wsEs.addRow([g.label]);
+    wsEs.mergeCells(secRow.number, 1, secRow.number, 4);
     secRow.getCell(1).fill = fill(C.BLUE_LIGHT);
     secRow.getCell(1).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
     secRow.getCell(1).border = border(C.BLUE_MED);
     secRow.height = 16;
 
-    const firstItemRow = ws.rowCount + 1;
+    const firstItemRow = wsEs.rowCount + 1;
     g.items.forEach(([cod, desc, key], idx) => {
       const h = v(`${key}_h`), m = v(`${key}_m`);
-      const r = dataRow(ws, [cod, desc, h / 100, m / 100], idx, [3, 4]);
+      const r = dataRow(wsEs, [cod, desc, h / 100, m / 100], idx, [3, 4]);
       r.getCell(1).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
       r.getCell(3).numFmt = '0.00%';
       r.getCell(4).numFmt = '0.00%';
     });
-    const lastItemRow = ws.rowCount;
+    const lastItemRow = wsEs.rowCount;
 
     // Subtotal with SUM formula
-    const stRn = ws.rowCount + 1;
-    const sr = ws.addRow(['', `Subtotal ${g.label.split(' — ')[0]}`, '', '']);
+    const stRn = wsEs.rowCount + 1;
+    const sr = wsEs.addRow(['', `Subtotal ${g.label.split(' — ')[0]}`, '', '']);
     sr.getCell(3).value = { formula: `SUM(C${firstItemRow}:C${lastItemRow})` } as any;
     sr.getCell(4).value = { formula: `SUM(D${firstItemRow}:D${lastItemRow})` } as any;
     sr.getCell(3).numFmt = '0.00%';
@@ -1084,16 +1284,16 @@ export async function xlsBdiEncargos(engConfig: EngineeringConfig | undefined, b
       sr.getCell(i).fill = fill(C.GRAY_SUB);
       sr.getCell(i).font = { bold: true, size: 9 };
       sr.getCell(i).border = border();
-      sr.getCell(i).alignment = { horizontal: i >= 3 ? 'right' : 'left' };
+      sr.getCell(i).alignment = { horizontal: i >= 3 ? 'right' : 'left', vertical: 'middle' };
     }
     subtotalRowNums.push(stRn);
-    ws.addRow([]);
+    wsEs.addRow([]);
   }
 
   // Grand total with SUM of subtotals
-  const gRn = ws.rowCount + 1;
-  const gRow = ws.addRow(['A + B + C + D =', '', '', '']);
-  ws.mergeCells(gRn, 1, gRn, 2);
+  const gRn = wsEs.rowCount + 1;
+  const gRow = wsEs.addRow(['A + B + C + D =', '', '', '']);
+  wsEs.mergeCells(gRn, 1, gRn, 2);
   if (subtotalRowNums.length > 0) {
     const hRefs = subtotalRowNums.map(rn => `C${rn}`).join('+');
     const mRefs = subtotalRowNums.map(rn => `D${rn}`).join('+');
@@ -1298,7 +1498,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
     const v = Number(item.custoTotal) || 0;
     const pct = total > 0 ? v / total : 0;
     acum += pct;
-    const cls = (acum * 100) <= 50 ? C.RED : (acum * 100) <= 80 ? C.AMBER : C.GREEN;
+    const cls = (acum * 100) <= 80 ? C.RED : (acum * 100) <= 95 ? C.AMBER : C.GREEN;
 
     let pctVal: any = pct;
     let acumVal: any = acum;
@@ -1449,6 +1649,7 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
       const calcRows = calcObj.rows;
 
       calcRows.forEach((row: any, rIdx: number) => {
+        const rNum = ws.rowCount + 1;
         const r = ws.addRow([
           rIdx === 0 ? it.itemNumber : '',
           rIdx === 0 ? it.description : '',
@@ -1458,7 +1659,7 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
           row.length ? Number(row.length) : '—',
           row.width ? Number(row.width) : '—',
           row.height ? Number(row.height) : '—',
-          Number(row.subtotal) || 0
+          { formula: `ROUND(E${rNum} * IF(ISNUMBER(F${rNum}), F${rNum}, 1) * IF(ISNUMBER(G${rNum}), G${rNum}, 1) * IF(ISNUMBER(H${rNum}), H${rNum}, 1), 4)` }
         ]);
         r.height = 16;
         for (let i = 1; i <= 9; i++) {
@@ -1468,8 +1669,8 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
           cell.font = { size: 9, color: { argb: C.TEXT_DARK } };
           if (i >= 5) {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
-            if (i === 5 || i === 9) cell.numFmt = '#,##0.00';
-            else if (typeof cell.value === 'number') cell.numFmt = '#,##0.00';
+            if (i === 5 || i === 9) cell.numFmt = '#,##0.00##';
+            else if (typeof cell.value === 'number') cell.numFmt = '#,##0.00##';
           } else {
             cell.alignment = { horizontal: i === 3 ? 'center' : 'left', vertical: 'middle', wrapText: true };
           }
