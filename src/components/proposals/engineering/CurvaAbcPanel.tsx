@@ -9,7 +9,7 @@ import { calculateCurvaAbc, type AbcItem } from './abcEngine';
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 interface Props {
-    items: { itemNumber: string; code: string; description: string; unit: string; quantity: number; unitPrice: number; totalPrice: number }[];
+    items: { itemNumber: string; code: string; sourceName?: string; description: string; unit: string; quantity: number; unitPrice: number; totalPrice: number }[];
 }
 
 const CLASS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -69,8 +69,8 @@ export function CurvaAbcPanel({ items }: Props) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <thead>
                         <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                            {['#', 'Classe', 'Item', 'Descrição', 'Qtd.', 'Preço Unit.', 'Total', '% Total', '% Acum.'].map((h, i) => (
-                                <th key={i} style={{ padding: '8px 10px', textAlign: i >= 4 ? 'right' : 'left', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{h}</th>
+                            {['#', 'Classe', 'Item', 'Descrição', 'Base', 'Qtd.', 'Preço Unit.', 'Total', '% Total', '% Acum.'].map((h, i) => (
+                                <th key={i} style={{ padding: '8px 10px', textAlign: i >= 5 ? 'right' : 'left', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -87,6 +87,17 @@ export function CurvaAbcPanel({ items }: Props) {
                                     </td>
                                     <td style={{ padding: '6px 10px', fontWeight: 600 }}>{it.itemNumber}</td>
                                     <td style={{ padding: '6px 10px', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.description}</td>
+                                    <td style={{ padding: '6px 10px' }}>
+                                        <span style={{
+                                            fontSize: '0.7rem', fontWeight: 600,
+                                            padding: '1px 5px', borderRadius: 3,
+                                            background: (it.sourceName === 'PRÓPRIA' || !it.sourceName) ? 'rgba(245,158,11,0.08)' : 'rgba(37,99,235,0.06)',
+                                            color: (it.sourceName === 'PRÓPRIA' || !it.sourceName) ? '#b45309' : '#2563eb',
+                                            whiteSpace: 'nowrap',
+                                        }}>
+                                            {it.sourceName || '—'}
+                                        </span>
+                                    </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right' }}>{it.quantity}</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right' }}>{fmt(it.unitPrice)}</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: colors.text }}>{fmt(it.totalPrice)}</td>
@@ -98,7 +109,7 @@ export function CurvaAbcPanel({ items }: Props) {
                     </tbody>
                     <tfoot>
                         <tr style={{ background: 'var(--color-bg-base)', borderTop: '2px solid var(--color-border)' }}>
-                            <td colSpan={6} style={{ padding: '10px', fontWeight: 700, textAlign: 'right' }}>TOTAL GLOBAL</td>
+                            <td colSpan={7} style={{ padding: '10px', fontWeight: 700, textAlign: 'right' }}>TOTAL GLOBAL</td>
                             <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '1rem' }}>{fmt(abc.totalGlobal)}</td>
                             <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>100%</td>
                             <td></td>

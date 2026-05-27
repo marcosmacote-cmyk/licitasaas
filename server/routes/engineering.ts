@@ -417,6 +417,46 @@ async function getOrCreatePropriaDatabase(txOrPrisma: any, tenantId: string, pro
     }
     return db;
 }
+/**
+ * FIX-HUB-05: Resolve the DISPLAY base name for a composition/insumo.
+ * When the motor stores everything in PROPRIA, this function detects the
+ * original official base from the composition code pattern.
+ * 
+ * Priority: dbName (if official) > sourceName (if official) > code heuristic > fallback
+ */
+function resolveDisplayBase(dbName: string | undefined, sourceName: string | undefined, compositionCode: string | undefined): string {
+    // 1. If dbName is an official base (not PROPRIA), use it directly
+    const db = (dbName || '').trim();
+    if (db && db !== 'PROPRIA' && !db.startsWith('PROPRIA_')) {
+        return db;
+    }
+
+    // 2. If sourceName is an official base, use it
+    const src = (sourceName || '').trim().toUpperCase();
+    if (src && src !== 'PROPRIA' && !src.startsWith('PROPRIA')) {
+        return src;
+    }
+
+    // 3. Detect base from composition code patterns
+    const code = (compositionCode || '').trim().toUpperCase();
+    if (code) {
+        // SEINFRA patterns: CPMH06, CPEL03, CPTO01, C0054, C1614, I0001
+        if (/^C[A-Z]{0,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
+        // SINAPI: 5-6 digit numbers (88316, 93566, 74209/1)
+        if (/^\d{5,6}(\/\d+)?$/.test(code)) return 'SINAPI';
+        // ORSE: numeric with possible /ORSE suffix
+        if (/^\d{3,6}\/ORSE$/.test(code) || (/^\d{3,6}$/.test(code) && src === 'ORSE')) return 'ORSE';
+        // SICRO: pattern like EC-05-013-00
+        if (/^[A-Z]{2}-\d{2}-\d{3}/.test(code)) return 'SICRO';
+        // SBC: starts with SBC
+        if (/^SBC/i.test(code)) return 'SBC';
+        // CAERN: starts with CAERN
+        if (/^CAERN/i.test(code)) return 'CAERN';
+    }
+
+    // 4. Fallback
+    return 'PRÓPRIA';
+}
 
 function normalizeCompositionSource(sourceName?: string): string | undefined {
     const source = String(sourceName || '').trim().toUpperCase();
@@ -2409,15 +2449,8 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
                         coefficient: ci.coefficient,
                         compositionCode: composition.code,
                         compositionDescription: composition.description,
-                        // FIX-HUB-05: Show original base name, not PROPRIA_<uuid>
-                        base: (() => {
-                            const dbName = composition.database?.name || '';
-                            // If it's a PROPRIA db, use the sourceName from the proposal item (SINAPI, SEINFRA, etc.)
-                            if (dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_')) {
-                                return item.sourceName || 'PRÓPRIA';
-                            }
-                            return dbName || item.sourceName || 'PRÓPRIA';
-                        })(),
+                        // FIX-HUB-05: Resolve display base from code pattern when PROPRIA
+                        base: resolveDisplayBase(composition.database?.name, item.sourceName, composition.code),
                         serviceQuantity: item.quantity,
                     });
                 }
@@ -2853,11 +2886,8 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 
             compositionsFound++;
             const serviceQty = Number(clientItem.quantity) || 1;
-            // FIX-HUB-05: Show original base name, not PROPRIA_<uuid>
-            const rawDbName = composition.database?.name || '';
-            const baseName = (rawDbName === 'PROPRIA' || rawDbName.startsWith('PROPRIA_'))
-                ? (clientItem.sourceName || 'PRÓPRIA')
-                : (rawDbName || clientItem.sourceName || 'PRÓPRIA');
+            // FIX-HUB-05: Resolve display base from code pattern when PROPRIA
+            const baseName = resolveDisplayBase(composition.database?.name, clientItem.sourceName, composition.code);
 
             // Check if main composition has reference divisor
             const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};

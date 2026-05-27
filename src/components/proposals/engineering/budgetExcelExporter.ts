@@ -1517,7 +1517,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
       }
     }
 
-    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.sourceName || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
+    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.base || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '0.00%';
     r.getCell(9).numFmt = '0.00%';

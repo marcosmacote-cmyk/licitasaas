@@ -10,6 +10,7 @@
 export interface AbcItem {
     itemNumber: string;
     code: string;
+    sourceName?: string;
     description: string;
     unit: string;
     quantity: number;
@@ -31,7 +32,7 @@ export interface AbcSummary {
 }
 
 export function calculateCurvaAbc(
-    items: { itemNumber: string; code: string; description: string; unit: string; quantity: number; unitPrice: number; totalPrice: number }[],
+    items: { itemNumber: string; code: string; sourceName?: string; description: string; unit: string; quantity: number; unitPrice: number; totalPrice: number }[],
     thresholdA: number = 80,
     thresholdB: number = 95
 ): AbcSummary {
