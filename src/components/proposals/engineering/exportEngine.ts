@@ -231,7 +231,7 @@ function openPrintWindow(title: string, html: string) {
   .abc-a { color: #dc2626; font-weight: 700; }
   .abc-b { color: #d97706; font-weight: 600; }
   .abc-c { color: #16a34a; }
-  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
   .stat-card { border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px; text-align: center; }
   .stat-value { font-size: 14px; font-weight: 700; }
   .stat-label { font-size: 8px; color: #64748b; text-transform: uppercase; }
@@ -284,7 +284,7 @@ ${engineeringConfig ? `
 
 <table>
 <thead><tr>
-  <th style="width:30px">ABC</th><th>Código</th><th>Descrição</th><th>Cat.</th><th>Un.</th>
+  <th style="width:30px">ABC</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th>
   <th class="right">Preço</th><th class="right">Desc.</th><th class="right">Final</th><th class="right">Coef.</th><th class="right">Custo Total</th>
 </tr></thead><tbody>`;
 
@@ -295,6 +295,7 @@ ${engineeringConfig ? `
   <td class="${abcCls}">${ins.abcClass || '—'}</td>
   <td class="mono">${ins.codigo}</td>
   <td>${ins.descricao}</td>
+  <td style="font-size:8px;font-weight:600">${ins.base || '—'}</td>
   <td>${catLabel}</td>
   <td>${ins.unidade}</td>
   <td class="right">${fmt(ins.precoOriginal)}</td>
@@ -307,7 +308,7 @@ ${engineeringConfig ? `
 
     html += `</tbody><tfoot>
 <tr class="grand-total">
-  <td colspan="9" style="text-align:right;padding:6px 8px">CUSTO TOTAL DO ORÇAMENTO</td>
+  <td colspan="10" style="text-align:right;padding:6px 8px">CUSTO TOTAL DO ORÇAMENTO</td>
   <td class="right" style="padding:6px 8px">${fmt(total)}</td>
 </tr></tfoot></table>`;
 

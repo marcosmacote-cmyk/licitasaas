@@ -44,7 +44,7 @@ const CONFIDENCE_COLORS: Record<string, string> = {
 
 /**
  * Clean display code: strip internal suffixes (-C1, -C2, -H-AJ, -M-EL, -INS-N)
- * and show only the meaningful part.
+ * and show only the meaningful part. Never returns empty — always shows something useful.
  */
 function cleanDisplayCode(code: string): { display: string; full: string; isSuffixed: boolean } {
     const full = code;
@@ -52,11 +52,12 @@ function cleanDisplayCode(code: string): { display: string; full: string; isSuff
     let display = code.replace(/-C\d+$/, '');
     // Remove suffixed variants like -H-AJ, -M-EL, -M-AJ
     display = display.replace(/-(H|M)-(AJ|EL)$/, '');
-    // Remove INS- prefix patterns like INS-CPMH06-1
+    // Clean INS- prefix patterns like INS-CPMH06-1 → show the composition reference
     if (display.match(/^INS-/i)) {
-        // Show the description instead — will be handled by caller
         display = display.replace(/^INS-/, '').replace(/-\d+$/, '');
     }
+    // Never return empty
+    if (!display || display.trim() === '') display = full;
     const isSuffixed = display !== full;
     return { display, full, isSuffixed };
 }
@@ -275,30 +276,34 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                 </div>
             )}
 
-            {/* Stats Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+            {/* Stats Cards — 4 categories + total */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-3)' }}>
                 {([
                     { label: 'Material', value: stats?.custoMaterial || 0, cat: 'MATERIAL' as InsumoCategoria },
                     { label: 'Mão de Obra', value: stats?.custoMaoDeObra || 0, cat: 'MAO_DE_OBRA' as InsumoCategoria },
                     { label: 'Equipamento', value: stats?.custoEquipamento || 0, cat: 'EQUIPAMENTO' as InsumoCategoria },
+                    { label: 'Serviço', value: stats?.custoServico || 0, cat: 'SERVICO' as InsumoCategoria },
                     { label: 'Total Insumos', value: stats?.totalCusto || 0, cat: null },
                 ]).map((card, idx) => {
                     const meta = card.cat ? CATEGORIA_META[card.cat] : null;
                     const Icon = card.cat ? CAT_ICON[card.cat] : TrendingDown;
+                    const isTotal = card.cat === null;
                     return (
                         <div key={idx} onClick={() => card.cat && setCatFilter(catFilter === card.cat ? 'TODOS' : card.cat)}
                             style={{
                                 padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                background: card.cat ? (catFilter === card.cat ? meta!.bgLight : 'var(--color-bg-surface)') : 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))',
+                                background: isTotal
+                                    ? 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))'
+                                    : (catFilter === card.cat ? meta!.bgLight : 'var(--color-bg-surface)'),
                                 border: `1px solid ${card.cat && catFilter === card.cat ? meta!.color + '40' : 'var(--color-border)'}`,
                                 cursor: card.cat ? 'pointer' : 'default',
                                 transition: 'all 0.15s',
                             }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                 <Icon size={16} color={meta?.color || 'var(--color-primary)'} />
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>{card.label}</span>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>{card.label}</span>
                             </div>
-                            <span style={{ fontSize: idx === 3 ? '1.3rem' : '1.1rem', fontWeight: 800, color: meta?.color || 'var(--color-primary)' }}>{fmt(card.value)}</span>
+                            <span style={{ fontSize: isTotal ? '1.2rem' : '1rem', fontWeight: 800, color: meta?.color || 'var(--color-primary)' }}>{fmt(card.value)}</span>
                         </div>
                     );
                 })}
@@ -342,8 +347,8 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                    {['Tipo', 'Código', 'Descrição', 'Unid.', 'Preço Unit.', 'Desc%', 'Preço Final', 'Qtd', 'Custo Total', 'ABC'].map((h, i) => (
-                                        <th key={i} style={{ padding: '10px 8px', textAlign: i >= 4 ? 'right' : (i === 3 ? 'center' : 'left'), fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '0.72rem', width: i === 0 ? 110 : undefined }}>{h}</th>
+                                    {['Tipo', 'Código', 'Descrição', 'Base', 'Unid.', 'Preço Unit.', 'Desc%', 'Preço Final', 'Qtd', 'Custo Total', 'ABC'].map((h, i) => (
+                                        <th key={i} style={{ padding: '10px 8px', textAlign: i >= 5 ? 'right' : (i === 4 ? 'center' : 'left'), fontWeight: 600, color: 'var(--color-text-secondary)', fontSize: '0.72rem', width: i === 0 ? 100 : (i === 3 ? 80 : undefined) }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -355,9 +360,6 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                     const rawType = insAny.tipoDetalhado || ins.categoria;
                                     const typeMeta = EXPANDED_TYPES_META[rawType] || meta || { label: rawType, color: '#6b7280', bgLight: 'rgba(107,114,128,0.08)' };
                                     const { display: displayCode, full: fullCode, isSuffixed } = cleanDisplayCode(ins.codigo);
-
-                                    // Use description as primary identifier for INS- codes
-                                    const isInternalCode = ins.codigo.startsWith('INS-') || ins.codigo.match(/-C\d+$/);
                                     const composicoesDetalhes = insAny.composicoesDetalhes || [];
 
                                     return (
@@ -430,13 +432,13 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                                 </div>
                                             </td>
 
-                                            {/* Code — clean display */}
+                                            {/* Code — always display a meaningful code */}
                                             <td style={{ padding: '6px 8px' }}>
                                                 <span
                                                     style={{ fontWeight: 700, color: meta?.color || '#6b7280', fontSize: '0.75rem' }}
-                                                    title={isSuffixed || isInternalCode ? `Código completo: ${fullCode}` : undefined}
+                                                    title={isSuffixed ? `Código completo: ${fullCode}` : undefined}
                                                 >
-                                                    {isInternalCode ? '—' : displayCode}
+                                                    {displayCode}
                                                 </span>
                                                 {isSuffixed && (
                                                     <span style={{ fontSize: '0.55rem', color: 'var(--color-text-tertiary)', marginLeft: 3, opacity: 0.6 }}>⊕</span>
@@ -448,17 +450,31 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }} title={ins.descricao}>
                                                     {ins.descricao}
                                                 </div>
-                                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                                    <span style={{ background: 'var(--color-bg-base)', padding: '0 4px', borderRadius: 3 }}>{ins.base}</span>
-                                                    {mode === 'compositions' && ins.composicoesVinculadas.length > 0 && (
+                                                {mode === 'compositions' && ins.composicoesVinculadas.length > 0 && (
+                                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
                                                         <span title={composicoesDetalhes.length > 0
                                                             ? composicoesDetalhes.map((c: any) => `${c.code} — ${(c.description || '').substring(0, 50)}`).join('\n')
                                                             : ins.composicoesVinculadas.join(', ')}
                                                             style={{ cursor: 'help' }}>
-                                                            · {ins.composicoesVinculadas.length} comp.
+                                                            {ins.composicoesVinculadas.length} comp.
                                                         </span>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            {/* Base column */}
+                                            <td style={{ padding: '6px 8px' }}>
+                                                <span style={{
+                                                    fontSize: '0.65rem', fontWeight: 600,
+                                                    padding: '1px 6px', borderRadius: 3,
+                                                    background: ins.base === 'PROPRIA' || ins.base?.startsWith('PROPRIA_')
+                                                        ? 'rgba(245,158,11,0.08)' : 'rgba(37,99,235,0.06)',
+                                                    color: ins.base === 'PROPRIA' || ins.base?.startsWith('PROPRIA_')
+                                                        ? '#b45309' : '#2563eb',
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    {ins.base || '—'}
+                                                </span>
                                             </td>
 
                                             {/* Unit */}
@@ -546,7 +562,7 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                     );
                                 })}
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={10} style={{ padding: 30, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                    <tr><td colSpan={11} style={{ padding: 30, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                         Nenhum insumo corresponde aos filtros selecionados.
                                     </td></tr>
                                 )}
