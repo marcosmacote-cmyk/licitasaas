@@ -2358,18 +2358,23 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const serviceQty = Number(clientItem.quantity) || 1;
             const baseName = composition.database?.name || clientItem.sourceName || 'PROPRIA';
 
+            // Check if main composition has reference divisor
+            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const divisor = Number(meta?.referenceDivisor?.value) || 1;
+            const effectiveServiceQty = serviceQty / divisor;
+
             // FIX-04: Helper to add an insumo to the consolidated map
             const addInsumo = (insumoCode: string, insumo: any, coef: number, parentCompCode: string) => {
                 const insumoKey = insumoCode.toUpperCase();
                 const existing = consolidated.get(insumoKey);
-                const weightedCoef = coef * serviceQty;
+                const weightedCoef = coef * effectiveServiceQty;
 
                 if (existing) {
                     existing.coeficienteTotal += weightedCoef;
                     existing.coeficientesPorComposicao.push({
                         compCode: parentCompCode,
                         coef,
-                        qty: serviceQty,
+                        qty: effectiveServiceQty,
                     });
                     if (!existing.composicoesVinculadas.includes(parentCompCode)) {
                         existing.composicoesVinculadas.push(parentCompCode);
@@ -2391,7 +2396,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         coeficientesPorComposicao: [{
                             compCode: parentCompCode,
                             coef,
-                            qty: serviceQty,
+                            qty: effectiveServiceQty,
                         }],
                         coeficienteTotal: weightedCoef,
                     });
@@ -2416,11 +2421,16 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         });
                         if (!auxComp) return;
 
+                        // Check if auxiliary composition itself has a reference divisor
+                        const auxMeta = auxComp.metadata ? (typeof auxComp.metadata === 'string' ? JSON.parse(auxComp.metadata) : auxComp.metadata) as any : {};
+                        const auxDivisor = Number(auxMeta?.referenceDivisor?.value) || 1;
+                        const effectiveParentCoef = parentCoef / auxDivisor;
+
                         for (const auxCi of auxComp.items) {
                             if (auxCi.item) {
-                                addInsumo(auxCi.item.code, auxCi.item, auxCi.coefficient * parentCoef, parentCompCode);
+                                addInsumo(auxCi.item.code, auxCi.item, auxCi.coefficient * effectiveParentCoef, parentCompCode);
                             } else if (auxCi.auxiliaryCompositionId) {
-                                await resolveAuxiliary(auxCi.auxiliaryCompositionId, auxCi.coefficient * parentCoef, parentCompCode);
+                                await resolveAuxiliary(auxCi.auxiliaryCompositionId, auxCi.coefficient * effectiveParentCoef, parentCompCode);
                             }
                         }
                     };
@@ -2780,12 +2790,17 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
 
             if (!composition) return;
 
+            // Check reference divisor
+            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const divisor = Number(meta?.referenceDivisor?.value) || 1;
+            const effectiveParentQty = parentQty / divisor;
+
             for (const ci of composition.items) {
                 if (ci.item) {
                     const insumo = ci.item;
                     const codeKey = insumo.code.toUpperCase();
                     const coef = ci.coefficient || 0;
-                    const weightedQty = parentQty * coef;
+                    const weightedQty = effectiveParentQty * coef;
 
                     const existing = leafInsumos.get(codeKey);
                     if (existing) {
@@ -2807,7 +2822,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
                         where: { id: ci.auxiliaryCompositionId }
                     });
                     if (auxComp) {
-                        await resolveLeafInsumosRecursive(auxComp.code, parentQty * ci.coefficient, itemBdi, itemDiscount);
+                        await resolveLeafInsumosRecursive(auxComp.code, effectiveParentQty * ci.coefficient, itemBdi, itemDiscount);
                     }
                 }
             }
@@ -2849,6 +2864,10 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
             });
             if (!comp) return;
 
+            const meta = comp.metadata ? (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) as any : {};
+            const divisor = Number(meta?.referenceDivisor?.value) || 1;
+            const effectiveParentQty = parentQty / divisor;
+
             for (const ci of comp.items) {
                 if (ci.item) {
                     const ins = ci.item;
@@ -2860,7 +2879,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
                     insumoIsLaborOrEncargo.set(codeKey, isLabor);
 
                     const factor = (1 + itemBdi / 100) * (1 - itemDiscount / 100);
-                    const impact = parentQty * coef * ins.price * factor;
+                    const impact = effectiveParentQty * coef * ins.price * factor;
 
                     insumoPriceImpacts.set(codeKey, (insumoPriceImpacts.get(codeKey) || 0) + impact);
                 } else if (ci.auxiliaryCompositionId) {
@@ -2868,7 +2887,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
                         where: { id: ci.auxiliaryCompositionId }
                     });
                     if (aux) {
-                        await calculatePriceImpactsRecursive(aux.code, parentQty * ci.coefficient, itemBdi, itemDiscount);
+                        await calculatePriceImpactsRecursive(aux.code, effectiveParentQty * ci.coefficient, itemBdi, itemDiscount);
                     }
                 }
             }
