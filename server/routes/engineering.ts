@@ -1423,21 +1423,138 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                 });
             }
 
-            // Sync description to any matching EngineeringProposalItem records in this proposal
+            // Sync cost, BDI, precision, unit, and description to any matching EngineeringProposalItem records in this proposal
             if (proposalId) {
-                const finalDescription = composition.description || existing.description;
-                const finalUnit = composition.unit || existing.unit;
-                await tx.engineeringProposalItem.updateMany({
-                    where: {
-                        proposalId,
-                        code: { in: [newCode, existing.code].filter(Boolean) }
-                    },
-                    data: {
-                        description: finalDescription,
-                        unit: finalUnit
-                    }
+                const proposal = await tx.priceProposal.findUnique({
+                    where: { id: proposalId },
+                    select: { engineeringConfig: true, bdiConfig: true, bdiPercentage: true }
                 });
-                logger.info(`[CompositionSave] 🔄 Sync'd proposal items matching proposalId=${proposalId} and code=${newCode}/${existing.code} to description "${finalDescription}" and unit "${finalUnit}"`);
+
+                if (proposal) {
+                    const engConfig = proposal.engineeringConfig ? (typeof proposal.engineeringConfig === 'string' ? JSON.parse(proposal.engineeringConfig) : proposal.engineeringConfig) as any : {};
+                    const bdiConfig = proposal.bdiConfig ? (typeof proposal.bdiConfig === 'string' ? JSON.parse(proposal.bdiConfig) : proposal.bdiConfig) as any : {};
+                    
+                    const bdiGlobal = Number(bdiConfig?.bdiGlobal) || Number(proposal.bdiPercentage) || 0;
+                    const bdiDiferenciado = !!engConfig?.bdiDiferenciado;
+                    const bdiFornecimento = Number(engConfig?.bdiFornecimento) || 0;
+                    const precisionConfig = engConfig?.precision || { tipo: 'ROUND', casasDecimais: 2 };
+
+                    const getBdi = (item: any) => {
+                        if (bdiDiferenciado && item.bdiCategoria === 'FORNECIMENTO') {
+                            return bdiFornecimento;
+                        }
+                        return bdiGlobal;
+                    };
+
+                    const applyPrecision = (value: number, config: any) => {
+                        const dec = config?.casasDecimais ?? 2;
+                        if (config?.tipo === 'TRUNCATE') {
+                            const factor = Math.pow(10, dec);
+                            return Math.floor(value * factor) / factor;
+                        }
+                        return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
+                    };
+
+                    const applyBdi = (cost: number, bdi: number, config: any) => {
+                        return applyPrecision(cost * (1 + bdi / 100), config);
+                    };
+
+                    // Resolve the divisor for the composition
+                    const refDiv = composition.referenceDivisor || metadata.referenceDivisor;
+                    let divisor = 1;
+                    if (refDiv) {
+                        if (typeof refDiv === 'object' && refDiv !== null && 'value' in refDiv) {
+                            divisor = Number(refDiv.value) || 1;
+                        } else if (typeof refDiv === 'number') {
+                            divisor = refDiv || 1;
+                        } else if (typeof refDiv === 'string') {
+                            divisor = parseFloat(refDiv) || 1;
+                        }
+                    }
+
+                    const rawTotal = composition.totalPrice !== undefined ? composition.totalPrice : existing.totalPrice;
+                    const unitCost = divisor > 0 ? applyPrecision(rawTotal / divisor, precisionConfig) : rawTotal;
+
+                    // Fetch all proposal items that match the composition code
+                    const matchingItems = await tx.engineeringProposalItem.findMany({
+                        where: {
+                            proposalId,
+                            code: { in: [newCode, existing.code].filter(Boolean) }
+                        }
+                    });
+
+                    for (const item of matchingItems) {
+                        const itemBdi = getBdi(item);
+                        const unitPrice = applyPrecision(applyBdi(unitCost, itemBdi, precisionConfig) * (1 - (item.discount || 0) / 100), precisionConfig);
+                        const totalPrice = applyPrecision(item.quantity * unitPrice, precisionConfig);
+
+                        // Also refresh priceAudit extractedUnitCost
+                        let updatedPriceAudit = item.priceAudit || {};
+                        if (typeof updatedPriceAudit === 'string') {
+                            try {
+                                updatedPriceAudit = JSON.parse(updatedPriceAudit);
+                            } catch {
+                                updatedPriceAudit = {};
+                            }
+                        }
+                        if (updatedPriceAudit && typeof updatedPriceAudit === 'object') {
+                            (updatedPriceAudit as any).extractedUnitCost = unitCost;
+                            // Re-run refreshSubmittedPriceAudit inline logic
+                            const hasRegimeMismatch = Array.isArray((updatedPriceAudit as any).warnings) && (updatedPriceAudit as any).warnings.some((warning: string) => String(warning).toLowerCase().includes('regime'));
+                            const hasDateMismatch = Array.isArray((updatedPriceAudit as any).warnings) && (updatedPriceAudit as any).warnings.some((warning: string) => String(warning).toLowerCase().includes('data-base'));
+                            const matchedUnitCost = Number((updatedPriceAudit as any).matchedUnitCost) || 0;
+                            
+                            if (matchedUnitCost > 0) {
+                                const deltaValue = hasRegimeMismatch ? null : unitCost - matchedUnitCost;
+                                const deltaPercent = deltaValue !== null && matchedUnitCost > 0 ? (deltaValue / matchedUnitCost) * 100 : null;
+                                const hasPriceDelta = !hasRegimeMismatch && deltaValue !== null && Math.abs(deltaValue) > 0.01;
+                                const hasBaseWarnings = Array.isArray((updatedPriceAudit as any).warnings) && (updatedPriceAudit as any).warnings.length > 0;
+                                
+                                let status;
+                                if (hasDateMismatch) {
+                                    status = 'BASE_INDISPONIVEL';
+                                } else if (hasPriceDelta) {
+                                    status = 'DIVERGENT';
+                                } else if (hasBaseWarnings) {
+                                    status = 'BASE_INCOMPATIVEL';
+                                } else {
+                                    status = 'OK';
+                                }
+                                
+                                (updatedPriceAudit as any).deltaValue = deltaValue;
+                                (updatedPriceAudit as any).deltaPercent = deltaPercent;
+                                (updatedPriceAudit as any).status = status;
+                            }
+                        }
+
+                        await tx.engineeringProposalItem.update({
+                            where: { id: item.id },
+                            data: {
+                                description: composition.description || existing.description,
+                                unit: composition.unit || existing.unit,
+                                unitCost,
+                                unitPrice,
+                                totalPrice,
+                                priceAudit: updatedPriceAudit as any
+                            }
+                        });
+                    }
+
+                    // Also recalculate proposal total value
+                    const allProposalItems = await tx.engineeringProposalItem.findMany({
+                        where: { proposalId }
+                    });
+                    const totalValue = allProposalItems
+                        .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                        .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
+
+                    await tx.priceProposal.update({
+                        where: { id: proposalId },
+                        data: { totalValue }
+                    });
+
+                    logger.info(`[CompositionSave] 🔄 Sync'd and recalculated ${matchingItems.length} proposal items matching proposalId=${proposalId} and code=${newCode}/${existing.code}. Proposal totalValue=${totalValue}`);
+                }
             }
 
             if (hasGroups) {
@@ -1644,17 +1761,21 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     if (!isAux && itemId && !isTempId(itemId)) {
                         const dbItem = nonTempItemsMap.get(itemId);
                         if (dbItem && (dbItem.database?.type === 'PROPRIA' || dbItem.database?.name?.startsWith('PROPRIA'))) {
-                            if (item.item?.description && item.item.description !== dbItem.description) {
+                            const hasDescriptionChanged = item.item?.description && item.item.description !== dbItem.description;
+                            const hasPriceChanged = item.item?.price !== undefined && item.item.price !== dbItem.price;
+                            const hasUnitChanged = item.item?.unit && item.item.unit !== dbItem.unit;
+
+                            if (hasDescriptionChanged || hasPriceChanged || hasUnitChanged) {
                                 const updatedItem = await tx.engineeringItem.update({
                                     where: { id: itemId },
                                     data: {
-                                        description: item.item.description,
+                                        description: item.item.description || dbItem.description,
                                         unit: item.item.unit || dbItem.unit,
                                         price: item.item.price !== undefined ? item.item.price : dbItem.price
                                     }
                                 });
                                 nonTempItemsMap.set(itemId, { ...dbItem, ...updatedItem });
-                                logger.info(`[CompositionSave] 📝 Updated own item description: code=${dbItem.code} id=${itemId}`);
+                                logger.info(`[CompositionSave] 📝 Updated own item (description/price/unit): code=${dbItem.code} id=${itemId}`);
                             }
                         }
                     }
@@ -1779,17 +1900,65 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
             targetId = targetComp.id;
         }
 
-        // Delete all composition items (keep the composition shell)
-        await prisma.engineeringCompositionItem.deleteMany({
-            where: { compositionId: targetId }
-        });
+        // Delete all composition items (keep the composition shell) inside a transaction to sync with proposal items
+        await prisma.$transaction(async (tx: any) => {
+            await tx.engineeringCompositionItem.deleteMany({
+                where: { compositionId: targetId }
+            });
 
-        // Reset totalPrice to 0 and clear metadata
-        await prisma.engineeringComposition.update({
-            where: { id: targetId },
-            data: { 
-                totalPrice: 0,
-                metadata: Prisma.DbNull
+            // Reset totalPrice to 0 and clear metadata
+            await tx.engineeringComposition.update({
+                where: { id: targetId },
+                data: { 
+                    totalPrice: 0,
+                    metadata: Prisma.DbNull
+                }
+            });
+
+            if (proposalId) {
+                // Fetch matching items
+                const matchingItems = await tx.engineeringProposalItem.findMany({
+                    where: {
+                        proposalId,
+                        code: { in: [existing.code].filter(Boolean) }
+                    }
+                });
+
+                for (const item of matchingItems) {
+                    await tx.engineeringProposalItem.update({
+                        where: { id: item.id },
+                        data: {
+                            unitCost: 0,
+                            unitPrice: 0,
+                            totalPrice: 0,
+                            priceAudit: {
+                                status: 'SEM_MATCH',
+                                warnings: ['Nenhuma composição analítica foi encontrada.'],
+                                confidence: 0,
+                                deltaValue: null,
+                                matchMethod: 'none',
+                                deltaPercent: null,
+                                matchedUnitCost: null,
+                                extractedUnitCost: 0
+                            }
+                        }
+                    });
+                }
+
+                // Recalculate proposal total value
+                const allProposalItems = await tx.engineeringProposalItem.findMany({
+                    where: { proposalId }
+                });
+                const totalValue = allProposalItems
+                    .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                    .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
+
+                await tx.priceProposal.update({
+                    where: { id: proposalId },
+                    data: { totalValue }
+                });
+
+                logger.info(`[CompositionClear] 🔄 Sync'd proposal items matching proposalId=${proposalId} and code=${existing.code}. Proposal totalValue=${totalValue}`);
             }
         });
 
