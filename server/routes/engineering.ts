@@ -2409,7 +2409,15 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
                         coefficient: ci.coefficient,
                         compositionCode: composition.code,
                         compositionDescription: composition.description,
-                        base: composition.database?.name || item.sourceName || 'PROPRIA',
+                        // FIX-HUB-05: Show original base name, not PROPRIA_<uuid>
+                        base: (() => {
+                            const dbName = composition.database?.name || '';
+                            // If it's a PROPRIA db, use the sourceName from the proposal item (SINAPI, SEINFRA, etc.)
+                            if (dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_')) {
+                                return item.sourceName || 'PRÓPRIA';
+                            }
+                            return dbName || item.sourceName || 'PRÓPRIA';
+                        })(),
                         serviceQuantity: item.quantity,
                     });
                 }
@@ -2845,7 +2853,11 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 
             compositionsFound++;
             const serviceQty = Number(clientItem.quantity) || 1;
-            const baseName = composition.database?.name || clientItem.sourceName || 'PROPRIA';
+            // FIX-HUB-05: Show original base name, not PROPRIA_<uuid>
+            const rawDbName = composition.database?.name || '';
+            const baseName = (rawDbName === 'PROPRIA' || rawDbName.startsWith('PROPRIA_'))
+                ? (clientItem.sourceName || 'PRÓPRIA')
+                : (rawDbName || clientItem.sourceName || 'PRÓPRIA');
 
             // Check if main composition has reference divisor
             const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
