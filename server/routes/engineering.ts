@@ -2285,13 +2285,20 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
             const composition = compositionMap.get(item.code.toUpperCase());
             if (!composition) continue;
 
+            const compDbName = composition.database?.name || '';
+            const isCompPropriaDb = compDbName === 'PROPRIA' || compDbName.startsWith('PROPRIA_');
+
             for (const ci of composition.items) {
                 if (ci.item) {
+                    let unitPrice = ci.item.price;
+                    if (isCompPropriaDb && ci.price !== undefined && ci.coefficient > 0) {
+                        unitPrice = ci.price / ci.coefficient;
+                    }
                     rawInsumos.push({
                         insumoCode: ci.item.code,
                         insumoDescription: ci.item.description,
                         insumoUnit: ci.item.unit,
-                        insumoPrice: ci.item.price,
+                        insumoPrice: unitPrice,
                         insumoType: ci.item.type,
                         coefficient: ci.coefficient,
                         compositionCode: composition.code,
@@ -2527,10 +2534,11 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const effectiveServiceQty = serviceQty / divisor;
 
             // FIX-04: Helper to add an insumo to the consolidated map
-            const addInsumo = (insumoCode: string, insumo: any, coef: number, parentCompCode: string) => {
+            const addInsumo = (insumoCode: string, insumo: any, coef: number, parentCompCode: string, overridePrice?: number) => {
                 const insumoKey = insumoCode.toUpperCase();
                 const existing = consolidated.get(insumoKey);
                 const weightedCoef = coef * effectiveServiceQty;
+                const priceToUse = overridePrice !== undefined ? overridePrice : insumo.price;
 
                 if (existing) {
                     existing.coeficienteTotal += weightedCoef;
@@ -2542,8 +2550,8 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                     if (!existing.composicoesVinculadas.includes(parentCompCode)) {
                         existing.composicoesVinculadas.push(parentCompCode);
                     }
-                    if (Math.abs(existing.precoOriginal - insumo.price) > 0.01) {
-                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${insumo.code}: R$${existing.precoOriginal} vs R$${insumo.price} — usando preço da primeira ocorrência`);
+                    if (Math.abs(existing.precoOriginal - priceToUse) > 0.01) {
+                        console.warn(`[Insumo Hub] ⚠️ Preço divergente para ${insumo.code}: R$${existing.precoOriginal} vs R$${priceToUse} — usando preço da primeira ocorrência`);
                     }
                 } else {
                     consolidated.set(insumoKey, {
@@ -2553,7 +2561,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
                         categoria: normalizeInsumoType(insumo.type),
                         tipoDetalhado: insumo.type,
                         unidade: insumo.unit,
-                        precoOriginal: insumo.price,
+                        precoOriginal: priceToUse,
                         base: baseName,
                         composicoesVinculadas: [parentCompCode],
                         coeficientesPorComposicao: [{
@@ -2567,10 +2575,16 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             };
 
             // Drill into each insumo of the composition
+            const isPropriaDb = baseName === 'PROPRIA' || baseName.startsWith('PROPRIA_');
+
             for (const ci of composition.items) {
                 if (ci.item) {
                     // Direct insumo (material, MO, equipment)
-                    addInsumo(ci.item.code, ci.item, ci.coefficient, composition.code);
+                    let unitPrice = ci.item.price;
+                    if (isPropriaDb && ci.price !== undefined && ci.coefficient > 0) {
+                        unitPrice = ci.price / ci.coefficient;
+                    }
+                    addInsumo(ci.item.code, ci.item, ci.coefficient, composition.code, unitPrice);
                 } else if (ci.auxiliaryCompositionId) {
                     // FIX-04: Resolve auxiliary composition recursively
                     const visitedAux = new Set<string>();
@@ -2580,9 +2594,12 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 
                         const auxComp = await prisma.engineeringComposition.findUnique({
                             where: { id: auxId },
-                            include: { items: { include: { item: true } } },
+                            include: { items: { include: { item: true } }, database: true },
                         });
                         if (!auxComp) return;
+
+                        const auxDbName = auxComp.database?.name || '';
+                        const isAuxPropriaDb = auxDbName === 'PROPRIA' || auxDbName.startsWith('PROPRIA_');
 
                         // Check if auxiliary composition itself has a reference divisor
                         const auxMeta = auxComp.metadata ? (typeof auxComp.metadata === 'string' ? JSON.parse(auxComp.metadata) : auxComp.metadata) as any : {};
@@ -2591,7 +2608,11 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
 
                         for (const auxCi of auxComp.items) {
                             if (auxCi.item) {
-                                addInsumo(auxCi.item.code, auxCi.item, auxCi.coefficient * effectiveParentCoef, parentCompCode);
+                                let unitPrice = auxCi.item.price;
+                                if (isAuxPropriaDb && auxCi.price !== undefined && auxCi.coefficient > 0) {
+                                    unitPrice = auxCi.price / auxCi.coefficient;
+                                }
+                                addInsumo(auxCi.item.code, auxCi.item, auxCi.coefficient * effectiveParentCoef, parentCompCode, unitPrice);
                             } else if (auxCi.auxiliaryCompositionId) {
                                 await resolveAuxiliary(auxCi.auxiliaryCompositionId, auxCi.coefficient * effectiveParentCoef, parentCompCode);
                             }
