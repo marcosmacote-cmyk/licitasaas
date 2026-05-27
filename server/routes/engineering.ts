@@ -2804,6 +2804,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             composicoesVinculadas: string[];
             coeficientesPorComposicao: { compCode: string; coef: number; qty: number }[];
             coeficienteTotal: number;
+            custoTotal: number;
         }>();
 
         let compositionsFound = 0;
