@@ -225,7 +225,8 @@ export async function extractCompositionFromImage(
     mimeType: string,
     expectedCode?: string,
     engineeringConfig?: any,
-    tenantId?: string
+    tenantId?: string,
+    proposalId?: string
 ) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -294,6 +295,44 @@ export async function extractCompositionFromImage(
     // ─────────────────────────────────────────────────
     const normalizedItems = normalizeExtractedCodes(validItems);
     logger.info(`[AI Extract Composition] Post-normalization: ${normalizedItems.length} items`);
+
+    // ─────────────────────────────────────────────────
+    // STEP 2.7: COEFFICIENT SANITY HEURISTIC
+    // ─────────────────────────────────────────────────
+    let expectedParentPrice = 0;
+    if (proposalId && expectedCode) {
+        try {
+            const propItem = await prisma.engineeringProposalItem.findFirst({
+                where: { proposalId, code: expectedCode }
+            });
+            if (propItem) {
+                expectedParentPrice = Number(propItem.unitCost) || 0;
+                logger.info(`[AI Extract] Resolved expected parent unit cost: R$ ${expectedParentPrice} for expectedCode=${expectedCode}`);
+            }
+        } catch (e: any) {
+            logger.warn(`[AI Extract] Failed to query expected parent price: ${e.message}`);
+        }
+    }
+
+    if (expectedParentPrice > 0) {
+        for (const item of normalizedItems) {
+            const coef = Number(item.coefficient) || 0;
+            const price = Number(item.price) || 0;
+            
+            if (coef >= 10 && price > 0) {
+                const itemCost = coef * price;
+                if (itemCost > expectedParentPrice * 5) {
+                    if ((coef / 1000) * price <= expectedParentPrice * 1.5) {
+                        logger.warn(`[AI Extract] ⚠️ Sanity Check: corrected coefficient of "${item.description}" from ${coef} to ${coef / 1000} (divided by 1000) based on parent expected price R$ ${expectedParentPrice}`);
+                        item.coefficient = coef / 1000;
+                    } else if ((coef / 100) * price <= expectedParentPrice * 1.5) {
+                        logger.warn(`[AI Extract] ⚠️ Sanity Check: corrected coefficient of "${item.description}" from ${coef} to ${coef / 100} (divided by 100) based on parent expected price R$ ${expectedParentPrice}`);
+                        item.coefficient = coef / 100;
+                    }
+                }
+            }
+        }
+    }
 
     // ─────────────────────────────────────────────────
     // STEP 3: BATCH MATCHING (priceEnricher pattern)

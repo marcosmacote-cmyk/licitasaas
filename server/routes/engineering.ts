@@ -53,6 +53,61 @@ function refreshSubmittedPriceAudit(item: any) {
     };
 }
 
+async function getOrCreateEngineeringItemWithCollisionCheck(
+    txOrPrisma: any,
+    {
+        databaseId,
+        code,
+        description,
+        unit,
+        price,
+        type,
+    }: {
+        databaseId: string;
+        code: string;
+        description: string;
+        unit: string;
+        price: number;
+        type: string;
+    }
+): Promise<{ id: string; code: string }> {
+    const cleanCode = String(code || 'PROPRIO').trim();
+    let currentCode = cleanCode;
+    let suffixCount = 0;
+
+    while (true) {
+        const existing = await txOrPrisma.engineeringItem.findFirst({
+            where: { databaseId, code: currentCode }
+        });
+
+        if (!existing) {
+            const created = await txOrPrisma.engineeringItem.create({
+                data: {
+                    databaseId,
+                    code: currentCode,
+                    description: description || 'Novo Insumo Próprio',
+                    unit: unit || 'UN',
+                    price: price || 0,
+                    type: type || 'MATERIAL',
+                }
+            });
+            logger.info(`[CollisionCheck] 🆕 Created item: code=${currentCode} id=${created.id} (original=${cleanCode})`);
+            return { id: created.id, code: currentCode };
+        }
+
+        const priceDiff = Math.abs(existing.price - price);
+        const unitMatch = String(existing.unit).trim().toUpperCase() === String(unit || 'UN').trim().toUpperCase();
+
+        if (priceDiff <= 0.01 && unitMatch) {
+            return { id: existing.id, code: currentCode };
+        }
+
+        suffixCount++;
+        currentCode = `${cleanCode}-C${suffixCount}`;
+    }
+}
+
+
 /**
  * Baixa os PDFs do edital diretamente do PNCP e prepara para envio inline ao Gemini.
  * Prioriza: Projeto Básico > Planilha Orçamentária > Edital > outros anexos
@@ -1678,36 +1733,17 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             itemCode = `OBS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
                         }
                         
-                        let existingItem = localPropriaItems.get(itemCode);
-
-                        if (!existingItem) {
-                            existingItem = await tx.engineeringItem.create({
-                                data: {
-                                    databaseId: txBasePropriaId,
-                                    code: itemCode,
-                                    description: item.item?.description || 'Novo Insumo Próprio (IA)',
-                                    unit: item.item?.unit || 'UN',
-                                    type: item.item?.type || 'MATERIAL',
-                                    price: item.item?.price || 0
-                                }
-                            });
-                            localPropriaItems.set(itemCode, existingItem);
-                            logger.info(`[CompositionSave] 🆕 Created own item: code=${itemCode} id=${existingItem.id}`);
-                        } else {
-                            if (item.item?.description && item.item.description !== existingItem.description) {
-                                existingItem = await tx.engineeringItem.update({
-                                    where: { id: existingItem.id },
-                                    data: {
-                                        description: item.item.description,
-                                        unit: item.item.unit || existingItem.unit,
-                                        price: item.item.price !== undefined ? item.item.price : existingItem.price,
-                                    }
-                                });
-                                localPropriaItems.set(itemCode, existingItem);
-                                logger.info(`[CompositionSave] 📝 Updated own item description/unit: code=${itemCode} id=${existingItem.id}`);
-                            }
-                        }
-                        itemId = existingItem.id;
+                        const resolvedItem = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                            databaseId: txBasePropriaId,
+                            code: itemCode,
+                            description: item.item?.description || 'Novo Insumo Próprio (IA)',
+                            unit: item.item?.unit || 'UN',
+                            price: item.item?.price || 0,
+                            type: item.item?.type || 'MATERIAL'
+                        });
+                        itemId = resolvedItem.id;
+                        itemCode = resolvedItem.code;
+                        if (item.item) item.item.code = itemCode;
                     }
 
                     // Dynamically create AI-extracted auxiliary compositions
@@ -1757,6 +1793,29 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         continue;
                     }
 
+                    // Sanity check/correction of coefficients (e.g. legacy data with 1000 coefficient math contradiction)
+                    let coef = Number(item.coefficient) || 0;
+                    let price = Number(item.price) || 0;
+                    
+                    if (coef >= 10 && price > 0) {
+                        const unitPrice = isAux ? (item.auxiliaryComposition?.totalPrice || 0) : (item.item?.price || 0);
+                        if (unitPrice > 0) {
+                            const expectedLinePrice = coef * unitPrice;
+                            const priceRatio = expectedLinePrice / price;
+                            if (priceRatio >= 99 && priceRatio <= 1001) {
+                                const possibleFactors = [100, 1000];
+                                for (const factor of possibleFactors) {
+                                    if (Math.abs(priceRatio - factor) < 2) {
+                                        logger.warn(`[CompositionSave] ⚠️ Corrected coefficient scaling anomaly: code=${item.item?.code || item.code} coef=${coef} changed to ${coef / factor} because price=${price} matches unitPrice=${unitPrice}`);
+                                        coef = coef / factor;
+                                        item.coefficient = coef;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Update description of existing proprietary items if they have changed and are not temp
                     if (!isAux && itemId && !isTempId(itemId)) {
                         const dbItem = nonTempItemsMap.get(itemId);
@@ -1766,34 +1825,80 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             const hasUnitChanged = item.item?.unit && item.item.unit !== dbItem.unit;
 
                             if (hasDescriptionChanged || hasPriceChanged || hasUnitChanged) {
-                                const updatedItem = await tx.engineeringItem.update({
-                                    where: { id: itemId },
-                                    data: {
+                                if (hasPriceChanged || hasUnitChanged) {
+                                    // Price or unit changed, check for collision to avoid leaking changes globally
+                                    const resolvedItem = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                                        databaseId: txBasePropriaId,
+                                        code: dbItem.code,
                                         description: item.item.description || dbItem.description,
                                         unit: item.item.unit || dbItem.unit,
-                                        price: item.item.price !== undefined ? item.item.price : dbItem.price
-                                    }
-                                });
-                                nonTempItemsMap.set(itemId, { ...dbItem, ...updatedItem });
-                                logger.info(`[CompositionSave] 📝 Updated own item (description/price/unit): code=${dbItem.code} id=${itemId}`);
+                                        price: item.item.price !== undefined ? item.item.price : dbItem.price,
+                                        type: dbItem.type
+                                    });
+                                    itemId = resolvedItem.id;
+                                    logger.info(`[CompositionSave] 🔄 Price/unit changed for existing proprietary item ${dbItem.code}. Resolved to ID=${itemId} (code=${resolvedItem.code}) to avoid leakage.`);
+                                } else {
+                                    const updatedItem = await tx.engineeringItem.update({
+                                        where: { id: itemId },
+                                        data: {
+                                            description: item.item.description || dbItem.description
+                                        }
+                                    });
+                                    nonTempItemsMap.set(itemId, { ...dbItem, ...updatedItem });
+                                    logger.info(`[CompositionSave] 📝 Updated own item description: code=${dbItem.code} id=${itemId}`);
+                                }
                             }
                         }
                     }
 
+                    // Isolating/cloning auxiliary proprietary compositions to proposal database
                     if (isAux && auxId && !isTempId(auxId)) {
-                        const dbAux = nonTempAuxsMap.get(auxId);
-                        if (dbAux && (dbAux.database?.type === 'PROPRIA' || dbAux.database?.name?.startsWith('PROPRIA'))) {
-                            if (item.auxiliaryComposition?.description && item.auxiliaryComposition.description !== dbAux.description) {
-                                const updatedAux = await tx.engineeringComposition.update({
-                                    where: { id: auxId },
+                        const referencedAux = await tx.engineeringComposition.findUnique({
+                            where: { id: auxId },
+                            include: { database: true }
+                        });
+                        
+                        if (referencedAux && referencedAux.databaseId !== txBasePropriaId) {
+                            logger.info(`[CompositionSave] 🐑 Auxiliary composition ID=${auxId} (code=${referencedAux.code}) belongs to database ID=${referencedAux.databaseId}. Cloning to target proposal DB.`);
+                            
+                            let clonedAux = await tx.engineeringComposition.findFirst({
+                                where: { databaseId: txBasePropriaId, code: referencedAux.code }
+                            });
+                            
+                            if (!clonedAux) {
+                                clonedAux = await tx.engineeringComposition.create({
                                     data: {
-                                        description: item.auxiliaryComposition.description,
-                                        unit: item.auxiliaryComposition.unit || dbAux.unit
+                                        databaseId: txBasePropriaId,
+                                        code: referencedAux.code,
+                                        description: referencedAux.description,
+                                        unit: referencedAux.unit,
+                                        totalPrice: referencedAux.totalPrice,
+                                        metadata: referencedAux.metadata || undefined
                                     }
                                 });
-                                nonTempAuxsMap.set(auxId, { ...dbAux, ...updatedAux });
-                                logger.info(`[CompositionSave] 📝 Updated own aux comp description: code=${dbAux.code} id=${auxId}`);
+                                
+                                const siblingItems = await tx.engineeringCompositionItem.findMany({
+                                    where: { compositionId: referencedAux.id }
+                                });
+                                
+                                for (const sib of siblingItems) {
+                                    await tx.engineeringCompositionItem.create({
+                                        data: {
+                                            compositionId: clonedAux.id,
+                                            itemId: sib.itemId,
+                                            auxiliaryCompositionId: sib.auxiliaryCompositionId,
+                                            coefficient: sib.coefficient,
+                                            price: sib.price,
+                                            groupKey: sib.groupKey,
+                                            coefficientExpression: sib.coefficientExpression
+                                        }
+                                    });
+                                }
+                                logger.info(`[CompositionSave] 🐑 Successfully cloned auxiliary composition to new ID=${clonedAux.id}`);
+                            } else {
+                                logger.info(`[CompositionSave] 🐑 Found existing clone ID=${clonedAux.id} in target proposal DB, reusing.`);
                             }
+                            auxId = clonedAux.id;
                         }
                     }
                     
@@ -2413,6 +2518,199 @@ router.get('/proposals/:id/insumos-hub', async (req: any, res: any) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// GET /api/engineering/proposals/:id/health-check
+// Auditoria matemática Hub de Insumos ↔ Planilha de Orçamento
+// ═══════════════════════════════════════════════════════════
+router.get('/proposals/:id/health-check', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
+        // 1. Load all engineering items for this proposal
+        const proposalItems = await prisma.engineeringProposalItem.findMany({
+            where: { proposalId },
+            orderBy: { sortOrder: 'asc' },
+        });
+
+        if (proposalItems.length === 0) {
+            return res.json({ status: 'OK', budgetTotal: 0, insumosTotal: 0, difference: 0, divergences: [] });
+        }
+
+        // 2. Load compositions in batch to avoid N+1 queries
+        const uniqueCodes = Array.from(new Set(proposalItems.map(i => i.code).filter((c): c is string => !!c && c !== 'N/A')));
+
+        const compositions = uniqueCodes.length > 0 ? await prisma.engineeringComposition.findMany({
+            where: { code: { in: uniqueCodes } },
+            include: {
+                items: { include: { item: true } },
+                database: { select: { name: true, uf: true } },
+            }
+        }) : [];
+
+        // Map compositions by upper-case code for fast in-memory lookup
+        const compositionMap = new Map<string, any>();
+        for (const comp of compositions) {
+            compositionMap.set(comp.code.toUpperCase(), comp);
+        }
+
+        let budgetTotal = 0;
+        let insumosTotal = 0;
+        const divergences = [];
+
+        // Track consolidated insumos exactly like insumos-hub does
+        const consolidatedInsumos = new Map<string, { price: number; quantity: number }>();
+
+        for (const item of proposalItems) {
+            if (item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+            
+            const itemQty = Number(item.quantity) || 1;
+            const itemUnitCost = Number(item.unitCost) || 0;
+            budgetTotal += itemQty * itemUnitCost;
+
+            const code = (item.code || '').trim();
+            if (!code || code === 'N/A') {
+                // If there's no composition, the item acts as its own insumo
+                const key = (item.code || `ITEM-${item.sortOrder + 1}`).toUpperCase();
+                const existing = consolidatedInsumos.get(key);
+                if (existing) {
+                    existing.quantity += itemQty;
+                } else {
+                    consolidatedInsumos.set(key, { price: itemUnitCost, quantity: itemQty });
+                }
+                continue;
+            }
+
+            const composition = compositionMap.get(code.toUpperCase());
+            if (!composition) {
+                // No composition in DB, means it has no sub-items. Item acts as insumo.
+                const key = code.toUpperCase();
+                const existing = consolidatedInsumos.get(key);
+                if (existing) {
+                    existing.quantity += itemQty;
+                } else {
+                    consolidatedInsumos.set(key, { price: itemUnitCost, quantity: itemQty });
+                }
+                
+                divergences.push({
+                    itemNumber: item.itemNumber,
+                    code: item.code,
+                    description: item.description,
+                    type: 'MISSING_COMPOSITION',
+                    budgetUnitCost: itemUnitCost,
+                    compositionUnitCost: 0,
+                    difference: itemUnitCost,
+                    totalDifference: itemUnitCost * itemQty,
+                    message: 'Composição analítica não encontrada no banco de dados.'
+                });
+                continue;
+            }
+
+            const compDbName = composition.database?.name || '';
+            const isCompPropriaDb = compDbName === 'PROPRIA' || compDbName.startsWith('PROPRIA_');
+            
+            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const divisor = Number(meta?.referenceDivisor?.value) || 1;
+            const effectiveQty = itemQty / divisor;
+
+            let compositionSimulatedUnitCost = 0;
+
+            for (const ci of composition.items) {
+                if (ci.item) {
+                    let unitPrice = ci.item.price;
+                    if (isCompPropriaDb && ci.price !== undefined && ci.coefficient > 0) {
+                        unitPrice = ci.price / ci.coefficient;
+                    }
+                    
+                    compositionSimulatedUnitCost += (ci.coefficient / divisor) * unitPrice;
+
+                    const insumoKey = ci.item.code.toUpperCase();
+                    const existing = consolidatedInsumos.get(insumoKey);
+                    const weightedQty = ci.coefficient * effectiveQty;
+                    if (existing) {
+                        existing.quantity += weightedQty;
+                    } else {
+                        consolidatedInsumos.set(insumoKey, { price: unitPrice, quantity: weightedQty });
+                    }
+                } else if (ci.auxiliaryCompositionId) {
+                    const resolveAuxiliary = async (auxId: string, parentCoef: number) => {
+                        const auxComp = await prisma.engineeringComposition.findUnique({
+                            where: { id: auxId },
+                            include: { items: { include: { item: true } }, database: true },
+                        });
+                        if (!auxComp) return;
+
+                        const auxDbName = auxComp.database?.name || '';
+                        const isAuxPropriaDb = auxDbName === 'PROPRIA' || auxDbName.startsWith('PROPRIA_');
+
+                        const auxMeta = auxComp.metadata ? (typeof auxComp.metadata === 'string' ? JSON.parse(auxComp.metadata) : auxComp.metadata) as any : {};
+                        const auxDivisor = Number(auxMeta?.referenceDivisor?.value) || 1;
+                        const effectiveParentCoef = parentCoef / auxDivisor;
+
+                        for (const auxCi of auxComp.items) {
+                            if (auxCi.item) {
+                                let unitPrice = auxCi.item.price;
+                                if (isAuxPropriaDb && auxCi.price !== undefined && auxCi.coefficient > 0) {
+                                    unitPrice = auxCi.price / auxCi.coefficient;
+                                }
+                                compositionSimulatedUnitCost += (auxCi.coefficient / divisor) * effectiveParentCoef * unitPrice;
+
+                                const insumoKey = auxCi.item.code.toUpperCase();
+                                const existing = consolidatedInsumos.get(insumoKey);
+                                const weightedQty = auxCi.coefficient * effectiveQty * effectiveParentCoef;
+                                if (existing) {
+                                    existing.quantity += weightedQty;
+                                } else {
+                                    consolidatedInsumos.set(insumoKey, { price: unitPrice, quantity: weightedQty });
+                                }
+                            } else if (auxCi.auxiliaryCompositionId) {
+                                await resolveAuxiliary(auxCi.auxiliaryCompositionId, auxCi.coefficient * effectiveParentCoef);
+                            }
+                        }
+                    };
+                    await resolveAuxiliary(ci.auxiliaryCompositionId, ci.coefficient);
+                }
+            }
+
+            const itemDiff = Math.abs(compositionSimulatedUnitCost - itemUnitCost);
+            if (itemDiff > 0.01) {
+                divergences.push({
+                    itemNumber: item.itemNumber,
+                    code: item.code,
+                    description: item.description,
+                    type: 'PRICE_MISMATCH',
+                    budgetUnitCost: itemUnitCost,
+                    compositionUnitCost: Math.round(compositionSimulatedUnitCost * 10000) / 10000,
+                    difference: Math.round(itemDiff * 10000) / 10000,
+                    totalDifference: Math.round((itemDiff * itemQty) * 100) / 100,
+                    message: `Custo unitário da planilha (R$ ${itemUnitCost.toFixed(2)}) diverge da soma da composição (R$ ${compositionSimulatedUnitCost.toFixed(2)}).`
+                });
+            }
+        }
+
+        // Calculate insumos total from consolidated map
+        for (const [, ins] of consolidatedInsumos) {
+            insumosTotal += ins.price * ins.quantity;
+        }
+
+        const absoluteDiff = Math.abs(insumosTotal - budgetTotal);
+        const status = absoluteDiff <= 1.0 ? 'OK' : 'DIVERGENT';
+
+        res.json({
+            status,
+            budgetTotal: Math.round(budgetTotal * 100) / 100,
+            insumosTotal: Math.round(insumosTotal * 100) / 100,
+            difference: Math.round(absoluteDiff * 100) / 100,
+            divergences
+        });
+
+    } catch (e: any) {
+        console.error('[Health Check] Error:', e);
+        res.status(500).json({ error: 'Erro ao executar auditoria matemática da proposta', details: e.message });
+    }
+});
+
 function normalizeInsumoType(type: string): string {
     const upper = (type || '').toUpperCase().trim();
     switch (upper) {
@@ -2701,28 +2999,26 @@ router.post('/proposals/:proposalId/reclassify-insumo', async (req: any, res: an
                 });
 
                 if (officialItem) {
-                    propriaItem = await tx.engineeringItem.create({
-                        data: {
-                            databaseId: basePropria.id,
-                            code: insumoCode,
-                            description: officialItem.description,
-                            unit: officialItem.unit,
-                            type: newType,
-                            price: officialItem.price
-                        }
+                    const resolved = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                        databaseId: basePropria.id,
+                        code: insumoCode,
+                        description: officialItem.description,
+                        unit: officialItem.unit,
+                        price: officialItem.price,
+                        type: newType,
                     });
+                    propriaItem = await tx.engineeringItem.findUnique({ where: { id: resolved.id } });
                     logger.info(`[Reclassify] Cloned official item ${insumoCode} to own item with type=${newType}`);
                 } else {
-                    propriaItem = await tx.engineeringItem.create({
-                        data: {
-                            databaseId: basePropria.id,
-                            code: insumoCode,
-                            description: 'Insumo Reclassificado',
-                            unit: 'UN',
-                            type: newType,
-                            price: 0
-                        }
+                    const resolved = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                        databaseId: basePropria.id,
+                        code: insumoCode,
+                        description: 'Insumo Reclassificado',
+                        unit: 'UN',
+                        price: 0,
+                        type: newType,
                     });
+                    propriaItem = await tx.engineeringItem.findUnique({ where: { id: resolved.id } });
                 }
             } else {
                 propriaItem = await tx.engineeringItem.update({
@@ -4404,19 +4700,21 @@ router.post('/ai-populate', async (req: any, res: any) => {
                                 : await prisma.engineeringComposition.create({ data: { code: comp.code || comp.item, description: comp.description, unit: comp.unit || 'UN', databaseId: propriaDb.id, totalPrice: compTotal } });
 
                             await prisma.engineeringCompositionItem.deleteMany({ where: { compositionId: compRecord.id } });
-                            for (const ins of (comp.insumos || [])) {
-                                const insCode = `INS-${comp.code || comp.item}-${saved + 1}`;
-                                let insumo = await prisma.engineeringItem.findFirst({ where: { code: insCode, databaseId: propriaDb.id } });
-                                if (!insumo) {
-                                    const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL', 'OBSERVACAO': 'OBSERVACAO' };
-                                    insumo = await prisma.engineeringItem.create({
-                                        data: { code: insCode, description: ins.description || '', unit: ins.unit || 'UN', price: ins.unitPrice || 0, type: typeMap[ins.type] || 'MATERIAL', databaseId: propriaDb.id }
-                                    });
-                                }
-                                await prisma.engineeringCompositionItem.create({
-                                    data: { compositionId: compRecord.id, itemId: insumo.id, coefficient: ins.coefficient || 0, price: ins.type === 'OBSERVACAO' ? 0 : (ins.coefficient || 0) * (ins.unitPrice || 0) }
-                                });
-                            }
+                             for (const ins of (comp.insumos || [])) {
+                                 const insCode = `INS-${comp.code || comp.item}-${saved + 1}`;
+                                 const typeMap: Record<string, string> = { 'MAO_DE_OBRA': 'MAO_DE_OBRA', 'EQUIPAMENTO': 'EQUIPAMENTO', 'MATERIAL': 'MATERIAL', 'OBSERVACAO': 'OBSERVACAO' };
+                                 const resolvedInsumo = await getOrCreateEngineeringItemWithCollisionCheck(prisma, {
+                                     databaseId: propriaDb.id,
+                                     code: insCode,
+                                     description: ins.description || '',
+                                     unit: ins.unit || 'UN',
+                                     price: ins.unitPrice || 0,
+                                     type: typeMap[ins.type] || 'MATERIAL'
+                                 });
+                                 await prisma.engineeringCompositionItem.create({
+                                     data: { compositionId: compRecord.id, itemId: resolvedInsumo.id, coefficient: ins.coefficient || 0, price: ins.type === 'OBSERVACAO' ? 0 : (ins.coefficient || 0) * (ins.unitPrice || 0) }
+                                 });
+                             }
                             saved++;
                         } catch (e: any) {
                             console.warn(`[Engineering AI-Populate] ⚠️ Erro ao salvar comp própria ${comp.code}: ${e.message}`);
@@ -4705,24 +5003,19 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
                 for (const [groupKey, items] of Object.entries(comp.groups || {})) {
                     if (!Array.isArray(items)) continue;
                     for (const item of items) {
-                        // Find or create the insumo (EngineeringItem)
-                        let insumo = await prisma.engineeringItem.findFirst({
-                            where: { code: item.code, databaseId: dbId }
+                        const resolvedInsumo = await getOrCreateEngineeringItemWithCollisionCheck(prisma, {
+                            databaseId: dbId,
+                            code: item.code,
+                            description: item.description,
+                            unit: item.unit || 'UN',
+                            price: item.unitPrice || 0,
+                            type: groupKey,
                         });
-                        if (!insumo) {
-                            insumo = await prisma.engineeringItem.create({
-                                data: {
-                                    code: item.code, description: item.description,
-                                    unit: item.unit || 'UN', price: item.unitPrice || 0,
-                                    type: groupKey, databaseId: dbId,
-                                }
-                            });
-                        }
 
                         const itemPrice = (item.coefficient || 0) * (item.unitPrice || 0);
                         await prisma.engineeringCompositionItem.create({
                             data: {
-                                compositionId: compRecord.id, itemId: insumo.id,
+                                compositionId: compRecord.id, itemId: resolvedInsumo.id,
                                 coefficient: item.coefficient || 0, price: itemPrice,
                             }
                         });
@@ -5799,9 +6092,9 @@ router.post('/ai/extract-composition', aiUpload.single('file'), async (req: any,
             return res.status(400).json({ error: 'Nenhum arquivo enviado' });
         }
 
-        const { code } = req.body;
+        const { code, proposalId } = req.body;
         const engineeringConfig = req.body.engineeringConfig ? JSON.parse(req.body.engineeringConfig) : undefined;
-        const result = await extractCompositionFromImage(req.file.buffer, req.file.mimetype, code, engineeringConfig, req.user?.tenantId);
+        const result = await extractCompositionFromImage(req.file.buffer, req.file.mimetype, code, engineeringConfig, req.user?.tenantId, proposalId);
         
         res.json(result);
     } catch (e: any) {
