@@ -155,7 +155,20 @@ export class CompositionFlattener {
       const flattened = await this.resolveComposition(composition.id, false, composition.database?.name || agg.sourceName);
       if (flattened) {
         flattened.proposalQuantity = agg.quantity;
-        flattened.proposalTotal = agg.quantity * flattened.valorComBdi;
+        
+        let divValue = 1;
+        if (flattened.metadata) {
+          try {
+            const meta = typeof flattened.metadata === 'string' ? JSON.parse(flattened.metadata) : flattened.metadata;
+            if (meta?.referenceDivisor?.value > 0) {
+              divValue = Number(meta.referenceDivisor.value) || 1;
+            }
+          } catch (err) {
+            console.error('[CompositionFlattener] Error parsing metadata for divisor:', err);
+          }
+        }
+        
+        flattened.proposalTotal = agg.quantity * (flattened.valorComBdi / divValue);
         flattened.itemNumbers = agg.itemNumbers;
         principalCompositions.push(flattened);
       }

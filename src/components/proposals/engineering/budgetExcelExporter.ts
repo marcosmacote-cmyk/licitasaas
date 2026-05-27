@@ -808,12 +808,16 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   if (showQty && comp.proposalQuantity) {
     const qRn = ws.rowCount + 1;
     const proposalQty = Number(comp.proposalQuantity) || 0;
+    const divisor = referenceDivisor && referenceDivisor.value > 0 ? referenceDivisor.value : null;
+    const formulaString = divisor
+      ? `ROUND((F${qRn}*H${bdiPriceRn})/${divisor}, 2)`
+      : `ROUND(F${qRn}*H${bdiPriceRn}, 2)`;
     const qRow = ws.addRow([
       'Quantidade de Serviço:', 
       '', '', '', '', 
       proposalQty, 
       'PREÇO TOTAL =>', 
-      { formula: `ROUND(F${qRn}*H${bdiPriceRn}, 2)` }
+      { formula: formulaString }
     ]);
     ws.mergeCells(qRn, 1, qRn, 5);
     qRow.getCell(6).numFmt = '#,##0.00##';
