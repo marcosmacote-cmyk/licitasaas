@@ -2321,6 +2321,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
         // Map: insumoCode → consolidated data
         const consolidated = new Map<string, {
             id: string; codigo: string; descricao: string; categoria: string;
+            tipoDetalhado?: string;
             unidade: string; precoOriginal: number; base: string;
             composicoesVinculadas: string[];
             coeficientesPorComposicao: { compCode: string; coef: number; qty: number }[];
@@ -2621,8 +2622,6 @@ router.post('/proposals/:proposalId/reclassify-insumo', async (req: any, res: an
         console.error('[Reclassify Insumo] Error:', e);
         res.status(500).json({ error: 'Erro ao reclassificar insumo', details: e.message });
     }
-});
-
 });
 
 // POST /api/engineering/proposals/:proposalId/ajuste-inteligente
