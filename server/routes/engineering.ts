@@ -968,7 +968,7 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             }
             if (!targetRegime) targetRegime = 'DESONERADO';
 
-            const officialItemsToEnrich = enrichedItems
+            const officialItemsToEnrich: any[] = enrichedItems
                 .filter((ci: any) => {
                     const code = ci.item?.code || ci.auxiliaryComposition?.code;
                     return code && ci.type !== 'OBSERVACAO' && String(code).length > 0;
@@ -4100,7 +4100,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
         if (oldRegime !== newRegime && Array.isArray(items) && items.length > 0) {
             const officialItems = items.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.sourceName !== 'PROPRIA');
             if (officialItems.length > 0) {
-                const tempItems = officialItems.map((it: any) => ({
+                const tempItems: any[] = officialItems.map((it: any) => ({
                     code: it.code,
                     sourceName: it.sourceName,
                     unitCost: it.unitCost,
