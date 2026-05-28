@@ -1858,12 +1858,31 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const hasRateio = rateio && typeof rateio === 'object' && Number(rateio.prazo) > 0 && Number(rateio.fracao) > 0;
     const rateioFactor = hasRateio ? (Number(rateio.prazo) / Number(rateio.fracao)) : 1;
 
+    // FIX PRICE-SYNC-02: Auto-sincroniza unitCost do orçamento com compositionTotal quando
+    // a diferença é causada apenas por arredondamento (< 0.05%).
+    // Isso evita que o alerta vermelho fique permanentemente visível para centavos.
+    useEffect(() => {
+        if (!data || !currentItem || drillStack.length > 0) return;
+        const ct = sumCompositionGroups(data.groups, engineeringConfig?.precision);
+        if (ct <= 0) return;
+        const budgetCost = asNumber(currentItem.unitCost);
+        if (budgetCost <= 0) return;
+        const delta = Math.abs(budgetCost - ct);
+        const deltaPct = (delta / ct) * 100;
+        // Só auto-sincroniza se a diferença for de arredondamento (< 0.05%)
+        if (delta > 0.005 && deltaPct < 0.05) {
+            triggerUpdateItem({ unitCost: ct });
+        }
+    }, [data?.totalPrice]); // eslint-disable-line react-hooks/exhaustive-deps
+
     if (!currentItem) return null;
 
     const editalUnitCost = asNumber(currentItem.officialUnitCost || currentItem.unitCost);
     const priceDelta = editalUnitCost - compositionTotal;
     const priceDeltaPct = compositionTotal > 0 ? (priceDelta / compositionTotal) * 100 : 0;
-    const hasPriceDivergence = compositionTotal > 0 && Math.abs(priceDelta) > 0.01;
+    // FIX PRICE-SYNC-01: Tolerância percentual para evitar falsos positivos de arredondamento.
+    // Diferenças < 0.05% são inerentes a arredondamento intermediário e não constituem divergência real.
+    const hasPriceDivergence = compositionTotal > 0 && Math.abs(priceDeltaPct) > 0.05;
     const databaseReference = data?.database
         ? [
             data.database.name,

@@ -1148,7 +1148,14 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             ...metadataObj,
             items: enrichedItems,
             groups,
-            totalDirect: enrichedItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0),
+            // FIX PRICE-SYNC-03: Recalcula totalDirect com coefficient × unitPrice ao invés de snapshot ci.price.
+            // Alinha o cálculo do backend com o frontend (getLineSubtotal) para evitar drift de arredondamento.
+            totalDirect: enrichedItems.reduce((s: number, ci: any) => {
+                const itemData = ci.item || ci.auxiliaryComposition;
+                const unitPrice = Number(itemData?.price ?? itemData?.totalPrice ?? 0);
+                const coef = Number(ci.coefficient) || 0;
+                return s + (coef * unitPrice);
+            }, 0),
             hasAnalyticalItems: enrichedItems.length > 0,
             // Cache: the database where analytical items were found (if different from price match)
             ...(analyticalCrossDb ? {
