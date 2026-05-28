@@ -437,8 +437,7 @@ app.get('/api/debug-comp/:code', async (req: any, res: any) => {
                 database: { select: { id: true, name: true, uf: true, version: true, payrollExemption: true } },
                 items: {
                     include: {
-                        item: { select: { code: true, description: true, price: true, type: true, unit: true } },
-                        auxiliaryComposition: { select: { code: true, description: true, totalPrice: true, unit: true } }
+                        item: { select: { code: true, description: true, price: true, type: true, unit: true } }
                     }
                 }
             }
