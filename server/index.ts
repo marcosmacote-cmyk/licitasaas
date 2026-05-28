@@ -439,8 +439,7 @@ app.get('/api/debug-comp/:code', async (req: any, res: any) => {
                     include: {
                         item: { select: { code: true, description: true, price: true, type: true, unit: true } },
                         auxiliaryComposition: { select: { code: true, description: true, totalPrice: true, unit: true } }
-                    },
-                    orderBy: { sortOrder: 'asc' }
+                    }
                 }
             }
         });
