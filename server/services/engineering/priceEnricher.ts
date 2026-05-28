@@ -508,6 +508,21 @@ export async function enrichWithOfficialPrices(
             }
         }
         let best = chooseBestCandidate(candidates, item, engineeringConfig, targetDate);
+        
+        // TEMPORARY DEBUG: trace candidate matching for problematic codes
+        const debugCodes = ['c0527', 'c0537'];
+        if (debugCodes.includes(codeLower) || debugCodes.some(dc => codeLower.includes(dc.slice(1)))) {
+            console.log(`[PriceEnricher-DEBUG] 🔎 code=${item.code} codeLower=${codeLower} candidates=${candidates.length}`);
+            for (const c of candidates.slice(0, 10)) {
+                const db = c.database || {};
+                console.log(`[PriceEnricher-DEBUG]   candidate: code=${c.code} matchedPrice=${c.matchedPrice} db=${db.name}/${db.uf} regime=${db.payrollExemption ? 'DES' : 'ON'} type=${c.matchType} dbId=${db.id?.substring(0, 8)}`);
+            }
+            if (best) {
+                console.log(`[PriceEnricher-DEBUG]   ✅ WINNER: code=${best.candidate.code} matchedPrice=${best.candidate.matchedPrice} score=${best.score} db=${best.candidate.database?.name} warnings=${best.warnings.join(', ')}`);
+            } else {
+                console.log(`[PriceEnricher-DEBUG]   ❌ NO MATCH`);
+            }
+        }
 
         // Strategy 1.5: Fuzzy Code Neighbors + Description Confirmation
         // When AI/OCR gets a digit wrong (e.g., 100862 vs 100861), try neighboring codes
