@@ -1936,6 +1936,66 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         }
                     }
 
+                    // If a user edits an official input inside a PROPRIA composition, the line must
+                    // stop pointing at the immutable official EngineeringItem. Otherwise a reload
+                    // hydrates item.price from the official table and the user's saved price appears
+                    // to vanish after switching proposal versions.
+                    if (!isAux && itemId && !isTempId(itemId)) {
+                        const dbItem = nonTempItemsMap.get(itemId);
+                        const dbNameUpper = String(dbName || '').toUpperCase();
+                        const isManualOwnLine = item._baseManuallySet === true ||
+                            item._noBaseMatch === true ||
+                            dbNameUpper === 'PRÓPRIO' ||
+                            dbNameUpper === 'PROPRIA' ||
+                            dbNameUpper.startsWith('PROPRIA_');
+                        const isDbItemOfficial = dbItem &&
+                            dbItem.database?.type !== 'PROPRIA' &&
+                            !String(dbItem.database?.name || '').startsWith('PROPRIA');
+
+                        if (dbItem && isDbItemOfficial) {
+                            const submittedPrice = Number(item.item?.price ?? dbItem.price) || 0;
+                            const submittedUnit = String(item.item?.unit || dbItem.unit || 'UN').trim();
+                            const submittedDescription = String(item.item?.description || dbItem.description || '').trim();
+                            const submittedType = String(item.item?.type || dbItem.type || 'MATERIAL').trim();
+                            const priceChanged = Math.abs((Number(dbItem.price) || 0) - submittedPrice) > 0.01;
+                            const unitChanged = submittedUnit.toUpperCase() !== String(dbItem.unit || 'UN').trim().toUpperCase();
+                            const descriptionChanged = submittedDescription && submittedDescription !== String(dbItem.description || '').trim();
+                            const typeChanged = submittedType && submittedType !== String(dbItem.type || '').trim();
+
+                            if (isManualOwnLine || priceChanged || unitChanged || descriptionChanged || typeChanged) {
+                                const resolvedItem = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                                    databaseId: txBasePropriaId,
+                                    code: item.item?.code || dbItem.code,
+                                    description: submittedDescription || dbItem.description,
+                                    unit: submittedUnit || dbItem.unit,
+                                    price: submittedPrice,
+                                    type: submittedType || dbItem.type
+                                });
+
+                                const ownItem = await tx.engineeringItem.update({
+                                    where: { id: resolvedItem.id },
+                                    data: {
+                                        description: submittedDescription || dbItem.description,
+                                        unit: submittedUnit || dbItem.unit,
+                                        price: submittedPrice,
+                                        type: submittedType || dbItem.type
+                                    }
+                                });
+                                localPropriaItems.set(ownItem.code, ownItem);
+                                itemId = ownItem.id;
+                                if (item.item) {
+                                    item.item.id = ownItem.id;
+                                    item.item.code = ownItem.code;
+                                    item.item.price = ownItem.price;
+                                    item.item.unit = ownItem.unit;
+                                    item.item.description = ownItem.description;
+                                    item.item.type = ownItem.type;
+                                }
+                                logger.info(`[CompositionSave] 🐑 Preserved edited official item ${dbItem.code} as PROPRIA item ${ownItem.code} id=${ownItem.id}`);
+                            }
+                        }
+                    }
+
                     // Skip observation/etapa items that have no real item or composition data
                     if (!itemId && !auxId && !isAux) {
                         logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId: coef=${item.coefficient}`);
