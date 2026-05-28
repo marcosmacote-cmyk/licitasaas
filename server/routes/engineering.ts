@@ -91,7 +91,7 @@ async function getOrCreateEngineeringItemWithCollisionCheck(
                     description: description || 'Novo Insumo Próprio',
                     unit: unit || 'UN',
                     price: price || 0,
-                    type: type || 'MATERIAL',
+                    type: classifyInsumoType(description || '', unit || 'UN', type).type,
                 }
             });
             logger.info(`[CollisionCheck] 🆕 Created item: code=${currentCode} id=${created.id} (original=${cleanCode})`);
@@ -1288,7 +1288,7 @@ router.post('/propria/create', async (req: any, res: any) => {
                 return res.status(400).json({ error: `Já existe insumo com código "${code}" na base própria` });
             }
             const item = await prisma.engineeringItem.create({
-                data: { code, description, unit: unitValue, price: priceValue, type: 'MATERIAL', databaseId: propriaDb.id }
+                data: { code, description, unit: unitValue, price: priceValue, type: classifyInsumoType(description, unitValue).type, databaseId: propriaDb.id }
             });
             // Update counter
             await prisma.engineeringDatabase.update({
@@ -1983,7 +1983,11 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             description: item.item?.description || 'Novo Insumo Próprio (IA)',
                             unit: item.item?.unit || 'UN',
                             price: item.item?.price || 0,
-                            type: item.item?.type || 'MATERIAL'
+                            type: classifyInsumoType(
+                                item.item?.description || '',
+                                item.item?.unit || 'UN',
+                                item.item?.type
+                            ).type
                         });
                         itemId = resolvedItem.id;
                         itemCode = resolvedItem.code;

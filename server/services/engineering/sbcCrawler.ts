@@ -6,6 +6,7 @@
  * Must navigate via sidebar clicks within the SAME authenticated session.
  */
 import { prisma } from '../../lib/prisma';
+import { classifyInsumoType } from './insumoClassifier';
 
 const SBC_REGIONS: { code: string; name: string; uf: string }[] = [
   { code: 'AJU', name: 'Aracajú', uf: 'SE' },
@@ -244,9 +245,14 @@ async function parseResultsTable(frame: any, itemType: string): Promise<ParsedIt
   });
 
   console.log(`[SBC Crawler] 📊 Table rows found: ${raw.length}`);
-  return raw.map((r: { code: string; desc: string; unit: string; price: string }) => ({
-    code: r.code, description: r.desc, unit: r.unit, price: parseBrPrice(r.price), type: itemType,
-  })).filter((it: ParsedItem) => it.code.length >= 1 && it.description.length > 2);
+  return raw.map((r: { code: string; desc: string; unit: string; price: string }) => {
+    const price = parseBrPrice(r.price);
+    // Classify by description instead of using fixed itemType
+    const classification = classifyInsumoType(r.desc, r.unit, itemType);
+    return {
+      code: r.code, description: r.desc, unit: r.unit, price, type: classification.type,
+    };
+  }).filter((it: ParsedItem) => it.code.length >= 1 && it.description.length > 2);
 }
 
 // ═══════════════════════════════════════════════════════════

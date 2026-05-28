@@ -1,6 +1,7 @@
 import { EngineeringComposition, EngineeringCompositionItem, EngineeringItem } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { resolveDisplayBase, deriveGroupKey } from './baseResolver';
+import { classifyInsumoType } from './insumoClassifier';
 
 export interface FlattenedItem {
   type: string; // 'MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'COMPOSICAO_AUXILIAR'
@@ -251,8 +252,13 @@ export class CompositionFlattener {
           itemTotal = ci.price;
         }
 
+        // Classify type with fallback for items still marked as default MATERIAL
+        const resolvedType = ci.item.type === 'MATERIAL'
+          ? classifyInsumoType(ci.item.description, ci.item.unit, ci.item.type).type
+          : ci.item.type;
+
         flattenedItems.push({
-          type: ci.item.type,
+          type: resolvedType,
           code: ci.item.code,
           sourceName: displayItemSourceName,
           description: ci.item.description,

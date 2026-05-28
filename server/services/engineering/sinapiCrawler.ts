@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { prisma } from '../../lib/prisma';
+import { classifyInsumoType } from './insumoClassifier';
 
 // ═══════════════════════════════════════════════════════════
 // Puppeteer portal navigation + CDP download interception
@@ -255,9 +256,11 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
           if (!parentCode || !code || code === '0') continue;
           
           const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
-          const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
           const description = String(r[descCol] ?? '').trim();
           const unit = String(r[unitCol] ?? '').trim() || 'UN';
+          const groupHint = rawType.includes('COMPOS') ? 'SERVICO' : undefined;
+          const classification = classifyInsumoType(description, unit, groupHint);
+          const type = rawType.includes('COMPOS') ? 'SERVICO' : classification.type;
           
           let qty = 0;
           const rawQty = r[qtyCol];
@@ -331,13 +334,15 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
       const price = localPrice > 0 ? localPrice : attributedPrice;
       if (price <= 0) continue;
 
-      // Determine type
-      let type = isComposition ? 'SERVICO' : 'MATERIAL';
       const group = String(r[groupCol] ?? '').toUpperCase();
-      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) type = 'MAO_DE_OBRA';
-      else if (group.includes('EQUIP')) type = 'EQUIPAMENTO';
-      else if (group.includes('COMPOS') || group.includes('SERV')) type = 'SERVICO';
-      else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
+      let groupType: string | undefined;
+      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) groupType = 'MAO_DE_OBRA';
+      else if (group.includes('EQUIP')) groupType = 'EQUIPAMENTO';
+      else if (group.includes('COMPOS') || group.includes('SERV')) groupType = 'SERVICO';
+      else if (group.includes('MATERIAL') || group.includes('INSUMO')) groupType = 'MATERIAL';
+      // When GRUPO column doesn't provide a clear type, use the classifier
+      const classification = classifyInsumoType(desc, unit, groupType);
+      const type = isComposition ? 'SERVICO' : (groupType || classification.type);
 
       items.push({ code, description: desc, unit, price, type });
       count++;
@@ -732,12 +737,14 @@ export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<stri
       const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
       if (!code || !desc || code.length < 2 || code === '0') continue;
 
-      let type = isComposition ? 'SERVICO' : 'MATERIAL';
       const group = String(r[groupCol] ?? '').toUpperCase();
-      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) type = 'MAO_DE_OBRA';
-      else if (group.includes('EQUIP')) type = 'EQUIPAMENTO';
-      else if (group.includes('COMPOS') || group.includes('SERV')) type = 'SERVICO';
-      else if (group.includes('MATERIAL') || group.includes('INSUMO')) type = 'MATERIAL';
+      let groupType: string | undefined;
+      if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) groupType = 'MAO_DE_OBRA';
+      else if (group.includes('EQUIP')) groupType = 'EQUIPAMENTO';
+      else if (group.includes('COMPOS') || group.includes('SERV')) groupType = 'SERVICO';
+      else if (group.includes('MATERIAL') || group.includes('INSUMO')) groupType = 'MATERIAL';
+      const classification = classifyInsumoType(desc, unit, groupType);
+      const type = isComposition ? 'SERVICO' : (groupType || classification.type);
 
       const attributedPrice = !isComposition && ufColMap[SINAPI_ATTRIBUTED_PRICE_UF] !== undefined
         ? parseSinapiNumber(r[ufColMap[SINAPI_ATTRIBUTED_PRICE_UF]])
@@ -790,9 +797,11 @@ export function parseExcelAllUFs(buffer: Buffer, desonerado?: boolean): Map<stri
       const code = readSinapiCodeCell(workbook, sheetName, i, ccodeCol, r[ccodeCol]);
       if (!parentCode || !code || code === '0') continue;
       const rawType = String(r[typeCol] ?? '').trim().toUpperCase();
-      const type = rawType.includes('COMPOS') ? 'SERVICO' : 'MATERIAL';
       const description = String(r[cdescCol] ?? '').trim();
       const unit = String(r[cunitCol] ?? '').trim() || 'UN';
+      const groupHint = rawType.includes('COMPOS') ? 'SERVICO' : undefined;
+      const classification = classifyInsumoType(description, unit, groupHint);
+      const type = rawType.includes('COMPOS') ? 'SERVICO' : classification.type;
       const qty = parseSinapiNumber(r[qtyCol]);
       if (qty <= 0) continue;
       compItems.push({ parentCode, type, code, description, unit, quantity: qty });

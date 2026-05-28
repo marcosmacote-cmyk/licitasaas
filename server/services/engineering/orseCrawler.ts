@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { prisma } from '../../lib/prisma';
+import { classifyInsumoType } from './insumoClassifier';
 
 const ORSE_BASE_URL = 'https://orse.cehop.se.gov.br';
 const ORSE_SERVICES_URL = `${ORSE_BASE_URL}/servicosargumento.asp`;
@@ -124,31 +125,16 @@ function normalizeOrseCode(code: string): string {
   return match ? match[1] : cleaned.replace(/\/ORSE$/i, '');
 }
 
-function detectInsumoType(description: string): OrseInsumoRow['type'] {
-  const desc = String(description || '').toUpperCase();
-  if (desc.includes('PEDREIRO') || desc.includes('SERVENTE') || desc.includes('CARPINTEIRO') ||
-    desc.includes('ELETRICIST') || desc.includes('BOMBEIRO') || desc.includes('PINTOR') ||
-    desc.includes('ENCANADOR') || desc.includes('SOLDADOR') || desc.includes('ARMADOR') ||
-    desc.includes('OPERADOR') || desc.includes('MOTORISTA') || desc.includes('MÃO-DE-OBRA') ||
-    desc.includes('MAO-DE-OBRA') || desc.includes('MÃO DE OBRA') || desc.includes('MAO DE OBRA') ||
-    desc.includes('AJUDANTE') || desc.includes('ENGENHEIRO') || desc.includes('MESTRE') ||
-    desc.includes('APONTADOR') || desc.includes('VIGIA') || desc.includes('TOPOGRAF') ||
-    desc.includes('ALMOXARIFE')) return 'MAO_DE_OBRA';
-  if (desc.includes('BETONEIRA') || desc.includes('COMPACTADOR') || desc.includes('RETRO') ||
-    desc.includes('ESCAVADEIRA') || desc.includes('CAMINH') || desc.includes('VIBRADOR') ||
-    desc.includes('GUINDASTE') || desc.includes('MÁQUINA') || desc.includes('MAQUINA') ||
-    desc.includes('ROLO ') || desc.includes('TRATOR') || desc.includes('GERADOR') ||
-    desc.includes('EQUIPAMENTO')) return 'EQUIPAMENTO';
-  if (desc.includes('SERVIÇO') || desc.includes('SERVICO') || desc.includes('FORNECIMENTO COM INSTALA')) return 'SERVICO';
-  return 'MATERIAL';
+function detectInsumoType(description: string, unit?: string): OrseInsumoRow['type'] {
+  return classifyInsumoType(description, unit || 'UN').type as OrseInsumoRow['type'];
 }
 
-function detectDetailType(marker: string, description: string): OrseCompositionDetailItem['type'] {
+function detectDetailType(marker: string, description: string, unit?: string): OrseCompositionDetailItem['type'] {
   const key = String(marker || '').trim().toUpperCase();
   if (key === 'P') return 'MAO_DE_OBRA';
   if (key === 'E') return 'EQUIPAMENTO';
   if (key === 'S') return 'SERVICO';
-  return detectInsumoType(description);
+  return classifyInsumoType(description, unit || 'UN').type as OrseCompositionDetailItem['type'];
 }
 
 function parsePeriodValue(value: string, label?: string): OrsePeriod | null {

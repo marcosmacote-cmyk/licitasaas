@@ -784,6 +784,7 @@ model EngineeringComposition {
   description     String   @db.Text
   unit            String   // "M2", "M3", "UN"
   totalPrice      Float    // Calculated total price without BDI
+  category        String   @default("GERAL") // ADMINISTRACAO, FUNDACOES, ESTRUTURA_CONCRETO, INSTALACOES_ELETRICAS, etc.
   
   metadata        Json?    // Custom metadata (stages, custom labels, order, group notes, divisor)
 
@@ -795,6 +796,7 @@ model EngineeringComposition {
 
   @@unique([databaseId, code])
   @@index([code])
+  @@index([category])
 }
 
 model EngineeringCompositionItem {
