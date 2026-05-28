@@ -135,45 +135,6 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-// Debug endpoint to inspect database compositions and items
-app.get('/api/debug-inspect', async (req: any, res: any) => {
-    try {
-        const codes = ['C1937', 'C0527', 'C0537', 'C2784', 'C2921'];
-        const comps = await prisma.engineeringComposition.findMany({
-            where: { code: { in: codes } },
-            include: { database: true }
-        });
-        const items = await prisma.engineeringItem.findMany({
-            where: { code: { in: codes } },
-            include: { database: true }
-        });
-        res.json({
-            compositions: comps.map(c => ({
-                id: c.id,
-                code: c.code,
-                desc: c.description,
-                db: c.database.name,
-                uf: c.database.uf,
-                ver: c.database.version,
-                exemption: c.database.payrollExemption,
-                price: Number(c.totalPrice) || 0
-            })),
-            items: items.map(i => ({
-                id: i.id,
-                code: i.code,
-                desc: i.description,
-                db: i.database.name,
-                uf: i.database.uf,
-                ver: i.database.version,
-                exemption: i.database.payrollExemption,
-                price: Number(i.price) || 0
-            }))
-        });
-    } catch (e: any) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 // Auth
 app.use('/api/auth', authRoutes);
 
