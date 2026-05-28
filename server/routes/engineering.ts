@@ -590,24 +590,81 @@ async function findCompositionWithItems(codeVariants: string[], where: any) {
     return sortCompositionsInMemory(comps)[0];
 }
 
+async function resolveRegimeAlignedDatabaseFilter(
+    databaseId?: string,
+    sourceName?: string,
+    proposalId?: string,
+    tenantId?: string
+): Promise<{ databaseId?: string; sourceName?: string; desiredExemption?: boolean | null }> {
+    let desiredExemption: boolean | null = null;
+    if (proposalId) {
+        const proposal = await prisma.priceProposal.findUnique({
+            where: { id: proposalId },
+            select: { engineeringConfig: true }
+        });
+        const config = (proposal?.engineeringConfig as any) || {};
+        if (config.regimeOneracao) {
+            desiredExemption = config.regimeOneracao === 'DESONERADO';
+        }
+    }
+
+    const normalizedSource = normalizeCompositionSource(sourceName);
+
+    if (!databaseId) {
+        return { sourceName: normalizedSource, desiredExemption };
+    }
+
+    const requestedDatabase = await prisma.engineeringDatabase.findUnique({
+        where: { id: databaseId },
+        select: { id: true, name: true, uf: true, type: true, payrollExemption: true }
+    });
+
+    if (!requestedDatabase) {
+        return { databaseId, sourceName: normalizedSource, desiredExemption };
+    }
+
+    if (desiredExemption !== null && requestedDatabase.payrollExemption !== desiredExemption && requestedDatabase.type === 'OFICIAL') {
+        // Regime mismatch in official database. Find the database with matching regime.
+        const alignedDb = await prisma.engineeringDatabase.findFirst({
+            where: {
+                name: requestedDatabase.name,
+                uf: requestedDatabase.uf || null,
+                type: 'OFICIAL',
+                payrollExemption: desiredExemption
+            },
+            select: { id: true }
+        });
+        if (alignedDb) {
+            logger.info(`[CompositionLookup] 🔀 Aligned database filter from wrong regime DB ${databaseId} (${requestedDatabase.payrollExemption ? 'DES' : 'ON'}) to correct regime DB ${alignedDb.id} (${desiredExemption ? 'DES' : 'ON'})`);
+            return { databaseId: alignedDb.id, desiredExemption };
+        }
+    }
+
+    return { databaseId, sourceName: normalizedSource, desiredExemption };
+}
+
 async function findBestAnalyticalComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string, proposalId?: string) {
-    const requestedDatabase = databaseId
+    const filter = await resolveRegimeAlignedDatabaseFilter(databaseId, sourceName, proposalId, tenantId);
+    const resolvedDbId = filter.databaseId;
+    const resolvedSourceName = filter.sourceName;
+    const desiredExemption = filter.desiredExemption;
+
+    const requestedDatabase = resolvedDbId
         ? await prisma.engineeringDatabase.findUnique({
-            where: { id: databaseId },
+            where: { id: resolvedDbId },
             select: { id: true, name: true, uf: true, type: true, tenantId: true, payrollExemption: true },
         })
         : null;
 
     // FIX SYNC-03: Determine if the caller is requesting a specific official source
-    const normalizedSource = normalizeCompositionSource(sourceName);
-    const isRequestingOfficial = normalizedSource && normalizedSource !== 'PROPRIA';
+    const isRequestingOfficial = resolvedSourceName && resolvedSourceName !== 'PROPRIA';
 
     // FIX SYNC-03: When an official source is explicitly requested, try it FIRST
     // This prevents PROPRIA copies from hijacking lookups for official compositions
     if (isRequestingOfficial) {
         // 1. Try exact databaseId first
-        if (databaseId) {
-            const exact = await findCompositionWithItems(codeVariants, { databaseId });
+        if (resolvedDbId) {
+            const exact = await findCompositionWithItems(codeVariants, { databaseId: resolvedDbId });
             if (exact) {
                 logger.info(`[CompositionLookup] ✅ OFFICIAL exact databaseId match: db=${exact.database?.name} code=${exact.code} items=${exact.items?.length || 0}`);
                 return exact;
@@ -615,12 +672,13 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         }
 
         // 2. Try same source + UF + payroll
-        const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || sourceName);
+        const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || resolvedSourceName);
         if (dbSourceName) {
             const sameSourceAndUfWhere: any = { database: { name: dbSourceName } };
             if (requestedDatabase?.uf) sameSourceAndUfWhere.database.uf = requestedDatabase.uf;
-            if (typeof requestedDatabase?.payrollExemption === 'boolean') {
-                sameSourceAndUfWhere.database.payrollExemption = requestedDatabase.payrollExemption;
+            const finalExemption = desiredExemption !== null ? desiredExemption : requestedDatabase?.payrollExemption;
+            if (typeof finalExemption === 'boolean') {
+                sameSourceAndUfWhere.database.payrollExemption = finalExemption;
             }
             const sameSourceAndUf = await findCompositionWithItems(codeVariants, sameSourceAndUfWhere);
             if (sameSourceAndUf) {
@@ -654,7 +712,11 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         }
 
         // 4. Try any official database
-        return findCompositionWithItems(codeVariants, { database: { type: 'OFICIAL' } });
+        const defaultOfficialWhere: any = { database: { type: 'OFICIAL' } };
+        if (desiredExemption !== null) {
+            defaultOfficialWhere.database.payrollExemption = desiredExemption;
+        }
+        return findCompositionWithItems(codeVariants, defaultOfficialWhere);
     }
 
     // Original behavior when PROPRIA is explicitly requested or no sourceName given
@@ -678,17 +740,18 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         logger.info(`[CompositionLookup] ℹ️ No PROPRIA composition with items found for codes=[${codeVariants.join(',')}] tenantId=${tenantId || 'none'}`);
     }
 
-    if (databaseId) {
-        const exact = await findCompositionWithItems(codeVariants, { databaseId });
+    if (resolvedDbId) {
+        const exact = await findCompositionWithItems(codeVariants, { databaseId: resolvedDbId });
         if (exact) return exact;
     }
 
-    const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || sourceName);
+    const dbSourceName = normalizeCompositionSource(requestedDatabase?.name || resolvedSourceName);
     if (dbSourceName) {
         const sameSourceAndUfWhere: any = { database: { name: dbSourceName } };
         if (requestedDatabase?.uf) sameSourceAndUfWhere.database.uf = requestedDatabase.uf;
-        if (typeof requestedDatabase?.payrollExemption === 'boolean') {
-            sameSourceAndUfWhere.database.payrollExemption = requestedDatabase.payrollExemption;
+        const finalExemption = desiredExemption !== null ? desiredExemption : requestedDatabase?.payrollExemption;
+        if (typeof finalExemption === 'boolean') {
+            sameSourceAndUfWhere.database.payrollExemption = finalExemption;
         }
         const sameSourceAndUf = await findCompositionWithItems(codeVariants, sameSourceAndUfWhere);
         if (sameSourceAndUf) return sameSourceAndUf;
@@ -697,13 +760,21 @@ async function findBestAnalyticalComposition(codeVariants: string[], databaseId?
         if (sameSource) return sameSource;
     }
 
-    return findCompositionWithItems(codeVariants, { database: { type: 'OFICIAL' } });
+    const defaultOfficialWhere: any = { database: { type: 'OFICIAL' } };
+    if (desiredExemption !== null) {
+        defaultOfficialWhere.database.payrollExemption = desiredExemption;
+    }
+    return findCompositionWithItems(codeVariants, defaultOfficialWhere);
 }
 
 async function findFallbackComposition(codeVariants: string[], databaseId?: string, sourceName?: string, tenantId?: string, proposalId?: string) {
     const include = compositionIncludes();
+    const filter = await resolveRegimeAlignedDatabaseFilter(databaseId, sourceName, proposalId, tenantId);
+    const resolvedDbId = filter.databaseId;
+    const resolvedSourceName = filter.sourceName;
+    const desiredExemption = filter.desiredExemption;
 
-    if (!databaseId) {
+    if (!resolvedDbId) {
         const targetPropriaName = getPropriaDatabaseName(proposalId);
         const propriaDatabaseWhere: any = { name: targetPropriaName };
         if (tenantId) propriaDatabaseWhere.tenantId = tenantId;
@@ -728,8 +799,20 @@ async function findFallbackComposition(codeVariants: string[], databaseId?: stri
     }
 
     const where: any = { code: { in: codeVariants } };
-    if (databaseId) where.databaseId = databaseId;
-    else if (sourceName) where.database = { name: sourceName };
+    if (resolvedDbId) {
+        where.databaseId = resolvedDbId;
+    } else if (resolvedSourceName) {
+        where.database = { name: resolvedSourceName };
+        if (desiredExemption !== null) {
+            where.database.payrollExemption = desiredExemption;
+        }
+    } else {
+        const defaultOfficialWhere: any = { database: { type: 'OFICIAL' } };
+        if (desiredExemption !== null) {
+            defaultOfficialWhere.database.payrollExemption = desiredExemption;
+        }
+        where.database = defaultOfficialWhere.database;
+    }
 
     const comps = await prisma.engineeringComposition.findMany({
         where,
@@ -757,7 +840,22 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         const proposalId = req.query.proposalId as string || undefined;
         const codeVariants = buildCompositionCodeVariants(code, sourceName);
 
-        const cacheKey = `comp:${code}:${databaseId || ''}:${sourceName || ''}:${tenantId}:${proposalId || ''}`;
+        // Fetch proposal regime to include in cache key (prevents cross-regime stale cache hits)
+        let targetRegime = 'DESONERADO';
+        if (proposalId) {
+            const proposal = await prisma.priceProposal.findUnique({
+                where: { id: proposalId },
+                select: { engineeringConfig: true }
+            });
+            const config = (proposal?.engineeringConfig as any) || {};
+            if (config.regimeOneracao) {
+                targetRegime = config.regimeOneracao;
+            }
+        } else if (req.query.regime) {
+            targetRegime = req.query.regime as string;
+        }
+
+        const cacheKey = `comp:${code}:${databaseId || ''}:${sourceName || ''}:${tenantId}:${proposalId || ''}:${targetRegime}`;
         const cached = compositionCache.get(cacheKey);
         if (cached) {
             logger.info(`[CompositionLookup] ⚡ Cache HIT: ${cacheKey}`);
@@ -4109,15 +4207,18 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                 await enrichWithOfficialPrices(tempItems, engineeringConfig, { tenantId, proposalId });
 
                 const costMap = new Map<string, number>();
+                const auditMap = new Map<string, any>();
                 for (const enriched of tempItems) {
                     if (enriched.priceAudit?.matchedUnitCost && enriched.priceAudit.matchedUnitCost > 0) {
                         costMap.set(enriched.code, enriched.priceAudit.matchedUnitCost);
+                        auditMap.set(enriched.code, enriched.priceAudit);
                     }
                 }
 
                 activeItems = items.map((it: any) => {
                     if (it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.sourceName !== 'PROPRIA' && costMap.has(it.code)) {
                         const newCost = costMap.get(it.code)!;
+                        const newAudit = auditMap.get(it.code);
                         const bdiGlobal = Number(bdiConfig?.bdiGlobal) || Number(oldProposal?.bdiPercentage) || 0;
                         const bdiDiferenciado = !!engineeringConfig?.bdiDiferenciado;
                         const bdiFornecimento = Number(engineeringConfig?.bdiFornecimento) || 0;
@@ -4144,6 +4245,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                             unitPrice,
                             totalPrice,
                             priceOrigin: 'BASE',
+                            priceAudit: newAudit || it.priceAudit,
                         };
                     }
                     return it;
