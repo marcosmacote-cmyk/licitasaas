@@ -8,6 +8,7 @@
  */
 import type { InsumoConsolidado, InsumoCategoria, InsumoHubStats, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
+import { displaySourceName } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number) => v.toFixed(2).replace('.', ',');
@@ -58,7 +59,7 @@ export function exportHubExcel(
         `"${ins.descricao.replace(/"/g, '""')}"`,
         CATEGORIA_META[ins.categoria]?.label || ins.categoria,
         ins.unidade,
-        ins.base,
+        displaySourceName(ins.base) || '—',
         fmtNum(ins.precoOriginal),
         fmtNum(ins.desconto),
         fmtNum(ins.precoFinal),
@@ -161,7 +162,7 @@ export function exportCompositionExcel(
                 groupLabel,
                 String(idx + 1),
                 itemData?.code || '—',
-                banco || '—',
+                displaySourceName(banco) || '—',
                 `"${(itemData?.description || '—').replace(/"/g, '""')}"`,
                 itemData?.unit || '—',
                 ci.coefficientExpression ? `"${ci.coefficientExpression.replace(/\*/g, '×')} = ${fmtCoef(ci.coefficient)}"` : fmtCoef(ci.coefficient),
@@ -295,7 +296,7 @@ ${engineeringConfig ? `
   <td class="${abcCls}">${ins.abcClass || '—'}</td>
   <td class="mono">${ins.codigo}</td>
   <td>${ins.descricao}</td>
-  <td style="font-size:8px;font-weight:600">${ins.base || '—'}</td>
+  <td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td>
   <td>${catLabel}</td>
   <td>${ins.unidade}</td>
   <td class="right">${fmt(ins.precoOriginal)}</td>
@@ -361,7 +362,7 @@ export function exportCompositionPdf(
 <h1>CPU — Composição de Preços Unitários</h1>
 <div class="meta">
   Código: <strong>${code}</strong>
-  ${data.database ? ` · Base: ${data.database.name} ${data.database.uf || ''}` : ''}
+  ${data.database ? ` · Base: ${displaySourceName(data.database.name)} ${data.database.uf || ''}` : ''}
 </div>
 ${engineeringConfig ? `
 <table style="margin-bottom: 12px; border: 1px solid #e2e8f0;">
@@ -401,7 +402,7 @@ ${engineeringConfig ? `
             html += `<tr>
   <td>${idx + 1}</td>
   <td class="mono">${itemData?.code || '—'}</td>
-  <td>${banco || '—'}</td>
+  <td>${displaySourceName(banco) || '—'}</td>
   <td>${itemData?.description || '—'}</td>
   <td>${itemData?.unit || '—'}</td>
   <td class="right mono">${ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${ci.coefficient.toFixed(4)}` : ci.coefficient.toFixed(4)}</td>

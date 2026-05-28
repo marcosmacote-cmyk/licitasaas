@@ -2104,10 +2104,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             </>
                         )}
                         {data && !isGrouperType(currentItem.type) && hasChanges && (
-                            <button onClick={saveToBase} disabled={isSavingToBase} title={data.database?.name === 'PROPRIA' ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
+                            <button onClick={saveToBase} disabled={isSavingToBase} title={isPropria(data.database?.name) ? "Atualizar a base de dados com as modificações desta composição" : "Salvar alterações como uma nova Composição Própria"}
                                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--color-primary)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600 }}>
                                 {isSavingToBase ? <Loader2 size={13} className="spin" /> : <Save size={13} />} 
-                                {data.database?.name === 'PROPRIA' ? 'Salvar na Base' : 'Salvar como Própria'}
+                                {isPropria(data.database?.name) ? 'Salvar na Base' : 'Salvar como Própria'}
                             </button>
                         )}
                         {data && !isGrouperType(currentItem.type) && (
@@ -2182,7 +2182,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         <div style={{ flex: 1 }}></div>
 
                         {/* Clear composition — available for all PROPRIA compositions */}
-                        {(data?.database?.name === 'PROPRIA' || data?.database?.type === 'PROPRIA') && (
+                        {(isPropria(data?.database?.name) || data?.database?.type === 'PROPRIA') && (
                             <button onClick={handleClearComposition}
                                 title="Limpar todos os itens e grupos customizados desta composição"
                                 style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid var(--color-danger)', background: 'transparent', color: 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600, opacity: 0.7 }}>
@@ -3178,7 +3178,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                             <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
                                                                     <>
                                                                         {/* Convert Insumo → Composição (only for unmatched items or items in base PRÓPRIA) */}
-                                                                        {ci.item && !itemData?.isObservation && (ci._noBaseMatch || data?.database?.name?.toUpperCase() === 'PROPRIA') && (
+                                                                        {ci.item && !itemData?.isObservation && (ci._noBaseMatch || isPropria(data?.database?.name)) && (
                                                                             <button
                                                                                 onClick={() => {
                                                                                     if (!data) return;
@@ -3202,10 +3202,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                             totalPrice: itemInfo.price || 0,
                                                                                             // FIX SYNC-02: Only mark as truly "new" for PROPRIA items
                                                                                             // Official items are copies, not new creations
-                                                                                            isNew: data?.database?.name?.toUpperCase() === 'PROPRIA' || !data?.database?.name,
+                                                                                            isNew: isPropria(data?.database?.name) || !data?.database?.name,
                                                                                             _isCasca: true,
                                                                                             // FIX SYNC-02: Preserve original database reference for traceability
-                                                                                            _officialSourceRef: data?.database?.name && data.database.name !== 'PROPRIA' ? {
+                                                                                            _officialSourceRef: data?.database?.name && !isPropria(data.database.name) ? {
                                                                                                 databaseId: data.databaseId || data.database?.id,
                                                                                                 databaseName: data.database.name,
                                                                                                 originalItemCode: itemInfo.code,

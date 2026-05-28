@@ -430,7 +430,7 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
         const pct = total > 0 ? (ins.custoTotal / total * 100) : 0;
         const pctAccum = total > 0 ? (accum / total * 100) : 0;
         const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
-        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${ins.base || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Insumos', `
 <h1>CURVA ABC DE INSUMOS</h1>
@@ -1216,7 +1216,7 @@ ${renderConfigTable(engineeringConfig)}
             const pct = insTotal > 0 ? (ins.custoTotal / insTotal * 100) : 0;
             const pctAccum = insTotal > 0 ? (accum / insTotal * 100) : 0;
             const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
-            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${ins.base || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(insTotal)}</div>
