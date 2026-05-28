@@ -4210,6 +4210,8 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     code: it.code,
                     sourceName: it.sourceName,
                     unitCost: it.unitCost,
+                    type: it.type,
+                    description: it.description,
                 }));
 
                 await enrichWithOfficialPrices(tempItems, engineeringConfig, { tenantId, proposalId });
