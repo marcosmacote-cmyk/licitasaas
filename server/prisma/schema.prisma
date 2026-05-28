@@ -714,6 +714,8 @@ model EngineeringProposalItem {
   notes           String?  // Observações/notas do usuário por item
   discount        Float?   // Desconto individual (%) aplicado ao preço unitário
   calculationMemory String? @db.Text
+  editalUnitCost    Float?   // CASCA-FIX: Preço original do edital (referência comparativa, nunca usado em cálculos)
+  compositionTotalPrice Float? // CASCA-FIX: Preço formado (totalPrice da composição na base PRÓPRIA)
   sortOrder       Int      @default(0)
   
   proposal        PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)

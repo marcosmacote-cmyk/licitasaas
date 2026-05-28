@@ -1804,6 +1804,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                 unitCost,
                                 unitPrice,
                                 totalPrice,
+                                // CASCA-FIX: Mark that this price was formed from composition items
+                                compositionTotalPrice: rawTotal,
                                 priceAudit: updatedPriceAudit as any
                             }
                         });
@@ -4356,6 +4358,9 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     notes: item.notes || null,
                     discount: item.discount != null ? Number(item.discount) || null : null,
                     calculationMemory: item.calculationMemory || null,
+                    // CASCA-FIX: Persist reference and formed prices
+                    editalUnitCost: item.editalUnitCost != null ? Number(item.editalUnitCost) || null : null,
+                    compositionTotalPrice: item.compositionTotalPrice != null ? Number(item.compositionTotalPrice) || null : null,
                     sortOrder: index,
                 }))
             });

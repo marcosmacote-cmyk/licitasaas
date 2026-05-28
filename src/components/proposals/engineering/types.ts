@@ -90,10 +90,35 @@ export interface EngItem {
     multiplicationFactor?: number;
     /** Memória de cálculo serializada em JSON */
     calculationMemory?: string;
+    /** CASCA-FIX: Preço original extraído do edital. Apenas referência comparativa — NUNCA
+     *  usado em cálculos. Para composições PRÓPRIAS sem insumos, o unitCost real será 0. */
+    editalUnitCost?: number;
+    /** CASCA-FIX: Preço formado (totalPrice da composição na base PRÓPRIA).
+     *  Quando presente, o recalcAllItems usa este valor como unitCost para PRÓPRIAS. */
+    compositionTotalPrice?: number;
 }
 
 export const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';
 export const getDepth = (itemNumber: string) => (itemNumber.match(/\./g) || []).length;
+
+/**
+ * CASCA-FIX: Detecta se uma composição é CASCA (shell sem detalhamento analítico).
+ * 
+ * Uma composição PRÓPRIA é CASCA quando não tem insumos que sustentem seu preço.
+ * Diferente da detecção anterior (unitCost === 0), esta função NÃO depende do preço
+ * — uma composição com preço do edital mas sem insumos continua sendo CASCA.
+ * 
+ * Composições oficiais (SINAPI/SEINFRA/etc) NÃO são CASCA mesmo sem insumos locais,
+ * pois seus preços são sustentados pela base oficial.
+ */
+export function isCompositionShell(it: EngItem): boolean {
+    if (it.type !== 'COMPOSICAO') return false;
+    // Oficial com preço da base → não é casca
+    if (!isPropria(it.sourceName)) return false;
+    // PRÓPRIA sem compositionTotalPrice formado → é casca
+    if (!it.compositionTotalPrice || it.compositionTotalPrice <= 0) return true;
+    return false;
+}
 
 /**
  * Normalizes source name for display in UI and reports.

@@ -469,13 +469,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 }
             }
 
+            // CASCA-FIX: Automatically propagate compositionTotalPrice when unitCost is being updated
+            // from the composition data. This ensures all cascade points (addFromSearch, inline edits,
+            // delete, factor, etc.) inform the spreadsheet this is a formed price.
+            const compositionTotalPrice = (updates as any).compositionTotalPrice !== undefined
+                ? (updates as any).compositionTotalPrice
+                : (isRoot && !isGrouper && costToUse !== undefined && data?.totalPrice !== undefined
+                    ? data.totalPrice
+                    : undefined);
+
             onUpdateItem(currentItem.id, {
                 ...updates,
                 ...(descToUse !== undefined ? { description: descToUse } : {}),
-                ...(costToUse !== undefined ? { unitCost: costToUse } : {})
-            });
+                ...(costToUse !== undefined ? { unitCost: costToUse } : {}),
+                ...(compositionTotalPrice !== undefined ? { compositionTotalPrice } : {}),
+            } as any);
         }
-    }, [onUpdateItem, currentItem, drillStack.length, data?.description, refDivisorValue, engineeringConfig]);
+    }, [onUpdateItem, currentItem, drillStack.length, data?.description, data?.totalPrice, refDivisorValue, engineeringConfig]);
 
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
@@ -1506,12 +1516,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 : data.totalPrice;
 
             // Sync this composition's details (code, description, unit, cost, sourceName) to any matching spreadsheet items
+            // CASCA-FIX: Include compositionTotalPrice so the spreadsheet knows this is a formed price
             if (onUpdateItem && canonicalCode) {
                 (onUpdateItem as any)('__syncComposition__', {
                     code: canonicalCode,
                     description: data.description || currentItem.description,
                     unit: data.unit || currentItem.unit,
                     unitCost: finalCost,
+                    compositionTotalPrice: data.totalPrice, // preço formado pelos insumos
                     sourceName: `PROPRIA`
                 });
             }
@@ -1521,6 +1533,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 triggerUpdateItem({
                     code: canonicalCode,
                     unitCost: data.totalPrice,
+                    compositionTotalPrice: data.totalPrice,
                     sourceName: `PROPRIA`,
                     priceAudit: {
                         ...currentItem.priceAudit,
@@ -1536,7 +1549,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     const rootCost = rootDiv > 0 
                         ? applyPrecision(rootSnapshot.totalPrice / rootDiv, { precision: engineeringConfig?.precision }) 
                         : rootSnapshot.totalPrice;
-                    onUpdateItem(currentItem.id, { unitCost: rootCost });
+                    onUpdateItem(currentItem.id, { unitCost: rootCost, compositionTotalPrice: rootSnapshot.totalPrice } as any);
                 }
             }
             

@@ -15,7 +15,7 @@
 import { applyBdi, resolveEffectiveBdi, type BdiConfig } from './bdiEngine';
 import { applyPrecision } from './precisionEngine';
 import type { EngItem, EngineeringConfig, PriceAudit } from './types';
-import { isGrouper } from './types';
+import { isGrouper, isPropria, isCompositionShell } from './types';
 
 // ═══════════════════════════════════════════════
 // CORE — Funções primárias
@@ -83,10 +83,28 @@ export function recalcAllItems(
             audited = { ...it, priceAudit: options.refreshPriceAudit(it) };
         }
 
-        const unitPrice = calculateEngineeringUnitPrice(audited, effectiveBdi, config);
+        // CASCA-FIX: Para composições PRÓPRIAS, o unitCost é determinado por compositionTotalPrice.
+        // Se compositionTotalPrice existe → usa como unitCost (preço formado pelos insumos).
+        // Se compositionTotalPrice = 0 ou undefined → CASCA, unitCost = 0.
+        // Oficiais (SINAPI/SEINFRA/etc) mantêm unitCost do item (preço da base oficial).
+        let effectiveUnitCost = Number(audited.unitCost) || 0;
+        if (audited.type === 'COMPOSICAO' && isPropria(audited.sourceName)) {
+            if (audited.compositionTotalPrice !== undefined && audited.compositionTotalPrice !== null) {
+                effectiveUnitCost = Number(audited.compositionTotalPrice) || 0;
+            }
+            // Se não tem compositionTotalPrice, mantém o unitCost atual
+            // (pode ter sido setado via cascade do CompositionEditor)
+        }
+
+        const itemForCalc = effectiveUnitCost !== (Number(audited.unitCost) || 0)
+            ? { ...audited, unitCost: effectiveUnitCost }
+            : audited;
+
+        const unitPrice = calculateEngineeringUnitPrice(itemForCalc, effectiveBdi, config);
 
         return {
             ...audited,
+            unitCost: effectiveUnitCost,
             unitPrice,
             totalPrice: applyPrecision((Number(audited.quantity) || 0) * unitPrice, config),
         };

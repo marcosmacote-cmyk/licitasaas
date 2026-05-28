@@ -17,7 +17,7 @@ import { applyPrecision } from './precisionEngine';
 import { calcularCronograma } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
-import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG, displaySourceName, isPropria } from './types';
+import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG, displaySourceName, isPropria, isCompositionShell } from './types';
 import * as XLSX from 'xlsx';
 import { ImageBudgetImportModal } from './ImageBudgetImportModal';
 
@@ -2160,7 +2160,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     </button>
                     <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                         {(() => {
-                            const shellCount = items.filter(it => it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0) && it.unitCost === 0).length;
+                            const shellCount = items.filter(it => isCompositionShell(it)).length;
                             return shellCount > 0 ? (
                                 <span style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -2466,7 +2466,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
                                 // ── COMPOSICAO / INSUMO ROW (data row) ──
                                 const hasInsumos = it.type === 'COMPOSICAO' && it.insumos && it.insumos.length > 0;
-                                const isShell = it.type === 'COMPOSICAO' && (!it.insumos || it.insumos.length === 0) && it.unitCost === 0;
+                                const isShell = isCompositionShell(it);
                                 const isExpanded = expandedItems.has(it.id);
                                 const rows = [];
 
@@ -2622,15 +2622,29 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             </div>
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            {it.unitCost === 0 ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: isShell ? '#d97706' : 'var(--color-danger)' }}>
-                                                    <span title={isShell ? "CASCA: Esta composição precisa de detalhamento analítico. Clique no ícone de composição (🔷) ao lado do código para abrir o editor e inserir insumos, mão de obra e equipamentos." : "Item sem preço unitário."} style={{ display: 'flex', cursor: isShell ? 'pointer' : 'default' }} onClick={isShell ? () => setCompositionEditorIndex(items.indexOf(it)) : undefined}>
-                                                        {isShell ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
+                                            {isShell ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: '#d97706' }}>
+                                                    <span title={`CASCA: Esta composição precisa de detalhamento analítico.${it.editalUnitCost ? ` Referência edital: R$ ${it.editalUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''} Clique para abrir o editor.`} style={{ display: 'flex', cursor: 'pointer' }} onClick={() => setCompositionEditorIndex(items.indexOf(it))}>
+                                                        <AlertTriangle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: isShell ? '#d97706' : 'var(--color-danger)', fontWeight: 700, border: `1px solid ${isShell ? 'rgba(245,158,11,0.4)' : 'var(--color-danger)'}` }} step="0.01" />
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: '#d97706', fontWeight: 700, border: '1px solid rgba(245,158,11,0.4)' }} step="0.01" />
+                                                </div>
+                                            ) : it.unitCost === 0 ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
+                                                    <span title="Item sem preço unitário." style={{ display: 'flex' }}>
+                                                        <AlertCircle size={14} />
+                                                    </span>
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
-                                                <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01" />
+                                                <div style={{ position: 'relative' }}>
+                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01"
+                                                        title={it.editalUnitCost && it.editalUnitCost !== it.unitCost ? `Referência edital: R$ ${it.editalUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Δ ${((it.unitCost - it.editalUnitCost) / it.editalUnitCost * 100).toFixed(1)}%` : undefined}
+                                                    />
+                                                    {it.editalUnitCost && it.editalUnitCost !== it.unitCost && isPropria(it.sourceName) && (
+                                                        <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: '50%', background: Math.abs(it.unitCost - it.editalUnitCost) / it.editalUnitCost > 0.1 ? '#f59e0b' : '#10b981' }} title={`Δ ${((it.unitCost - it.editalUnitCost) / it.editalUnitCost * 100).toFixed(1)}% vs edital`} />
+                                                    )}
+                                                </div>
                                             )}
                                             {/* FIX F5.6: Discount input */}
                                             {(it.discount && it.discount > 0) || hoveredRowId === it.id ? (
@@ -3234,14 +3248,19 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea
                         if (itemId === '__syncComposition__') {
-                            const { code, description, unit, unitCost, sourceName } = updates as any;
+                            const { code, description, unit, unitCost, sourceName, compositionTotalPrice } = updates as any;
                             setItems(prev => prev.map(it => {
                                 if (it.code !== code) return it;
                                 const updated = { ...it };
                                 if (description !== undefined) updated.description = description;
                                 if (unit !== undefined) updated.unit = unit;
+                                // CASCA-FIX: Propagar compositionTotalPrice junto com unitCost
+                                if (compositionTotalPrice !== undefined) {
+                                    updated.compositionTotalPrice = compositionTotalPrice;
+                                }
                                 if (unitCost !== undefined) {
                                     updated.unitCost = unitCost;
+                                    // Se estamos recebendo compositionTotalPrice, o unitCost já é o preço formado
                                     const itemBdi = resolveItemBdi(updated);
                                     updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
                                     updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
@@ -3271,6 +3290,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         // When an official composition is saved as PROPRIA, update the planilha badge
                         if ((updates as any).sourceName !== undefined) {
                             updateItem(itemId, 'sourceName', (updates as any).sourceName);
+                        }
+                        // CASCA-FIX: Propagate compositionTotalPrice from CompositionEditor cascade
+                        if ((updates as any).compositionTotalPrice !== undefined) {
+                            setItems(prev => prev.map(it => 
+                                it.id === itemId ? { ...it, compositionTotalPrice: (updates as any).compositionTotalPrice } : it
+                            ));
                         }
                         if (updates.multiplicationFactor !== undefined) {
                             const factor = Number(updates.multiplicationFactor) || 1;

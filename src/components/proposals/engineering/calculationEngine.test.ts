@@ -182,3 +182,114 @@ describe('ensureClientIds', () => {
         expect(result[1].clientId).not.toBe('keep-this');
     });
 });
+
+// ═══════════════════════════════════════════════
+// CASCA-FIX: compositionTotalPrice + isCompositionShell
+// ═══════════════════════════════════════════════
+import { isCompositionShell } from './types';
+
+describe('CASCA-FIX: recalcAllItems com compositionTotalPrice', () => {
+    it('PROPRIA com compositionTotalPrice usa preço formado como unitCost', () => {
+        const item = makeItem({
+            sourceName: 'PROPRIA',
+            unitCost: 1156.52, // preço do edital (fantasma)
+            editalUnitCost: 1156.52,
+            compositionTotalPrice: 360.62, // preço formado real
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        // unitCost deve ser 360.62 (formado), não 1156.52 (edital)
+        expect(result[0].unitCost).toBe(360.62);
+        // unitPrice = 360.62 * 1.25 = 450.78 (arredondado)
+        expect(result[0].unitPrice).toBeCloseTo(450.78, 2);
+    });
+
+    it('PROPRIA sem compositionTotalPrice mantém unitCost existente', () => {
+        // Composição que já teve cascade do CompositionEditor (unitCost setado diretamente)
+        const item = makeItem({
+            sourceName: 'PROPRIA',
+            unitCost: 500,
+            // compositionTotalPrice: undefined (não set)
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        expect(result[0].unitCost).toBe(500);
+    });
+
+    it('PROPRIA com compositionTotalPrice=0 → unitCost=0 (CASCA real)', () => {
+        const item = makeItem({
+            sourceName: 'PROPRIA',
+            unitCost: 1000, // preço fantasma
+            editalUnitCost: 1000,
+            compositionTotalPrice: 0, // sem insumos
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        expect(result[0].unitCost).toBe(0);
+        expect(result[0].unitPrice).toBe(0);
+        expect(result[0].totalPrice).toBe(0);
+    });
+
+    it('oficial (SINAPI) NÃO é afetada pelo compositionTotalPrice', () => {
+        const item = makeItem({
+            sourceName: 'SINAPI',
+            unitCost: 500,
+            compositionTotalPrice: 100, // não deve ser usado
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        expect(result[0].unitCost).toBe(500); // mantém preço oficial
+        expect(result[0].unitPrice).toBe(625);
+    });
+
+    it('PROPRIA_UUID funciona igual a PROPRIA', () => {
+        const item = makeItem({
+            sourceName: 'PROPRIA_32ad9473-a618-4f6d',
+            unitCost: 800,
+            compositionTotalPrice: 200,
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        expect(result[0].unitCost).toBe(200);
+    });
+
+    it('preserva editalUnitCost intacto durante recalc', () => {
+        const item = makeItem({
+            sourceName: 'PROPRIA',
+            unitCost: 1156.52,
+            editalUnitCost: 1156.52,
+            compositionTotalPrice: 360.62,
+        });
+        const result = recalcAllItems([item], 25, baseConfig);
+        expect(result[0].editalUnitCost).toBe(1156.52); // referência preservada
+        expect(result[0].unitCost).toBe(360.62); // preço formado
+    });
+});
+
+describe('isCompositionShell', () => {
+    it('PROPRIA sem compositionTotalPrice → é CASCA', () => {
+        const item = makeItem({ sourceName: 'PROPRIA', compositionTotalPrice: undefined });
+        expect(isCompositionShell(item)).toBe(true);
+    });
+
+    it('PROPRIA com compositionTotalPrice=0 → é CASCA', () => {
+        const item = makeItem({ sourceName: 'PROPRIA', compositionTotalPrice: 0 });
+        expect(isCompositionShell(item)).toBe(true);
+    });
+
+    it('PROPRIA com compositionTotalPrice>0 → NÃO é CASCA', () => {
+        const item = makeItem({ sourceName: 'PROPRIA', compositionTotalPrice: 360.62 });
+        expect(isCompositionShell(item)).toBe(false);
+    });
+
+    it('SINAPI sem compositionTotalPrice → NÃO é CASCA (oficial)', () => {
+        const item = makeItem({ sourceName: 'SINAPI' });
+        expect(isCompositionShell(item)).toBe(false);
+    });
+
+    it('ETAPA → NÃO é CASCA', () => {
+        const item = makeItem({ type: 'ETAPA', sourceName: 'PROPRIA' });
+        expect(isCompositionShell(item)).toBe(false);
+    });
+
+    it('INSUMO PROPRIA → NÃO é CASCA', () => {
+        const item = makeItem({ type: 'INSUMO', sourceName: 'PROPRIA' });
+        expect(isCompositionShell(item)).toBe(false);
+    });
+});
+
