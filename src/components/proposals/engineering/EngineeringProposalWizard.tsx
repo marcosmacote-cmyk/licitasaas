@@ -12,13 +12,14 @@ import { StepperBar } from './StepperBar';
 import { Step1ConfigPanel } from './steps/Step1ConfigPanel';
 import { Step2BudgetEditor } from './steps/Step2BudgetEditor';
 import { Step4ProposalLetter } from './steps/Step4ProposalLetter';
-import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, autoDistributeBdi, resolveEffectiveBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { calculateBdiTCU, DEFAULT_BDI_CONFIG, autoDistributeBdi, resolveEffectiveBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { buildInsumosItemsHash, recalculateEngineeringItems } from './calculationEngine';
 import { applyPrecision } from './precisionEngine';
 import { CronogramaPanel } from './CronogramaPanel';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
-import type { EngItem, EngItemType, EngineeringConfig } from './types';
+import type { EngItem, EngineeringConfig } from './types';
 import { isGrouper, DEFAULT_ENGINEERING_CONFIG } from './types';
 import type { BiddingProcess, CompanyProfile, PriceProposal } from '../../../types';
 
@@ -92,13 +93,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // RECALC
     // ══════════════════════════════════════════
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
-        return its.map(it => {
-            if (isGrouper(it.type)) return it;
-            const itemBdi = config.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO'
-                ? (config.bdiFornecimento || 14.02) : _bdi;
-            const up = applyBdi(it.unitCost, itemBdi, config.precision);
-            return { ...it, unitPrice: up, totalPrice: applyPrecision(it.quantity * up, config) };
-        });
+        return recalculateEngineeringItems(its, _bdi, config);
     }, []);
 
     useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
@@ -325,11 +320,16 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     }, [cronogramaData]);
 
     // FIX F1.3: Fetch insumos consolidados when items change (for BudgetDocsPanel)
-    const insumosLoadedRef = useRef(false);
+    const insumosItemsHashRef = useRef('');
     useEffect(() => {
-        // Only load once per proposal when items are available
-        if (items.length === 0 || insumosLoadedRef.current) return;
-        insumosLoadedRef.current = true;
+        const itemsHash = buildInsumosItemsHash(items);
+        if (items.length === 0 || !itemsHash) {
+            insumosItemsHashRef.current = '';
+            setConsolidatedInsumos([]);
+            return;
+        }
+        if (itemsHash === insumosItemsHashRef.current) return;
+        insumosItemsHashRef.current = itemsHash;
 
         const loadInsumos = async () => {
             try {

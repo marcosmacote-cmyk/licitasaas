@@ -13,6 +13,7 @@ import type { PropostaSectionId, DocMode } from './budgetDocGenerator';
 import { xlsOrcamentoResumido, xlsOrcamentoSintetico, xlsOrcamentoAnalitico, xlsCpuBatch, xlsCurvaAbcServicos, xlsCurvaAbcInsumos, xlsCronograma, xlsBdiEncargos, xlsMemoriaCalculo } from './budgetExcelExporter';
 import { ReportConfigPanel } from './ReportConfigPanel';
 import type { BdiConfig } from './bdiEngine';
+import { buildInsumosItemsHash } from './calculationEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig } from './types';
@@ -91,13 +92,16 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
 
     const [localInsumos, setLocalInsumos] = useState<InsumoConsolidado[]>(insumos || []);
     const [localCronogramaResult, setLocalCronogramaResult] = useState<CronogramaResult | null>(cronogramaResult);
+    const insumosLoadedHashRef = useRef('');
+    const itemsHash = useMemo(() => buildInsumosItemsHash(items), [items]);
 
     // Sync with props when props have valid data
     useEffect(() => {
         if (insumos && insumos.length > 0) {
             setLocalInsumos(insumos);
+            insumosLoadedHashRef.current = itemsHash;
         }
-    }, [insumos]);
+    }, [insumos]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (cronogramaResult) {
@@ -106,10 +110,15 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
     }, [cronogramaResult]);
 
     // Fallback resolution for insumos if empty but we have items
-    const insumosLoadedRef = useRef(false);
     useEffect(() => {
-        if (localInsumos.length === 0 && items && items.length > 0 && !insumosLoadedRef.current) {
-            insumosLoadedRef.current = true;
+        if (!itemsHash) {
+            insumosLoadedHashRef.current = '';
+            setLocalInsumos([]);
+            return;
+        }
+        if (insumosLoadedHashRef.current === itemsHash) return;
+
+        if (items && items.length > 0) {
             const loadInsumos = async () => {
                 try {
                     const payload = items
@@ -125,14 +134,17 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     const data = await res.json();
                     if (data.insumos && data.insumos.length > 0) {
                         setLocalInsumos(data.insumos);
+                    } else {
+                        setLocalInsumos([]);
                     }
+                    insumosLoadedHashRef.current = itemsHash;
                 } catch (e) {
                     console.error('[BudgetDocsPanel] Local insumo fallback consolidation failed:', e);
                 }
             };
             loadInsumos();
         }
-    }, [localInsumos.length, items]);
+    }, [itemsHash, items]);
 
     // Fallback resolution for cronograma if null but we have engineeringConfig
     useEffect(() => {

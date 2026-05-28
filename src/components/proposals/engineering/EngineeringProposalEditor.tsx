@@ -13,6 +13,7 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { applyPrecision } from './precisionEngine';
+import { buildInsumosItemsHash, recalculateEngineeringItems, resolveEffectiveEngineeringBdi, resolveItemBdi as resolveEngineeringItemBdi } from './calculationEngine';
 import { calcularCronograma } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
@@ -618,10 +619,16 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         return calcularCronograma(cronogramaData.etapas, cronogramaData.meses);
     }, [cronogramaData]);
 
-    const insumosLoadedRef = useRef(false);
+    const insumosItemsHashRef = useRef('');
     useEffect(() => {
-        if (items.length === 0 || insumosLoadedRef.current) return;
-        insumosLoadedRef.current = true;
+        const itemsHash = buildInsumosItemsHash(items);
+        if (items.length === 0 || !itemsHash) {
+            insumosItemsHashRef.current = '';
+            setConsolidatedInsumos([]);
+            return;
+        }
+        if (itemsHash === insumosItemsHashRef.current) return;
+        insumosItemsHashRef.current = itemsHash;
 
         const loadInsumos = async () => {
             try {
@@ -646,14 +653,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         loadInsumos();
     }, [items]);
 
-    const effectiveBdi = bdiConfig.bdiGlobal;
+    const effectiveBdi = resolveEffectiveEngineeringBdi(dashBdi, dashConfig);
     
     /** Resolve o BDI efetivo para um item (suporte a BDI diferenciado OBRA vs FORNECIMENTO) */
     const resolveItemBdi = useCallback((it: EngItem) => {
-        if (!engineeringConfig.bdiDiferenciado) return effectiveBdi;
-        if (it.bdiCategoria === 'FORNECIMENTO') return engineeringConfig.bdiFornecimento || 14.02;
-        return effectiveBdi; // Default = OBRA
-    }, [effectiveBdi, engineeringConfig.bdiDiferenciado, engineeringConfig.bdiFornecimento]);
+        return resolveEngineeringItemBdi(it, effectiveBdi, dashConfig);
+    }, [effectiveBdi, dashConfig]);
 
     // FIX BUG-01: Filtra agrupadores (ETAPA/SUBETAPA) do cálculo de totais
     const billableItems = items.filter(it => !isGrouper(it.type));
@@ -661,26 +666,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const total = billableItems.reduce((s, it) => s + it.totalPrice, 0);
 
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
-        return its.map(it => {
-            if (isGrouper(it.type)) return it;
-            const audited = { ...it, priceAudit: refreshPriceAudit(it) };
-            // FIX BDI-01: Sempre recalcula unitPrice = unitCost × (1+BDI/100).
-            // O officialUnitPrice/officialTotalPrice são mantidos como campos de auditoria
-            // para comparação, mas NUNCA congelam o preço do licitante.
-            const itemBdi = config.bdiDiferenciado && audited.bdiCategoria === 'FORNECIMENTO'
-                ? (config.bdiFornecimento || 14.02)
-                : _bdi;
-            let up = applyBdi(audited.unitCost, itemBdi, config.precision);
-            // FIX F5.6: Apply per-item discount after BDI
-            if (audited.discount && audited.discount > 0) {
-                up = applyPrecision(up * (1 - audited.discount / 100), config);
-            }
-            return { ...audited, unitPrice: up, totalPrice: applyPrecision(audited.quantity * up, config) };
-        });
+        return recalculateEngineeringItems(its, _bdi, config, { refreshPriceAudit });
     }, []);
 
     // System recalc on BDI/config change — silent (no undo tracking)
-    useEffect(() => { setItemsSilent(recalcAll(items, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { setItemsSilent(recalcAll(items, effectiveBdi, dashConfig)); }, [effectiveBdi, dashConfig, recalcAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync items back to Wizard for Cronograma, Carta Proposta, etc.
     useEffect(() => {

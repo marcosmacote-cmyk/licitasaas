@@ -232,14 +232,21 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
     const handleSaveLetter = useCallback(async (contentOverride?: string) => {
         setIsSaving(true);
         try {
-            await fetch(`/api/proposals/${proposalId}`, {
+            const res = await fetch(`/api/proposals/${proposalId}`, {
                 method: 'PUT', headers: hdrs(),
                 body: JSON.stringify({ letterContent: contentOverride || letterContent }),
             });
+            if (!res.ok) {
+                const errorBody = await res.json().catch(() => ({}));
+                throw new Error(errorBody.error || errorBody.message || 'Erro ao salvar carta proposta');
+            }
             if (contentOverride) setLetterContent(contentOverride);
             // FIX STEP4-CHECK: Notify parent that letter was saved
             onLetterSaved?.();
-        } catch { /* best effort */ }
+        } catch (e: any) {
+            console.error('[Step4ProposalLetter] Save failed:', e);
+            window.alert(e?.message || 'Erro ao salvar carta proposta');
+        }
         finally { setIsSaving(false); }
     }, [proposalId, letterContent, onLetterSaved]);
 
