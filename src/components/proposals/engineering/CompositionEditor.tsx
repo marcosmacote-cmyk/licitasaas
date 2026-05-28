@@ -225,12 +225,21 @@ const normalizeCompositionMath = (raw: any, precision?: any) => {
 
     for (const groupKey of Object.keys(groups)) {
         groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
-            if (isPropria && ci.price !== undefined && ci.coefficient > 0) {
-                const dbUnitPrice = ci.price / ci.coefficient;
-                if (ci.item) {
-                    ci.item = { ...ci.item, price: dbUnitPrice };
-                } else if (ci.auxiliaryComposition) {
-                    ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
+            // FIX PRICE-ROUND: Only use division fallback when item has no own price.
+            // The backend already provides ci.item.price (from Prisma include or enrichment).
+            // Dividing ci.price/ci.coefficient introduces rounding errors because ci.price
+            // is a rounded subtotal snapshot.
+            if (isPropria && ci.coefficient > 0) {
+                const itemData = ci.item || ci.auxiliaryComposition;
+                const ownPrice = itemData?.price ?? itemData?.totalPrice;
+                if ((ownPrice === undefined || ownPrice === null || ownPrice === 0) && ci.price > 0) {
+                    // Fallback: no unit price available, recover from subtotal
+                    const dbUnitPrice = ci.price / ci.coefficient;
+                    if (ci.item) {
+                        ci.item = { ...ci.item, price: dbUnitPrice };
+                    } else if (ci.auxiliaryComposition) {
+                        ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
+                    }
                 }
             }
             if (ci.item && (ci.item.type === 'OBSERVACAO' || ci.item.code?.startsWith('OBS'))) {
