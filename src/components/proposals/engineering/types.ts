@@ -91,6 +91,34 @@ export interface EngItem {
 export const isGrouper = (type: EngItemType) => type === 'ETAPA' || type === 'SUBETAPA';
 export const getDepth = (itemNumber: string) => (itemNumber.match(/\./g) || []).length;
 
+/**
+ * Normalizes source name for display in UI and reports.
+ * - "PROPRIA" → "PRÓPRIA"
+ * - "PROPRIA_32ad9473-a618-..." → "PRÓPRIA"
+ * - "SEINFRA", "SINAPI", etc → unchanged
+ * - "PRÓPRIO" → "PRÓPRIA" (consistency)
+ * 
+ * NOTE: Only for DISPLAY purposes. Internal logic must keep original values.
+ */
+export function displaySourceName(name?: string | null): string {
+    if (!name) return '';
+    const upper = name.trim().toUpperCase();
+    if (upper === 'PROPRIA' || upper.startsWith('PROPRIA_') || upper === 'PRÓPRIA' || upper === 'PRÓPRIO') {
+        return 'PRÓPRIA';
+    }
+    return name.trim();
+}
+
+/**
+ * Checks if a source name represents a "PROPRIA" (own) database.
+ * Works with both "PROPRIA" and "PROPRIA_UUID" variants.
+ */
+export function isPropria(name?: string | null): boolean {
+    if (!name) return false;
+    const upper = name.trim().toUpperCase();
+    return upper === 'PROPRIA' || upper.startsWith('PROPRIA_') || upper === 'PRÓPRIA' || upper === 'PRÓPRIO';
+}
+
 // ═══════════════════════════════════════════════════════════
 // ENGINEERING CONFIG — Tipagem forte para engineeringConfig
 // ═══════════════════════════════════════════════════════════

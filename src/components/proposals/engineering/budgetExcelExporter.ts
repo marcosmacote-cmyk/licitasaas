@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { EngineeringConfig, ColorPalette } from './types';
-import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
+import { isGrouper, DEFAULT_COLOR_PALETTE, displaySourceName } from './types';
 import type { BdiConfig } from './bdiEngine';
 import { applyPrecision as applyPrecisionNum } from './precisionEngine';
 
@@ -482,7 +482,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       const uc  = Number(it.unitCost) || 0;
       const up  = Number(it.unitPrice) || 0;
       const tp  = Number(it.totalPrice) || 0;
-      const vals: any[] = [it.itemNumber || '', it.code || '', it.sourceName || '—', it.description || '', it.unit || '', qty];
+      const vals: any[] = [it.itemNumber || '', it.code || '', displaySourceName(it.sourceName) || '—', it.description || '', it.unit || '', qty];
       if (showCU) vals.push(uc);
       if (showPU) vals.push(up);
       let totalVal: any = tp;
@@ -572,7 +572,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
-  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', '', `Banco: ${comp.sourceName || ''}`, `Unidade: ${comp.unit || ''}`]);
+  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', '', `Banco: ${displaySourceName(comp.sourceName) || ''}`, `Unidade: ${comp.unit || ''}`]);
   ws.mergeCells(rn, 1, rn, 6);
   hdr.height = 18;
   for (let i = 1; i <= 8; i++) {
@@ -688,7 +688,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
         totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
       }
 
-      const r = dataRow(ws, [tipo, ci.code || '', ci.sourceName || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
+      const r = dataRow(ws, [tipo, ci.code || '', displaySourceName(ci.sourceName) || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
       if (!ci.coefficientExpression || engConfig?.reportConfig?.exportExcelWithFormulas) {
         r.getCell(6).numFmt = '#,##0.0000';
       }
@@ -1126,7 +1126,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
       }
     }
 
-    const vals: any[] = [idx + 1, item.code || '', item.sourceName || '', item.description || '', item.unit || '', qty];
+    const vals: any[] = [idx + 1, item.code || '', displaySourceName(item.sourceName) || '', item.description || '', item.unit || '', qty];
     if (showCU) vals.push(uc);
     if (showPU) vals.push(up);
     vals.push(totalVal, pctVal, acumVal);

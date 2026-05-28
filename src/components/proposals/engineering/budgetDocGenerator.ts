@@ -12,7 +12,7 @@ import type { InsumoConsolidado } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig, EncargosSociaisConfig, ColorPalette } from './types';
-import { isGrouper, DEFAULT_COLOR_PALETTE } from './types';
+import { isGrouper, DEFAULT_COLOR_PALETTE, displaySourceName } from './types';
 import { applyPrecision } from './precisionEngine';
 
 let activePrecisionCasas = 2;
@@ -379,7 +379,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 <table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
         const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
         for (const it of ch.items) {
-            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
         }
         html += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }
@@ -405,7 +405,7 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, m
         const pctAccum = total > 0 ? (accum / total * 100) : 0;
         const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
         const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
@@ -732,7 +732,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
             ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
             <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
-            <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${comp.sourceName} · Unidade: ${comp.unit}</span>
+            <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${comp.unit}</span>
         </div>`;
 
     for (const groupKey of orderedKeys) {
@@ -763,7 +763,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
             ch += `<tr>
                 <td>${tipo}</td>
                 <td class="mono">${ci.code || ''}</td>
-                ${showBanco ? `<td>${ci.sourceName || ''}</td>` : ''}
+                ${showBanco ? `<td>${displaySourceName(ci.sourceName) || ''}</td>` : ''}
                 <td>${ci.description || '—'}</td>
                 <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
                 ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${displayCoef.toFixed(7)}` : displayCoef.toFixed(7))}</td>` : ''}
@@ -1025,7 +1025,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
 <table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
             const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
             for (const it of ch.items) {
-                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
             }
             h += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
         }
@@ -1195,7 +1195,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             const pctAccum = svTotal > 0 ? (accum / svTotal * 100) : 0;
             const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
             const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${it.sourceName || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${validItems.length} serviços · Total: ${fmt(svTotal)}</div>

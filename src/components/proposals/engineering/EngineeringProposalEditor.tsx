@@ -16,7 +16,7 @@ import { applyPrecision } from './precisionEngine';
 import { calcularCronograma } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
-import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG } from './types';
+import { isGrouper, getDepth, DEFAULT_ENGINEERING_CONFIG, displaySourceName, isPropria } from './types';
 import * as XLSX from 'xlsx';
 import { ImageBudgetImportModal } from './ImageBudgetImportModal';
 
@@ -1377,7 +1377,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const data = await res.json();
             // FIX #1: Update sourceName from enrichment results
             const auditedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
-                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || it.sourceName === 'PROPRIA')) {
+                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
                     return { ...it, sourceName: it.priceAudit.matchedSourceName };
                 }
                 return it;
@@ -1425,7 +1425,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     updated.priceOrigin = 'BASE' as const;
                 }
                 // FIX #1: Update sourceName from enrichment
-                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || it.sourceName === 'PROPRIA')) {
+                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
                     updated.sourceName = it.priceAudit.matchedSourceName;
                 }
                 return updated;
@@ -2520,7 +2520,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            {it.sourceName && <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{it.sourceName}</span>}
+                                            {it.sourceName && <span style={{ background: isPropria(it.sourceName) ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: isPropria(it.sourceName) ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{displaySourceName(it.sourceName)}</span>}
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

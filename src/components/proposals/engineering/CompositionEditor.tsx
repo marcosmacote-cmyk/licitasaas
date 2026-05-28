@@ -13,6 +13,7 @@ import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
 import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
+import { displaySourceName, isPropria } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -385,7 +386,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         const dbType = itemData.database?.type;
         const dbName = itemData.database?.name || ci?._matchedDatabase;
         if (dbType === 'PROPRIA') return true;
-        if (dbName === 'PROPRIA' || (dbName && dbName.startsWith('PROPRIA_'))) return true;
+        if (isPropria(dbName)) return true;
         return false;
     }, []);
 
@@ -1964,8 +1965,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         {(() => {
                             const isRoot = drillStack.length === 0;
                             const currentCompDesc = drillStack.length > 0 ? drillStack[drillStack.length - 1].description : (data?.description || currentItem.description);
-                            const isPropria = data?.database?.type === 'PROPRIA' || data?.database?.name === 'PROPRIA' || data?.database?.name?.startsWith('PROPRIA_');
-                            const canRenameHeader = isRoot || isPropria;
+                            const isPropriaPred = isPropria(data?.database?.name) || data?.database?.type === 'PROPRIA';
+                            const canRenameHeader = isRoot || isPropriaPred;
                             
                             return isEditingTitle ? (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
@@ -2009,21 +2010,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         })()}
                         {!isGrouperType(currentItem.type) && (
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                                Código: <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> · {drillStack.length > 0 ? (data?.database?.name || '') : currentItem.sourceName}
+                                Código: <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> · {drillStack.length > 0 ? displaySourceName(data?.database?.name || '') : displaySourceName(currentItem.sourceName)}
                                 {/* FIX SYNC-04: Show real composition origin when loaded */}
                                 {data?.database?.name && data.database.name !== currentItem.sourceName && (
                                     <span style={{
                                         marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: '0.65rem', fontWeight: 700,
-                                        background: data.database.name === 'PROPRIA' 
+                                        background: isPropria(data.database.name) 
                                             ? (data._officialRef ? 'rgba(124,58,237,0.08)' : 'rgba(16,185,129,0.08)')
                                             : 'rgba(37,99,235,0.08)',
-                                        color: data.database.name === 'PROPRIA'
+                                        color: isPropria(data.database.name)
                                             ? (data._officialRef ? '#7c3aed' : '#059669')
                                             : '#2563eb',
                                     }}>
-                                        {data.database.name === 'PROPRIA' && data._officialRef
+                                        {isPropria(data.database.name) && data._officialRef
                                             ? `editada de ${data._officialRef.databaseName}`
-                                            : `via ${data.database.name}`}
+                                            : `via ${displaySourceName(data.database.name)}`}
                                     </span>
                                 )}
                                 {hasChanges && <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 700 }}>● Modificado</span>}
@@ -2951,9 +2952,10 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             })()}
                                                                             {/* ── Interactive Base Badge with change dropdown ── */}
                                                                             {(() => {
-                                                                                const displayBase = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';
+                                                                                const rawBase = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';
+                                                                                const displayBase = displaySourceName(rawBase);
                                                                                 const isUnmatched = ci._noBaseMatch;
-                                                                                const isProprio = displayBase === 'PRÓPRIO' || displayBase === 'PROPRIA';
+                                                                                const isProprio = isPropria(rawBase);
                                                                                 const isConfirmedMatch = !isUnmatched && !isProprio;
                                                                                 // Visual styling: confirmed = solid, unmatched/próprio = dashed
                                                                                 const badgeStyle: React.CSSProperties = {

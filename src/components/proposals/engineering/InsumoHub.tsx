@@ -3,6 +3,7 @@ import { Package, Users, Wrench, Search, Percent, RefreshCw, Filter, TrendingDow
 import type { InsumoConsolidado, InsumoCategoria, DescontoConfig } from './insumoEngine';
 import { CATEGORIA_META, DEFAULT_DESCONTO_CONFIG, filterInsumos, applyDescontos, classifyABC, calculateHubStats, EXPANDED_TYPES_META, resolveMetaCategory } from './insumoEngine';
 import { exportHubExcel, exportHubPdf } from './exportEngine';
+import { displaySourceName, isPropria } from './types';
 
 interface ClientItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -467,13 +468,13 @@ export function InsumoHub({ proposalId, clientItems, engineeringConfig }: Props)
                                                 <span style={{
                                                     fontSize: '0.65rem', fontWeight: 600,
                                                     padding: '1px 6px', borderRadius: 3,
-                                                    background: ins.base === 'PROPRIA' || ins.base?.startsWith('PROPRIA_')
+                                                    background: isPropria(ins.base)
                                                         ? 'rgba(245,158,11,0.08)' : 'rgba(37,99,235,0.06)',
-                                                    color: ins.base === 'PROPRIA' || ins.base?.startsWith('PROPRIA_')
+                                                    color: isPropria(ins.base)
                                                         ? '#b45309' : '#2563eb',
                                                     whiteSpace: 'nowrap',
                                                 }}>
-                                                    {ins.base || '—'}
+                                                    {displaySourceName(ins.base) || '—'}
                                                 </span>
                                             </td>
 

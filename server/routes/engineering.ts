@@ -4197,15 +4197,8 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
 
         let activeItems = items;
         if (oldRegime !== newRegime && Array.isArray(items) && items.length > 0) {
-            console.log(`[REGIME-SWITCH] 🔄 Switching from "${oldRegime}" to "${newRegime}" — ${items.length} items total`);
             const officialItems = items.filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA' && it.sourceName !== 'PROPRIA');
-            console.log(`[REGIME-SWITCH] 📋 Official items to enrich: ${officialItems.length}`);
             if (officialItems.length > 0) {
-                // LOG: Snapshot of incoming item costs
-                for (const oi of officialItems) {
-                    console.log(`[REGIME-SWITCH] 📥 BEFORE code=${oi.code} source=${oi.sourceName} unitCost=${oi.unitCost} unitPrice=${oi.unitPrice} type=${oi.type}`);
-                }
-
                 const tempItems: any[] = officialItems.map((it: any) => ({
                     code: it.code,
                     sourceName: it.sourceName,
@@ -4222,10 +4215,6 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     if (enriched.priceAudit?.matchedUnitCost && enriched.priceAudit.matchedUnitCost > 0) {
                         costMap.set(enriched.code, enriched.priceAudit.matchedUnitCost);
                         auditMap.set(enriched.code, enriched.priceAudit);
-                        // LOG: What the enrichment returned
-                        console.log(`[REGIME-SWITCH] 🔍 ENRICHED code=${enriched.code} matchedUnitCost=${enriched.priceAudit.matchedUnitCost} matchedDB=${enriched.priceAudit.matchedDatabaseId} matchedSource=${enriched.priceAudit.matchedSourceName} regime=${enriched.priceAudit.matchedPayrollExemption ? 'DES' : 'ON'} status=${enriched.priceAudit.status}`);
-                    } else {
-                        console.log(`[REGIME-SWITCH] ⚠️ NO MATCH code=${enriched.code} priceAudit=${JSON.stringify(enriched.priceAudit?.status || 'NONE')}`);
                     }
                 }
 
@@ -4253,9 +4242,6 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                         const unitPrice = applyPrecision(upWithoutDiscount * (1 - (it.discount || 0) / 100), precisionConfig);
                         const totalPrice = applyPrecision(it.quantity * unitPrice, precisionConfig);
 
-                        // LOG: What changed
-                        console.log(`[REGIME-SWITCH] 📤 AFTER code=${it.code} oldCost=${it.unitCost} → newCost=${newCost} oldPrice=${it.unitPrice} → newPrice=${unitPrice} bdi=${itemBdi}% qty=${it.quantity} total=${totalPrice}`);
-
                         return {
                             ...it,
                             unitCost: newCost,
@@ -4264,9 +4250,6 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                             priceOrigin: 'BASE',
                             priceAudit: newAudit || it.priceAudit,
                         };
-                    }
-                    if (it.type !== 'ETAPA' && it.type !== 'SUBETAPA') {
-                        console.log(`[REGIME-SWITCH] ⏭️ SKIPPED code=${it.code} source=${it.sourceName} inCostMap=${costMap.has(it.code)} type=${it.type}`);
                     }
                     return it;
                 });

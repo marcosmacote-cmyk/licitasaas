@@ -12,6 +12,7 @@ import { useState, useCallback } from 'react';
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
 import { AiDisclaimerBanner } from '../../../shared/AiDisclaimerBanner';
 import type { EngineeringConfig, EngItem } from '../types';
+import { isPropria } from '../types';
 import type { BdiConfig } from '../bdiEngine';
 
 interface Props {
@@ -43,7 +44,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
     const isLumpSum = currentItems.length > 0 &&
         currentItems.length <= 3 &&
         !currentItems.some(it => it.type === 'ETAPA') &&
-        !currentItems.some(it => it.sourceName && it.sourceName !== 'PROPRIA' && it.code && it.code !== 'N/A');
+        !currentItems.some(it => it.sourceName && !isPropria(it.sourceName) && it.code && it.code !== 'N/A');
     const showBanner = hasLoadedItems || (items && items.length > 0);
     const bannerVariant = isLumpSum ? 'extraction_limited' : 'extraction';
 
