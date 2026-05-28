@@ -1438,7 +1438,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const officialInputCodes = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const dbName = item._matchedDatabase;
                     return !isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
                 })
@@ -1447,7 +1447,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const officialAuxCodes = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const dbName = item._matchedDatabase;
                     return isAux && dbName && dbName !== 'PRÓPRIO' && dbName !== 'PROPRIA';
                 })
@@ -1456,7 +1456,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const propriaItemCodes = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const itemId = item.item ? item.item.id : item.itemId;
                     return !isAux && itemId && isTempId(itemId) && item.item?.code;
                 })
@@ -1465,7 +1465,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const propriaAuxCodes = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
                     return isAux && auxId && isTempId(auxId) && item.auxiliaryComposition?.code;
                 })
@@ -1474,7 +1474,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const nonTempItemIds = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const itemId = item.item ? item.item.id : item.itemId;
                     return !isAux && itemId && !isTempId(itemId);
                 })
@@ -1482,7 +1482,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
             const nonTempAuxIds = flatItems
                 .filter(item => {
-                    const isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    const isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     const auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
                     return isAux && auxId && !isTempId(auxId);
                 })
@@ -1800,7 +1800,10 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                 // Loop through flatItems to sync database records
                 for (const item of flatItems) {
-                    let isAux = !!item.auxiliaryCompositionId || (item.auxiliaryComposition && item.auxiliaryComposition.id);
+                    // FIX AUX-LOST-01: Detect auxiliary compositions by the PRESENCE of the
+                    // auxiliaryComposition object, not just its .id. When the frontend sends
+                    // a newly added aux comp, .id may be undefined/temp, but the object exists.
+                    let isAux = !!item.auxiliaryCompositionId || !!item.auxiliaryComposition;
                     let itemId = item.item ? item.item.id : item.itemId;
                     let auxId = item.auxiliaryComposition ? item.auxiliaryComposition.id : item.auxiliaryCompositionId;
                     const dbName = item._matchedDatabase;

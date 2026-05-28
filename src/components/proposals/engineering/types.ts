@@ -139,6 +139,40 @@ export function displaySourceName(name?: string | null): string {
 }
 
 /**
+ * FIX BUG-2: Resolve the real official base for display purposes.
+ * When items are stored in a PROPRIA database, this detects the
+ * original official base from the item's code pattern.
+ * 
+ * Mirrors server/services/engineering/baseResolver.ts
+ */
+export function resolveDisplayBase(dbName?: string | null, itemCode?: string | null): string {
+    const db = (dbName || '').trim();
+    // If not PROPRIA, use as-is
+    if (db && db !== 'PROPRIA' && !db.startsWith('PROPRIA_') && db !== 'PRÓPRIA' && db !== 'PRÓPRIO') {
+        return db;
+    }
+    // Detect base from code patterns
+    let code = (itemCode || '').trim().toUpperCase();
+    if (code) {
+        code = code.replace(/-C\d+$/, '').replace(/-(H|M)-(AJ|EL)$/, '');
+        if (code.startsWith('INS-')) code = code.replace(/^INS-/, '').replace(/-\d+$/, '');
+        // SEINFRA: Letter prefix + digits (CPMH06, C0054, I0001, M18042)
+        if (/^[A-Z]{1,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
+        // SINAPI: 3-6 digit numbers (247, 2436, 88316, 74209/1)
+        if (/^\d{3,6}(\/\d+)?$/.test(code)) return 'SINAPI';
+        // ORSE: with /ORSE suffix
+        if (/^\d{3,6}\/ORSE$/.test(code)) return 'ORSE';
+        // SICRO: pattern like EC-05-013-00
+        if (/^[A-Z]{2}-\d{2}-\d{3}/.test(code)) return 'SICRO';
+        // SBC/CAERN/SICOR prefixes
+        if (/^SBC/i.test(code)) return 'SBC';
+        if (/^CAERN/i.test(code)) return 'CAERN';
+        if (/^SICOR/i.test(code)) return 'SICOR';
+    }
+    return displaySourceName(dbName);
+}
+
+/**
  * Checks if a source name represents a "PROPRIA" (own) database.
  * Works with both "PROPRIA" and "PROPRIA_UUID" variants.
  */

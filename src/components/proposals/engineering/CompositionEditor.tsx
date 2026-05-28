@@ -13,7 +13,7 @@ import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
 import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
-import { displaySourceName, isPropria } from './types';
+import { displaySourceName, isPropria, resolveDisplayBase } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
@@ -3007,8 +3007,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                             })()}
                                                                             {/* ── Interactive Base Badge with change dropdown ── */}
                                                                             {(() => {
-                                                                                const rawBase = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';
-                                                                                const displayBase = displaySourceName(rawBase);
+                                                                                const rawDbName = ci._matchedDatabase || ci.item?.database?.name || ci.auxiliaryComposition?.database?.name || data?.database?.name || currentItem?.sourceName || '';
+                                                                                const itemCode = ci.item?.code || ci.auxiliaryComposition?.code || '';
+                                                                                // FIX BUG-2: Resolve real base from code pattern when stored in PROPRIA
+                                                                                const rawBase = resolveDisplayBase(rawDbName, itemCode);
+                                                                                const displayBase = rawBase; // Already resolved by resolveDisplayBase
                                                                                 const isUnmatched = ci._noBaseMatch;
                                                                                 const isProprio = isPropria(rawBase);
                                                                                 const isConfirmedMatch = !isUnmatched && !isProprio;
