@@ -426,6 +426,38 @@ import proposalRoutes from './routes/proposals';
 import analysisRoutes, { injectAnalysisDeps } from './routes/analysis';
 app.use('/api/chat-monitor', chatMonitorRoutes);
 app.use('/api/proposals', proposalRoutes);  // proposals + dossier
+// TEMPORARY: Public debug endpoint for composition inspection — REMOVE AFTER DEBUG
+app.get('/api/debug-comp/:code', async (req: any, res: any) => {
+    try {
+        const code = req.params.code;
+        const comps = await prisma.engineeringComposition.findMany({
+            where: { code: { equals: code, mode: 'insensitive' }, database: { name: 'SEINFRA', type: 'OFICIAL' } },
+            include: {
+                database: { select: { id: true, name: true, uf: true, version: true, payrollExemption: true } },
+                items: {
+                    include: {
+                        item: { select: { code: true, description: true, price: true, type: true, unit: true } },
+                        auxiliaryComposition: { select: { code: true, description: true, totalPrice: true, unit: true } }
+                    },
+                    orderBy: { sortOrder: 'asc' }
+                }
+            }
+        });
+        const result = comps.map((comp: any) => {
+            const regime = comp.database.payrollExemption ? 'DESONERADO' : 'ONERADO';
+            let calcTotal = 0;
+            const items = comp.items.map((ci: any) => {
+                const price = ci.item?.price || ci.auxiliaryComposition?.totalPrice || 0;
+                const coef = Number(ci.coefficient) || 0;
+                const sub = coef * Number(price);
+                calcTotal += sub;
+                return { code: ci.item?.code || ci.auxiliaryComposition?.code, desc: (ci.item?.description || ci.auxiliaryComposition?.description || '').substring(0, 60), type: ci.type || ci.item?.type, coef, price: Number(price), sub: Math.round(sub * 10000) / 10000 };
+            });
+            return { regime, dbId: comp.database.id, version: comp.database.version, desc: comp.description, unit: comp.unit, storedTotal: Number(comp.totalPrice), calcTotal: Math.round(calcTotal * 10000) / 10000, match: Math.abs(Number(comp.totalPrice) - calcTotal) > 0.1 ? 'MISMATCH' : 'OK', items };
+        });
+        res.json({ code, compositions: result });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
 app.use('/api/engineering', authenticateToken, engineeringRoutes);
 
 // Inject dependencies required by analysis routes
