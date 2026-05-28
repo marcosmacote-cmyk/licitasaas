@@ -1023,7 +1023,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             
             const updated = normalizeCompositionMath(extracted, engineeringConfig?.precision);
             
-            setData(updated);
+            // BUG-FIX: Preserve the original composition description and code from the budget item.
+            // The AI extraction returns a generic description (e.g. "Composição Extraída via IA") 
+            // which should NOT overwrite the real item name (e.g. "ADMINISTRAÇÃO DA OBRA").
+            // Only groups, items, totalPrice, database, and _ai_stats should come from the extraction.
+            // (drillLevel already declared above at L1000)
+            const preservedDescription = data?.description || drillLevel?.description || currentItem.description;
+            const preservedCode = data?.code || drillLevel?.code || currentItem.code;
+            const preservedUnit = data?.unit || currentItem.unit;
+            
+            setData({
+                ...updated,
+                description: preservedDescription,
+                code: preservedCode,
+                unit: updated.unit || preservedUnit,
+            });
             setError('');
             setHasChanges(true);
             
