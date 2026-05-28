@@ -46,8 +46,8 @@ export function resolveDisplayBase(
 
         // SEINFRA patterns: CPMH06, CPEL03, CPTO01, C0054, C1614, I0001, PMH07
         if (/^[A-Z]{1,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
-        // SINAPI: 5-6 digit numbers (88316, 93566, 74209/1)
-        if (/^\d{5,6}(\/\d+)?$/.test(code)) return 'SINAPI';
+        // SINAPI: 3-6 digit numbers (247, 2436, 6110 = MO básica; 88316, 93566 = composições; 74209/1)
+        if (/^\d{3,6}(\/\d+)?$/.test(code)) return 'SINAPI';
         // ORSE: numeric with possible /ORSE suffix
         if (/^\d{3,6}\/ORSE$/.test(code) || (/^\d{3,6}$/.test(code) && src === 'ORSE')) return 'ORSE';
         // SICRO: pattern like EC-05-013-00
