@@ -430,7 +430,8 @@ app.use('/api/proposals', proposalRoutes);  // proposals + dossier
 app.get('/api/debug-comp/:code', async (req: any, res: any) => {
     try {
         const code = req.params.code;
-        const comps = await prisma.engineeringComposition.findMany({
+        const p = prisma as any;
+        const comps = await p.engineeringComposition.findMany({
             where: { code: { equals: code, mode: 'insensitive' }, database: { name: 'SEINFRA', type: 'OFICIAL' } },
             include: {
                 database: { select: { id: true, name: true, uf: true, version: true, payrollExemption: true } },
@@ -446,7 +447,7 @@ app.get('/api/debug-comp/:code', async (req: any, res: any) => {
         const result = comps.map((comp: any) => {
             const regime = comp.database.payrollExemption ? 'DESONERADO' : 'ONERADO';
             let calcTotal = 0;
-            const items = comp.items.map((ci: any) => {
+            const items = (comp.items || []).map((ci: any) => {
                 const price = ci.item?.price || ci.auxiliaryComposition?.totalPrice || 0;
                 const coef = Number(ci.coefficient) || 0;
                 const sub = coef * Number(price);
