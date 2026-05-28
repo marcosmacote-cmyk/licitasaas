@@ -1,5 +1,6 @@
 import { EngineeringComposition, EngineeringCompositionItem, EngineeringItem } from '@prisma/client';
 import prisma from '../../lib/prisma';
+import { resolveDisplayBase, deriveGroupKey } from './baseResolver';
 
 export interface FlattenedItem {
   type: string; // 'MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'COMPOSICAO_AUXILIAR'
@@ -237,7 +238,9 @@ export class CompositionFlattener {
     for (const ci of composition.items) {
       if (ci.itemId && ci.item) {
         const itemDbName = ci.item.database?.name || composition.database?.name || sourceName;
-        const displayItemSourceName = itemDbName.startsWith('PROPRIA') ? 'PROPRIA' : itemDbName;
+        // FIX BUG-1: Use resolveDisplayBase to show the real official base (SEINFRA/SINAPI)
+        // instead of generic 'PROPRIA' when items are stored in a PROPRIA database.
+        const displayItemSourceName = resolveDisplayBase(itemDbName, undefined, ci.item.code);
 
         // It's a basic item (Material, Labor, Equipment)
         let unitPrice = ci.item.price;
@@ -258,7 +261,8 @@ export class CompositionFlattener {
           unitPrice: unitPrice,
           totalPrice: itemTotal,
           coefficientExpression: ci.coefficientExpression || null,
-          groupKey: ci.groupKey || null,
+          // FIX BUG-2: Derive groupKey from item type when not persisted
+          groupKey: deriveGroupKey(ci.item.type, ci.groupKey),
         });
 
         // Accumulate totals for the footer
@@ -312,7 +316,8 @@ export class CompositionFlattener {
             unitPrice: unitPrice, // Unit price of the composition
             totalPrice: itemTotal,
             coefficientExpression: ci.coefficientExpression || null,
-            groupKey: ci.groupKey || null,
+            // FIX BUG-2: Derive groupKey for auxiliary compositions
+            groupKey: deriveGroupKey('COMPOSICAO_AUXILIAR', ci.groupKey),
           });
 
           // Recursively resolve and store the auxiliary composition

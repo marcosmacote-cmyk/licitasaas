@@ -16,6 +16,7 @@ import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../se
 import { Prisma } from '@prisma/client';
 import { SimpleTtlCache } from '../lib/cache';
 import { classifyInsumoType } from '../services/engineering/insumoClassifier';
+import { resolveDisplayBase } from '../services/engineering/baseResolver';
 
 const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
@@ -420,51 +421,10 @@ async function getOrCreatePropriaDatabase(txOrPrisma: any, tenantId: string, pro
 }
 /**
  * FIX-HUB-05: Resolve the DISPLAY base name for a composition/insumo.
- * When the motor stores everything in PROPRIA, this function detects the
- * original official base from the composition code pattern.
- * 
- * Priority: dbName (if official) > sourceName (if official) > code heuristic > fallback
+ * Now delegated to shared baseResolver module.
+ * @see server/services/engineering/baseResolver.ts
  */
-function resolveDisplayBase(dbName: string | undefined, sourceName: string | undefined, compositionCode: string | undefined): string {
-    // 1. If dbName is an official base (not PROPRIA), use it directly
-    const db = (dbName || '').trim();
-    if (db && db !== 'PROPRIA' && !db.startsWith('PROPRIA_')) {
-        return db;
-    }
-
-    // 2. If sourceName is an official base, use it
-    const src = (sourceName || '').trim().toUpperCase();
-    if (src && src !== 'PROPRIA' && !src.startsWith('PROPRIA')) {
-        return src;
-    }
-
-    // 3. Detect base from composition code patterns
-    let code = (compositionCode || '').trim().toUpperCase();
-    if (code) {
-        // Clear common collision/variant prefix and suffixes (ex: INS-, -C1, -H-AJ)
-        code = code.replace(/-C\d+$/, '');
-        code = code.replace(/-(H|M)-(AJ|EL)$/, '');
-        if (code.startsWith('INS-')) {
-            code = code.replace(/^INS-/, '').replace(/-\d+$/, '');
-        }
-
-        // SEINFRA patterns: CPMH06, CPEL03, CPTO01, C0054, C1614, I0001, PMH07 (supports standard letters/codes)
-        if (/^[A-Z]{1,4}\d{2,5}$/.test(code) || /^I\d{3,5}$/.test(code)) return 'SEINFRA';
-        // SINAPI: 5-6 digit numbers (88316, 93566, 74209/1)
-        if (/^\d{5,6}(\/\d+)?$/.test(code)) return 'SINAPI';
-        // ORSE: numeric with possible /ORSE suffix
-        if (/^\d{3,6}\/ORSE$/.test(code) || (/^\d{3,6}$/.test(code) && src === 'ORSE')) return 'ORSE';
-        // SICRO: pattern like EC-05-013-00
-        if (/^[A-Z]{2}-\d{2}-\d{3}/.test(code)) return 'SICRO';
-        // SBC: starts with SBC
-        if (/^SBC/i.test(code)) return 'SBC';
-        // CAERN: starts with CAERN
-        if (/^CAERN/i.test(code)) return 'CAERN';
-    }
-
-    // 4. Fallback
-    return 'PRÓPRIA';
-}
+// resolveDisplayBase is imported from '../services/engineering/baseResolver'
 
 function normalizeCompositionSource(sourceName?: string): string | undefined {
     const source = String(sourceName || '').trim().toUpperCase();

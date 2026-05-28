@@ -735,6 +735,15 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
             <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${comp.unit}</span>
         </div>`;
 
+    // FIX BUG-5: Detect CASCA (composition without analytical detail)
+    const totalItemCount = Object.values(itemsByGroup).reduce((s, arr) => s + (arr as any[]).length, 0);
+    if (totalItemCount === 0) {
+        ch += `<div style="padding:10px 12px; background:#fffbeb; border:1px solid #fcd34d; color:#92400e; font-size:8.5px; margin:6px;">
+            <strong>⚠ Composição sem detalhamento analítico (CASCA)</strong><br>
+            <span style="font-size:7.5px;">Esta composição não possui insumos cadastrados. O preço exibido é apenas referência do edital.</span>
+        </div>`;
+    }
+
     for (const groupKey of orderedKeys) {
         const items = itemsByGroup[groupKey] || [];
         if (items.length === 0) continue;
