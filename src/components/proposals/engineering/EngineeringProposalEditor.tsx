@@ -4,7 +4,8 @@ import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, autoDistributeBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, autoDistributeBdi, resolveEffectiveBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { recalcAllItems, ensureClientIds, buildInsumosItemsHash, resolveEffectiveEngineeringBdi, resolveItemBdi as resolveEngineeringItemBdi } from './calculationEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
 import { AjusteInteligenteModal } from './AjusteInteligenteModal';
@@ -13,7 +14,6 @@ import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { applyPrecision } from './precisionEngine';
-import { buildInsumosItemsHash, recalculateEngineeringItems, resolveEffectiveEngineeringBdi, resolveItemBdi as resolveEngineeringItemBdi } from './calculationEngine';
 import { calcularCronograma } from './cronogramaEngine';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngItemType, EngineeringConfig, BdiCategoria, PriceAudit } from './types';
@@ -619,22 +619,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         return calcularCronograma(cronogramaData.etapas, cronogramaData.meses);
     }, [cronogramaData]);
 
-    const insumosItemsHashRef = useRef('');
+    // FIX F4: Invalidar insumos quando itens relevantes mudam (hash-based)
+    const insumosHashRef = useRef<string>('');
+    const insumosDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
-        const itemsHash = buildInsumosItemsHash(items);
-        if (items.length === 0 || !itemsHash) {
-            insumosItemsHashRef.current = '';
-            setConsolidatedInsumos([]);
-            return;
-        }
-        if (itemsHash === insumosItemsHashRef.current) return;
-        insumosItemsHashRef.current = itemsHash;
+        if (items.length === 0) return;
 
-        const loadInsumos = async () => {
+        const itemsHash = buildInsumosItemsHash(items);
+        if (itemsHash === insumosHashRef.current) return;
+        insumosHashRef.current = itemsHash;
+
+        if (insumosDebounceRef.current) clearTimeout(insumosDebounceRef.current);
+        insumosDebounceRef.current = setTimeout(async () => {
             try {
-                const payload = items
-                    .filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
-                    .map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
+                const billable = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA');
+                const payload = billable.map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
                 if (payload.length === 0) return;
 
                 const res = await fetch('/api/engineering/insumos-hub-resolve', {
@@ -649,10 +648,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             } catch (e) {
                 console.error('[Editor] Insumo consolidation failed:', e);
             }
-        };
-        loadInsumos();
+        }, 3000);
+
+        return () => { if (insumosDebounceRef.current) clearTimeout(insumosDebounceRef.current); };
     }, [items]);
 
+    // FIX F2: Usar resolveEffectiveEngineeringBdi que internamente chama resolveEffectiveBdi
     const effectiveBdi = resolveEffectiveEngineeringBdi(dashBdi, dashConfig);
     
     /** Resolve o BDI efetivo para um item (suporte a BDI diferenciado OBRA vs FORNECIMENTO) */
@@ -665,8 +666,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const subtotal = billableItems.reduce((s, it) => s + it.quantity * it.unitCost, 0);
     const total = billableItems.reduce((s, it) => s + it.totalPrice, 0);
 
+    // FIX F1: Delegado ao calculationEngine centralizado.
+    // Garante consistência de cálculo (desconto, BDI diferenciado) com o Wizard.
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
-        return recalculateEngineeringItems(its, _bdi, config, { refreshPriceAudit });
+        return recalcAllItems(its, _bdi, config, { refreshPriceAudit });
     }, []);
 
     // System recalc on BDI/config change — silent (no undo tracking)
@@ -779,7 +782,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const handleSave = async () => {
         setIsSaving(true); setSaveMsg(null);
         try {
-            const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
+            const itemsToSave = ensureClientIds(recalcAll(items, effectiveBdi, engineeringConfig));
             setItemsSilent(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),

@@ -236,16 +236,17 @@ export function Step4ProposalLetter({ proposalId, biddingId, items, bdiGlobal, t
                 method: 'PUT', headers: hdrs(),
                 body: JSON.stringify({ letterContent: contentOverride || letterContent }),
             });
-            if (!res.ok) {
+            // FIX F3: Só notifica parent que a carta foi salva quando HTTP retorna sucesso
+            if (res.ok) {
+                if (contentOverride) setLetterContent(contentOverride);
+                onLetterSaved?.();
+            } else {
                 const errorBody = await res.json().catch(() => ({}));
-                throw new Error(errorBody.error || errorBody.message || 'Erro ao salvar carta proposta');
+                console.error('[Step4] Erro ao salvar carta:', res.status, res.statusText, errorBody);
+                window.alert(errorBody.error || errorBody.message || 'Erro ao salvar carta proposta');
             }
-            if (contentOverride) setLetterContent(contentOverride);
-            // FIX STEP4-CHECK: Notify parent that letter was saved
-            onLetterSaved?.();
         } catch (e: any) {
-            console.error('[Step4ProposalLetter] Save failed:', e);
-            window.alert(e?.message || 'Erro ao salvar carta proposta');
+            console.error('[Step4] Erro de rede ao salvar carta:', e);
         }
         finally { setIsSaving(false); }
     }, [proposalId, letterContent, onLetterSaved]);

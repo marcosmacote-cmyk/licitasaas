@@ -59,6 +59,10 @@ export interface EngInsumo {
 
 export interface EngItem {
     id: string;
+    /** Q1/F5: ID estável que sobrevive saves (deleteMany+createMany → upsert).
+     *  Gerado pelo frontend via crypto.randomUUID(). Itens antigos sem clientId
+     *  usam fallback para `id` no backend. */
+    clientId?: string;
     itemNumber: string;
     code: string;
     sourceName: string;

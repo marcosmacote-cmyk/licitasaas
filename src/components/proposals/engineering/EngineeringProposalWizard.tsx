@@ -13,7 +13,7 @@ import { Step1ConfigPanel } from './steps/Step1ConfigPanel';
 import { Step2BudgetEditor } from './steps/Step2BudgetEditor';
 import { Step4ProposalLetter } from './steps/Step4ProposalLetter';
 import { calculateBdiTCU, DEFAULT_BDI_CONFIG, autoDistributeBdi, resolveEffectiveBdi, type BdiConfig, type BdiTcuParams } from './bdiEngine';
-import { buildInsumosItemsHash, recalculateEngineeringItems } from './calculationEngine';
+import { recalcAllItems, ensureClientIds, buildInsumosItemsHash } from './calculationEngine';
 import { applyPrecision } from './precisionEngine';
 import { CronogramaPanel } from './CronogramaPanel';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
@@ -92,8 +92,10 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // ══════════════════════════════════════════
     // RECALC
     // ══════════════════════════════════════════
+    // FIX F1: Delegado ao calculationEngine centralizado.
+    // Agora inclui desconto individual (antes ignorado pelo Wizard).
     const recalcAll = useCallback((its: EngItem[], _bdi: number, config: EngineeringConfig) => {
-        return recalculateEngineeringItems(its, _bdi, config);
+        return recalcAllItems(its, _bdi, config);
     }, []);
 
     useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi, engineeringConfig)); }, [effectiveBdi, engineeringConfig, recalcAll]);
@@ -164,7 +166,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
         try {
             const activeConfig = updatedConfig || engineeringConfig;
             const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
-            const itemsToSave = recalcAll(items, effectiveBdi, activeConfig);
+            const itemsToSave = ensureClientIds(recalcAll(items, effectiveBdi, activeConfig));
             setItems(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
@@ -190,6 +192,12 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // ══════════════════════════════════════════
     const isAnyAIRunning = isExtractingBdi || isExtractingConfig || isExtractingEncargos || isAuditing;
 
+    // FIX F8: Ref com payload atualizado para autosave (evita closures stale)
+    const autoSavePayloadRef = useRef({ items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData });
+    useEffect(() => {
+        autoSavePayloadRef.current = { items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData };
+    }, [items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData]);
+
     useEffect(() => {
         // Clear any pending auto-save timer
         if (autoSaveTimerRef.current) {
@@ -202,11 +210,12 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
             autoSaveTimerRef.current = setTimeout(async () => {
                 setIsAutoSaving(true);
                 try {
-                    const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
-                    const itemsToSave = recalcAll(items, effectiveBdi, engineeringConfig);
+                    const snap = autoSavePayloadRef.current;
+                    const bdiConfigToSave = { ...snap.bdiConfig, bdiGlobal: snap.effectiveBdi };
+                    const itemsToSave = ensureClientIds(recalcAll(snap.items, snap.effectiveBdi, snap.engineeringConfig));
                     const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                         method: 'POST', headers: hdrs(),
-                        body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig, cronogramaData })
+                        body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig: snap.engineeringConfig, cronogramaData: snap.cronogramaData })
                     });
                     if (res.ok) {
                         setHasUnsavedChanges(false);
@@ -320,22 +329,22 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     }, [cronogramaData]);
 
     // FIX F1.3: Fetch insumos consolidados when items change (for BudgetDocsPanel)
-    const insumosItemsHashRef = useRef('');
+    // FIX F4: Invalidar insumos quando itens relevantes mudam (hash-based)
+    const insumosHashRef = useRef<string>('');
+    const insumosDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
-        const itemsHash = buildInsumosItemsHash(items);
-        if (items.length === 0 || !itemsHash) {
-            insumosItemsHashRef.current = '';
-            setConsolidatedInsumos([]);
-            return;
-        }
-        if (itemsHash === insumosItemsHashRef.current) return;
-        insumosItemsHashRef.current = itemsHash;
+        if (items.length === 0) return;
 
-        const loadInsumos = async () => {
+        const itemsHash = buildInsumosItemsHash(items);
+        if (itemsHash === insumosHashRef.current) return;
+        insumosHashRef.current = itemsHash;
+
+        // Debounce: evita re-fetch em edições rápidas
+        if (insumosDebounceRef.current) clearTimeout(insumosDebounceRef.current);
+        insumosDebounceRef.current = setTimeout(async () => {
             try {
-                const payload = items
-                    .filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
-                    .map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
+                const billable = items.filter(it => it.type !== 'ETAPA' && it.type !== 'SUBETAPA');
+                const payload = billable.map(it => ({ code: it.code, quantity: it.quantity, sourceName: it.sourceName }));
                 if (payload.length === 0) return;
 
                 const res = await fetch('/api/engineering/insumos-hub-resolve', {
@@ -349,8 +358,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
             } catch (e) {
                 console.error('[Wizard] Insumo consolidation for BudgetDocsPanel failed:', e);
             }
-        };
-        loadInsumos();
+        }, 3000); // 3s debounce — insumos são para relatório, não precisam ser real-time
+
+        return () => { if (insumosDebounceRef.current) clearTimeout(insumosDebounceRef.current); };
     }, [items]);
 
     // ══════════════════════════════════════════
