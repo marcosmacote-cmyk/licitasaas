@@ -34,6 +34,7 @@ interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
     description: string; unit: string; quantity: number;
     unitCost: number; unitPrice: number; totalPrice: number;
+    compositionTotalPrice?: number | null;
     type?: string; // ETAPA, SUBETAPA, COMPOSICAO, INSUMO
     multiplicationFactor?: number;
     officialUnitCost?: number;
@@ -1770,7 +1771,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     useEffect(() => {
         if (!data || !currentItem || drill.isInDrill) return;
         const ct = sumCompositionGroups(data.groups, engineeringConfig?.precision);
-        if (ct <= 0) return;
+        if (ct <= 0) {
+            const hasStaleBudgetPrice = asNumber(currentItem.unitCost) > 0 || currentItem.compositionTotalPrice !== 0;
+            if (currentItem.type === 'COMPOSICAO' && isPropria(currentItem.sourceName) && hasStaleBudgetPrice) {
+                triggerUpdateItem({ unitCost: 0, compositionTotalPrice: 0, sourceName: 'PROPRIA' } as any);
+            }
+            return;
+        }
         const budgetCost = asNumber(currentItem.unitCost);
         if (budgetCost <= 0) return;
         const delta = Math.abs(budgetCost - ct);

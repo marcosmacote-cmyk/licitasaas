@@ -4584,7 +4584,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                     calculationMemory: item.calculationMemory || null,
                     // CASCA-FIX: Persist reference and formed prices
                     editalUnitCost: item.editalUnitCost != null ? Number(item.editalUnitCost) || null : null,
-                    compositionTotalPrice: item.compositionTotalPrice != null ? Number(item.compositionTotalPrice) || null : null,
+                    compositionTotalPrice: item.compositionTotalPrice != null ? Number(item.compositionTotalPrice) || 0 : null,
                     sortOrder: index,
                 }))
             });

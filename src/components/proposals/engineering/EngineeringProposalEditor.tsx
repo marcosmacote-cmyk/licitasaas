@@ -2989,6 +2989,32 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             markUnsaved();
                             return;
                         }
+                        if (updates.unitCost !== undefined || (updates as any).compositionTotalPrice !== undefined) {
+                            markUnsaved();
+                            setItems(prev => prev.map(it => {
+                                if (it.id !== itemId) return it;
+                                const updated = { ...it };
+                                if (updates.type !== undefined) updated.type = updates.type as typeof updated.type;
+                                if (updates.description !== undefined) updated.description = updates.description;
+                                if ((updates as any).sourceName !== undefined) updated.sourceName = (updates as any).sourceName;
+                                if ((updates as any).compositionTotalPrice !== undefined) {
+                                    updated.compositionTotalPrice = (updates as any).compositionTotalPrice;
+                                }
+                                if (updates.unitCost !== undefined) {
+                                    updated.unitCost = updates.unitCost;
+                                    updated.priceOrigin = 'MANUAL';
+                                }
+                                const shouldRecalculate = updates.unitCost !== undefined || (updates as any).sourceName !== undefined || (updates as any).compositionTotalPrice !== undefined;
+                                if (shouldRecalculate) {
+                                    const itemBdi = resolveItemBdi(updated);
+                                    updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                                    updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                                    updated.priceAudit = refreshPriceAudit(updated);
+                                }
+                                return updated;
+                            }));
+                            return;
+                        }
                         if (updates.type !== undefined) {
                             updateItem(itemId, 'type', updates.type);
                         }

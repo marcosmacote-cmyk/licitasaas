@@ -83,17 +83,16 @@ export function recalcAllItems(
             audited = { ...it, priceAudit: options.refreshPriceAudit(it) };
         }
 
-        // CASCA-FIX: Para composições PRÓPRIAS, o unitCost é determinado por compositionTotalPrice.
-        // Se compositionTotalPrice existe → usa como unitCost (preço formado pelos insumos).
-        // Se compositionTotalPrice = 0 ou undefined → CASCA, unitCost = 0.
-        // Oficiais (SINAPI/SEINFRA/etc) mantêm unitCost do item (preço da base oficial).
+        // CASCA-FIX: Para composições PRÓPRIAS, o unitCost é determinado pelo preço
+        // formado pela CPU. Sem preço formado, a composição é casca e não pode manter
+        // preço fantasma vindo do edital ou de estado antigo.
         let effectiveUnitCost = Number(audited.unitCost) || 0;
         if (audited.type === 'COMPOSICAO' && isPropria(audited.sourceName)) {
             if (audited.compositionTotalPrice !== undefined && audited.compositionTotalPrice !== null) {
                 effectiveUnitCost = Number(audited.compositionTotalPrice) || 0;
+            } else if (isCompositionShell(audited)) {
+                effectiveUnitCost = 0;
             }
-            // Se não tem compositionTotalPrice, mantém o unitCost atual
-            // (pode ter sido setado via cascade do CompositionEditor)
         }
 
         const itemForCalc = effectiveUnitCost !== (Number(audited.unitCost) || 0)

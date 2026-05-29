@@ -203,15 +203,15 @@ describe('CASCA-FIX: recalcAllItems com compositionTotalPrice', () => {
         expect(result[0].unitPrice).toBeCloseTo(450.78, 2);
     });
 
-    it('PROPRIA sem compositionTotalPrice mantém unitCost existente', () => {
-        // Composição que já teve cascade do CompositionEditor (unitCost setado diretamente)
+    it('PROPRIA sem compositionTotalPrice é casca e zera unitCost fantasma', () => {
         const item = makeItem({
             sourceName: 'PROPRIA',
-            unitCost: 500,
-            // compositionTotalPrice: undefined (não set)
+            unitCost: 500, // preço antigo que não pode sobreviver sem CPU formada
         });
         const result = recalcAllItems([item], 25, baseConfig);
-        expect(result[0].unitCost).toBe(500);
+        expect(result[0].unitCost).toBe(0);
+        expect(result[0].unitPrice).toBe(0);
+        expect(result[0].totalPrice).toBe(0);
     });
 
     it('PROPRIA com compositionTotalPrice=0 → unitCost=0 (CASCA real)', () => {
@@ -292,4 +292,3 @@ describe('isCompositionShell', () => {
         expect(isCompositionShell(item)).toBe(false);
     });
 });
-
