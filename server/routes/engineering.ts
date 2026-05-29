@@ -2153,14 +2153,39 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                     }
                     
                     // Verify FK references exist in memory before inserting (eliminates DB roundtrips)
+                    // FIX FK-ORPHAN: When items come from an official composition without _matchedDatabase,
+                    // they won't be in our pre-loaded maps. Fall back to a direct DB lookup + auto-clone.
                     if (!isAux && itemId) {
                         const itemExists = nonTempItemsMap.has(itemId) || 
                                            [...localPropriaItems.values()].some((i: any) => i.id === itemId) ||
                                            officialItems.some((i: any) => i.id === itemId);
                         if (!itemExists) {
-                            saveWarnings.push(`Insumo "${item.item?.code || item.item?.description || itemId}" não encontrado no banco`);
-                            logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist. Item code=${item.item?.code}`);
-                            continue;
+                            // Fallback: check DB directly — the item may exist but wasn't in our preload scope
+                            const dbLookup = await tx.engineeringItem.findUnique({ where: { id: itemId }, include: { database: true } });
+                            if (dbLookup) {
+                                nonTempItemsMap.set(itemId, dbLookup);
+                                logger.info(`[CompositionSave] 🔍 FK-ORPHAN fallback: found item id=${itemId} code=${dbLookup.code} in DB (was missing from preload)`);
+                            } else {
+                                // Item truly doesn't exist — try to clone by code to PROPRIA
+                                const itemCode = item.item?.code;
+                                if (itemCode) {
+                                    const resolvedItem = await getOrCreateEngineeringItemWithCollisionCheck(tx, {
+                                        databaseId: txBasePropriaId,
+                                        code: itemCode,
+                                        description: item.item?.description || 'Insumo (auto-clone)',
+                                        unit: item.item?.unit || 'UN',
+                                        price: item.item?.price || 0,
+                                        type: item.item?.type || 'MATERIAL'
+                                    });
+                                    itemId = resolvedItem.id;
+                                    localPropriaItems.set(itemCode, resolvedItem);
+                                    logger.info(`[CompositionSave] 🐑 FK-ORPHAN: auto-created item code=${itemCode} in PROPRIA id=${resolvedItem.id}`);
+                                } else {
+                                    saveWarnings.push(`Insumo "${item.item?.code || item.item?.description || itemId}" não encontrado no banco`);
+                                    logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist. Item code=${item.item?.code}`);
+                                    continue;
+                                }
+                            }
                         }
                     }
                     if (isAux && auxId) {
@@ -2168,9 +2193,41 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                            [...localPropriaAuxs.values()].some((a: any) => a.id === auxId) ||
                                            officialComps.some((a: any) => a.id === auxId);
                         if (!auxExists) {
-                            saveWarnings.push(`Composição auxiliar "${item.auxiliaryComposition?.code || auxId}" não encontrada no banco`);
-                            logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist. Aux code=${item.auxiliaryComposition?.code}`);
-                            continue;
+                            // Fallback: check DB directly
+                            const dbLookup = await tx.engineeringComposition.findUnique({ where: { id: auxId }, include: { database: true } });
+                            if (dbLookup) {
+                                nonTempAuxsMap.set(auxId, dbLookup);
+                                logger.info(`[CompositionSave] 🔍 FK-ORPHAN fallback: found aux id=${auxId} code=${dbLookup.code} in DB (was missing from preload)`);
+                            } else {
+                                // Aux truly doesn't exist — try to auto-create in PROPRIA
+                                const auxCode = item.auxiliaryComposition?.code;
+                                if (auxCode) {
+                                    let existingAux = localPropriaAuxs.get(auxCode);
+                                    if (!existingAux) {
+                                        existingAux = await tx.engineeringComposition.findFirst({
+                                            where: { databaseId: txBasePropriaId, code: auxCode }
+                                        });
+                                    }
+                                    if (!existingAux) {
+                                        existingAux = await tx.engineeringComposition.create({
+                                            data: {
+                                                databaseId: txBasePropriaId,
+                                                code: auxCode,
+                                                description: item.auxiliaryComposition?.description || 'Composição Auxiliar (auto-clone)',
+                                                unit: item.auxiliaryComposition?.unit || 'UN',
+                                                totalPrice: item.auxiliaryComposition?.totalPrice || 0
+                                            }
+                                        });
+                                        logger.info(`[CompositionSave] 🐑 FK-ORPHAN: auto-created aux code=${auxCode} in PROPRIA id=${existingAux.id}`);
+                                    }
+                                    auxId = existingAux.id;
+                                    localPropriaAuxs.set(auxCode, existingAux);
+                                } else {
+                                    saveWarnings.push(`Composição auxiliar "${item.auxiliaryComposition?.code || auxId}" não encontrada no banco`);
+                                    logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist. Aux code=${item.auxiliaryComposition?.code}`);
+                                    continue;
+                                }
+                            }
                         }
                     }
 
