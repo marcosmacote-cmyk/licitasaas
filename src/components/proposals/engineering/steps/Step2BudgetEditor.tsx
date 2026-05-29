@@ -23,6 +23,8 @@ interface Props {
     /** FIX STEP2-01: Current items from wizard state — passed to editor for remount persistence */
     items?: EngItem[];
     onItemsChange?: (items: EngItem[]) => void;
+    /** FIX SYNC-PRICE: Propagate unsaved state from Editor → Wizard for auto-save */
+    onUnsavedChanges?: () => void;
     /** FIX F2.3: Estimated value from the bidding for comparison card */
     estimatedValue?: number;
     onPrev: () => void;
@@ -30,7 +32,7 @@ interface Props {
     onReloadProposal?: () => void;
 }
 
-export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, estimatedValue, onPrev, onNext, onReloadProposal }: Props) {
+export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, onUnsavedChanges, estimatedValue, onPrev, onNext, onReloadProposal }: Props) {
     // Track whether items have been loaded (from AI extraction or saved data)
     const [hasLoadedItems, setHasLoadedItems] = useState(false);
 
@@ -60,6 +62,7 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 wizardConfig={engineeringConfig}
                 wizardBdiConfig={bdiConfig}
                 onItemsChange={handleItemsChange}
+                onUnsavedChanges={onUnsavedChanges}
                 wizardItems={items}
                 estimatedValue={estimatedValue}
                 onReloadProposal={onReloadProposal}

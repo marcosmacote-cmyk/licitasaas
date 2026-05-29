@@ -1381,6 +1381,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     compositionTotalPrice: data.totalPrice,
                     sourceName: 'PROPRIA'
                 });
+                // FIX SYNC-PRICE: Skip triggerUpdateItem when onCompositionSaved already handled propagation.
+                // Both paths update the same parent item — calling both causes race conditions.
             } else if (onUpdateItem && canonicalCode) {
                 // Fallback for backward compatibility
                 (onUpdateItem as any)('__syncComposition__', {
@@ -1391,30 +1393,29 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     compositionTotalPrice: data.totalPrice,
                     sourceName: 'PROPRIA'
                 });
-            }
 
-            if (!drill.isInDrill) {
-                // If at the root level, also trigger update for the parent item specifically
-                triggerUpdateItem({
-                    code: canonicalCode,
-                    unitCost: data.totalPrice,
-                    compositionTotalPrice: data.totalPrice,
-                    sourceName: `PROPRIA`,
-                    priceAudit: {
-                        ...currentItem.priceAudit,
-                        matchedSourceName: `PROPRIA`
+                // Only use triggerUpdateItem as fallback when onCompositionSaved is not available
+                if (!drill.isInDrill) {
+                    triggerUpdateItem({
+                        code: canonicalCode,
+                        unitCost: data.totalPrice,
+                        compositionTotalPrice: data.totalPrice,
+                        sourceName: `PROPRIA`,
+                        priceAudit: {
+                            ...currentItem.priceAudit,
+                            matchedSourceName: `PROPRIA`
+                        }
+                    } as any);
+                } else {
+                    const rootSnapshot = drillStack[0]?.snapshot?.data;
+                    if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
+                        const rootDivValue = drillStack[0]?.snapshot?.refDivisorValue;
+                        const rootDiv = rootDivValue ? (parseFloat(rootDivValue.replace(',', '.')) || 1) : 1;
+                        const rootCost = rootDiv > 0 
+                            ? applyPrecision(rootSnapshot.totalPrice / rootDiv, { precision: engineeringConfig?.precision }) 
+                            : rootSnapshot.totalPrice;
+                        onUpdateItem(currentItem.id, { unitCost: rootCost, compositionTotalPrice: rootSnapshot.totalPrice } as any);
                     }
-                } as any);
-            } else {
-                // If in drill-down, propagate the parent's recalculated totalPrice to the spreadsheet immediately
-                const rootSnapshot = drillStack[0]?.snapshot?.data;
-                if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
-                    const rootDivValue = drillStack[0]?.snapshot?.refDivisorValue;
-                    const rootDiv = rootDivValue ? (parseFloat(rootDivValue.replace(',', '.')) || 1) : 1;
-                    const rootCost = rootDiv > 0 
-                        ? applyPrecision(rootSnapshot.totalPrice / rootDiv, { precision: engineeringConfig?.precision }) 
-                        : rootSnapshot.totalPrice;
-                    onUpdateItem(currentItem.id, { unitCost: rootCost, compositionTotalPrice: rootSnapshot.totalPrice } as any);
                 }
             }
             // G14: Show warnings to user if items were skipped during save

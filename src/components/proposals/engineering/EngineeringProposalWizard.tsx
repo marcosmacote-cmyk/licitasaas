@@ -641,6 +641,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     bdiConfig={bdiConfig}
                     items={items}
                     onItemsChange={setItems}
+                    onUnsavedChanges={() => setHasUnsavedChanges(true)}
                     estimatedValue={estimatedValue}
                     onPrev={() => setCurrentStep(1)}
                     onNext={() => setCurrentStep(3)}

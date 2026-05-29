@@ -39,6 +39,8 @@ interface Props {
     wizardBdiConfig?: BdiConfig;
     /** Callback: sync items back to the Wizard for other steps (Cronograma, etc.) */
     onItemsChange?: (items: EngItem[]) => void;
+    /** FIX SYNC-PRICE: Propagate unsaved state to Wizard for auto-save */
+    onUnsavedChanges?: () => void;
     /** FIX STEP2-01: Items from the Wizard state — used to restore items when Step 2 remounts */
     wizardItems?: EngItem[];
     /** FIX F2.3: Estimated value from the bidding for comparison */
@@ -46,7 +48,7 @@ interface Props {
     onReloadProposal?: () => void;
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, wizardItems, estimatedValue, onReloadProposal }: Props) {
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, onUnsavedChanges, wizardItems, estimatedValue, onReloadProposal }: Props) {
     // FIX F1.2: Undo/Redo integration — replaces plain useState<EngItem[]>
     // - setItems: tracked changes (user edits) → pushed to undo stack
     // - setItemsSilent: system changes (recalc, load, save) → no undo stack
@@ -190,7 +192,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [filterType, setFilterType] = useState<string>('');
 
     const updateEngineeringConfig = (next: EngineeringConfig) => {
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setEngineeringConfig(next);
     };
 
@@ -260,6 +262,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     // FIX ARQ-04: Cronograma data persisted in parent state to survive tab switches
     const [cronogramaData, setCronogramaData] = useState<{ meses: number; etapas: any[] } | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // FIX SYNC-PRICE: Wrapper that marks unsaved in BOTH Editor AND Wizard (via callback)
+    // This ensures the Wizard's auto-save triggers when composition changes propagate
+    const markUnsaved = useCallback(() => {
+        setHasUnsavedChanges(true);
+        onUnsavedChanges?.();
+    }, [onUnsavedChanges]);
 
     // Consolidated insumos and cronograma results for BudgetDocsPanel
     const [consolidatedInsumos, setConsolidatedInsumos] = useState<InsumoConsolidado[]>([]);
@@ -544,7 +553,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             }
 
             if (changed) {
-                setTimeout(() => setHasUnsavedChanges(true), 0);
+                setTimeout(() => markUnsaved(), 0);
                 return {
                     meses: prev.meses,
                     etapas: updated,
@@ -651,10 +660,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         setHasUnsavedChanges(false);
                         hasPersistedItemsRef.current = true;
                     } else {
-                        setHasUnsavedChanges(true);
+                        markUnsaved();
                     }
                 } catch {
-                    setHasUnsavedChanges(true);
+                    markUnsaved();
                 }
                 const etapas = mapped.filter((m: EngItem) => m.type === 'ETAPA').length;
                 const subs = mapped.filter((m: EngItem) => m.type === 'SUBETAPA').length;
@@ -874,7 +883,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     if (byDesc) return { ...it, insumos: byDesc };
                     return it;
                 }));
-                setHasUnsavedChanges(true);
+                markUnsaved();
             }
         } catch (e: any) { setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>); }
         finally { setIsExtractingComps(false); setTimeout(() => setSaveMsg(null), 8000); }
@@ -934,7 +943,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     }
                 }));
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Composição TCU 2622 extraída com sucesso!</span>);
-                setHasUnsavedChanges(true);
+                markUnsaved();
             } else if (bdiData.globalBdi) {
                 // If only global is found
                 setBdiConfig(prev => ({
@@ -944,7 +953,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     tcu: autoDistributeBdi(bdiData.globalBdi)
                 }));
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> BDI Global extraído com sucesso!</span>);
-                setHasUnsavedChanges(true);
+                markUnsaved();
             } else {
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}><AlertTriangle size={14} /> IA não conseguiu identificar os valores numéricos.</span>);
             }
@@ -954,7 +963,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     // Inline edit
     const updateItem = (id: string, field: keyof EngItem, value: any) => {
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setItems(prev => {
             const mapped = prev.map(it => {
                 if (it.id !== id) return it;
@@ -974,7 +983,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     };
 
     const saveCalculationMemory = (itemId: string, calcMemoryJsonStr: string, calculatedQuantity: number) => {
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setItems(prev => prev.map(it => {
             if (it.id !== itemId) return it;
             const updated = { ...it, quantity: calculatedQuantity, calculationMemory: calcMemoryJsonStr };
@@ -987,10 +996,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         }));
     };
 
-    const removeItem = (id: string) => { setHasUnsavedChanges(true); setItems(prev => renumberItems(prev.filter(it => it.id !== id))); };
+    const removeItem = (id: string) => { markUnsaved(); setItems(prev => renumberItems(prev.filter(it => it.id !== id))); };
 
     const applyBasePriceToItem = (id: string) => {
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setItems(prev => prev.map(it => {
             if (it.id !== id) return it;
             const audit = refreshPriceAudit(it);
@@ -1026,7 +1035,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 return it;
             });
             setItems(recalcAll(auditedItems, effectiveBdi, dashConfig));
-            setHasUnsavedChanges(true);
+            markUnsaved();
             // FIX AUDIT-01: Show detailed match counts instead of generic success
             const okCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'OK').length;
             const divCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'DIVERGENT').length;
@@ -1100,7 +1109,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
             const removedCount = syncedItems.length - dedupedItems.length;
             setItems(recalcAll(dedupedItems, effectiveBdi, dashConfig));
-            setHasUnsavedChanges(true);
+            markUnsaved();
             const matchCount = dedupedItems.filter((it: any) => it.priceAudit?.matchedUnitCost > 0).length;
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> Hub: {matchCount} preços atualizados{removedCount > 0 ? `, ${removedCount} duplicatas removidas` : ''} ({dashConfig.regimeOneracao})</span>);
         } catch (e: any) {
@@ -1114,7 +1123,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const addTypedItem = (type: EngItemType, insertAfterId?: string, description?: string): string => {
         const isGroup = isGrouper(type);
         const newId = `new-${Date.now()}`;
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setItems(prev => {
             const newItem = {
                 id: newId, itemNumber: '', code: isGroup ? '' : '', sourceName: isGroup ? '' : 'PROPRIA',
@@ -1162,7 +1171,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             setItems(prev => {
                 const oldIndex = prev.findIndex(item => item.id === active.id);
                 const newIndex = prev.findIndex(item => item.id === over.id);
-                setHasUnsavedChanges(true);
+                markUnsaved();
                 return renumberItems(arrayMove(prev, oldIndex, newIndex));
             });
         }
@@ -1232,7 +1241,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         const typeFromBase = dbItem.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : insertType;
         const qty = searchQuantities[dbItem.id] || 1;
         const newId = `db-${Date.now()}`;
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setItems(prev => {
             const newItem = {
                 id: newId, itemNumber: '',
@@ -1293,7 +1302,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             const qty = parseFloat(propriaQty.replace(',', '.')) || 1;
             const typeFromKind = (data.item.recordKind === 'COMPOSICAO' ? 'COMPOSICAO' : 'INSUMO') as EngItemType;
             const newId = `propria-${Date.now()}`;
-            setHasUnsavedChanges(true);
+            markUnsaved();
             setItems(prev => {
                 const newItem = {
                     id: newId, itemNumber: '',
@@ -1329,7 +1338,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     // BDI helpers
     const updateTcu = (field: keyof BdiTcuParams, val: number) => {
-        setHasUnsavedChanges(true);
+        markUnsaved();
         setBdiConfig(prev => {
             const nextTcu = { ...prev.tcu, [field]: val };
             const calculatedBdi = calculateBdiTCU(nextTcu, engineeringConfig?.precision);
@@ -1439,7 +1448,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     } else {
                         setItems(prev => [...prev, ...imported]);
                     }
-                    setHasUnsavedChanges(true);
+                    markUnsaved();
                     const etapas = imported.filter(i => i.type === 'ETAPA').length;
                     const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
                     const modeLabel = mode === 'replace' ? 'substituídos' : 'adicionados';
@@ -1506,7 +1515,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         });
 
         setItems(prev => renumberItems([...prev, ...imported]));
-        setHasUnsavedChanges(true);
+        markUnsaved();
 
         const etapas = imported.filter(i => i.type === 'ETAPA').length;
         const comps = imported.filter(i => i.type === 'COMPOSICAO').length;
@@ -1656,7 +1665,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     {/* ── FIX F1.2: Undo / Redo ── */}
                     <button
                         className="btn btn-outline"
-                        onClick={() => { undoItems(); setHasUnsavedChanges(true); }}
+                        onClick={() => { undoItems(); markUnsaved(); }}
                         disabled={!canUndo}
                         title={`Desfazer (${undoCount}) — Ctrl+Z`}
                         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', padding: '5px 8px', opacity: canUndo ? 1 : 0.35, position: 'relative' }}
@@ -1666,7 +1675,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     </button>
                     <button
                         className="btn btn-outline"
-                        onClick={() => { redoItems(); setHasUnsavedChanges(true); }}
+                        onClick={() => { redoItems(); markUnsaved(); }}
                         disabled={!canRedo}
                         title={`Refazer (${redoCount}) — Ctrl+Shift+Z`}
                         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', padding: '5px 8px', opacity: canRedo ? 1 : 0.35, position: 'relative' }}
@@ -1875,7 +1884,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 <CronogramaPanel
                     items={items}
                     savedData={cronogramaData}
-                    onDataChange={(data) => { setHasUnsavedChanges(true); setCronogramaData(data); }}
+                    onDataChange={(data) => { markUnsaved(); setCronogramaData(data); }}
                 />
             )}
 
@@ -2946,7 +2955,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             if (sourceName !== undefined) updated.sourceName = sourceName;
                             return updated;
                         }));
-                        setHasUnsavedChanges(true);
+                        markUnsaved();
                     }}
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea
@@ -2972,12 +2981,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 if (sourceName !== undefined) updated.sourceName = sourceName;
                                 return updated;
                             }));
-                            setHasUnsavedChanges(true);
+                            markUnsaved();
                             return;
                         }
                         if (itemId === '__reportConfig__') {
                             setEngineeringConfig((prev: any) => ({ ...prev, reportConfig: updates }));
-                            setHasUnsavedChanges(true);
+                            markUnsaved();
                             return;
                         }
                         if (updates.type !== undefined) {
@@ -3031,7 +3040,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 }
                                 return updated;
                             });
-                            setHasUnsavedChanges(true);
+                            markUnsaved();
                         }
                     }}
                     engineeringConfig={dashConfig}
