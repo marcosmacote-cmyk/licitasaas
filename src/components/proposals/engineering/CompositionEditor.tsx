@@ -214,6 +214,17 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
 // G5-PREP: Price helpers moved to compositionMath.ts
 
 export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, onCompositionSaved, engineeringConfig, proposalId, bdiConfig }: Props) {
+    // FIX STAB-05: Guard against losing unsaved composition changes
+    const handleSafeClose = useCallback(() => {
+        if (hasChangesRef.current) {
+            const shouldClose = window.confirm(
+                'Você tem alterações não salvas nesta composição.\n\nDeseja sair sem salvar?'
+            );
+            if (!shouldClose) return;
+        }
+        onClose();
+    }, [onClose]);
+    const hasChangesRef = useRef(false);
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -248,6 +259,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [editingField, setEditingField] = useState<{ id: string; field: 'coef' | 'price' } | null>(null);
     const [editValue, setEditValue] = useState('');
     const [hasChanges, setHasChanges] = useState(false);
+    // FIX STAB-05: Keep ref in sync for use in handleSafeClose
+    useEffect(() => { hasChangesRef.current = hasChanges; }, [hasChanges]);
     const [isSavingToBase, setIsSavingToBase] = useState(false);
     const [isExtractingAi, setIsExtractingAi] = useState(false);
 
@@ -816,7 +829,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             if (editingField) return;
             if (e.key === 'ArrowLeft' && hasPrev) navigate(-1);
             if (e.key === 'ArrowRight' && hasNext) navigate(1);
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') handleSafeClose();
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
@@ -2000,7 +2013,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 </button>
                             </>
                         )}
-                        <button onClick={onClose} title="Fechar (Esc)"
+                        <button onClick={handleSafeClose} title="Fechar (Esc)"
                             style={{ padding: 8, borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', cursor: 'pointer' }}>
                             <X size={18} />
                         </button>

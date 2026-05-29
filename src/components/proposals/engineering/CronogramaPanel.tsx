@@ -13,6 +13,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Calendar, Plus, Minus, Trash2, BarChart3, TrendingUp, RotateCcw, Cpu, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { calcularCronograma, gerarEtapasPadrao, type CronogramaEtapa } from './cronogramaEngine';
+import { syncCronogramaFromItems } from './cronogramaSync';
 import { isGrouper } from './types';
 import { CronogramaImportModal } from './CronogramaImportModal';
 
@@ -44,74 +45,23 @@ export function CronogramaPanel({ items, savedData, onDataChange }: Props) {
     }, [meses, etapas]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ══════════════════════════════════════════
-    // FIX F4.1: Auto-sync planilha → cronograma
-    // Update etapa values when items change (preserve user percentuais)
+    // FIX STAB/SYNC-01: Auto-sync planilha → cronograma
+    // Uses unified cronogramaSync instead of inline duplicated logic
     // ══════════════════════════════════════════
     const prevItemsRef = useRef<string>('');
     useEffect(() => {
         if (items.length === 0) return;
         
-        // Build current etapa totals from items
+        // Build fingerprint to avoid unnecessary updates
         const etapaItems = items.filter(it => it.type === 'ETAPA');
         if (etapaItems.length === 0) return;
-
-        // Create a fingerprint to avoid unnecessary updates
         const fingerprint = etapaItems.map(e => `${e.itemNumber}:${e.totalPrice}`).join('|');
         if (fingerprint === prevItemsRef.current) return;
         prevItemsRef.current = fingerprint;
 
-        // Compute subtotals per etapa from child items
-        const etapaTotals = new Map<string, { name: string; total: number }>();
-        let currentEtapa = '';
-        for (const it of items) {
-            if (it.type === 'ETAPA') {
-                currentEtapa = it.itemNumber.split('.')[0] || it.itemNumber;
-                etapaTotals.set(currentEtapa, { name: it.description, total: 0 });
-            } else if (!isGrouper(it.type as any) && currentEtapa) {
-                const entry = etapaTotals.get(currentEtapa);
-                if (entry) entry.total += it.totalPrice || 0;
-            }
-        }
-
-        if (etapaTotals.size === 0) return;
-
-        const isAutomaticEtapaId = (id: string) => {
-            const num = Number(id);
-            return !isNaN(num) && num < 1000000;
-        };
-
         setEtapas(prev => {
-            // Filter out automatic stages that no longer exist in the spreadsheet items
-            const filtered = prev.filter(e => {
-                if (isAutomaticEtapaId(e.id)) {
-                    return etapaTotals.has(e.id);
-                }
-                return true; // Keep manual/custom stages
-            });
-
-            // Match existing etapas by id, update valorTotal only
-            const updated = filtered.map(e => {
-                const match = etapaTotals.get(e.id);
-                if (match) {
-                    return { ...e, valorTotal: match.total, nome: match.name || e.nome };
-                }
-                return e;
-            });
-
-            // Add new etapas from items that don't exist in cronograma
-            const existingIds = new Set(prev.map(e => e.id));
-            for (const [id, data] of etapaTotals) {
-                if (!existingIds.has(id)) {
-                    updated.push({
-                        id,
-                        nome: data.name,
-                        valorTotal: data.total,
-                        percentuais: Array(12).fill(0),
-                    });
-                }
-            }
-
-            return updated;
+            const { etapas: updated, changed } = syncCronogramaFromItems(items, prev);
+            return changed ? updated : prev;
         });
     }, [items]);
 

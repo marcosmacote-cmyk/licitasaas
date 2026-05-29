@@ -132,19 +132,18 @@ export function resolveEffectiveEngineeringBdi(bdiConfig: BdiConfig, config: Eng
 
 /**
  * Gera hash determinístico dos itens para invalidação de cache (insumos, etc).
- * Mudanças em code, quantity, unitCost, sourceName ou insumos invalidam o hash.
+ * FIX STAB-02: Exclui unitPrice e totalPrice (campos derivados) do hash.
+ * Esses campos mudam a cada recalc (BDI, desconto, precisão) sem impactar
+ * a consolidação de insumos. Mudanças relevantes: code, quantity, unitCost, sourceName, insumos.
  */
 export function buildInsumosItemsHash(items: EngItem[]): string {
     return items
         .filter(item => !isGrouper(item.type))
         .map(item => [
-            item.id,
             item.code || '',
             item.sourceName || '',
             Number(item.quantity) || 0,
             Number(item.unitCost) || 0,
-            Number(item.unitPrice) || 0,
-            Number(item.totalPrice) || 0,
             item.insumos?.length || 0,
         ].join(':'))
         .join('|');

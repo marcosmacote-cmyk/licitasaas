@@ -79,10 +79,11 @@ export function AjusteInteligenteModal({ proposalId, currentValue, estimatedValu
                 }),
             });
 
-            const data = await res.json();
             if (!res.ok) {
-                throw new Error(data.error || 'Erro ao aplicar ajuste inteligente');
+                const errData = await res.json().catch(() => ({ error: `Erro HTTP ${res.status}` }));
+                throw new Error(errData.error || `Erro ao processar ajuste (${res.status})`);
             }
+            const data = await res.json();
 
             onSuccess();
             onClose();

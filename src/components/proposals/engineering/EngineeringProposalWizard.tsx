@@ -5,6 +5,7 @@
  *
  * FIX F1.1: Auto-save debounced a cada 30s quando hasUnsavedChanges
  * FIX F1.3: BudgetDocsPanel agora recebe cronogramaResult e insumos reais
+ * FIX STAB: Auto-save granular (15s), saveValidator, UnsavedChangesModal, cronogramaSync unificado
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Settings, TableProperties, Calendar, FileText, Package as PackageIcon, Save, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -18,6 +19,10 @@ import { applyPrecision } from './precisionEngine';
 import { CronogramaPanel } from './CronogramaPanel';
 import { BudgetDocsPanel } from './BudgetDocsPanel';
 import { calcularCronograma, type CronogramaResult } from './cronogramaEngine';
+import { syncCronogramaFromItems } from './cronogramaSync';
+import { useAutoSave } from './useAutoSave';
+import { validateSavePayload } from './saveValidator';
+import { UnsavedChangesModal } from './UnsavedChangesModal';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngineeringConfig } from './types';
 import { isGrouper, DEFAULT_ENGINEERING_CONFIG } from './types';
@@ -58,10 +63,8 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
     const [bases, setBases] = useState<any[]>([]);
 
-    // FIX F1.1: Auto-save state
-    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-    const [isAutoSaving, setIsAutoSaving] = useState(false);
-    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // FIX STAB: Unsaved changes modal for step navigation
+    const [pendingStep, setPendingStep] = useState<number | null>(null);
 
     // FIX F1.3: Insumos consolidados para BudgetDocsPanel
     const [consolidatedInsumos, setConsolidatedInsumos] = useState<InsumoConsolidado[]>([]);
@@ -161,12 +164,28 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // ══════════════════════════════════════════
     // SAVE
     // ══════════════════════════════════════════
+    // FIX STAB: Track previous item count for save validation
+    const prevItemCountRef = useRef(0);
+    useEffect(() => { if (items.length > 0) prevItemCountRef.current = items.length; }, [items.length]);
+
     const handleSave = async (updatedConfig?: EngineeringConfig) => {
         setIsSaving(true); setSaveMsg(null);
         try {
             const activeConfig = updatedConfig || engineeringConfig;
+
+            // FIX STAB: Validate payload before saving
+            const validation = validateSavePayload(items, prevItemCountRef.current, activeConfig, bdiConfig);
+            if (!validation.valid) {
+                console.warn('[Save] Blocked:', validation.errors);
+                setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {validation.errors[0]}</span>);
+                return;
+            }
+            if (validation.warnings.length > 0) {
+                console.warn('[Save] Warnings:', validation.warnings);
+            }
+
             const bdiConfigToSave = { ...bdiConfig, bdiGlobal: effectiveBdi };
-            const itemsToSave = ensureClientIds(recalcAll(items, effectiveBdi, activeConfig));
+            const itemsToSave = ensureClientIds(recalcAll(validation.sanitized, effectiveBdi, activeConfig));
             setItems(itemsToSave);
             const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
                 method: 'POST', headers: hdrs(),
@@ -179,6 +198,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                 }
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}><CheckCircle2 size={14} /> {d.message}</span>);
                 setHasUnsavedChanges(false);
+                prevItemCountRef.current = (d.items || itemsToSave).length;
             } else {
                 setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> Erro ao salvar</span>);
             }
@@ -188,126 +208,36 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     };
 
     // ══════════════════════════════════════════
-    // FIX F1.1: AUTO-SAVE (debounced 30s)
+    // FIX STAB: AUTO-SAVE via dedicated hook (15s debounce, with validation)
     // ══════════════════════════════════════════
     const isAnyAIRunning = isExtractingBdi || isExtractingConfig || isExtractingEncargos || isAuditing;
 
-    // FIX F8: Ref com payload atualizado para autosave (evita closures stale)
-    const autoSavePayloadRef = useRef({ items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData });
-    useEffect(() => {
-        autoSavePayloadRef.current = { items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData };
-    }, [items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData]);
+    const getAutoSavePayload = useCallback(() => ({
+        items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData,
+    }), [items, bdiConfig, effectiveBdi, engineeringConfig, cronogramaData]);
 
-    useEffect(() => {
-        // Clear any pending auto-save timer
-        if (autoSaveTimerRef.current) {
-            clearTimeout(autoSaveTimerRef.current);
-            autoSaveTimerRef.current = null;
-        }
+    const { isAutoSaving, lastSavedAt } = useAutoSave({
+        proposalId,
+        debounceMs: 15000,
+        isBlocked: isAnyAIRunning || isSaving,
+        hasUnsavedChanges,
+        getPayload: getAutoSavePayload,
+        recalcAll,
+        ensureClientIds,
+        onSaveSuccess: () => setHasUnsavedChanges(false),
+    });
 
-        // Only schedule auto-save if there are unsaved changes and no AI is running
-        if (hasUnsavedChanges && !isSaving && !isAnyAIRunning && items.length > 0) {
-            autoSaveTimerRef.current = setTimeout(async () => {
-                setIsAutoSaving(true);
-                try {
-                    const snap = autoSavePayloadRef.current;
-                    const bdiConfigToSave = { ...snap.bdiConfig, bdiGlobal: snap.effectiveBdi };
-                    const itemsToSave = ensureClientIds(recalcAll(snap.items, snap.effectiveBdi, snap.engineeringConfig));
-                    const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
-                        method: 'POST', headers: hdrs(),
-                        body: JSON.stringify({ items: itemsToSave, bdiConfig: bdiConfigToSave, engineeringConfig: snap.engineeringConfig, cronogramaData: snap.cronogramaData })
-                    });
-                    if (res.ok) {
-                        setHasUnsavedChanges(false);
-                        setLastSavedAt(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-                    }
-                } catch (e) {
-                    console.error('[Auto-Save] Error:', e);
-                }
-                setIsAutoSaving(false);
-            }, 30000); // 30 seconds
-        }
-
-        return () => {
-            if (autoSaveTimerRef.current) {
-                clearTimeout(autoSaveTimerRef.current);
-            }
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasUnsavedChanges, isSaving, isAnyAIRunning, items.length]);
-
-    // Reactive sync between items and cronogramaData (prevents stale values in Step 5/PDFs)
+    // FIX STAB/SYNC-01: Reactive sync between items and cronogramaData
+    // Uses unified cronogramaSync instead of inline duplicated logic
     useEffect(() => {
         if (items.length === 0) return;
 
         setCronogramaData(prev => {
             if (!prev) return prev;
-
-            // Build current etapa totals from items
-            const etapaTotals = new Map<string, { name: string; total: number }>();
-            let currentEtapa = '';
-            for (const it of items) {
-                if (it.type === 'ETAPA') {
-                    currentEtapa = it.itemNumber.split('.')[0] || it.itemNumber;
-                    etapaTotals.set(currentEtapa, { name: it.description, total: 0 });
-                } else if (!isGrouper(it.type as any) && currentEtapa) {
-                    const entry = etapaTotals.get(currentEtapa);
-                    if (entry) entry.total += it.totalPrice || 0;
-                }
-            }
-
-            const isAutomaticEtapaId = (id: string) => {
-                const num = Number(id);
-                return !isNaN(num) && num < 1000000;
-            };
-
-            let changed = false;
-            const prevEtapas = prev.etapas || [];
-
-            // Filter out automatic stages that no longer exist
-            const filtered = prevEtapas.filter(e => {
-                if (isAutomaticEtapaId(e.id)) {
-                    const exists = etapaTotals.has(e.id);
-                    if (!exists) changed = true;
-                    return exists;
-                }
-                return true;
-            });
-
-            // Map and update existing stages
-            const updated = filtered.map(e => {
-                const match = etapaTotals.get(e.id);
-                if (match) {
-                    const hasNameChange = match.name && match.name !== e.nome;
-                    const hasValueChange = match.total !== e.valorTotal;
-                    if (hasNameChange || hasValueChange) {
-                        changed = true;
-                        return { ...e, valorTotal: match.total, nome: match.name || e.nome };
-                    }
-                }
-                return e;
-            });
-
-            // Add new stages
-            const existingIds = new Set(prevEtapas.map(e => e.id));
-            for (const [id, data] of etapaTotals) {
-                if (!existingIds.has(id)) {
-                    changed = true;
-                    updated.push({
-                        id,
-                        nome: data.name,
-                        valorTotal: data.total,
-                        percentuais: Array(12).fill(0),
-                    });
-                }
-            }
-
+            const { etapas: updated, changed } = syncCronogramaFromItems(items, prev.etapas || []);
             if (changed) {
                 setTimeout(() => setHasUnsavedChanges(true), 0);
-                return {
-                    meses: prev.meses,
-                    etapas: updated,
-                };
+                return { meses: prev.meses, etapas: updated };
             }
             return prev;
         });
@@ -624,7 +554,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                    {/* FIX F1.1: Auto-save indicator */}
+                    {/* FIX STAB: Auto-save indicator */}
                     {isAutoSaving && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
                             <Loader2 size={12} className="spin" /> Salvando...
@@ -646,8 +576,33 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                 </div>
             </div>
 
-            {/* Stepper */}
-            <StepperBar steps={steps} currentStep={currentStep} onStepClick={setCurrentStep} />
+            {/* Stepper — FIX STAB: Intercept step change for unsaved changes prompt */}
+            <StepperBar steps={steps} currentStep={currentStep} onStepClick={(step) => {
+                if (hasUnsavedChanges && step !== currentStep) {
+                    setPendingStep(step);
+                } else {
+                    setCurrentStep(step);
+                }
+            }} />
+
+            {/* FIX STAB: Unsaved Changes Modal */}
+            {pendingStep !== null && (
+                <UnsavedChangesModal
+                    targetStepLabel={steps[pendingStep - 1]?.label}
+                    isSaving={isSaving}
+                    onSaveAndContinue={async () => {
+                        await handleSave();
+                        setCurrentStep(pendingStep);
+                        setPendingStep(null);
+                    }}
+                    onDiscard={() => {
+                        setHasUnsavedChanges(false);
+                        setCurrentStep(pendingStep);
+                        setPendingStep(null);
+                    }}
+                    onCancel={() => setPendingStep(null)}
+                />
+            )}
 
             {/* Step Content */}
             {currentStep === 1 && (

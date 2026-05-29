@@ -83,15 +83,17 @@ export const DEFAULT_BDI_CONFIG: BdiConfig = {
  * @returns BDI como percentual (ex: 25.34)
  */
 export function calculateBdiTCU(params: BdiTcuParams, precision?: PrecisionConfig): number {
-    const ac = params.adminCentral / 100;
-    const s  = params.seguros / 100;
-    const g  = params.garantias / 100;
-    const r  = params.riscos / 100;
-    const df = params.despFinanceiras / 100;
-    const l  = params.lucro / 100;
-    const i  = (params.pis + params.cofins + params.iss + (params.csll || 0) + (params.cprb || 0)) / 100;
+    // FIX STAB-01: Sanitize negative inputs — user may type negative values
+    const clamp = (v: number) => Math.max(0, Number(v) || 0);
+    const ac = clamp(params.adminCentral) / 100;
+    const s  = clamp(params.seguros) / 100;
+    const g  = clamp(params.garantias) / 100;
+    const r  = clamp(params.riscos) / 100;
+    const df = clamp(params.despFinanceiras) / 100;
+    const l  = clamp(params.lucro) / 100;
+    const i  = (clamp(params.pis) + clamp(params.cofins) + clamp(params.iss) + clamp(params.csll) + clamp(params.cprb)) / 100;
 
-    // Guard against division by zero
+    // Guard against division by zero (I >= 100%)
     if (i >= 1) return 0;
 
     const bdi = ((1 + ac + s + g + r) * (1 + df) * (1 + l) / (1 - i) - 1) * 100;
