@@ -1435,7 +1435,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const handleClearComposition = async () => {
         if (!data || !data.id || !currentItem) return;
         // Only allow clearing PROPRIA compositions
-        if (data.database?.name !== 'PROPRIA' && data.database?.type !== 'PROPRIA') {
+        if (!isPropria(data.database?.name) && data.database?.type !== 'PROPRIA') {
             alert('Apenas composições PRÓPRIAS podem ser limpas. Composições oficiais são somente leitura.');
             return;
         }

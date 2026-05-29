@@ -498,7 +498,8 @@ function compositionOrderBy() {
 
 async function autoCleanCompositionMetadata(comp: any) {
     if (!comp) return;
-    const isPropria = comp.database?.type === 'PROPRIA' || comp.database?.name === 'PROPRIA';
+    const dbName = String(comp.database?.name || '').toUpperCase();
+    const isPropria = comp.database?.type === 'PROPRIA' || dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_');
     const hasNoItems = !comp.items || comp.items.length === 0;
     if (isPropria && hasNoItems) {
         let hasMetadata = false;
@@ -2246,7 +2247,8 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
             return res.status(404).json({ error: 'Composição não encontrada' });
         }
 
-        if (existing.database.type !== 'PROPRIA' && existing.database.name !== 'PROPRIA') {
+        const existingDbName = String(existing.database.name || '').toUpperCase();
+        if (existing.database.type !== 'PROPRIA' && existingDbName !== 'PROPRIA' && !existingDbName.startsWith('PROPRIA_')) {
             return res.status(403).json({ error: 'Apenas composições próprias podem ser limpas' });
         }
 
