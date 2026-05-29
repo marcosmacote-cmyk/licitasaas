@@ -4770,7 +4770,7 @@ router.post('/proposals/:id/reconcile', async (req: any, res: any) => {
         compositionCache.flushAll();
         engineeringSearchCache.flushAll();
 
-        res.json({ success: true, ...result });
+        res.json(result);
     } catch (e: any) {
         console.error('[Reconcile Action] Error:', e);
         const status = e.statusCode || 500;
