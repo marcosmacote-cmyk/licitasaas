@@ -18,6 +18,7 @@ import { SimpleTtlCache } from '../lib/cache';
 import { classifyInsumoType } from '../services/engineering/insumoClassifier';
 import { classifyComposition } from '../services/engineering/compositionCategorizer';
 import { resolveDisplayBase } from '../services/engineering/baseResolver';
+import { isTempId, flattenCompositionGroups, buildCompositionMetadata, correctCoefficientScaling, validateFkReferences, generateItemCode } from '../services/engineering/compositionSaveService';
 
 const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
@@ -1385,32 +1386,18 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         }
 
         // Flatten all items from groups to update, preserving their groupKey
-        const flatItems: any[] = [];
-        const hasGroups = !!composition.groups;
-        if (hasGroups) {
-            for (const [groupKey, group] of Object.entries(composition.groups)) {
-                if (Array.isArray(group)) {
-                    for (const item of group) {
-                        flatItems.push({
-                            ...item,
-                            groupKey: groupKey
-                        });
-                    }
-                }
-            }
-        }
+        const { flatItems, hasGroups } = flattenCompositionGroups(composition);
         logger.info(`[CompositionSave] PUT id=${id} code=${composition.code} flatItems=${flatItems.length} hasGroups=${hasGroups}`);
 
         let targetCompId = id;
         const tenantId = req.user?.tenantId || composition.tenantId;
 
-        // Invalidate cache since we are writing changes
-        compositionCache.flushAll();
-        engineeringSearchCache.flushAll();
+        // G12: Targeted cache invalidation — only flush entries related to this composition
+        const codeUpper = (composition.code || existing.code || '').toUpperCase();
+        compositionCache.flushPattern(key => typeof key === 'string' && key.toUpperCase().includes(codeUpper));
+        engineeringSearchCache.flushAll(); // search cache must be fully invalidated since results span multiple compositions
 
-        // Helper: detect temporary/synthetic IDs that don't exist in DB
-        const isTempId = (valId: string | null | undefined) => 
-            !valId || valId.startsWith('new-') || valId.startsWith('temp-') || valId.startsWith('new-casca-') || valId.startsWith('new-aux-') || valId.startsWith('synthetic-') || valId.startsWith('etapa-');
+
 
         // Retrieve proposal's target database details if databaseId is provided
         const targetDatabase = targetDbId
@@ -1579,18 +1566,17 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         const nonTempAuxsMap = new Map<string, any>();
         for (const aux of existingNonTempAuxs) nonTempAuxsMap.set(aux.id, aux);
 
-        const metadata = {
-            groupNotes: composition.groupNotes || null,
-            customGroupLabels: composition.customGroupLabels || null,
-            groupOrder: composition.groupOrder || null,
-            referenceDivisor: composition.referenceDivisor || null,
-            _officialRef: composition._officialRef || null,
-            observation: composition.observation || null,
-            rateio: composition.rateio || null,
-        };
+        const metadata = buildCompositionMetadata(composition);
 
         const newCode = composition.code || existing.code;
         let txBasePropriaId = basePropria?.id;
+
+        // G13: Auto-categorize composition on save
+        const autoCategory = classifyComposition(composition.description || existing.description, newCode).category;
+
+        // G14: Collect warnings about skipped items to return to the frontend
+        const saveWarnings: string[] = [];
+        let savedItemCount = 0;
 
         // Start a transaction to delete old items and recreate (with expanded timeout of 30s)
         await prisma.$transaction(async (tx: any) => {
@@ -1609,7 +1595,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             unit: composition.unit || existing.unit,
                             totalPrice: composition.totalPrice,
                             databaseId: targetDb.id,
-                            metadata: metadata
+                            metadata: metadata,
+                            category: autoCategory
                         }
                     });
                     logger.info(`[CompositionSave] 🐑 Cloned global PROPRIA comp id=${id} code=${newCode} to proposal database ${targetDb.name} with new id=${targetComp.id}`);
@@ -1621,7 +1608,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             description: composition.description || existing.description,
                             unit: composition.unit || existing.unit,
                             totalPrice: composition.totalPrice,
-                            metadata: metadata
+                            metadata: metadata,
+                            category: autoCategory
                         }
                     });
                 }
@@ -1648,7 +1636,8 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         totalPrice: composition.totalPrice !== undefined ? composition.totalPrice : existing.totalPrice,
                         description: composition.description || existing.description,
                         unit: composition.unit || existing.unit,
-                        metadata: metadata
+                        metadata: metadata,
+                        category: autoCategory
                     }
                 });
             }
@@ -1964,7 +1953,9 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                     // Skip observation/etapa items that have no real item or composition data
                     if (!itemId && !auxId && !isAux) {
-                        logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId: coef=${item.coefficient}`);
+                        const desc = item.item?.description || item.auxiliaryComposition?.description || `coef=${item.coefficient}`;
+                        saveWarnings.push(`Item sem referência válida ignorado: "${desc}"`);
+                        logger.info(`[CompositionSave] ⏩ Skipping item without itemId/auxId: ${desc}`);
                         continue;
                     }
                     
@@ -2039,11 +2030,15 @@ router.put('/compositions/:id', async (req: any, res: any) => {
 
                     // Final validation: skip if we still don't have valid references
                     if (!isAux && !itemId) {
-                        logger.warn(`[CompositionSave] ⚠️ Skipping item with no valid itemId after resolution`);
+                        const desc = item.item?.description || item.item?.code || 'desconhecido';
+                        saveWarnings.push(`Insumo "${desc}" não pôde ser resolvido no banco`);
+                        logger.warn(`[CompositionSave] ⚠️ Skipping item with no valid itemId after resolution: ${desc}`);
                         continue;
                     }
                     if (isAux && !auxId) {
-                        logger.warn(`[CompositionSave] ⚠️ Skipping aux comp with no valid auxId after resolution`);
+                        const desc = item.auxiliaryComposition?.description || item.auxiliaryComposition?.code || 'desconhecido';
+                        saveWarnings.push(`Composição auxiliar "${desc}" não pôde ser resolvida`);
+                        logger.warn(`[CompositionSave] ⚠️ Skipping aux comp with no valid auxId after resolution: ${desc}`);
                         continue;
                     }
 
@@ -2162,6 +2157,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                            [...localPropriaItems.values()].some((i: any) => i.id === itemId) ||
                                            officialItems.some((i: any) => i.id === itemId);
                         if (!itemExists) {
+                            saveWarnings.push(`Insumo "${item.item?.code || item.item?.description || itemId}" não encontrado no banco`);
                             logger.warn(`[CompositionSave] ⚠️ Skipping item: itemId=${itemId} does not exist. Item code=${item.item?.code}`);
                             continue;
                         }
@@ -2171,6 +2167,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                            [...localPropriaAuxs.values()].some((a: any) => a.id === auxId) ||
                                            officialComps.some((a: any) => a.id === auxId);
                         if (!auxExists) {
+                            saveWarnings.push(`Composição auxiliar "${item.auxiliaryComposition?.code || auxId}" não encontrada no banco`);
                             logger.warn(`[CompositionSave] ⚠️ Skipping aux: auxId=${auxId} does not exist. Aux code=${item.auxiliaryComposition?.code}`);
                             continue;
                         }
@@ -2187,14 +2184,21 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             coefficientExpression: item.coefficientExpression || null,
                         }
                     });
+                    savedItemCount++;
                 }
             }
         }, {
             timeout: 30000 // 30s timeout
         });
 
-        logger.info(`[CompositionSave] ✅ PUT complete: id=${targetCompId} code=${composition.code} items=${flatItems.length} saved`);
-        res.json({ message: 'Composição updated com sucesso', id: targetCompId });
+        logger.info(`[CompositionSave] ✅ PUT complete: id=${targetCompId} code=${composition.code} items=${savedItemCount}/${flatItems.length} saved, warnings=${saveWarnings.length}`);
+        res.json({
+            message: 'Composição updated com sucesso',
+            id: targetCompId,
+            savedItems: savedItemCount,
+            totalItems: flatItems.length,
+            warnings: saveWarnings.length > 0 ? saveWarnings : undefined
+        });
 
     } catch (e: any) {
         console.error('Error updating custom composition:', e);
@@ -2527,6 +2531,128 @@ router.delete('/items/:id', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('Error deleting item:', e);
         res.status(500).json({ error: 'Erro ao excluir insumo', details: e.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/proposals/:proposalId/recalculate-prices
+// G1-FIX: Reconcile proposal item prices with actual composition data
+// Detects and fixes stale prices (composition edited after budget creation)
+// ═══════════════════════════════════════════════════════════
+router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: any) => {
+    try {
+        const { proposalId } = req.params;
+        const tenantId = req.user?.tenantId;
+
+        const proposal = await prisma.priceProposal.findFirst({
+            where: { id: proposalId, ...(tenantId ? { tenantId } : {}) },
+            select: { id: true, engineeringConfig: true, bdiConfig: true, bdiPercentage: true }
+        });
+        if (!proposal) return res.status(404).json({ error: 'Proposta não encontrada' });
+
+        const engConfig = proposal.engineeringConfig ? (typeof proposal.engineeringConfig === 'string' ? JSON.parse(proposal.engineeringConfig as string) : proposal.engineeringConfig) as any : {};
+        const bdiConfig = proposal.bdiConfig ? (typeof proposal.bdiConfig === 'string' ? JSON.parse(proposal.bdiConfig as string) : proposal.bdiConfig) as any : {};
+        const bdiGlobal = Number(bdiConfig?.bdiGlobal) || Number(proposal.bdiPercentage) || 0;
+        const bdiDiferenciado = !!engConfig?.bdiDiferenciado;
+        const bdiFornecimento = Number(engConfig?.bdiFornecimento) || 0;
+        const precisionConfig = engConfig?.precision || { tipo: 'ROUND', casasDecimais: 2 };
+
+        const applyPrecision = (value: number, config: any) => {
+            const dec = config?.casasDecimais ?? 2;
+            if (config?.tipo === 'TRUNCATE') {
+                const factor = Math.pow(10, dec);
+                return Math.floor(value * factor + 1e-9) / factor;
+            }
+            return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
+        };
+        const applyBdi = (cost: number, bdi: number) => applyPrecision(cost * (1 + bdi / 100), precisionConfig);
+
+        // Get all billable items in proposal
+        const items = await prisma.engineeringProposalItem.findMany({
+            where: { proposalId },
+        });
+
+        // Get all unique codes from items that have compositions
+        const compositionCodes = [...new Set(items.filter(i => i.code && i.type !== 'ETAPA' && i.type !== 'SUBETAPA').map(i => i.code!.toUpperCase()))];
+
+        // Batch load compositions from PROPRIA_proposalId, then PROPRIA, then any
+        const compositions = await prisma.engineeringComposition.findMany({
+            where: {
+                code: { in: compositionCodes, mode: 'insensitive' },
+                database: { OR: [{ name: `PROPRIA_${proposalId}` }, { name: 'PROPRIA' }] }
+            },
+            include: { database: true, items: { include: { item: true } } }
+        });
+
+        const compByCode = new Map<string, any>();
+        // PROPRIA first, then PROPRIA_proposalId overrides
+        for (const comp of compositions.sort((a, b) => a.database.name.localeCompare(b.database.name))) {
+            compByCode.set(comp.code.toUpperCase(), comp);
+        }
+
+        const changes: { itemId: string; code: string; oldUnitCost: number; newUnitCost: number; delta: number }[] = [];
+
+        for (const item of items) {
+            if (!item.code || item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
+            const comp = compByCode.get(item.code.toUpperCase());
+            if (!comp || comp.items.length === 0) continue; // No composition data available
+
+            // Calculate divisor from composition metadata
+            let divisor = 1;
+            if (comp.metadata) {
+                try {
+                    const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                    if (meta?.referenceDivisor?.value > 0) divisor = Number(meta.referenceDivisor.value) || 1;
+                } catch {}
+            }
+
+            // Calculate real sum from composition items
+            const realTotal = comp.items.reduce((sum: number, ci: any) => {
+                if (ci.item) return sum + (ci.item.price * ci.coefficient);
+                return sum + (ci.price || 0);
+            }, 0);
+            const effectiveTotal = realTotal > 0 ? realTotal : comp.totalPrice;
+            const newUnitCost = applyPrecision(effectiveTotal / divisor, precisionConfig);
+            const oldUnitCost = Number(item.unitCost) || 0;
+
+            if (Math.abs(newUnitCost - oldUnitCost) > 0.01) {
+                const itemBdi = bdiDiferenciado && (item as any).bdiCategoria === 'FORNECIMENTO' ? bdiFornecimento : bdiGlobal;
+                const unitPrice = applyBdi(newUnitCost, itemBdi);
+                const totalPrice = applyPrecision(item.quantity * unitPrice, precisionConfig);
+
+                await prisma.engineeringProposalItem.update({
+                    where: { id: item.id },
+                    data: { unitCost: newUnitCost, unitPrice, totalPrice, compositionTotalPrice: effectiveTotal }
+                });
+
+                changes.push({
+                    itemId: item.id,
+                    code: item.code,
+                    oldUnitCost,
+                    newUnitCost,
+                    delta: newUnitCost - oldUnitCost
+                });
+            }
+        }
+
+        // Recalculate proposal total if any changes were made
+        if (changes.length > 0) {
+            const allItems = await prisma.engineeringProposalItem.findMany({ where: { proposalId } });
+            const totalValue = allItems
+                .filter((it: any) => it.type !== 'ETAPA' && it.type !== 'SUBETAPA')
+                .reduce((sum: number, it: any) => sum + (Number(it.totalPrice) || 0), 0);
+            await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
+            logger.info(`[RecalculatePrices] ✅ Reconciled ${changes.length} items in proposal ${proposalId}. New total: ${totalValue}`);
+        }
+
+        res.json({
+            message: `${changes.length} preço(s) reconciliado(s)`,
+            changes,
+            totalChanges: changes.length
+        });
+    } catch (e: any) {
+        logger.error('[RecalculatePrices] Error:', e);
+        res.status(500).json({ error: 'Erro ao reconciliar preços', details: e.message });
     }
 });
 

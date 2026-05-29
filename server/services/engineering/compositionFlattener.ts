@@ -89,69 +89,43 @@ export class CompositionFlattener {
       }
     }
 
-    for (const agg of aggregatedItems.values()) {
-      // Try to find in PROPRIA_${proposalId} first
-      let composition = await prisma.engineeringComposition.findFirst({
-        where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: `PROPRIA_${proposalId}` } },
-        include: {
-          database: true,
-          items: {
-            include: {
-              item: true,
-              composition: { include: { database: true } }
-            }
+    // G8-FIX: Batch-load ALL compositions in a single query instead of N+1
+    const allCodes = [...aggregatedItems.keys()];
+    const allCompositions = allCodes.length > 0 ? await prisma.engineeringComposition.findMany({
+      where: { code: { in: allCodes, mode: 'insensitive' } },
+      include: {
+        database: true,
+        items: {
+          include: {
+            item: true,
+            composition: { include: { database: true } }
           }
         }
-      });
-
-      // Try to find in PROPRIA next (overridden composition)
-      if (!composition) {
-        composition = await prisma.engineeringComposition.findFirst({
-          where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: 'PROPRIA' } },
-          include: {
-            database: true,
-            items: {
-              include: {
-                item: true,
-                composition: { include: { database: true } }
-              }
-            }
-          }
-        });
       }
+    }) : [];
 
-      // Fallback to the one matching the sourceName
-      if (!composition) {
-          composition = await prisma.engineeringComposition.findFirst({
-            where: { code: { equals: agg.code, mode: 'insensitive' }, database: { name: agg.sourceName } },
-            include: {
-              database: true,
-              items: {
-                include: {
-                  item: true,
-                  composition: { include: { database: true } }
-                }
-              }
-            }
-          });
-      }
+    // Build priority map: PROPRIA_proposalId > PROPRIA > sourceName > any
+    const compByCode = new Map<string, any>();
+    // Pass 1: any database (lowest priority)
+    for (const c of allCompositions) compByCode.set(c.code.toUpperCase(), c);
+    // Pass 2: matching sourceName
+    for (const agg of aggregatedItems.values()) {
+      const sourceMatch = allCompositions.find(c => 
+        c.code.toUpperCase() === agg.code.toUpperCase() && c.database?.name === agg.sourceName
+      );
+      if (sourceMatch) compByCode.set(sourceMatch.code.toUpperCase(), sourceMatch);
+    }
+    // Pass 3: PROPRIA (override)
+    for (const c of allCompositions) {
+      if (c.database?.name === 'PROPRIA') compByCode.set(c.code.toUpperCase(), c);
+    }
+    // Pass 4: PROPRIA_proposalId (highest priority)
+    for (const c of allCompositions) {
+      if (c.database?.name === `PROPRIA_${proposalId}`) compByCode.set(c.code.toUpperCase(), c);
+    }
 
-      // Final fallback to any
-      if (!composition) {
-          composition = await prisma.engineeringComposition.findFirst({
-            where: { code: { equals: agg.code, mode: 'insensitive' } },
-            include: {
-              database: true,
-              items: {
-                include: {
-                  item: true,
-                  composition: { include: { database: true } }
-                }
-              }
-            }
-          });
-      }
-
+    for (const agg of aggregatedItems.values()) {
+      const composition = compByCode.get(agg.code.toUpperCase());
       if (!composition) continue;
 
       const flattened = await this.resolveComposition(composition.id, false, composition.database?.name || agg.sourceName);
@@ -271,10 +245,11 @@ export class CompositionFlattener {
           groupKey: deriveGroupKey(ci.item.type, ci.groupKey),
         });
 
-        // Accumulate totals for the footer
-        if (ci.item.type === 'MAO_DE_OBRA') totalMoComLs += itemTotal;
-        else if (ci.item.type === 'MATERIAL') totalMaterial += itemTotal;
-        else if (ci.item.type === 'EQUIPAMENTO') totalEquipamento += itemTotal;
+        // G4-FIX: Use resolvedType (from classifier) instead of ci.item.type (raw DB)
+        // to ensure footer totals match the badges shown in the report
+        if (resolvedType === 'MAO_DE_OBRA') totalMoComLs += itemTotal;
+        else if (resolvedType === 'MATERIAL') totalMaterial += itemTotal;
+        else if (resolvedType === 'EQUIPAMENTO') totalEquipamento += itemTotal;
         
       } else if (ci.auxiliaryCompositionId) {
         // It's an auxiliary composition, we need to resolve it recursively
@@ -338,12 +313,21 @@ export class CompositionFlattener {
       }
     }
 
+    // G3-FIX: Integrity check — compare calculated sum vs stored totalPrice
+    const calculatedTotal = flattenedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const storedTotal = composition.totalPrice;
+    if (Math.abs(calculatedTotal - storedTotal) > 0.1 && flattenedItems.length > 0) {
+      console.warn(`[CompositionFlattener] ⚠️ Price integrity warning for ${composition.code}: calculated=${calculatedTotal.toFixed(2)} stored=${storedTotal.toFixed(2)} Δ=${(calculatedTotal - storedTotal).toFixed(2)}`);
+    }
+    // Use calculated total when available (more accurate), fall back to stored
+    const effectiveTotal = flattenedItems.length > 0 ? calculatedTotal : storedTotal;
+
     // Leis Sociais already included in totalMoComLs. Extract backward.
     const totalMoSemLs = totalMoComLs / (1 + this.lsPercentage);
     const totalLs = totalMoComLs - totalMoSemLs;
     
-    const valorBdi = composition.totalPrice * this.bdi;
-    const valorComBdi = composition.totalPrice + valorBdi;
+    const valorBdi = effectiveTotal * this.bdi;
+    const valorComBdi = effectiveTotal + valorBdi;
 
     const result: FlattenedComposition = {
       id: composition.id,
@@ -351,7 +335,7 @@ export class CompositionFlattener {
       sourceName: displaySourceName,
       description: composition.description,
       unit: composition.unit,
-      totalPrice: composition.totalPrice,
+      totalPrice: effectiveTotal,
       items: flattenedItems,
       isAuxiliary,
       itemNumbers: [], // populated by flattenProposal for principals

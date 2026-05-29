@@ -2083,6 +2083,37 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     {isAuditing ? <Loader2 size={14} className="spin" /> : <Database size={14} color="var(--color-primary)" />}
                                     <div><div>Puxar Valores do Hub</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Atualiza preços com a data base configurada</div></div>
                                 </button>
+                                <button onClick={async () => {
+                                    setShowToolsMenu(false);
+                                    try {
+                                        const res = await fetch(`/api/engineering/proposals/${proposalId}/recalculate-prices`, {
+                                            method: 'POST',
+                                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok && data.totalChanges > 0) {
+                                            // Apply changes to local items state
+                                            setItems(prev => prev.map(it => {
+                                                const change = data.changes.find((c: any) => c.code === it.code);
+                                                if (!change) return it;
+                                                const itemBdi = engineeringConfig.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO' ? (engineeringConfig.bdiFornecimento || 0) : effectiveBdi;
+                                                const newUp = applyBdi(change.newUnitCost, itemBdi, engineeringConfig.precision);
+                                                return { ...it, unitCost: change.newUnitCost, unitPrice: newUp, totalPrice: applyPrecision(it.quantity * newUp, engineeringConfig) };
+                                            }));
+                                            alert(`✅ ${data.totalChanges} preço(s) reconciliado(s) com as composições atuais.\n\n${data.changes.map((c: any) => `• ${c.code}: R$ ${c.oldUnitCost.toFixed(2)} → R$ ${c.newUnitCost.toFixed(2)} (Δ ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)})`).join('\n')}`);
+                                        } else if (res.ok) {
+                                            alert('✅ Todos os preços já estão sincronizados com as composições.');
+                                        } else {
+                                            alert('Erro: ' + (data.error || 'Falha na reconciliação'));
+                                        }
+                                    } catch { alert('Erro de conexão'); }
+                                }} disabled={items.length === 0}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    <RefreshCw size={14} color="#059669" />
+                                    <div><div>Reconciliar Preços</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Sincroniza preços do orçamento com composições atuais</div></div>
+                                </button>
                             </div>
                         </>)}
                     </div>

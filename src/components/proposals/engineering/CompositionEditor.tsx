@@ -1566,8 +1566,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                     onUpdateItem(currentItem.id, { unitCost: rootCost, compositionTotalPrice: rootSnapshot.totalPrice } as any);
                 }
             }
-            
-            alert(`Composição salva com sucesso na base PRÓPRIA!${officialRef ? ` (referência: ${officialRef.databaseName})` : ''}`);
+            // G14: Show warnings to user if items were skipped during save
+            const warningText = putRes.warnings?.length 
+                ? `\n\n⚠️ ${putRes.warnings.length} item(ns) não puderam ser salvos:\n${putRes.warnings.map((w: string) => `• ${w}`).join('\n')}`
+                : '';
+            alert(`Composição salva com sucesso na base PRÓPRIA!${officialRef ? ` (referência: ${officialRef.databaseName})` : ''}${warningText}`);
+            if (putRes.warnings?.length) {
+                console.warn('[CompositionEditor] Save warnings:', putRes.warnings);
+            }
         } catch (e: any) {
             alert(e.message || 'Erro de rede ao salvar');
         } finally {
