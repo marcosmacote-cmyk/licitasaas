@@ -2314,6 +2314,8 @@ router.delete('/compositions/:id/items', async (req: any, res: any) => {
                             unitCost: 0,
                             unitPrice: 0,
                             totalPrice: 0,
+                            compositionTotalPrice: 0,
+                            sourceName: 'PROPRIA',
                             priceAudit: {
                                 status: 'SEM_MATCH',
                                 warnings: ['Nenhuma composição analítica foi encontrada.'],

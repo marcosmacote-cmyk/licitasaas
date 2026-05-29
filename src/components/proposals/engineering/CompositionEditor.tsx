@@ -1498,8 +1498,31 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             setRefDivisorLabel('');
             setRefDivisorValue('');
 
-            // CASCADE: update planilha item unitCost to 0
-            triggerUpdateItem({ unitCost: 0 });
+            const canonicalCode = currentItem.code;
+            if (onCompositionSaved && canonicalCode) {
+                onCompositionSaved({
+                    code: canonicalCode,
+                    description: data.description || currentItem.description,
+                    unit: data.unit || currentItem.unit,
+                    unitCost: 0,
+                    compositionTotalPrice: 0,
+                    sourceName: 'PROPRIA'
+                });
+            } else if (onUpdateItem && canonicalCode) {
+                (onUpdateItem as any)('__syncComposition__', {
+                    code: canonicalCode,
+                    description: data.description || currentItem.description,
+                    unit: data.unit || currentItem.unit,
+                    unitCost: 0,
+                    compositionTotalPrice: 0,
+                    sourceName: 'PROPRIA'
+                });
+            }
+
+            // CASCADE: update current planilha item unitCost/compositionTotalPrice to 0.
+            // Pass compositionTotalPrice explicitly so triggerUpdateItem does not reuse
+            // the pre-clear data.totalPrice snapshot.
+            triggerUpdateItem({ unitCost: 0, compositionTotalPrice: 0, sourceName: 'PROPRIA' } as any);
         } catch (e: any) {
             alert(e.message || 'Erro ao limpar composição');
         }
