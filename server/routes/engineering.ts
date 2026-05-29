@@ -6,6 +6,7 @@ import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
 // seinfra-scraper moved to engineering/baseSyncRoutes.ts
+import { hydrateOrseCompositionDetails } from '../services/engineering/orseCrawler';
 import { CompositionFlattener } from '../services/engineering/compositionFlattener';
 import axios from 'axios';
 import https from 'https';
