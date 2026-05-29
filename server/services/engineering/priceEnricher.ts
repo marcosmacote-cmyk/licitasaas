@@ -287,8 +287,21 @@ export function chooseBestCandidate(
 
 // ── Main Enrichment Function ──
 
-function buildDatabaseWhere(options?: PriceEnrichmentOptions) {
-    const or: any[] = [{ type: 'OFICIAL' }];
+function buildDatabaseWhere(config?: EngineeringConfig, options?: PriceEnrichmentOptions) {
+    const or: any[] = [];
+    const desiredOfficialBases = Array.isArray(config?.basesConsideradas)
+        ? config.basesConsideradas.filter((b: string) => b && b.toUpperCase() !== 'PROPRIA')
+        : [];
+    
+    if (desiredOfficialBases.length > 0) {
+        or.push({
+            type: 'OFICIAL',
+            name: { in: desiredOfficialBases }
+        });
+    } else {
+        or.push({ type: 'OFICIAL' });
+    }
+
     if (options?.tenantId && options.includeOwnTenantDatabase !== false) {
         if (options.proposalId) {
             or.push({
@@ -452,11 +465,11 @@ export async function enrichWithOfficialPrices(
 
     const [dbItems, dbComps] = await Promise.all([
         prisma.engineeringItem.findMany({
-            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(options) },
+            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(engineeringConfig, options) },
             include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
         prisma.engineeringComposition.findMany({
-            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(options) },
+            where: { code: { in: codes, mode: 'insensitive' }, database: buildDatabaseWhere(engineeringConfig, options) },
             include: { database: { select: { id: true, tenantId: true, type: true, name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } } },
         }),
     ]);
@@ -467,7 +480,7 @@ export async function enrichWithOfficialPrices(
         console.log(`[PriceEnricher] ⚠️ ZERO matches in DB! Possible causes: base not imported, wrong code format, or database filter too strict`);
         // List all OFICIAL databases for diagnostic
         try {
-            const allDbs = await prisma.engineeringDatabase.findMany({ where: buildDatabaseWhere(options), select: { name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } });
+            const allDbs = await prisma.engineeringDatabase.findMany({ where: buildDatabaseWhere(engineeringConfig, options), select: { name: true, uf: true, version: true, referenceMonth: true, referenceYear: true, payrollExemption: true } });
             const dbNames = [...new Set(allDbs.map(d => `${d.name}/${d.uf || '?'}/${d.version || '?'}/${d.referenceYear || '?'}-${d.referenceMonth || '?'}/desoneracao:${d.payrollExemption}`))];
             console.log(`[PriceEnricher] 📚 Available databases (${allDbs.length}): ${dbNames.slice(0, 10).join(' | ')}`);
         } catch {}
@@ -623,6 +636,12 @@ function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {
         if (!item.unit || item.unit === 'UN') item.unit = matchedCandidate.unit || item.unit;
         if ((!item.sourceName || item.sourceName.startsWith('PROPRIA')) && matchedCandidate.database?.name) item.sourceName = matchedCandidate.database.name;
         if (matchedCandidate.matchType === 'COMPOSICAO') item.type = 'COMPOSICAO';
+    }
+
+    // Auto-popula o custo unitário se estiver zerado e o match encontrou um valor válido
+    if ((Number(item.unitCost) || 0) === 0 && matchedUnitCost > 0) {
+        item.unitCost = matchedUnitCost;
+        item.priceOrigin = 'BASE';
     }
 
     item.priceAudit = {

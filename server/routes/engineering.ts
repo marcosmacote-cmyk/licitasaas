@@ -2598,27 +2598,42 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
         // Get all unique codes from items that have compositions
         const compositionCodes = [...new Set(items.filter(i => i.code && i.type !== 'ETAPA' && i.type !== 'SUBETAPA').map(i => i.code!.toUpperCase()))];
 
-        // Batch load compositions from PROPRIA_proposalId, then PROPRIA, then any
+        // Batch load compositions matching codes
         const compositions = await prisma.engineeringComposition.findMany({
             where: {
-                code: { in: compositionCodes, mode: 'insensitive' },
-                database: { OR: [{ name: `PROPRIA_${proposalId}` }, { name: 'PROPRIA' }] }
+                code: { in: compositionCodes, mode: 'insensitive' }
             },
             include: { database: true, items: { include: { item: true } } }
         });
 
-        const compByCode = new Map<string, any>();
-        // PROPRIA first, then PROPRIA_proposalId overrides
-        for (const comp of compositions.sort((a, b) => a.database.name.localeCompare(b.database.name))) {
-            compByCode.set(comp.code.toUpperCase(), comp);
+        const compsByCode = new Map<string, any[]>();
+        for (const comp of compositions) {
+            const codeKey = comp.code.toUpperCase();
+            if (!compsByCode.has(codeKey)) {
+                compsByCode.set(codeKey, []);
+            }
+            compsByCode.get(codeKey)!.push(comp);
         }
 
+        const targetDate = parseDataBaseMonth(engConfig?.dataBase);
         const changes: { itemId: string; code: string; oldUnitCost: number; newUnitCost: number; delta: number }[] = [];
 
         for (const item of items) {
             if (!item.code || item.type === 'ETAPA' || item.type === 'SUBETAPA') continue;
-            const comp = compByCode.get(item.code.toUpperCase());
-            if (!comp || comp.items.length === 0) continue; // No composition data available
+            const candidates = compsByCode.get(item.code.toUpperCase()) || [];
+            if (candidates.length === 0) continue;
+
+            // Use chooseBestCandidate from priceEnricher to find the best composition match
+            const bestMatch = chooseBestCandidate(
+                candidates.map(c => ({ ...c, matchedPrice: Number(c.totalPrice) || 0 })),
+                item,
+                engConfig,
+                targetDate
+            );
+
+            if (!bestMatch) continue;
+            const comp = bestMatch.candidate;
+            if (!comp) continue;
 
             // Calculate divisor from composition metadata
             let divisor = 1;
@@ -2630,22 +2645,30 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
             }
 
             // Calculate real sum from composition items
-            const realTotal = comp.items.reduce((sum: number, ci: any) => {
+            const realTotal = Array.isArray(comp.items) ? comp.items.reduce((sum: number, ci: any) => {
                 if (ci.item) return sum + (ci.item.price * ci.coefficient);
                 return sum + (ci.price || 0);
-            }, 0);
-            const effectiveTotal = realTotal > 0 ? realTotal : comp.totalPrice;
+            }, 0) : 0;
+            const effectiveTotal = realTotal > 0 ? realTotal : (Number(comp.totalPrice) || 0);
             const newUnitCost = applyPrecision(effectiveTotal / divisor, precisionConfig);
             const oldUnitCost = Number(item.unitCost) || 0;
 
-            if (Math.abs(newUnitCost - oldUnitCost) > 0.01) {
+            if (Math.abs(newUnitCost - oldUnitCost) > 0.01 || oldUnitCost === 0) {
                 const itemBdi = bdiDiferenciado && (item as any).bdiCategoria === 'FORNECIMENTO' ? bdiFornecimento : bdiGlobal;
                 const unitPrice = applyBdi(newUnitCost, itemBdi);
                 const totalPrice = applyPrecision(item.quantity * unitPrice, precisionConfig);
 
+                const isOfficial = comp.database?.type === 'OFICIAL';
+
                 await prisma.engineeringProposalItem.update({
                     where: { id: item.id },
-                    data: { unitCost: newUnitCost, unitPrice, totalPrice, compositionTotalPrice: effectiveTotal }
+                    data: {
+                        unitCost: newUnitCost,
+                        unitPrice,
+                        totalPrice,
+                        compositionTotalPrice: effectiveTotal,
+                        priceOrigin: isOfficial ? 'BASE' : 'PROPRIA'
+                    }
                 });
 
                 changes.push({

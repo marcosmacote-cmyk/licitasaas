@@ -604,7 +604,6 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                 />
             )}
 
-            {/* Step Content */}
             {currentStep === 1 && (
                 <Step1ConfigPanel
                     engineeringConfig={engineeringConfig}
@@ -622,7 +621,10 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     onExtractEncargos={handleExtractEncargos}
                     onSyncBases={syncBases}
                     onSave={handleSave}
-                    onNext={() => setCurrentStep(2)}
+                    onNext={async () => {
+                        await handleSave(engineeringConfig);
+                        setCurrentStep(2);
+                    }}
                     setHasUnsavedChanges={setHasUnsavedChanges}
                     saveMsg={saveMsg}
                     setSaveMsg={setSaveMsg}

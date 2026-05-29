@@ -2526,14 +2526,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         {/* Data Base */}
                         <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', padding: '10px 12px' }}>
                             <div style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Data Base</div>
-                            {dashConfig?.dataBases && Object.keys(dashConfig.dataBases).length > 0 ? (
+                            {dashConfig?.dataBases && Object.keys(dashConfig.dataBases).filter(base => (dashConfig.basesConsideradas || []).includes(base)).length > 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {Object.entries(dashConfig.dataBases).map(([base, date]) => (
-                                        <div key={base} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                                            <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
-                                            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{date || '—'}</span>
-                                        </div>
-                                    ))}
+                                    {Object.entries(dashConfig.dataBases)
+                                        .filter(([base]) => (dashConfig.basesConsideradas || []).includes(base))
+                                        .map(([base, date]) => (
+                                            <div key={base} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                                                <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>{base}</span>
+                                                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{date || '—'}</span>
+                                            </div>
+                                        ))
+                                    }
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>

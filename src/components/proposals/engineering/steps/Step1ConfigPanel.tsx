@@ -792,8 +792,17 @@ export function Step1ConfigPanel({
                                     }}>
                                         <input type="checkbox" checked={isChecked} style={{ display: 'none' }}
                                             onChange={e => {
-                                                const b = engineeringConfig.basesConsideradas;
-                                                onConfigChange({ ...engineeringConfig, basesConsideradas: e.target.checked ? [...b, base] : b.filter(x => x !== base) });
+                                                const b = engineeringConfig.basesConsideradas || [];
+                                                const nextBases = e.target.checked ? [...b, base] : b.filter(x => x !== base);
+                                                const nextDataBases = { ...(engineeringConfig.dataBases || {}) };
+                                                if (!e.target.checked) {
+                                                    delete nextDataBases[base];
+                                                }
+                                                onConfigChange({
+                                                    ...engineeringConfig,
+                                                    basesConsideradas: nextBases,
+                                                    dataBases: nextDataBases
+                                                });
                                             }} />
                                         {base}
                                     </label>
