@@ -1423,7 +1423,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
         if (hasGroups) {
             basePropria = await getOrCreatePropriaDatabase(prisma, tenantId, proposalId);
 
-            const uniqueDbNames = [...new Set(flatItems.map(item => item._matchedDatabase).filter(name => name && name !== 'PRÓPRIO' && name !== 'PROPRIA'))];
+            const uniqueDbNames = [...new Set(flatItems.map(item => item._matchedDatabase).filter((name): name is string => !!name && name !== 'PRÓPRIO' && name !== 'PROPRIA'))];
 
             const officialInputCodes = flatItems
                 .filter(item => {
