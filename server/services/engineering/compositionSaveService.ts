@@ -62,7 +62,7 @@ export function isTempId(valId: string | null | undefined): boolean {
  */
 export function flattenCompositionGroups(composition: any): { flatItems: FlatItem[]; hasGroups: boolean } {
     const flatItems: FlatItem[] = [];
-    const hasGroups = composition.groups && typeof composition.groups === 'object' && Object.keys(composition.groups).length > 0;
+    const hasGroups = !!(composition.groups && typeof composition.groups === 'object' && Object.keys(composition.groups).length > 0);
 
     if (hasGroups) {
         for (const [groupKey, group] of Object.entries(composition.groups)) {

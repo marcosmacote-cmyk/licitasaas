@@ -46,11 +46,21 @@ interface EngItem {
     insumos?: InsumoDetail[];
 }
 
+interface CompositionSyncData {
+    code: string;
+    description?: string;
+    unit?: string;
+    unitCost: number;
+    compositionTotalPrice: number;
+    sourceName: string;
+}
+
 interface Props {
     items: EngItem[];
     initialIndex: number;
     onClose: () => void;
     onUpdateItem: (itemId: string, updates: Partial<EngItem>) => void;
+    onCompositionSaved?: (data: CompositionSyncData) => void;
     engineeringConfig?: any;
     proposalId?: string;
     bdiConfig?: any;
@@ -268,7 +278,7 @@ const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precisi
     return applyPrecision(total, { precision });
 };
 
-export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, engineeringConfig, proposalId, bdiConfig }: Props) {
+export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, onCompositionSaved, engineeringConfig, proposalId, bdiConfig }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const currentItem = items[currentIndex];
     const hasPrev = currentIndex > 0;
@@ -1529,16 +1539,25 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 ? applyPrecision(data.totalPrice / divisor, { precision: engineeringConfig?.precision }) 
                 : data.totalPrice;
 
-            // Sync this composition's details (code, description, unit, cost, sourceName) to any matching spreadsheet items
-            // CASCA-FIX: Include compositionTotalPrice so the spreadsheet knows this is a formed price
-            if (onUpdateItem && canonicalCode) {
+            // G11-FIX: Use typed callback instead of magic string __syncComposition__
+            if (onCompositionSaved && canonicalCode) {
+                onCompositionSaved({
+                    code: canonicalCode,
+                    description: data.description || currentItem.description,
+                    unit: data.unit || currentItem.unit,
+                    unitCost: finalCost,
+                    compositionTotalPrice: data.totalPrice,
+                    sourceName: 'PROPRIA'
+                });
+            } else if (onUpdateItem && canonicalCode) {
+                // Fallback for backward compatibility
                 (onUpdateItem as any)('__syncComposition__', {
                     code: canonicalCode,
                     description: data.description || currentItem.description,
                     unit: data.unit || currentItem.unit,
                     unitCost: finalCost,
-                    compositionTotalPrice: data.totalPrice, // preço formado pelos insumos
-                    sourceName: `PROPRIA`
+                    compositionTotalPrice: data.totalPrice,
+                    sourceName: 'PROPRIA'
                 });
             }
 

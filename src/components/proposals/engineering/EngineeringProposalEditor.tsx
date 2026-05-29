@@ -3276,6 +3276,28 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     proposalId={proposalId}
                     bdiConfig={bdiConfig}
                     onClose={() => setCompositionEditorIndex(null)}
+                    onCompositionSaved={({ code, description, unit, unitCost, sourceName, compositionTotalPrice }) => {
+                        // G11-FIX: Typed callback replaces __syncComposition__ magic string
+                        setItems(prev => prev.map(it => {
+                            if (it.code !== code) return it;
+                            const updated = { ...it };
+                            if (description !== undefined) updated.description = description;
+                            if (unit !== undefined) updated.unit = unit;
+                            if (compositionTotalPrice !== undefined) {
+                                updated.compositionTotalPrice = compositionTotalPrice;
+                            }
+                            if (unitCost !== undefined) {
+                                updated.unitCost = unitCost;
+                                const itemBdi = resolveItemBdi(updated);
+                                updated.unitPrice = applyBdi(updated.unitCost, itemBdi, engineeringConfig.precision);
+                                updated.totalPrice = applyPrecision(updated.quantity * updated.unitPrice, { precision: engineeringConfig?.precision });
+                                updated.priceAudit = refreshPriceAudit(updated);
+                            }
+                            if (sourceName !== undefined) updated.sourceName = sourceName;
+                            return updated;
+                        }));
+                        setHasUnsavedChanges(true);
+                    }}
                     onUpdateItem={(itemId, updates) => {
                         // Handle compositionNotes from the CompositionEditor observation textarea
                         if (itemId === '__syncComposition__') {
