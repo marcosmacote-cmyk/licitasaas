@@ -6,7 +6,15 @@
  */
 import { applyPrecision } from './precisionEngine';
 
-const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
+export const SNAPSHOT_SUBTOTAL_KEY = '_snapshotSubtotalAuthoritative';
+
+export const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+export const isPropriaComposition = (raw: any): boolean => {
+    const dbName = String(raw?.database?.name || '').toUpperCase();
+    const dbType = String(raw?.database?.type || '').toUpperCase();
+    return dbType === 'PROPRIA' || dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_') || dbName === 'PRÓPRIO';
+};
 
 /**
  * Get the effective coefficient of a composition item line.
@@ -28,6 +36,9 @@ export const getLineUnitPrice = (ci: any): number => {
 export const getLineSubtotal = (ci: any, precision?: any): number => {
     const itemData = ci?.item || ci?.auxiliaryComposition;
     if (itemData?.isObservation) return 0;
+    if (ci?.[SNAPSHOT_SUBTOTAL_KEY]) {
+        return applyPrecision(asNumber(ci?.price), { precision });
+    }
     const computed = getLineCoefficient(ci) * getLineUnitPrice(ci);
     if (computed > 0 || getLineUnitPrice(ci) > 0) {
         return applyPrecision(computed, { precision });
@@ -44,25 +55,25 @@ export const normalizeCompositionMath = (raw: any, precision?: any): any => {
     const groups = { ...(raw.groups || {}) };
     let total = 0;
 
-    const isPropria = raw.database?.type === 'PROPRIA' || raw.database?.name?.startsWith('PROPRIA') || raw.database?.name === 'PRÓPRIO';
+    const isPropria = isPropriaComposition(raw);
 
     for (const groupKey of Object.keys(groups)) {
         groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
-            // FIX PRICE-ROUND: Only use division fallback when item has no own price.
-            if (isPropria && ci.coefficient > 0) {
-                const itemData = ci.item || ci.auxiliaryComposition;
-                const ownPrice = itemData?.price ?? itemData?.totalPrice;
-                if ((ownPrice === undefined || ownPrice === null || ownPrice === 0) && ci.price > 0) {
-                    const dbUnitPrice = ci.price / ci.coefficient;
-                    if (ci.item) {
-                        ci.item = { ...ci.item, price: dbUnitPrice };
-                    } else if (ci.auxiliaryComposition) {
-                        ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
-                    }
-                }
-            }
             if (ci.item && (ci.item.type === 'OBSERVACAO' || ci.item.code?.startsWith('OBS'))) {
                 ci.item = { ...ci.item, isObservation: true };
+            }
+
+            if (isPropria && ci.coefficient > 0) {
+                const savedSubtotal = applyPrecision(asNumber(ci.price), { precision });
+                const dbUnitPrice = savedSubtotal / ci.coefficient;
+                if (ci.item) {
+                    ci.item = { ...ci.item, price: dbUnitPrice };
+                } else if (ci.auxiliaryComposition) {
+                    ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
+                }
+
+                total += savedSubtotal;
+                return { ...ci, price: savedSubtotal, [SNAPSHOT_SUBTOTAL_KEY]: true };
             }
             const subtotal = getLineSubtotal(ci, precision);
             total += subtotal;

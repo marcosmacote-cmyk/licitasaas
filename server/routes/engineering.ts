@@ -1014,26 +1014,25 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             return ci;
         }));
 
-        // FIX PRICE-INTEGRITY: For PROPRIA compositions, ci.price (saved subtotal in
-        // EngineeringCompositionItem) IS the source of truth. We must NOT re-enrich with
-        // official prices, because:
-        //   1. The ci.item JOIN brings the official EngineeringItem.price, which may differ
-        //      from the price used when the composition was saved.
-        //   2. Re-enriching overwrites saved prices, causing drift between budget and composition.
-        //   3. The budget stores unitCost = composition.totalPrice at save time.
-        // Instead, we derive unit prices from saved ci.price / ci.coefficient.
-        if (sourceName === 'PROPRIA' && enrichedItems.length > 0) {
+        const isPropriaResponse = sourceName === 'PROPRIA' ||
+            String(finalComposition.database?.type || '').toUpperCase() === 'PROPRIA' ||
+            String(finalComposition.database?.name || '').toUpperCase() === 'PROPRIA' ||
+            String(finalComposition.database?.name || '').toUpperCase().startsWith('PROPRIA_');
+
+        if (isPropriaResponse && enrichedItems.length > 0) {
+            // A composição própria é snapshot da proposta. No load, nunca re-enriquecer
+            // contra bases oficiais: apenas deriva preço unitário para exibição a partir
+            // do subtotal salvo em EngineeringCompositionItem.price.
             for (const ci of enrichedItems) {
                 const savedSubtotal = Number(ci.price) || 0;
-                const coef = Number(ci.coefficient) || 0;
-                if (savedSubtotal > 0 && coef > 0) {
-                    const derivedUnitPrice = savedSubtotal / coef;
-                    if (ci.item) {
-                        // Override the JOIN'd official price with the saved unit price
-                        ci.item = { ...ci.item, price: derivedUnitPrice };
-                    } else if (ci.auxiliaryComposition) {
-                        ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: derivedUnitPrice };
-                    }
+                const coefficient = Number(ci.coefficient) || 0;
+                if (savedSubtotal <= 0 || coefficient <= 0) continue;
+
+                const savedUnitPrice = savedSubtotal / coefficient;
+                if (ci.item) {
+                    ci.item = { ...ci.item, price: savedUnitPrice };
+                } else if (ci.auxiliaryComposition) {
+                    ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: savedUnitPrice };
                 }
             }
         }
@@ -1071,18 +1070,15 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                 : finalComposition.metadata)
             : {};
 
+        const totalDirect = enrichedItems.reduce((s: number, ci: any) => s + (Number(ci.price) || 0), 0);
+
         const finalEnrichedRes = {
             ...finalComposition,
             ...metadataObj,
             items: enrichedItems,
             groups,
-            // FIX PRICE-INTEGRITY: Use saved ci.price (subtotal) as source of truth.
-            // For PROPRIA compositions, ci.price was set at save time and must not be
-            // overridden by recalculating from the JOIN'd item.price (which comes from
-            // the official DB and may differ from the price used during composition editing).
-            totalDirect: enrichedItems.reduce((s: number, ci: any) => {
-                return s + (Number(ci.price) || 0);
-            }, 0),
+            totalDirect,
+            ...(isPropriaResponse ? { totalPrice: totalDirect } : {}),
             hasAnalyticalItems: enrichedItems.length > 0,
             // Cache: the database where analytical items were found (if different from price match)
             ...(analyticalCrossDb ? {
@@ -2007,7 +2003,9 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         continue;
                     }
 
-                    // Sanity check/correction of coefficients (e.g. legacy data with 1000 coefficient math contradiction)
+                    // Sanity check of coefficients (e.g. legacy data with 1000 coefficient math contradiction).
+                    // Do not mutate coefficients silently here: a saved composition is a financial snapshot,
+                    // and automatic scale correction can change a valid CPU without user consent.
                     let coef = Number(item.coefficient) || 0;
                     let price = Number(item.price) || 0;
                     
@@ -2020,9 +2018,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                                 const possibleFactors = [100, 1000];
                                 for (const factor of possibleFactors) {
                                     if (Math.abs(priceRatio - factor) < 2) {
-                                        logger.warn(`[CompositionSave] ⚠️ Corrected coefficient scaling anomaly: code=${item.item?.code || item.code} coef=${coef} changed to ${coef / factor} because price=${price} matches unitPrice=${unitPrice}`);
-                                        coef = coef / factor;
-                                        item.coefficient = coef;
+                                        logger.warn(`[CompositionSave] ⚠️ Detected coefficient scaling anomaly but kept user value: code=${item.item?.code || item.code} coef=${coef} suggested=${coef / factor} price=${price} unitPrice=${unitPrice}`);
                                         break;
                                     }
                                 }
@@ -6134,4 +6130,3 @@ import baseSyncRoutes from './engineering/baseSyncRoutes';
 router.use('/', baseSyncRoutes);
 
 export default router;
-

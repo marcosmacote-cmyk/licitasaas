@@ -7,19 +7,13 @@
  */
 import { useState, useEffect } from 'react';
 import { X, Layers, Package, HardHat, Wrench, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { getLineSubtotal, getLineUnitPrice, normalizeCompositionMath, sumCompositionGroups } from './compositionMath';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtCoef = (v: number) => v.toFixed(4);
 const token = () => localStorage.getItem('token') || '';
 const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
-const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
-const getLineUnitPrice = (ci: any) => asNumber((ci?.item || ci?.auxiliaryComposition)?.price ?? (ci?.item || ci?.auxiliaryComposition)?.totalPrice);
-const getLineSubtotal = (ci: any) => {
-    const computed = asNumber(ci?.coefficient) * getLineUnitPrice(ci);
-    return computed > 0 || getLineUnitPrice(ci) > 0 ? computed : asNumber(ci?.price);
-};
-const getCompositionTotal = (data: any) => Object.values(data?.groups || {})
-    .reduce((total: number, group: any) => total + (Array.isArray(group) ? group.reduce((s: number, ci: any) => s + getLineSubtotal(ci), 0) : 0), 0);
+const getCompositionTotal = (data: any) => sumCompositionGroups(data?.groups);
 
 interface Props {
     code: string;
@@ -52,11 +46,8 @@ export function CompositionDrawer({ code, description, databaseId, sourceName, o
         fetch(url, { headers: hdrs() })
             .then(r => { if (!r.ok) throw new Error('not_found'); return r.json(); })
             .then(d => {
-                const groups = { ...(d.groups || {}) };
-                for (const key of Object.keys(groups)) {
-                    groups[key] = (groups[key] || []).map((ci: any) => ({ ...ci, price: getLineSubtotal(ci) }));
-                }
-                setData({ ...d, groups, totalDirect: getCompositionTotal({ groups }), totalPrice: getCompositionTotal({ groups }) });
+                const normalized = normalizeCompositionMath(d);
+                setData(normalized);
                 setLoading(false);
             })
             .catch(() => { setError('Composição não encontrada na base oficial.'); setLoading(false); });

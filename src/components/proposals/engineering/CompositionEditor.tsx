@@ -12,7 +12,7 @@ import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, Chevron
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
-import { getLineCoefficient, getLineUnitPrice, getLineSubtotal, normalizeCompositionMath, sumCompositionGroups } from './compositionMath';
+import { asNumber, getLineCoefficient, getLineUnitPrice, getLineSubtotal, normalizeCompositionMath, sumCompositionGroups } from './compositionMath';
 import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
 import { useDrillDown, type DrillCurrentState, type DrillLevelSnapshot } from './useDrillDown';
 import { displaySourceName, isPropria, resolveDisplayBase } from './types';
@@ -76,8 +76,6 @@ const GROUP_META: Record<string, { label: string; icon: any; color: string }> = 
     AUXILIAR: { label: 'Composições Auxiliares', icon: Layers, color: '#7c3aed' },
     OBSERVACAO: { label: 'Observações e Textos', icon: FileText, color: '#64748b' },
 };
-
-const asNumber = (value: any) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 const isGrouperType = (type?: string) => type === 'ETAPA' || type === 'SUBETAPA';
 
