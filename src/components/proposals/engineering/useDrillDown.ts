@@ -18,6 +18,7 @@
  */
 import { useState, useCallback, useRef } from 'react';
 import { applyPrecision, type PrecisionConfig } from './precisionEngine';
+import { getLineCoefficient, sumCompositionGroups } from './compositionMath';
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -57,27 +58,7 @@ export interface DrillCurrentState {
 /** Callback to restore state from a snapshot */
 export type DrillRestoreCallback = (snapshot: DrillLevelSnapshot) => void;
 
-// Helper
-const getLineCoefficient = (ci: any): number => {
-    if (ci.coefficientExpression) {
-        try {
-            const parts = ci.coefficientExpression.split('*').map((p: string) => parseFloat(p.trim())).filter((n: number) => !isNaN(n));
-            if (parts.length > 0) return parts.reduce((acc: number, v: number) => acc * v, 1);
-        } catch { /* fallback */ }
-    }
-    return Number(ci.coefficient) || 0;
-};
-
-const sumCompositionGroups = (groups: Record<string, any[]>, precision?: PrecisionConfig): number => {
-    let total = 0;
-    for (const groupItems of Object.values(groups)) {
-        if (!Array.isArray(groupItems)) continue;
-        for (const ci of groupItems) {
-            total += Number(ci.price) || 0;
-        }
-    }
-    return applyPrecision(total, { precision });
-};
+// G5-PREP: Helpers moved to compositionMath.ts
 
 // ═══════════════════════════════════════════════════════════
 // HOOK

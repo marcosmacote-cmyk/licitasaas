@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, X, Layers, Package, HardHat, Wrench, Chevron
 import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
+import { getLineCoefficient, getLineUnitPrice, getLineSubtotal, normalizeCompositionMath, sumCompositionGroups } from './compositionMath';
 import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
 import { useDrillDown, type DrillCurrentState, type DrillLevelSnapshot } from './useDrillDown';
 import { displaySourceName, isPropria, resolveDisplayBase } from './types';
@@ -210,74 +211,7 @@ function filterBasesWithWarnings(allBases: any[], config: any): BaseFilterResult
 }
 
 
-const getLineCoefficient = (ci: any) => asNumber(ci?.coefficient);
-
-const getLineUnitPrice = (ci: any) => {
-    const itemData = ci?.item || ci?.auxiliaryComposition;
-    return asNumber(itemData?.price ?? itemData?.totalPrice);
-};
-
-const getLineSubtotal = (ci: any, precision?: any) => {
-    const itemData = ci?.item || ci?.auxiliaryComposition;
-    if (itemData?.isObservation) return 0;
-    const computed = getLineCoefficient(ci) * getLineUnitPrice(ci);
-    if (computed > 0 || getLineUnitPrice(ci) > 0) {
-        return applyPrecision(computed, { precision });
-    }
-    return asNumber(ci?.price);
-};
-
-const normalizeCompositionMath = (raw: any, precision?: any) => {
-    if (!raw) return raw;
-    const groups = { ...(raw.groups || {}) };
-    let total = 0;
-
-    const isPropria = raw.database?.type === 'PROPRIA' || raw.database?.name?.startsWith('PROPRIA') || raw.database?.name === 'PRÓPRIO';
-
-    for (const groupKey of Object.keys(groups)) {
-        groups[groupKey] = (groups[groupKey] || []).map((ci: any) => {
-            // FIX PRICE-ROUND: Only use division fallback when item has no own price.
-            // The backend already provides ci.item.price (from Prisma include or enrichment).
-            // Dividing ci.price/ci.coefficient introduces rounding errors because ci.price
-            // is a rounded subtotal snapshot.
-            if (isPropria && ci.coefficient > 0) {
-                const itemData = ci.item || ci.auxiliaryComposition;
-                const ownPrice = itemData?.price ?? itemData?.totalPrice;
-                if ((ownPrice === undefined || ownPrice === null || ownPrice === 0) && ci.price > 0) {
-                    // Fallback: no unit price available, recover from subtotal
-                    const dbUnitPrice = ci.price / ci.coefficient;
-                    if (ci.item) {
-                        ci.item = { ...ci.item, price: dbUnitPrice };
-                    } else if (ci.auxiliaryComposition) {
-                        ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: dbUnitPrice };
-                    }
-                }
-            }
-            if (ci.item && (ci.item.type === 'OBSERVACAO' || ci.item.code?.startsWith('OBS'))) {
-                ci.item = { ...ci.item, isObservation: true };
-            }
-            const subtotal = getLineSubtotal(ci, precision);
-            total += subtotal;
-            return { ...ci, price: subtotal };
-        });
-    }
-
-    return {
-        ...raw,
-        groups,
-        items: Object.values(groups).flat(),
-        totalDirect: applyPrecision(total, { precision }),
-        totalPrice: applyPrecision(total, { precision }),
-    };
-};
-
-const sumCompositionGroups = (groups: Record<string, any[]> | undefined, precision?: any) => {
-    let total = 0;
-    for (const groupItems of Object.values(groups || {})) {
-        for (const ci of groupItems || []) total += getLineSubtotal(ci, precision);
-    }
-    return applyPrecision(total, { precision });
-};
+// G5-PREP: Price helpers moved to compositionMath.ts
 
 export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, onCompositionSaved, engineeringConfig, proposalId, bdiConfig }: Props) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
