@@ -13,6 +13,7 @@ import { exportCompositionExcel, exportCompositionPdf } from './exportEngine';
 import { applyPrecision } from './precisionEngine';
 import { SmartCpuDropzone } from './SmartCpuDropzone';
 import { resolveMetaCategory, EXPANDED_TYPES_META } from './insumoEngine';
+import { useDrillDown, type DrillCurrentState, type DrillLevelSnapshot } from './useDrillDown';
 import { displaySourceName, isPropria, resolveDisplayBase } from './types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -357,27 +358,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     const [showAiDropzone, setShowAiDropzone] = useState(false);
     const aiFileInputRef = useRef<HTMLInputElement>(null);
 
-    // Drill-down stack for auxiliary compositions — includes snapshot of parent data to restore on back
-    const [drillStack, setDrillStack] = useState<{
-        code: string;
-        description: string;
-        snapshot?: any;
-        snapshotGroupNotes?: Record<string, string>;
-        snapshotCustomLabels?: Record<string, string>;
-        snapshotGroupOrder?: string[];
-        snapshotRefDivisorLabel?: string;
-        snapshotRefDivisorValue?: string;
-        snapshotHasChanges?: boolean;
-        snapshotObservation?: string;
-    }[]>([]);
+    // G7-FIX: Use dedicated drill-down hook instead of inline state
+    const drill = useDrillDown(currentItem?.code, engineeringConfig?.precision);
 
-    const checkCircularDependency = (targetCode: string): boolean => {
-        const rootCode = currentItem?.code;
-        if (rootCode && targetCode.trim().toUpperCase() === rootCode.trim().toUpperCase()) {
-            return true;
-        }
-        return drillStack.some(level => level.code.trim().toUpperCase() === targetCode.trim().toUpperCase());
-    };
+    // Legacy alias — gradually migrating from drillStack to drill.*
+    const drillStack = drill.stack;
 
     const [observation, setObservation] = useState('');
     // Grouper editing states
@@ -452,7 +437,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setGroupOrder([]);
         setRefDivisorLabel('');
         setRefDivisorValue('');
-        setDrillStack([]);
+        drill.reset();
         if (isGrouper) {
             setGrouperDesc(currentItem.description || '');
             setGrouperFactor(String(currentItem.multiplicationFactor || 1));
@@ -460,11 +445,11 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         }
     }
 
-    const activeCode = drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem?.code;
+    const activeCode = drill.activeCode;
 
     const triggerUpdateItem = useCallback((updates: Partial<EngItem>) => {
         if (onUpdateItem && currentItem) {
-            const isRoot = drillStack.length === 0;
+            const isRoot = !drill.isInDrill;
             const isGrouper = currentItem.type === 'ETAPA' || currentItem.type === 'SUBETAPA';
             
             const descToUse = updates.description !== undefined
@@ -495,7 +480,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 ...(compositionTotalPrice !== undefined ? { compositionTotalPrice } : {}),
             } as any);
         }
-    }, [onUpdateItem, currentItem, drillStack.length, data?.description, data?.totalPrice, refDivisorValue, engineeringConfig]);
+    }, [onUpdateItem, currentItem, drill.depth, data?.description, data?.totalPrice, refDivisorValue, engineeringConfig]);
 
     // Load bases once when opening search — filtered by Step 1 config
     useEffect(() => {
@@ -595,7 +580,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!data) return;
         
         if (searchType === 'composition') {
-            if (checkCircularDependency(dbItem.code)) {
+            if (drill.checkCircularDependency(dbItem.code)) {
                 alert(`Erro: Dependência Circular Detectada! Não é possível adicionar a composição auxiliar "${dbItem.code}", pois ela já é uma composição ancestral na estrutura atual.`);
                 return;
             }
@@ -679,7 +664,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         if (!propriaCode.trim() || !propriaDesc.trim() || !propriaPrice.trim() || !data) return;
         
         if (searchType === 'composition') {
-            if (checkCircularDependency(propriaCode)) {
+            if (drill.checkCircularDependency(propriaCode)) {
                 alert(`Erro: Dependência Circular Detectada! Não é possível criar e adicionar a composição auxiliar "${propriaCode}", pois ela já é uma composição ancestral na estrutura atual.`);
                 return;
             }
@@ -731,7 +716,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     // ── Restore composition from drillStack snapshot (avoids losing unsaved data) ──
     const restoreFromSnapshot = useCallback((
-        snapshot: any,
+        snapshotOrData: any | DrillLevelSnapshot,
         snapshotGroupNotes?: Record<string, string>,
         snapshotCustomLabels?: Record<string, string>,
         snapshotGroupOrder?: string[],
@@ -742,14 +727,28 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     ) => {
         setLoading(false);
         setError('');
-        setData(snapshot);
-        setGroupNotes(snapshotGroupNotes || {});
-        setCustomGroupLabels(snapshotCustomLabels || {});
-        setGroupOrder(snapshotGroupOrder || []);
-        setRefDivisorLabel(snapshotRefDivisorLabel || '');
-        setRefDivisorValue(snapshotRefDivisorValue || '');
-        setHasChanges(snapshotHasChanges ?? false);
-        setObservation(snapshotObservation || '');
+        // G7-FIX: Detect if called with DrillLevelSnapshot (has .data property + .groupNotes)
+        if (snapshotOrData && typeof snapshotOrData === 'object' && 'data' in snapshotOrData && 'groupNotes' in snapshotOrData) {
+            const s = snapshotOrData as DrillLevelSnapshot;
+            setData(s.data);
+            setGroupNotes(s.groupNotes || {});
+            setCustomGroupLabels(s.customGroupLabels || {});
+            setGroupOrder(s.groupOrder || []);
+            setRefDivisorLabel(s.refDivisorLabel || '');
+            setRefDivisorValue(s.refDivisorValue || '');
+            setHasChanges(s.hasChanges ?? false);
+            setObservation(s.observation || '');
+        } else {
+            // Legacy 8-parameter call
+            setData(snapshotOrData);
+            setGroupNotes(snapshotGroupNotes || {});
+            setCustomGroupLabels(snapshotCustomLabels || {});
+            setGroupOrder(snapshotGroupOrder || []);
+            setRefDivisorLabel(snapshotRefDivisorLabel || '');
+            setRefDivisorValue(snapshotRefDivisorValue || '');
+            setHasChanges(snapshotHasChanges ?? false);
+            setObservation(snapshotObservation || '');
+        }
     }, []);
 
     const loadComposition = useCallback(async (code: string, overrideSourceName?: string, overrideDatabaseId?: string) => {
@@ -854,133 +853,23 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 setGrouperFactor(String(currentItem.multiplicationFactor || 1));
                 setGrouperFactorSaved(false);
             } else if (currentItem.code) {
-                setDrillStack([]);
+                drill.reset();
                 loadComposition(currentItem.code);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentItem?.code, currentItem?.type]);
 
-    // Sync child composition changes back to all parent snapshots in drillStack (bottom-up cascade)
+    // G7-FIX: Cascade is now handled by useDrillDown hook
     useEffect(() => {
-        if (drillStack.length > 0 && data && data.totalPrice !== undefined) {
-            let currentData = data;
-            let foundAny = false;
-            
-            // Check if any level in the stack needs an update (prevents infinite updates / warnings)
-            for (let i = drillStack.length - 1; i >= 0; i--) {
-                const level = drillStack[i];
-                const parentSnapshot = level.snapshot;
-                if (!parentSnapshot || !parentSnapshot.groups) continue;
-                
-                let levelFound = false;
-                const childCodeUpper = currentData.code?.trim().toUpperCase();
-                
-                for (const groupKey of Object.keys(parentSnapshot.groups)) {
-                    const groupItems = parentSnapshot.groups[groupKey] || [];
-                    for (const ci of groupItems) {
-                        if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
-                            const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
-                            const expectedSubtotal = applyPrecision(currentData.totalPrice * getLineCoefficient(ci), { precision: engineeringConfig?.precision });
-                            const priceChanged = ci.price !== expectedSubtotal || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
-                            const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
-                            const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
-                            
-                            if (descChanged || priceChanged || unitChanged || codeChanged) {
-                                levelFound = true;
-                                foundAny = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (levelFound) break;
-                }
-                
-                let levelPrice = level.snapshot?.totalPrice || 0;
-                if (levelFound) {
-                    levelPrice = currentData.totalPrice;
-                }
-                
-                currentData = {
-                    code: level.code,
-                    description: level.description,
-                    unit: level.snapshot?.unit || '',
-                    totalPrice: levelPrice
-                };
-            }
-            
-            if (foundAny) {
-                setDrillStack(prev => {
-                    if (prev.length === 0) return prev;
-                    const copy = [...prev];
-                    let currentData = data;
-                    
-                    for (let i = copy.length - 1; i >= 0; i--) {
-                        const level = copy[i];
-                        const parentSnapshot = level.snapshot;
-                        if (!parentSnapshot || !parentSnapshot.groups) continue;
-                        
-                        let updatedSnapshot = { ...parentSnapshot, groups: { ...parentSnapshot.groups } };
-                        let levelFound = false;
-                        const childCodeUpper = currentData.code?.trim().toUpperCase();
-                        
-                        for (const groupKey of Object.keys(updatedSnapshot.groups)) {
-                            const groupItems = updatedSnapshot.groups[groupKey] || [];
-                            const updatedItems = groupItems.map((ci: any) => {
-                                if (ci.auxiliaryComposition && ci.auxiliaryComposition.code?.trim().toUpperCase() === childCodeUpper) {
-                                    const descChanged = currentData.description && ci.auxiliaryComposition.description !== currentData.description;
-                                    const expectedSubtotal = applyPrecision(currentData.totalPrice * getLineCoefficient(ci), { precision: engineeringConfig?.precision });
-                                    const priceChanged = ci.price !== expectedSubtotal || ci.auxiliaryComposition.totalPrice !== currentData.totalPrice;
-                                    const unitChanged = currentData.unit && ci.auxiliaryComposition.unit !== currentData.unit;
-                                    const codeChanged = currentData.code && ci.auxiliaryComposition.code !== currentData.code;
-                                    
-                                    if (descChanged || priceChanged || unitChanged || codeChanged) {
-                                        levelFound = true;
-                                        return {
-                                            ...ci,
-                                            price: expectedSubtotal,
-                                            auxiliaryComposition: {
-                                                ...ci.auxiliaryComposition,
-                                                code: currentData.code || ci.auxiliaryComposition.code,
-                                                description: currentData.description || ci.auxiliaryComposition.description,
-                                                unit: currentData.unit || ci.auxiliaryComposition.unit,
-                                                totalPrice: currentData.totalPrice
-                                            }
-                                        };
-                                    }
-                                }
-                                return ci;
-                            });
-                            updatedSnapshot.groups[groupKey] = updatedItems;
-                        }
-                        
-                        if (levelFound) {
-                            updatedSnapshot.totalPrice = sumCompositionGroups(updatedSnapshot.groups, engineeringConfig?.precision);
-                            updatedSnapshot.totalDirect = updatedSnapshot.totalPrice;
-                            
-                            copy[i] = {
-                                ...level,
-                                snapshot: updatedSnapshot,
-                                snapshotHasChanges: true
-                            };
-                        }
-                        
-                        currentData = {
-                            code: level.code,
-                            description: level.description,
-                            unit: updatedSnapshot.unit || level.snapshot?.unit || '',
-                            totalPrice: updatedSnapshot.totalPrice
-                        };
-                    }
-                    
-                    return copy;
-                });
-                
+        if (drill.isInDrill && data && data.totalPrice !== undefined) {
+            const didUpdate = drill.updateParentSnapshots(data);
+            if (didUpdate) {
                 setHasChanges(true);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data, drillStack.length, engineeringConfig?.precision]);
+    }, [data, drill.depth, engineeringConfig?.precision]);
 
     const navigate = (dir: -1 | 1) => {
         const next = currentIndex + dir;
@@ -1007,7 +896,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
             formData.append('file', file);
             // FIX CASCADE-01: In drill-down, use the current drillStack level's code/description
             // This ensures AI extracts the correct composition, not the parent budget item
-            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            const drillLevel = drill.currentLevel;
             formData.append('code', drillLevel?.code || currentItem.code);
             formData.append('description', drillLevel?.description || currentItem.description);
             formData.append('unit', currentItem.unit);
@@ -1361,18 +1250,14 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
 
     const handleSaveTitle = () => {
         const trimmed = tempTitle.trim();
-        const currentCompDesc = drillStack.length > 0 ? drillStack[drillStack.length - 1].description : (data?.description || currentItem.description);
+        const currentCompDesc = drill.isInDrill ? drill.currentLevel!.description : (data?.description || currentItem.description);
         if (trimmed && trimmed !== currentCompDesc) {
             // Update local data description
             setData((prev: any) => prev ? { ...prev, description: trimmed } : prev);
             
             // If in drillstack, update the drillstack entry description
-            if (drillStack.length > 0) {
-                setDrillStack(prev => {
-                    const next = [...prev];
-                    next[next.length - 1].description = trimmed;
-                    return next;
-                });
+            if (drill.isInDrill) {
+                drill.updateCurrentDescription(trimmed);
             } else {
                 // Also notify parent item about the updated description
                 triggerUpdateItem({ description: trimmed });
@@ -1421,7 +1306,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setIsSavingToBase(true);
         try {
             // Use the budget item's code as canonical — UNLESS in drill-down, where we use the drillStack code
-            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            const drillLevel = drill.currentLevel;
             const canonicalCode = drillLevel?.code || currentItem.code;
             let targetId: string | null = null;
 
@@ -1561,7 +1446,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 });
             }
 
-            if (drillStack.length === 0) {
+            if (!drill.isInDrill) {
                 // If at the root level, also trigger update for the parent item specifically
                 triggerUpdateItem({
                     code: canonicalCode,
@@ -1575,9 +1460,9 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                 } as any);
             } else {
                 // If in drill-down, propagate the parent's recalculated totalPrice to the spreadsheet immediately
-                const rootSnapshot = drillStack[0]?.snapshot;
+                const rootSnapshot = drillStack[0]?.snapshot?.data;
                 if (rootSnapshot && rootSnapshot.totalPrice !== undefined && onUpdateItem) {
-                    const rootDivValue = drillStack[0]?.snapshotRefDivisorValue;
+                    const rootDivValue = drillStack[0]?.snapshot?.refDivisorValue;
                     const rootDiv = rootDivValue ? (parseFloat(rootDivValue.replace(',', '.')) || 1) : 1;
                     const rootCost = rootDiv > 0 
                         ? applyPrecision(rootSnapshot.totalPrice / rootDiv, { precision: engineeringConfig?.precision }) 
@@ -1680,7 +1565,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
         setError('');
         try {
             // When in drill-down, use the drillStack's code/description (casca), not currentItem (parent)
-            const drillLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+            const drillLevel = drill.currentLevel;
             const compCode = drillLevel?.code || currentItem.code;
             const compDesc = drillLevel?.description || currentItem.description;
             
@@ -1914,7 +1799,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
     // a diferença é causada apenas por arredondamento (< 0.05%).
     // Isso evita que o alerta vermelho fique permanentemente visível para centavos.
     useEffect(() => {
-        if (!data || !currentItem || drillStack.length > 0) return;
+        if (!data || !currentItem || drill.isInDrill) return;
         const ct = sumCompositionGroups(data.groups, engineeringConfig?.precision);
         if (ct <= 0) return;
         const budgetCost = asNumber(currentItem.unitCost);
@@ -2043,8 +1928,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                 : 'CPU — Composição de Preços Unitários'}
                         </div>
                         {(() => {
-                            const isRoot = drillStack.length === 0;
-                            const currentCompDesc = drillStack.length > 0 ? drillStack[drillStack.length - 1].description : (data?.description || currentItem.description);
+                            const isRoot = !drill.isInDrill;
+                            const currentCompDesc = drill.isInDrill ? drill.currentLevel!.description : (data?.description || currentItem.description);
                             const isPropriaPred = isPropria(data?.database?.name) || data?.database?.type === 'PROPRIA';
                             const canRenameHeader = isRoot || isPropriaPred;
                             
@@ -2090,7 +1975,7 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                         })()}
                         {!isGrouperType(currentItem.type) && (
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
-                                Código: <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> · {drillStack.length > 0 ? displaySourceName(data?.database?.name || '') : displaySourceName(currentItem.sourceName)}
+                                Código: <strong>{drill.isInDrill ? drill.currentLevel!.code : currentItem.code}</strong> · {drill.isInDrill ? displaySourceName(data?.database?.name || '') : displaySourceName(currentItem.sourceName)}
                                 {/* FIX SYNC-04: Show real composition origin when loaded */}
                                 {data?.database?.name && data.database.name !== currentItem.sourceName && (
                                     <span style={{
@@ -2111,23 +1996,13 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             </span>
                         )}
                         {/* Drill-down breadcrumb */}
-                        {drillStack.length > 0 && (
+                        {drill.isInDrill && (
                             <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center', fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
                                 <button onClick={() => {
-                                    // FIX DRILL-SNAPSHOT: Restore root level from first stack entry's snapshot
-                                    const rootEntry = drillStack[0];
-                                    setDrillStack([]);
-                                    if (rootEntry?.snapshot) {
-                                        restoreFromSnapshot(
-                                            rootEntry.snapshot,
-                                            rootEntry.snapshotGroupNotes,
-                                            rootEntry.snapshotCustomLabels,
-                                            rootEntry.snapshotGroupOrder,
-                                            rootEntry.snapshotRefDivisorLabel,
-                                            rootEntry.snapshotRefDivisorValue,
-                                            rootEntry.snapshotHasChanges,
-                                            rootEntry.snapshotObservation
-                                        );
+                                    // G7-FIX: Use hook API for popToRoot
+                                    const rootSnapshot = drill.popToRoot();
+                                    if (rootSnapshot) {
+                                        restoreFromSnapshot(rootSnapshot);
                                     } else {
                                         loadComposition(currentItem.code);
                                     }
@@ -2140,23 +2015,12 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                         <ChevronRight size={12} />
                                         {i < drillStack.length - 1 ? (
                                             <button onClick={() => {
-                                                // FIX DRILL-SNAPSHOT: Navigate to intermediate level, restoring next level's snapshot
-                                                const nextEntry = drillStack[i + 1];
-                                                const newStack = drillStack.slice(0, i + 1);
-                                                setDrillStack(newStack);
-                                                if (nextEntry?.snapshot) {
-                                                    restoreFromSnapshot(
-                                                        nextEntry.snapshot,
-                                                        nextEntry.snapshotGroupNotes,
-                                                        nextEntry.snapshotCustomLabels,
-                                                        nextEntry.snapshotGroupOrder,
-                                                        nextEntry.snapshotRefDivisorLabel,
-                                                        nextEntry.snapshotRefDivisorValue,
-                                                        nextEntry.snapshotHasChanges,
-                                                        nextEntry.snapshotObservation
-                                                    );
+                                                // G7-FIX: Use hook API for navigateTo
+                                                const snapshot = drill.navigateTo(i);
+                                                if (snapshot) {
+                                                    restoreFromSnapshot(snapshot);
                                                 } else {
-                                                    loadComposition(newStack[newStack.length - 1].code);
+                                                    loadComposition(drillStack[i].code);
                                                 }
                                             }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, padding: 0 }}>
                                                 {level.code}
@@ -2388,8 +2252,8 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                             <AlertCircle size={36} style={{ opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
                             <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>Composição não encontrada nas bases de dados</div>
                             <div style={{ fontSize: '0.85rem', marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
-                                O código <strong>{drillStack.length > 0 ? drillStack[drillStack.length - 1].code : currentItem.code}</strong> não foi encontrado nas bases oficiais e nem no seu banco de dados próprio.
-                                {drillStack.length > 0 && <><br/><span style={{ color: '#7c3aed', fontWeight: 600 }}>Crie abaixo para montar esta composição auxiliar como PRÓPRIA.</span></>}
+                                O código <strong>{drill.isInDrill ? drill.currentLevel!.code : currentItem.code}</strong> não foi encontrado nas bases oficiais e nem no seu banco de dados próprio.
+                                {drill.isInDrill && <><br/><span style={{ color: '#7c3aed', fontWeight: 600 }}>Crie abaixo para montar esta composição auxiliar como PRÓPRIA.</span></>}
                             </div>
                             
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -2904,23 +2768,21 @@ export function CompositionEditor({ items, initialIndex, onClose, onUpdateItem, 
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
-                                                                                        if (checkCircularDependency(itemData.code)) {
+                                                                                        if (drill.checkCircularDependency(itemData.code)) {
                                                                                             alert(`Erro: Dependência Circular Detectada! Não é possível abrir a composição auxiliar "${itemData.code}", pois ela já é uma composição ancestral na estrutura atual.`);
                                                                                             return;
                                                                                         }
-                                                                                        // FIX DRILL-SNAPSHOT: Save current data in stack so we can restore on back
-                                                                                        setDrillStack(prev => [...prev, {
-                                                                                            code: itemData.code,
-                                                                                            description: itemData.description,
-                                                                                            snapshot: data,
-                                                                                            snapshotGroupNotes: { ...groupNotes },
-                                                                                            snapshotCustomLabels: { ...customGroupLabels },
-                                                                                            snapshotGroupOrder: [...groupOrder],
-                                                                                            snapshotRefDivisorLabel: refDivisorLabel,
-                                                                                            snapshotRefDivisorValue: refDivisorValue,
-                                                                                            snapshotHasChanges: hasChanges,
-                                                                                            snapshotObservation: observation,
-                                                                                        }]);
+                                                                                        // G7-FIX: Use hook API for drill push
+                                                                                        drill.push(itemData.code, itemData.description, {
+                                                                                            data,
+                                                                                            groupNotes,
+                                                                                            customGroupLabels,
+                                                                                            groupOrder,
+                                                                                            refDivisorLabel,
+                                                                                            refDivisorValue,
+                                                                                            hasChanges,
+                                                                                            observation,
+                                                                                        });
                                                                                         // FIX CASCADE-02: Pass current composition's database context for correct lookup
                                                                                         loadComposition(itemData.code, data?.database?.name, data?.databaseId);
                                                                                     }}
