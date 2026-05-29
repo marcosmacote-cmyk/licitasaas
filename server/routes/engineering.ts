@@ -1030,15 +1030,23 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             }
             if (!targetRegime) targetRegime = 'DESONERADO';
 
+            // FIX AUX-INFLATE: Only re-enrich simple items (insumos), NOT auxiliary compositions.
+            // Auxiliary compositions store a totalPrice that represents the FULL composition cost.
+            // enrichWithOfficialPrices returns matchedUnitCost = totalPrice of the official composition,
+            // which when multiplied by the coefficient causes massive price inflation.
+            // Example: "Sinalização de Trânsito" saved as coef=15.9, unitPrice=~6.01 → subtotal=~95
+            //   After re-enrich: matchedUnitCost=722.51 (full comp price) × 15.9 = R$10,037 ← WRONG
             const officialItemsToEnrich: any[] = enrichedItems
                 .filter((ci: any) => {
-                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
+                    // Exclude auxiliary compositions — their prices are user-defined and should not be overridden
+                    if (ci.auxiliaryCompositionId || ci.auxiliaryComposition) return false;
+                    const code = ci.item?.code;
                     return code && ci.type !== 'OBSERVACAO' && String(code).length > 0;
                 })
                 .map((ci: any) => {
-                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
-                    const src = ci.item?.database?.name || ci.item?.source || ci.auxiliaryComposition?.database?.name || ci.auxiliaryComposition?.source || 'SINAPI';
-                    const unitCost = ci.item ? (ci.item.price || 0) : (ci.auxiliaryComposition?.totalPrice || 0);
+                    const code = ci.item?.code;
+                    const src = ci.item?.database?.name || ci.item?.source || 'SINAPI';
+                    const unitCost = ci.item?.price || 0;
                     return { code, sourceName: src, unitCost };
                 });
 
@@ -1057,16 +1065,14 @@ router.get('/compositions/:code', async (req: any, res: any) => {
                     }
                 }
 
-                // Atualiza os preços e subtotais no enrichedItems
+                // Atualiza os preços e subtotais APENAS de insumos simples (não auxiliares)
                 for (const ci of enrichedItems) {
-                    const code = ci.item?.code || ci.auxiliaryComposition?.code;
+                    // Skip auxiliary compositions — they must keep their saved prices
+                    if (ci.auxiliaryCompositionId || ci.auxiliaryComposition) continue;
+                    const code = ci.item?.code;
                     if (code && enrichMap.has(code)) {
                         const newUnitPrice = enrichMap.get(code)!;
-                        if (ci.item) {
-                            ci.item = { ...ci.item, price: newUnitPrice };
-                        } else if (ci.auxiliaryComposition) {
-                            ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: newUnitPrice };
-                        }
+                        ci.item = { ...ci.item, price: newUnitPrice };
                         ci.price = newUnitPrice * ci.coefficient;
                     }
                 }
