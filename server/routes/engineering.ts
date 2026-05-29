@@ -1014,66 +1014,25 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             return ci;
         }));
 
-        // Se for composição própria, re-enriquecemos os subitens oficiais de acordo com o regime da proposta
+        // FIX PRICE-INTEGRITY: For PROPRIA compositions, ci.price (saved subtotal in
+        // EngineeringCompositionItem) IS the source of truth. We must NOT re-enrich with
+        // official prices, because:
+        //   1. The ci.item JOIN brings the official EngineeringItem.price, which may differ
+        //      from the price used when the composition was saved.
+        //   2. Re-enriching overwrites saved prices, causing drift between budget and composition.
+        //   3. The budget stores unitCost = composition.totalPrice at save time.
+        // Instead, we derive unit prices from saved ci.price / ci.coefficient.
         if (sourceName === 'PROPRIA' && enrichedItems.length > 0) {
-            const queryRegime = req.query.regime as string | undefined;
-            let targetRegime = queryRegime;
-            if (proposalId) {
-                const proposal = await prisma.priceProposal.findUnique({
-                    where: { id: proposalId },
-                    select: { engineeringConfig: true }
-                });
-                const config = (proposal?.engineeringConfig as any) || {};
-                if (config.regimeOneracao) {
-                    targetRegime = config.regimeOneracao;
-                }
-            }
-            if (!targetRegime) targetRegime = 'DESONERADO';
-
-            // FIX AUX-INFLATE: Only re-enrich simple items (insumos), NOT auxiliary compositions.
-            // Auxiliary compositions store a totalPrice that represents the FULL composition cost.
-            // enrichWithOfficialPrices returns matchedUnitCost = totalPrice of the official composition,
-            // which when multiplied by the coefficient causes massive price inflation.
-            // Example: "Sinalização de Trânsito" saved as coef=15.9, unitPrice=~6.01 → subtotal=~95
-            //   After re-enrich: matchedUnitCost=722.51 (full comp price) × 15.9 = R$10,037 ← WRONG
-            const officialItemsToEnrich: any[] = enrichedItems
-                .filter((ci: any) => {
-                    // Exclude auxiliary compositions — their prices are user-defined and should not be overridden
-                    if (ci.auxiliaryCompositionId || ci.auxiliaryComposition) return false;
-                    const code = ci.item?.code;
-                    return code && ci.type !== 'OBSERVACAO' && String(code).length > 0;
-                })
-                .map((ci: any) => {
-                    const code = ci.item?.code;
-                    const src = ci.item?.database?.name || ci.item?.source || 'SINAPI';
-                    const unitCost = ci.item?.price || 0;
-                    return { code, sourceName: src, unitCost };
-                });
-
-            if (officialItemsToEnrich.length > 0) {
-                const tempConfig = {
-                    regimeOneracao: targetRegime,
-                    basesConsideradas: Array.from(new Set(officialItemsToEnrich.map(i => i.sourceName))),
-                };
-
-                await enrichWithOfficialPrices(officialItemsToEnrich, tempConfig, { tenantId: req.user?.tenantId });
-
-                const enrichMap = new Map<string, number>();
-                for (const enriched of officialItemsToEnrich) {
-                    if (enriched.priceAudit?.matchedUnitCost && enriched.priceAudit.matchedUnitCost > 0) {
-                        enrichMap.set(enriched.code, enriched.priceAudit.matchedUnitCost);
-                    }
-                }
-
-                // Atualiza os preços e subtotais APENAS de insumos simples (não auxiliares)
-                for (const ci of enrichedItems) {
-                    // Skip auxiliary compositions — they must keep their saved prices
-                    if (ci.auxiliaryCompositionId || ci.auxiliaryComposition) continue;
-                    const code = ci.item?.code;
-                    if (code && enrichMap.has(code)) {
-                        const newUnitPrice = enrichMap.get(code)!;
-                        ci.item = { ...ci.item, price: newUnitPrice };
-                        ci.price = newUnitPrice * ci.coefficient;
+            for (const ci of enrichedItems) {
+                const savedSubtotal = Number(ci.price) || 0;
+                const coef = Number(ci.coefficient) || 0;
+                if (savedSubtotal > 0 && coef > 0) {
+                    const derivedUnitPrice = savedSubtotal / coef;
+                    if (ci.item) {
+                        // Override the JOIN'd official price with the saved unit price
+                        ci.item = { ...ci.item, price: derivedUnitPrice };
+                    } else if (ci.auxiliaryComposition) {
+                        ci.auxiliaryComposition = { ...ci.auxiliaryComposition, totalPrice: derivedUnitPrice };
                     }
                 }
             }
@@ -1117,13 +1076,12 @@ router.get('/compositions/:code', async (req: any, res: any) => {
             ...metadataObj,
             items: enrichedItems,
             groups,
-            // FIX PRICE-SYNC-03: Recalcula totalDirect com coefficient × unitPrice ao invés de snapshot ci.price.
-            // Alinha o cálculo do backend com o frontend (getLineSubtotal) para evitar drift de arredondamento.
+            // FIX PRICE-INTEGRITY: Use saved ci.price (subtotal) as source of truth.
+            // For PROPRIA compositions, ci.price was set at save time and must not be
+            // overridden by recalculating from the JOIN'd item.price (which comes from
+            // the official DB and may differ from the price used during composition editing).
             totalDirect: enrichedItems.reduce((s: number, ci: any) => {
-                const itemData = ci.item || ci.auxiliaryComposition;
-                const unitPrice = Number(itemData?.price ?? itemData?.totalPrice ?? 0);
-                const coef = Number(ci.coefficient) || 0;
-                return s + (coef * unitPrice);
+                return s + (Number(ci.price) || 0);
             }, 0),
             hasAnalyticalItems: enrichedItems.length > 0,
             // Cache: the database where analytical items were found (if different from price match)
