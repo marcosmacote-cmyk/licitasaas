@@ -16,6 +16,7 @@ import { parseAndNormalizeEngineeringExtraction, postClassifyTypes } from '../se
 import { Prisma } from '@prisma/client';
 import { SimpleTtlCache } from '../lib/cache';
 import { classifyInsumoType } from '../services/engineering/insumoClassifier';
+import { classifyComposition } from '../services/engineering/compositionCategorizer';
 import { resolveDisplayBase } from '../services/engineering/baseResolver';
 
 const router = Router();
@@ -2592,6 +2593,114 @@ router.post('/propria/cleanup', async (req: any, res: any) => {
     } catch (e: any) {
         console.error('Error cleaning propria:', e);
         res.status(500).json({ error: 'Erro ao limpar base própria', details: e.message });
+    }
+});
+
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/:databaseId/reclassify
+// Reclassify items and compositions in a database using the centralized classifiers
+// ═══════════════════════════════════════════════════════════
+router.post('/bases/:databaseId/reclassify', async (req: any, res: any) => {
+    try {
+        const user = req.user;
+        if (user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Apenas SUPER_ADMIN pode reclassificar bases' });
+        }
+
+        const { databaseId } = req.params;
+        const { scope = 'all' } = req.body; // 'items' | 'compositions' | 'all'
+
+        const database = await prisma.engineeringDatabase.findUnique({ where: { id: databaseId } });
+        if (!database) {
+            return res.status(404).json({ error: 'Base não encontrada' });
+        }
+
+        logger.info(`[Reclassify] 🔄 Starting reclassification of "${database.name}" (${database.uf || 'N/A'}), scope=${scope}`);
+
+        const report: any = {
+            database: { id: database.id, name: database.name, uf: database.uf },
+            scope,
+            items: { processed: 0, changed: 0, byType: { MAO_DE_OBRA: 0, EQUIPAMENTO: 0, SERVICO: 0, MATERIAL: 0 } },
+            compositions: { processed: 0, changed: 0, byCategory: {} as Record<string, number> },
+        };
+
+        // ── Reclassify Items ──
+        if (scope === 'items' || scope === 'all') {
+            const BATCH = 5000;
+            let offset = 0;
+            while (true) {
+                const items = await prisma.engineeringItem.findMany({
+                    where: { databaseId },
+                    select: { id: true, description: true, unit: true, type: true },
+                    skip: offset,
+                    take: BATCH,
+                });
+                if (!items.length) break;
+
+                for (const item of items) {
+                    const classification = classifyInsumoType(item.description, item.unit);
+                    if (classification.type !== item.type && classification.confidence !== 'LOW') {
+                        await prisma.engineeringItem.update({
+                            where: { id: item.id },
+                            data: { type: classification.type },
+                        });
+                        report.items.changed++;
+                        report.items.byType[classification.type] = (report.items.byType[classification.type] || 0) + 1;
+                    }
+                }
+                report.items.processed += items.length;
+                offset += BATCH;
+
+                if (offset % 50000 === 0) {
+                    logger.info(`[Reclassify] Items: ${offset} processed, ${report.items.changed} changed`);
+                }
+            }
+        }
+
+        // ── Reclassify Compositions ──
+        if (scope === 'compositions' || scope === 'all') {
+            const BATCH = 2000;
+            let offset = 0;
+            while (true) {
+                const compositions = await prisma.engineeringComposition.findMany({
+                    where: { databaseId },
+                    select: { id: true, code: true, description: true, category: true },
+                    skip: offset,
+                    take: BATCH,
+                });
+                if (!compositions.length) break;
+
+                for (const comp of compositions) {
+                    const classification = classifyComposition(comp.description, comp.code);
+                    const currentCategory = comp.category || 'GERAL';
+                    if (classification.category !== currentCategory && classification.confidence !== 'LOW') {
+                        await prisma.engineeringComposition.update({
+                            where: { id: comp.id },
+                            data: { category: classification.category },
+                        });
+                        report.compositions.changed++;
+                        report.compositions.byCategory[classification.category] = (report.compositions.byCategory[classification.category] || 0) + 1;
+                    }
+                }
+                report.compositions.processed += compositions.length;
+                offset += BATCH;
+
+                if (offset % 10000 === 0) {
+                    logger.info(`[Reclassify] Compositions: ${offset} processed, ${report.compositions.changed} changed`);
+                }
+            }
+        }
+
+        logger.info(`[Reclassify] ✅ Done "${database.name}": ${report.items.changed} items + ${report.compositions.changed} compositions reclassified`);
+        res.json({
+            message: `Reclassificação concluída: ${report.items.changed} insumos e ${report.compositions.changed} composições alterados`,
+            report,
+        });
+
+    } catch (e: any) {
+        logger.error(`[Reclassify] ❌ Error: ${e.message}`);
+        res.status(500).json({ error: 'Erro ao reclassificar', details: e.message });
     }
 });
 

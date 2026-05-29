@@ -61,6 +61,8 @@ export function EngineeringHub() {
     const [editItemData, setEditItemData] = useState<{code: string; description: string; unit: string; price: string; type: string}>({code:'', description:'', unit:'', price:'', type:''});
     const [editingHubCompId, setEditingHubCompId] = useState<string | null>(null);
     const [editHubCompData, setEditHubCompData] = useState<{code: string; description: string; unit: string}>({code:'', description:'', unit:''});
+    const [reclassifyingDbId, setReclassifyingDbId] = useState<string | null>(null);
+    const [reclassifyReport, setReclassifyReport] = useState<any>(null);
 
     const hdrs = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
@@ -163,6 +165,28 @@ export function EngineeringHub() {
     const user = userStr ? JSON.parse(userStr) : null;
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN';
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+    const handleReclassify = async (dbId: string, dbName: string) => {
+        if (!confirm(`Reclassificar insumos e composições da base "${dbName}"?\n\nIsso usa o classificador inteligente para corrigir tipos (MAO_DE_OBRA, EQUIPAMENTO) e categorias de composição.\n\nO processo pode levar alguns minutos em bases grandes.`)) return;
+        setReclassifyingDbId(dbId);
+        setReclassifyReport(null);
+        try {
+            const res = await fetch(`/api/engineering/bases/${dbId}/reclassify`, {
+                method: 'POST',
+                headers: hdrs(),
+                body: JSON.stringify({ scope: 'all' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setReclassifyReport(data.report);
+                alert(`✅ Reclassificação concluída!\n\n• ${data.report.items.changed} insumos reclassificados\n• ${data.report.compositions.changed} composições categorizadas\n\nDetalhes no console.`);
+                console.log('[Reclassify Report]', data.report);
+            } else {
+                alert('Erro: ' + (data.error || 'Falha na reclassificação'));
+            }
+        } catch { alert('Erro de conexão'); }
+        setReclassifyingDbId(null);
+    };
 
     const fetchBases = async () => {
         try {
@@ -952,6 +976,7 @@ export function EngineeringHub() {
                                                         <th style={{ padding: '8px 14px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Insumos</th>
                                                         <th style={{ padding: '8px 14px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Composições</th>
                                                         <th style={{ padding: '8px 6px', textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>⬤</th>
+                                                        {isSuperAdmin && <th style={{ padding: '8px 6px', textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: '0.76rem' }}>Ações</th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -974,6 +999,26 @@ export function EngineeringHub() {
                                                                 <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 600 }}>{(b.itemCount || 0).toLocaleString('pt-BR')}</td>
                                                                 <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 600 }}>{(b.compositionCount || 0).toLocaleString('pt-BR')}</td>
                                                                 <td style={{ padding: '8px 6px', textAlign: 'center' }}>{hasData ? <CheckCircle2 size={14} color="#059669" /> : <AlertCircle size={14} color="#f59e0b" />}</td>
+                                                                {isSuperAdmin && (
+                                                                    <td style={{ padding: '4px 6px', textAlign: 'center' }}>
+                                                                        <button
+                                                                            onClick={() => handleReclassify(b.id, `${b.name} ${b.uf || ''}`)}
+                                                                            disabled={reclassifyingDbId === b.id}
+                                                                            title="Reclassificar tipos e categorias"
+                                                                            style={{
+                                                                                background: reclassifyingDbId === b.id ? 'rgba(124,58,237,0.15)' : 'rgba(124,58,237,0.08)',
+                                                                                border: '1px solid rgba(124,58,237,0.2)', borderRadius: 4,
+                                                                                cursor: reclassifyingDbId === b.id ? 'wait' : 'pointer',
+                                                                                padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                                                color: '#7c3aed', fontSize: '0.65rem', fontWeight: 700,
+                                                                                opacity: reclassifyingDbId === b.id ? 0.6 : 1,
+                                                                            }}
+                                                                        >
+                                                                            {reclassifyingDbId === b.id ? <RefreshCw size={10} className="spin" /> : <Wrench size={10} />}
+                                                                            {reclassifyingDbId === b.id ? 'Classificando...' : 'Reclassificar'}
+                                                                        </button>
+                                                                    </td>
+                                                                )}
                                                             </tr>
                                                         );
                                                     })}
