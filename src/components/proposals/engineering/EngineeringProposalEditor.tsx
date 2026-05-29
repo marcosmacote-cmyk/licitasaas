@@ -46,9 +46,11 @@ interface Props {
     /** FIX F2.3: Estimated value from the bidding for comparison */
     estimatedValue?: number;
     onReloadProposal?: () => void;
+    onOpenReconciliation?: () => void;
+    reconciliationCount?: number;
 }
 
-export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, onUnsavedChanges, wizardItems, estimatedValue, onReloadProposal }: Props) {
+export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, onUnsavedChanges, wizardItems, estimatedValue, onReloadProposal, onOpenReconciliation, reconciliationCount = 0 }: Props) {
     // FIX F1.2: Undo/Redo integration — replaces plain useState<EngItem[]>
     // - setItems: tracked changes (user edits) → pushed to undo stack
     // - setItemsSilent: system changes (recalc, load, save) → no undo stack
@@ -2653,6 +2655,39 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 </div>
                             );
                         })()}
+
+                        {/* PACS Reconciliation Assistant Card */}
+                        <div style={{
+                            background: reconciliationCount > 0 ? 'linear-gradient(135deg, rgba(239,68,68,0.03), rgba(245,158,11,0.03))' : 'var(--color-bg-surface)',
+                            borderRadius: 'var(--radius-lg)',
+                            border: reconciliationCount > 0 ? '1px solid rgba(245,158,11,0.3)' : '1px solid var(--color-border)',
+                            overflow: 'hidden',
+                            marginTop: 4
+                        }}>
+                            <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Conciliação PACS</span>
+                                {reconciliationCount > 0 ? (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#d97706', background: 'rgba(245,158,11,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                        {reconciliationCount} divergência{reconciliationCount > 1 ? 's' : ''}
+                                    </span>
+                                ) : (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--color-success)', background: 'rgba(34,197,94,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                        100% OK
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ padding: '0 14px 12px' }}>
+                                <button className="btn btn-outline btn-sm" onClick={onOpenReconciliation} style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    fontSize: '0.75rem', fontWeight: 700, borderColor: reconciliationCount > 0 ? '#d97706' : 'var(--color-border)',
+                                    color: reconciliationCount > 0 ? '#d97706' : 'var(--color-text-secondary)',
+                                    background: '#fff', cursor: 'pointer', padding: '6px 12px'
+                                }}>
+                                    <AlertTriangle size={12} color={reconciliationCount > 0 ? '#d97706' : 'var(--color-text-tertiary)'} />
+                                    Central de Conciliação
+                                </button>
+                            </div>
+                        </div>
                     </div>
             </div>
             )}

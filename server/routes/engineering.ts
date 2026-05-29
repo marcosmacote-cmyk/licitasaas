@@ -20,6 +20,7 @@ import { classifyInsumoType } from '../services/engineering/insumoClassifier';
 import { classifyComposition } from '../services/engineering/compositionCategorizer';
 import { resolveDisplayBase } from '../services/engineering/baseResolver';
 import { isTempId, flattenCompositionGroups, buildCompositionMetadata, correctCoefficientScaling, validateFkReferences, generateItemCode } from '../services/engineering/compositionSaveService';
+import { getReconciliationReport, reconcileProposal } from '../services/engineering/reconciliationService';
 
 const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
@@ -4736,6 +4737,44 @@ router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
         console.error('Error deleting engineering item:', e);
         const status = e.statusCode || 500;
         res.status(status).json({ error: e.message || 'Erro ao remover item' });
+    }
+});
+
+// GET /api/engineering/proposals/:id/reconciliation-report
+router.get('/proposals/:id/reconciliation-report', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
+        const report = await getReconciliationReport(proposalId, tenantId);
+        res.json(report);
+    } catch (e: any) {
+        console.error('[Reconciliation Report] Error:', e);
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao gerar relatório de conciliação' });
+    }
+});
+
+// POST /api/engineering/proposals/:id/reconcile
+router.post('/proposals/:id/reconcile', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        const tenantId = req.user?.tenantId;
+        await validateProposalOwnership(proposalId, tenantId);
+
+        const { actionType, alertId } = req.body;
+        const result = await reconcileProposal(proposalId, tenantId, actionType, alertId);
+
+        // Flush caches to ensure frontend sees fresh resolved data
+        compositionCache.flushAll();
+        engineeringSearchCache.flushAll();
+
+        res.json({ success: true, ...result });
+    } catch (e: any) {
+        console.error('[Reconcile Action] Error:', e);
+        const status = e.statusCode || 500;
+        res.status(status).json({ error: e.message || 'Erro ao executar conciliação', details: e.message });
     }
 });
 

@@ -1,16 +1,8 @@
-/**
- * Step2BudgetEditor.tsx — Planilha Orçamentária (Step 2 do Wizard)
- * 
- * ESTRATÉGIA: Em vez de duplicar 800+ linhas da tabela DnD, este componente
- * renderiza o EngineeringProposalEditor legado em "modo embutido" (embedded mode).
- * O editor legado continua funcionando 100% — apenas o wrapper de navegação muda.
- * 
- * Recebe engineeringConfig e bdiConfig do Wizard para que o dashboard sidebar
- * reflita a configuração atual do Step 1 em tempo real.
- */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { EngineeringProposalEditor } from '../EngineeringProposalEditor';
 import { AiDisclaimerBanner } from '../../../shared/AiDisclaimerBanner';
+import { ReconciliationDrawer } from '../ReconciliationDrawer';
+import { ShieldAlert, AlertTriangle } from 'lucide-react';
 import type { EngineeringConfig, EngItem } from '../types';
 import { isPropria } from '../types';
 import type { BdiConfig } from '../bdiEngine';
@@ -35,6 +27,26 @@ interface Props {
 export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bdiConfig, items, onItemsChange, onUnsavedChanges, estimatedValue, onPrev, onNext, onReloadProposal }: Props) {
     // Track whether items have been loaded (from AI extraction or saved data)
     const [hasLoadedItems, setHasLoadedItems] = useState(false);
+    const [isReconcileOpen, setIsReconcileOpen] = useState(false);
+    const [reconciliationCount, setReconciliationCount] = useState(0);
+
+    const checkReconciliation = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/reconciliation-report`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+            });
+            if (res.ok) {
+                const report = await res.json();
+                setReconciliationCount(report?.summary?.totalAlerts || 0);
+            }
+        } catch (e) {
+            console.error('[Reconciliation Check] Error:', e);
+        }
+    }, [proposalId]);
+
+    useEffect(() => {
+        checkReconciliation();
+    }, [items, checkReconciliation]);
 
     const handleItemsChange = useCallback((items: EngItem[]) => {
         if (items.length > 0) setHasLoadedItems(true);
@@ -55,6 +67,32 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
             {/* AI Disclaimer — only visible AFTER items are loaded */}
             {showBanner && <AiDisclaimerBanner variant={bannerVariant} />}
 
+            {/* Reconciliation Banner */}
+            {reconciliationCount > 0 && (
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(245,158,11,0.06))',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                    padding: '12px 18px',
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <ShieldAlert size={16} color="#d97706" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            PACS detectou {reconciliationCount} divergência{reconciliationCount > 1 ? 's' : ''} de valores e bases na proposta.
+                        </span>
+                    </div>
+                    <button className="btn btn-outline btn-sm" onClick={() => setIsReconcileOpen(true)} 
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: '#d97706', color: '#d97706', padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, background: '#fff', cursor: 'pointer' }}>
+                        <AlertTriangle size={13} />
+                        Reconciliar
+                    </button>
+                </div>
+            )}
+
             {/* The legacy editor renders the full budget table with DnD, toolbar, sidebar, search modal, etc. */}
             <EngineeringProposalEditor
                 proposalId={proposalId}
@@ -66,6 +104,8 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                 wizardItems={items}
                 estimatedValue={estimatedValue}
                 onReloadProposal={onReloadProposal}
+                onOpenReconciliation={() => setIsReconcileOpen(true)}
+                reconciliationCount={reconciliationCount}
             />
 
             {/* Step navigation footer */}
@@ -82,6 +122,18 @@ export function Step2BudgetEditor({ proposalId, biddingId, engineeringConfig, bd
                     Próximo: Cronograma →
                 </button>
             </div>
+
+            {/* Reconciliation Drawer */}
+            <ReconciliationDrawer
+                isOpen={isReconcileOpen}
+                onClose={() => setIsReconcileOpen(false)}
+                proposalId={proposalId}
+                onReconciled={() => {
+                    checkReconciliation();
+                    onReloadProposal?.();
+                }}
+            />
         </div>
     );
 }
+
