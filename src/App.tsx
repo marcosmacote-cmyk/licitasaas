@@ -369,10 +369,12 @@ function App() {
                 }}
                 className="logo-glow-effect"
                 style={{
-                  width: 34,
-                  height: 34,
+                  width: 52,
+                  height: 52,
                   objectFit: 'contain',
                   flexShrink: 0,
+                  marginLeft: '-8px',
+                  marginRight: '-4px',
                 }}
               />
               <div style={{

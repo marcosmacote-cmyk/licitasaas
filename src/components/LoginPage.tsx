@@ -70,10 +70,10 @@ export function LoginPage({ onLoginSuccess }: Props) {
                         }}
                         className="logo-glow-effect"
                         style={{
-                            width: 110,
-                            height: 110,
+                            width: 160,
+                            height: 160,
                             objectFit: 'contain',
-                            margin: '0 auto var(--space-4)',
+                            margin: '-16px auto 0',
                             display: 'block',
                         }}
                     />
