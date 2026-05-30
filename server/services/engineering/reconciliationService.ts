@@ -34,7 +34,7 @@ function applyPrecision(value: number, config: any): number {
     const dec = config?.casasDecimais ?? 2;
     const factor = Math.pow(10, dec);
     if (config?.tipo === 'TRUNCATE') {
-        return Math.floor(value * factor + 1e-9) / factor;
+        return Math.trunc(value * factor + 1e-9) / factor;
     }
     return Math.round(value * factor) / factor;
 }

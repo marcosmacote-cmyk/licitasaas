@@ -809,6 +809,7 @@ model EngineeringCompositionItem {
   
   coefficient     Float    // Quantity of the item required for 1 unit of the composition
   price           Float    // Snapshot of the price at the time of creation (price * coefficient)
+  unitPrice       Float?   // Original unit price snapshot of the line
   groupKey        String?  // The visual stage/group this item belongs to
   coefficientExpression String?
 

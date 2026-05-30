@@ -50,6 +50,45 @@ interface Props {
     reconciliationCount?: number;
 }
 
+interface DeferredInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+    value: string | number;
+    onCommit: (value: any) => void;
+    parseValue?: (val: string) => any;
+}
+
+const DeferredInput = ({ value, onCommit, parseValue, onBlur, ...props }: DeferredInputProps) => {
+    const [localValue, setLocalValue] = useState<string | number>(value ?? '');
+
+    useEffect(() => {
+        setLocalValue(value ?? '');
+    }, [value]);
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const parsed = parseValue ? parseValue(String(localValue)) : localValue;
+        if (parsed !== value) {
+            onCommit(parsed);
+        }
+        if (onBlur) {
+            onBlur(e);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.currentTarget.blur();
+        }
+    };
+
+    return (
+        <input
+            {...props}
+            value={localValue}
+            onChange={e => setLocalValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+        />
+    );
+};
 export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig, wizardBdiConfig, onItemsChange, onUnsavedChanges, wizardItems, estimatedValue, onReloadProposal, onOpenReconciliation, reconciliationCount = 0 }: Props) {
     // FIX F1.2: Undo/Redo integration — replaces plain useState<EngItem[]>
     // - setItems: tracked changes (user edits) → pushed to undo stack
@@ -893,7 +932,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     // AI BDI extraction
     const [isExtractingBdi, setIsExtractingBdi] = useState(false);
-    const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
     // FIX F5.5: Notes popover state
     const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
     // FIX F5.4: Multi-selection state
@@ -1311,6 +1349,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     code: data.item.code, sourceName: 'PROPRIA',
                     description: data.item.description, unit: data.item.unit || 'UN', quantity: qty,
                     unitCost: cost, unitPrice,
+                    compositionTotalPrice: typeFromKind === 'COMPOSICAO' ? cost : undefined,
                     totalPrice: applyPrecision(qty * unitPrice, { precision: engineeringConfig.precision }),
                     type: typeFromKind, priceOrigin: 'BASE' as const,
                 };
@@ -1589,16 +1628,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     });
 
     // ── SortableRow extracted outside map() to prevent React remount on every re-render ──
-    // useMemo ensures the component identity is stable across re-renders (setHoveredRowId is stable from useState)
+    // useMemo ensures the component identity is stable across re-renders
     const SortableRow = useMemo(() => {
         const Row = ({ id, children }: { id: string; children: (listeners: any) => React.ReactNode }) => {
             const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
             const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, background: isDragging ? 'rgba(0,0,0,0.05)' : undefined, position: 'relative' as const };
             return (
                 <tr ref={setNodeRef} style={{ ...style, borderBottom: '1px solid var(--color-border)' }}
+                    className="budget-row"
                     data-item-id={id}
-                    onMouseEnter={() => setHoveredRowId(id)}
-                    onMouseLeave={() => setHoveredRowId(null)}
                 >
                     {children(listeners)}
                 </tr>
@@ -1610,6 +1648,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+            <style>{`
+                .budget-row .hover-actions-menu {
+                    display: none !important;
+                }
+                .budget-row:hover .hover-actions-menu {
+                    display: flex !important;
+                }
+                .budget-row .discount-input-wrapper {
+                    display: none !important;
+                }
+                .budget-row:hover .discount-input-wrapper,
+                .budget-row .discount-input-wrapper.discount-active {
+                    display: flex !important;
+                }
+            `}</style>
 
             {/* Tab Bar — unified navigation */}
             <div style={{ display: 'flex', gap: 4, background: 'var(--color-bg-base)', padding: 4, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
@@ -2083,7 +2136,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 </div>
                                             </td>
                                                     <td colSpan={6} style={{ padding: '8px 12px' }}>
-                                                        <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} 
+                                                        <DeferredInput value={it.description} onCommit={val => updateItem(it.id, 'description', val)} 
                                                             style={{ ...inputStyle(), fontWeight: 700, fontSize: '0.85rem', color: meta.color, background: 'transparent', border: '1px solid transparent', paddingLeft: depth > 0 ? 16 : 0 }}
                                                             onFocus={e => { e.currentTarget.style.border = `1px solid ${meta.color}30`; }}
                                                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; }}
@@ -2119,35 +2172,33 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                         );
                                                     })()}
                                                     <td style={{ padding: '6px 8px', textAlign: 'center', position: 'relative', width: 40 }}>
-                                                        {hoveredRowId === it.id && (
-                                                            <div style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
-                                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
-                                                                {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
-                                                                    const m = TYPE_META[t];
-                                                                    const handleClick = (e: React.MouseEvent) => {
-                                                                        e.preventDefault();
-                                                                        e.stopPropagation();
-                                                                        // All types open the Hub de Inserção
-                                                                        setInsertType(t);
-                                                                        setInsertTargetId(it.id);
-                                                                        setSearchQuery('');
-                                                                        setSearchResults([]);
-                                                                        setSearchQuantities({});
-                                                                        setAddedItemIds(new Set());
-                                                                        setAddedCount(0);
-                                                                        setShowSearch(true);
-                                                                    };
-                                                                    return (
-                                                                        <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
-                                                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
-                                                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
-                                                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
-                                                                            <Icon size={13} />
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
+                                                        <div className="hover-actions-menu" style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
+                                                            {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
+                                                                const m = TYPE_META[t];
+                                                                const handleClick = (e: React.MouseEvent) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    // All types open the Hub de Inserção
+                                                                    setInsertType(t);
+                                                                    setInsertTargetId(it.id);
+                                                                    setSearchQuery('');
+                                                                    setSearchResults([]);
+                                                                    setSearchQuantities({});
+                                                                    setAddedItemIds(new Set());
+                                                                    setAddedCount(0);
+                                                                    setShowSearch(true);
+                                                                };
+                                                                return (
+                                                                    <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
+                                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
+                                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
+                                                                        <Icon size={13} />
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                         <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                     </td>
                                                 </>
@@ -2180,7 +2231,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                                 {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                                             </button>
                                                         )}
-                                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle(hasInsumos ? '80px' : '100px'), fontWeight: 700 }} />
+                                                        <DeferredInput value={it.itemNumber} onCommit={val => updateItem(it.id, 'itemNumber', val)} style={{ ...inputStyle(hasInsumos ? '80px' : '100px'), fontWeight: 700 }} />
                                                     </div>
                                                 </td>
                                         <td style={{ padding: '6px 8px' }}>
@@ -2209,7 +2260,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('86px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
+                                                <DeferredInput value={it.code} onCommit={val => updateItem(it.id, 'code', val)} style={{ ...inputStyle('86px'), color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }} />
                                                 {it.type === 'COMPOSICAO' && it.code && it.code !== 'N/A' && (
                                                     <button title="Editar composição" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5, flexShrink: 0 }}
                                                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
@@ -2237,7 +2288,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                <input value={it.description} title={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500, flex: 1, ...(isShell ? { borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.03)' } : {}) }} />
+                                                <DeferredInput value={it.description} title={it.description} onCommit={val => updateItem(it.id, 'description', val)} style={{ ...inputStyle(), fontWeight: 500, flex: 1, ...(isShell ? { borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.03)' } : {}) }} />
                                                 {isShell && (
                                                     <button
                                                         title="Esta composição é apenas uma casca sem detalhamento analítico. Clique para abrir o editor e inserir insumos, mão de obra e equipamentos."
@@ -2284,11 +2335,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                             )}
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
-                                            <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('48px'), textAlign: 'center', padding: '4px' }} />
+                                            <DeferredInput value={it.unit} onCommit={val => updateItem(it.id, 'unit', val)} style={{ ...inputStyle('48px'), textAlign: 'center', padding: '4px' }} />
                                         </td>
                                         <td style={{ padding: '6px 8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                                                <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('72px'), textAlign: 'right' }} step="0.01" />
+                                                <DeferredInput type="number" value={it.quantity} parseValue={parseLocaleNumber} onCommit={val => updateItem(it.id, 'quantity', val)} style={{ ...inputStyle('72px'), textAlign: 'right' }} step="0.01" />
                                                 {!isGrouper(it.type) && (
                                                     <button
                                                         onClick={() => setActiveCalcItem(it)}
@@ -2319,18 +2370,18 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                     <span title={`CASCA: Esta composição precisa de detalhamento analítico.${it.editalUnitCost ? ` Referência edital: R$ ${it.editalUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''} Clique para abrir o editor.`} style={{ display: 'flex', cursor: 'pointer' }} onClick={() => setCompositionEditorIndex(items.indexOf(it))}>
                                                         <AlertTriangle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: '#d97706', fontWeight: 700, border: '1px solid rgba(245,158,11,0.4)' }} step="0.01" />
+                                                    <DeferredInput type="number" value={it.unitCost} parseValue={parseLocaleNumber} onCommit={val => updateItem(it.id, 'unitCost', val)} style={{ ...inputStyle('100px'), textAlign: 'right', color: '#d97706', fontWeight: 700, border: '1px solid rgba(245,158,11,0.4)' }} step="0.01" />
                                                 </div>
                                             ) : it.unitCost === 0 ? (
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', color: 'var(--color-danger)' }}>
                                                     <span title="Item sem preço unitário." style={{ display: 'flex' }}>
                                                         <AlertCircle size={14} />
                                                     </span>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
+                                                    <DeferredInput type="number" value={it.unitCost} parseValue={parseLocaleNumber} onCommit={val => updateItem(it.id, 'unitCost', val)} style={{ ...inputStyle('100px'), textAlign: 'right', color: 'var(--color-danger)', fontWeight: 700, border: '1px solid var(--color-danger)' }} step="0.01" />
                                                 </div>
                                             ) : (
                                                 <div style={{ position: 'relative' }}>
-                                                    <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseLocaleNumber(e.target.value))} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01"
+                                                    <DeferredInput type="number" value={it.unitCost} parseValue={parseLocaleNumber} onCommit={val => updateItem(it.id, 'unitCost', val)} style={{ ...inputStyle('100px'), textAlign: 'right' }} step="0.01"
                                                         title={it.editalUnitCost && it.editalUnitCost !== it.unitCost ? `Referência edital: R$ ${it.editalUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Δ ${((it.unitCost - it.editalUnitCost) / it.editalUnitCost * 100).toFixed(1)}%` : undefined}
                                                     />
                                                     {it.editalUnitCost && it.editalUnitCost !== it.unitCost && isPropria(it.sourceName) && (
@@ -2339,51 +2390,48 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                                 </div>
                                             )}
                                             {/* FIX F5.6: Discount input */}
-                                            {(it.discount && it.discount > 0) || hoveredRowId === it.id ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2, justifyContent: 'flex-end' }}>
-                                                    <span style={{ fontSize: '0.58rem', color: '#059669', fontWeight: 700 }}>Desc:</span>
-                                                    <input
-                                                        type="number" value={it.discount || 0} min={0} max={100} step={0.5}
-                                                        onChange={e => updateItem(it.id, 'discount', parseLocaleNumber(e.target.value))}
-                                                        style={{ width: 44, fontSize: '0.6rem', padding: '1px 3px', textAlign: 'right', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 3, background: 'rgba(34,197,94,0.04)', color: '#059669', fontWeight: 700 }}
-                                                    />
-                                                    <span style={{ fontSize: '0.58rem', color: '#059669' }}>%</span>
-                                                </div>
-                                            ) : null}
-                                        </td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
-                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
+                                            <div className={`discount-input-wrapper ${it.discount && it.discount > 0 ? 'discount-active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2, justifyContent: 'flex-end' }}>
+                                                <span style={{ fontSize: '0.58rem', color: '#059669', fontWeight: 700 }}>Desc:</span>
+                                                <DeferredInput
+                                                    type="number" value={it.discount || 0} min={0} max={100} step={0.5}
+                                                    parseValue={parseLocaleNumber}
+                                                    onCommit={val => updateItem(it.id, 'discount', val)}
+                                                    style={{ width: 44, fontSize: '0.6rem', padding: '1px 3px', textAlign: 'right', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 3, background: 'rgba(34,197,94,0.04)', color: '#059669', fontWeight: 700 }}
+                                                />
+                                                <span style={{ fontSize: '0.58rem', color: '#059669' }}>%</span>
+                                            </div>
+                                         </td>
+                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: it.unitCost === 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                         <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', fontSize: '0.82rem' }}>{fmt(it.totalPrice)}</td>
                                                 <td style={{ padding: '6px 8px', textAlign: 'center' }}>{renderPriceAudit(it, () => applyBasePriceToItem(it.id))}</td>
                                                 <td style={{ padding: '6px 8px', textAlign: 'center', position: 'relative', width: 40 }}>
-                                                    {hoveredRowId === it.id && (
-                                                        <div style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
-                                                            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
-                                                            {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
-                                                                const m = TYPE_META[t];
-                                                                const handleClick = (e: React.MouseEvent) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    // All types open the Hub de Inserção
-                                                                    setInsertType(t);
-                                                                    setInsertTargetId(it.id);
-                                                                    setSearchQuery('');
-                                                                    setSearchResults([]);
-                                                                    setSearchQuantities({});
-                                                                    setAddedItemIds(new Set());
-                                                                    setAddedCount(0);
-                                                                    setShowSearch(true);
-                                                                };
-                                                                return (
-                                                                    <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
-                                                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
-                                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
-                                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
-                                                                        <Icon size={13} />
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                    <div className="hover-actions-menu" style={{ position: 'absolute', right: 38, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4, alignItems: 'center', background: 'var(--color-bg-surface)', padding: '4px 8px', borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--color-border)', zIndex: 10 }}>
+                                                        <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 4, whiteSpace: 'nowrap' }}>Inserir:</span>
+                                                        {([['ETAPA', FolderOpen], ['SUBETAPA', GitBranch], ['COMPOSICAO', Layers], ['INSUMO', Package]] as [EngItemType, typeof FolderOpen][]).map(([t, Icon]) => {
+                                                            const m = TYPE_META[t];
+                                                            const handleClick = (e: React.MouseEvent) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                // All types open the Hub de Inserção
+                                                                setInsertType(t);
+                                                                setInsertTargetId(it.id);
+                                                                setSearchQuery('');
+                                                                setSearchResults([]);
+                                                                setSearchQuantities({});
+                                                                setAddedItemIds(new Set());
+                                                                setAddedCount(0);
+                                                                setShowSearch(true);
+                                                            };
+                                                            return (
+                                                                <button key={t} onClick={handleClick} onPointerDown={e => e.stopPropagation()} title={`Inserir ${m.label}`}
+                                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 6px', borderRadius: 4, border: `1px solid ${m.color}30`, background: m.bg, cursor: 'pointer', color: m.color, transition: 'all 0.15s' }}
+                                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${m.color}20`; }}
+                                                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = m.bg; }}>
+                                                                    <Icon size={13} />
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
                                                     <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                                 </td>
                                             </>

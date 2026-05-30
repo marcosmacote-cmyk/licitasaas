@@ -1024,13 +1024,17 @@ router.get('/compositions/:code', async (req: any, res: any) => {
         if (isPropriaResponse && enrichedItems.length > 0) {
             // A composição própria é snapshot da proposta. No load, nunca re-enriquecer
             // contra bases oficiais: apenas deriva preço unitário para exibição a partir
-            // do subtotal salvo em EngineeringCompositionItem.price.
+            // do subtotal salvo em EngineeringCompositionItem.price ou do unitPrice persistido.
             for (const ci of enrichedItems) {
                 const savedSubtotal = Number(ci.price) || 0;
                 const coefficient = Number(ci.coefficient) || 0;
                 if (savedSubtotal <= 0 || coefficient <= 0) continue;
 
-                const savedUnitPrice = savedSubtotal / coefficient;
+                // FIX DRIFT: prioritize persisted unitPrice to avoid float division issues
+                const savedUnitPrice = ci.unitPrice != null && Number(ci.unitPrice) > 0
+                    ? Number(ci.unitPrice)
+                    : savedSubtotal / coefficient;
+
                 if (ci.item) {
                     ci.item = { ...ci.item, price: savedUnitPrice };
                 } else if (ci.auxiliaryComposition) {
@@ -1632,7 +1636,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                         const dec = config?.casasDecimais ?? 2;
                         if (config?.tipo === 'TRUNCATE') {
                             const factor = Math.pow(10, dec);
-                            return Math.floor(value * factor + 1e-9) / factor;
+                            return Math.trunc(value * factor + 1e-9) / factor;
                         }
                         return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
                     };
@@ -2200,6 +2204,7 @@ router.put('/compositions/:id', async (req: any, res: any) => {
                             auxiliaryCompositionId: isAux ? auxId : null,
                             coefficient: item.coefficient,
                             price: item.price,
+                            unitPrice: Number(item.unitPrice ?? (isAux ? (item.auxiliaryComposition?.totalPrice ?? 0) : (item.item?.price ?? 0))) || 0,
                             groupKey: item.groupKey || null,
                             coefficientExpression: item.coefficientExpression || null,
                         }
@@ -2584,7 +2589,7 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
             const dec = config?.casasDecimais ?? 2;
             if (config?.tipo === 'TRUNCATE') {
                 const factor = Math.pow(10, dec);
-                return Math.floor(value * factor + 1e-9) / factor;
+                return Math.trunc(value * factor + 1e-9) / factor;
             }
             return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
         };
@@ -3840,7 +3845,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
             const dec = config?.casasDecimais ?? 2;
             if (config?.tipo === 'TRUNCATE') {
                 const factor = Math.pow(10, dec);
-                return Math.floor(value * factor + 1e-9) / factor;
+                return Math.trunc(value * factor + 1e-9) / factor;
             }
             return Math.round(value * Math.pow(10, dec)) / Math.pow(10, dec);
         };
@@ -4550,7 +4555,7 @@ router.post('/proposals/:id/items', async (req: any, res: any) => {
                             const dec = config?.casasDecimais ?? 2;
                             const factor = Math.pow(10, dec);
                             if (config?.tipo === 'TRUNCATE') {
-                                return Math.floor(value * factor + 1e-9) / factor;
+                                return Math.trunc(value * factor + 1e-9) / factor;
                             }
                             return Math.round(value * factor) / factor;
                         };

@@ -65,7 +65,9 @@ export const normalizeCompositionMath = (raw: any, precision?: any): any => {
 
             if (isPropria && ci.coefficient > 0) {
                 const savedSubtotal = applyPrecision(asNumber(ci.price), { precision });
-                const dbUnitPrice = savedSubtotal / ci.coefficient;
+                const dbUnitPrice = ci.unitPrice != null && asNumber(ci.unitPrice) > 0
+                    ? asNumber(ci.unitPrice)
+                    : savedSubtotal / ci.coefficient;
                 if (ci.item) {
                     ci.item = { ...ci.item, price: dbUnitPrice };
                 } else if (ci.auxiliaryComposition) {

@@ -579,29 +579,39 @@ export async function enrichWithOfficialPrices(
         return { matched, total: itemsWithCode.length + itemsWithoutCode.length };
     }
 
-    for (const item of unmatchedItems) {
-        const extractedUnitCost = Number(item.unitCost) || 0;
-        const best = await semanticFallbackMatch(item, engineeringConfig, targetDate, options);
-
-        if (!best) {
-            item.priceAudit = {
-                status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
-                extractedUnitCost,
-                matchedUnitCost: null,
-                matchMethod: 'none',
-                confidence: 0,
-                deltaValue: null,
-                deltaPercent: null,
-                warnings: ['código não encontrado e sem similaridade textual confiável nas bases permitidas'],
-            };
-            continue;
+    const chunkArray = <T>(arr: T[], size: number): T[][] => {
+        const chunks: T[][] = [];
+        for (let i = 0; i < arr.length; i += size) {
+            chunks.push(arr.slice(i, i + size));
         }
+        return chunks;
+    };
 
-        applyBestCandidate(item, best, extractedUnitCost);
-        matched++;
+    const chunks = chunkArray(unmatchedItems, 5);
+    for (const chunk of chunks) {
+        await Promise.all(chunk.map(async (item) => {
+            const extractedUnitCost = Number(item.unitCost) || 0;
+            const best = await semanticFallbackMatch(item, engineeringConfig, targetDate, options);
+
+            if (!best) {
+                item.priceAudit = {
+                    status: 'SEM_MATCH' as EngineeringPriceAuditStatus,
+                    extractedUnitCost,
+                    matchedUnitCost: null,
+                    matchMethod: 'none',
+                    confidence: 0,
+                    deltaValue: null,
+                    deltaPercent: null,
+                    warnings: ['código não encontrado e sem similaridade textual confiável nas bases permitidas'],
+                };
+            } else {
+                applyBestCandidate(item, best, extractedUnitCost);
+                matched++;
+            }
+        }));
     }
 
-    return { matched, total: itemsWithCode.length + itemsWithoutCode.length };
+    return { matched, total: itemsWithCode.length + unmatchedItems.length };
 }
 
 function applyBestCandidate(item: any, best: any, extractedUnitCost: number) {

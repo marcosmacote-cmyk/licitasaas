@@ -25,6 +25,12 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Add firefox or webkit if necessary
   ],
+
+  webServer: {
+    command: 'npx vite --port 5173',
+    url: 'http://localhost:5173',
+    reuseExistingServer: true,
+    timeout: 15000,
+  },
 });
