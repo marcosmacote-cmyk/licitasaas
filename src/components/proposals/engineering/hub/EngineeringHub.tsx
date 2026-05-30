@@ -20,8 +20,9 @@ interface EngDatabase {
 
 const SOURCE_COLORS: Record<string, string> = {
     SINAPI: '#059669', SEINFRA: '#7c3aed', ORSE: '#0891b2', SICOR: '#ca8a04', SICRO: '#dc2626', SBC: '#d97706', CAERN: '#0d9488', PROPRIA: '#2563eb',
+    FNDE: '#ea580c', CDHU: '#1e3a8a', CPOS: '#0369a1', EMOP: '#be185d', SUDECAP: '#4f46e5', SEDOP: '#15803d',
 };
-const SOURCE_ORDER = ['SINAPI', 'SICRO', 'SBC', 'CAERN', 'SICOR', 'SEINFRA', 'ORSE', 'PROPRIA'];
+const SOURCE_ORDER = ['SINAPI', 'SICRO', 'SBC', 'CAERN', 'SICOR', 'SEINFRA', 'ORSE', 'FNDE', 'CDHU', 'CPOS', 'EMOP', 'SUDECAP', 'SEDOP', 'PROPRIA'];
 
 export function EngineeringHub() {
     const [activeTab, setActiveTab] = useState<'oficiais' | 'propria'>('oficiais');
@@ -239,10 +240,19 @@ export function EngineeringHub() {
         if (!file) return;
 
         let name = 'SINAPI';
-        if (file.name.toUpperCase().includes('SEINFRA')) name = 'SEINFRA';
-        if (file.name.toUpperCase().includes('SICRO')) name = 'SICRO';
-        if (file.name.toUpperCase().includes('ORSE')) name = 'ORSE';
-        if (file.name.toUpperCase().includes('SICOR')) name = 'SICOR';
+        const fileNameUpper = file.name.toUpperCase();
+        if (fileNameUpper.includes('SEINFRA')) name = 'SEINFRA';
+        else if (fileNameUpper.includes('SICRO')) name = 'SICRO';
+        else if (fileNameUpper.includes('ORSE')) name = 'ORSE';
+        else if (fileNameUpper.includes('SICOR')) name = 'SICOR';
+        else if (fileNameUpper.includes('FNDE')) name = 'FNDE';
+        else if (fileNameUpper.includes('CDHU')) name = 'CDHU';
+        else if (fileNameUpper.includes('CPOS')) name = 'CPOS';
+        else if (fileNameUpper.includes('EMOP')) name = 'EMOP';
+        else if (fileNameUpper.includes('SUDECAP')) name = 'SUDECAP';
+        else if (fileNameUpper.includes('SEDOP')) name = 'SEDOP';
+        else if (fileNameUpper.includes('SBC')) name = 'SBC';
+        else if (fileNameUpper.includes('CAERN')) name = 'CAERN';
 
         const ufMatch = file.name.match(/_([A-Z]{2})_/i) || file.name.match(/-([A-Z]{2})-/i);
         const uf = ufMatch ? ufMatch[1].toUpperCase() : '';
