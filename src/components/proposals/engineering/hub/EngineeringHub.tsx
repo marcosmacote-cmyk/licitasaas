@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter, Trash2, Edit3, Pencil, Package, Wrench, Sparkles } from 'lucide-react';
+import { Database, UploadCloud, RefreshCw, Layers, MapPin, CheckCircle2, AlertCircle, FileSpreadsheet, Zap, Shield, ShieldOff, Hash, ChevronDown, ChevronUp, Search, X, Filter, Trash2, Edit3, Pencil, Package, Wrench, Sparkles, Folder } from 'lucide-react';
 import { CompositionEditor } from '../CompositionEditor';
 import { apiFetch } from '../../../../services/apiClient';
 
@@ -14,6 +14,8 @@ interface EngDatabase {
     referenceYear: number | null;
     itemCount: number;
     compositionCount: number;
+    proposalTitle?: string | null;
+    proposalNumber?: string | null;
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -49,7 +51,16 @@ export function EngineeringHub() {
     const [hubSearching, setHubSearching] = useState(false);
     const hubSearchTimer = useRef<any>(null);
 
-    const propriaBase = bases.find(b => b.type === 'PROPRIA' || b.name === 'PROPRIA');
+    const [selectedPropriaBaseId, setSelectedPropriaBaseId] = useState<string | null>(null);
+
+    const propriaBasesList = useMemo(() => {
+        return bases.filter(b => b.type === 'PROPRIA' || b.name === 'PROPRIA' || b.name.startsWith('PROPRIA_'));
+    }, [bases]);
+
+    const activePropriaBase = useMemo(() => {
+        return propriaBasesList.find(b => b.id === selectedPropriaBaseId) || propriaBasesList[0];
+    }, [propriaBasesList, selectedPropriaBaseId]);
+
     const [propriaComps, setPropriaComps] = useState<any[]>([]);
     const [propriaItems, setPropriaItems] = useState<any[]>([]);
     const [loadingPropria, setLoadingPropria] = useState(false);
@@ -67,12 +78,12 @@ export function EngineeringHub() {
     const hdrs = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
     const loadPropria = async () => {
-        if (!propriaBase) return;
+        if (!activePropriaBase) return;
         setLoadingPropria(true);
         try {
             const [compsRes, itemsRes] = await Promise.all([
-                fetch(`/api/engineering/compositions?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
-                fetch(`/api/engineering/items?databaseId=${propriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
+                fetch(`/api/engineering/compositions?databaseId=${activePropriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
+                fetch(`/api/engineering/items?databaseId=${activePropriaBase.id}&limit=500&q=${encodeURIComponent(propriaSearch)}`, { headers: hdrs() }),
             ]);
             if (compsRes.ok) setPropriaComps(await compsRes.json());
             if (itemsRes.ok) setPropriaItems(await itemsRes.json());
@@ -132,7 +143,12 @@ export function EngineeringHub() {
         if (!confirm('Limpar base própria?\n\n• Composições vazias (sem insumos) serão removidas\n• Insumos órfãos (não usados em nenhuma composição) serão removidos\n\nEssa ação não pode ser desfeita.')) return;
         setCleaningUp(true);
         try {
-            const res = await fetch('/api/engineering/propria/cleanup', { method: 'POST', headers: hdrs() });
+            let url = '/api/engineering/propria/cleanup';
+            if (activePropriaBase && activePropriaBase.name.startsWith('PROPRIA_')) {
+                const proposalId = activePropriaBase.name.replace('PROPRIA_', '');
+                url += `?proposalId=${proposalId}`;
+            }
+            const res = await fetch(url, { method: 'POST', headers: hdrs() });
             const data = await res.json();
             if (res.ok) {
                 alert(`✅ ${data.message}\n\nRestantes: ${data.remaining.compositions} composições, ${data.remaining.items} insumos`);
@@ -144,7 +160,7 @@ export function EngineeringHub() {
 
     useEffect(() => {
         if (activeTab === 'propria') loadPropria();
-    }, [activeTab, propriaBase, propriaSearch]);
+    }, [activeTab, activePropriaBase, propriaSearch]);
 
     // Debounced hub search
     useEffect(() => {
@@ -194,7 +210,19 @@ export function EngineeringHub() {
             const res = await fetch('/api/engineering/bases', {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-            if (res.ok) setBases(await res.json());
+            if (res.ok) {
+                const data = await res.json();
+                setBases(data);
+                
+                // Configurar base própria selecionada inicial
+                const globalProp = data.find((b: any) => b.type === 'PROPRIA' && b.name === 'PROPRIA');
+                if (globalProp && !selectedPropriaBaseId) {
+                    setSelectedPropriaBaseId(globalProp.id);
+                } else if (data.length > 0 && !selectedPropriaBaseId) {
+                    const anyProp = data.find((b: any) => b.type === 'PROPRIA');
+                    if (anyProp) setSelectedPropriaBaseId(anyProp.id);
+                }
+            }
         } catch (e) {
             console.error(e);
         } finally {
@@ -464,7 +492,11 @@ export function EngineeringHub() {
 
     // ── Filtered + Grouped bases ──
     const allStates = useMemo(() => [...new Set(bases.map(b => extractUF(b.uf)))].sort(), [bases]);
-    const allSources = useMemo(() => [...new Set(bases.map(b => b.name))].sort((a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b)), [bases]);
+    const allSources = useMemo(() => {
+        return [...new Set(bases.map(b => b.name))]
+            .filter(name => name !== 'PROPRIA' && !name.toUpperCase().startsWith('PROPRIA'))
+            .sort((a, b) => SOURCE_ORDER.indexOf(a) - SOURCE_ORDER.indexOf(b));
+    }, [bases]);
 
     // Macro-regions present in bases
     const presentRegions = useMemo(() => {
@@ -1035,10 +1067,59 @@ export function EngineeringHub() {
 
             {activeTab === 'propria' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Folder selector for proposals or global */}
+                    {propriaBasesList.length > 0 && (
+                        <div style={{ 
+                            display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', 
+                            padding: '16px 20px', background: 'var(--color-bg-surface)', 
+                            borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Folder size={18} color="var(--color-primary)" />
+                                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>Selecionar Base Própria:</span>
+                            </div>
+                            <select 
+                                value={selectedPropriaBaseId || ''} 
+                                onChange={e => setSelectedPropriaBaseId(e.target.value)}
+                                style={{ 
+                                    padding: '8px 12px', borderRadius: 'var(--radius-md)', 
+                                    border: '1px solid var(--color-border)', fontSize: '0.88rem', 
+                                    background: 'var(--color-bg-base)', color: 'var(--color-text-primary)', 
+                                    fontWeight: 600, minWidth: 320, outline: 'none', cursor: 'pointer',
+                                    transition: 'border-color 0.2s'
+                                }}
+                                onFocus={e => e.currentTarget.style.borderColor = 'var(--color-primary)'}
+                                onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+                            >
+                                {propriaBasesList.map(b => {
+                                    const isGlobal = b.name === 'PROPRIA';
+                                    const label = isGlobal 
+                                        ? '📂 Base Própria Principal (Global do Tenant)' 
+                                        : `📄 Proposta: ${b.proposalTitle || b.name} ${b.proposalNumber ? `(Proc. ${b.proposalNumber})` : ''}`;
+                                    return <option key={b.id} value={b.id}>{label}</option>;
+                                })}
+                            </select>
+
+                            {activePropriaBase && (
+                                <span style={{ 
+                                    fontSize: '0.7rem', fontWeight: 700, color: '#fff', 
+                                    background: activePropriaBase.name === 'PROPRIA' ? '#2563eb' : '#7c3aed', 
+                                    padding: '3px 8px', borderRadius: 8 
+                                }}>
+                                    {activePropriaBase.name === 'PROPRIA' ? 'GLOBAL' : 'PROPOSTA'}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
                     {/* Header with stats and actions */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         <div>
-                            <h3 style={{ margin: '0 0 4px', color: 'var(--color-text-primary)', fontSize: '1.15rem', fontWeight: 800 }}>Minha Base Própria</h3>
+                            <h3 style={{ margin: '0 0 4px', color: 'var(--color-text-primary)', fontSize: '1.15rem', fontWeight: 800 }}>
+                                {activePropriaBase?.name === 'PROPRIA' 
+                                    ? 'Minha Base Própria (Global)' 
+                                    : `Base Própria: ${activePropriaBase?.proposalTitle || activePropriaBase?.name || 'Proposta'}`}
+                            </h3>
                             <div style={{ display: 'flex', gap: 16, fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
                                 <span><Layers size={12} style={{ verticalAlign: -1 }} /> <strong style={{ color: 'var(--color-primary)' }}>{propriaComps.length}</strong> composições</span>
                                 <span><Package size={12} style={{ verticalAlign: -1 }} /> <strong style={{ color: '#059669' }}>{propriaItems.length}</strong> insumos</span>
@@ -1084,7 +1165,7 @@ export function EngineeringHub() {
                         ))}
                     </div>
 
-                    {!propriaBase ? (
+                    {!activePropriaBase ? (
                         <div style={{ padding: 60, textAlign: 'center', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
                             <Layers size={48} color="var(--color-text-tertiary)" style={{ margin: '0 auto 16px', opacity: 0.4 }} />
                             <h3 style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Base Própria ainda não criada</h3>

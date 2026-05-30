@@ -276,7 +276,39 @@ router.get('/bases', async (req: any, res: any) => {
                 { version: 'desc' }
             ]
         });
-        res.json(bases);
+
+        // Buscar as propostas deste tenant para enriquecer as bases específicas de proposta
+        const proposals = await prisma.priceProposal.findMany({
+            where: { tenantId },
+            select: {
+                id: true,
+                biddingProcess: {
+                    select: {
+                        title: true,
+                        processNumber: true
+                    }
+                }
+            }
+        });
+
+        const proposalMap = new Map(proposals.map(p => [p.id, p]));
+
+        const enrichedBases = bases.map((b: any) => {
+            if (b.type === 'PROPRIA' && b.name.startsWith('PROPRIA_')) {
+                const proposalId = b.name.replace('PROPRIA_', '');
+                const prop = proposalMap.get(proposalId);
+                if (prop) {
+                    return {
+                        ...b,
+                        proposalTitle: prop.biddingProcess?.title || null,
+                        proposalNumber: prop.biddingProcess?.processNumber || null
+                    };
+                }
+            }
+            return b;
+        });
+
+        res.json(enrichedBases);
     } catch (e) {
         console.error('Error fetching engineering bases', e);
         res.status(500).json({ error: 'Erro ao buscar tabelas de engenharia' });
