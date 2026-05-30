@@ -58,12 +58,29 @@ export function LoginPage({ onLoginSuccess }: Props) {
 
     return (
         <div className="login-container">
-            <div className="login-card">
+            <div className="login-card premium-glass-card">
                 <div className="login-header">
-                    <div className="login-logo">
-                        <Building2 size={32} color="var(--color-primary)" />
+                    <img 
+                        src="/logo.png" 
+                        alt="LicitaSaaS Logo" 
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                        }}
+                        className="logo-glow-effect"
+                        style={{
+                            width: 110,
+                            height: 110,
+                            objectFit: 'contain',
+                            margin: '0 auto var(--space-4)',
+                            display: 'block',
+                        }}
+                    />
+                    <div className="login-logo" style={{ display: 'none' }}>
+                        <Building2 size={28} />
                     </div>
-                    <h1 className="login-title">LicitaSaaS</h1>
+                    <h1 className="login-title premium-heading" style={{ fontSize: '2.1rem' }}>LicitaSaaS</h1>
                     <p className="login-subtitle">Gestão Inteligente de Licitações</p>
                 </div>
 

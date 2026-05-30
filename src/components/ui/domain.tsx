@@ -63,20 +63,38 @@ interface MetricCardProps {
 }
 
 export function MetricCard({ title, value, icon, color = 'var(--color-primary)', bg = 'var(--color-primary-light)', subtitle, onClick }: MetricCardProps) {
+  let glowClass = 'premium-glow-wrapper';
+  if (color === 'var(--color-success)') glowClass = 'premium-glow-wrapper premium-glow-success';
+  else if (color === 'var(--color-danger)') glowClass = 'premium-glow-wrapper premium-glow-danger';
+  else if (color.includes('ai') || color === 'var(--color-ai)') glowClass = 'premium-glow-wrapper premium-glow-ai';
+
   return (
     <div
-      className="card card-interactive dom-metric glass-panel premium-hover"
+      className={`card premium-glass-card premium-hover-lift dom-metric ${glowClass}`}
       onClick={onClick}
-      style={{ borderTop: `3px solid ${color}` }}
+      style={{ 
+        borderLeft: `3.5px solid ${color}`,
+        position: 'relative'
+      }}
     >
       <div className="dom-metric__body">
         <div>
-          <div className="dom-metric__title">{title}</div>
-          <div className="dom-metric__value metric-value-premium" style={{ color }}>{value}</div>
-          {subtitle && <div className="dom-metric__sub">{subtitle}</div>}
+          <div className="premium-micro-label" style={{ marginBottom: 'var(--space-1)', display: 'block' }}>{title}</div>
+          <div className="premium-heading" style={{ fontSize: '2rem', color: 'var(--color-text-primary)', marginBottom: '2px' }}>{value}</div>
+          {subtitle && <div className="dom-metric__sub" style={{ fontSize: '0.725rem', color: 'var(--color-text-secondary)' }}>{subtitle}</div>}
         </div>
         {icon && (
-          <div className="dom-metric__icon" style={{ color, backgroundColor: bg, boxShadow: `0 0 16px ${bg}` }}>
+          <div className="dom-metric__icon" style={{ 
+            color, 
+            backgroundColor: bg, 
+            boxShadow: `0 4px 12px ${bg}`,
+            borderRadius: 'var(--radius-md)',
+            width: 38,
+            height: 38,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
             {icon}
           </div>
         )}
@@ -149,13 +167,23 @@ interface RadarCardProps {
 }
 
 export function RadarCard({ title, value, desc, icon, color, bg, action, onClick }: RadarCardProps) {
+  let glowClass = 'premium-glow-wrapper';
+  if (color === 'var(--color-success)') glowClass = 'premium-glow-wrapper premium-glow-success';
+  else if (color === 'var(--color-danger)') glowClass = 'premium-glow-wrapper premium-glow-danger';
+  else if (color.includes('ai') || color === 'var(--color-ai)') glowClass = 'premium-glow-wrapper premium-glow-ai';
+
   return (
-    <div className="card card-interactive dom-radar glass-panel premium-hover" onClick={onClick}>
-      <div className="dom-radar__icon" style={{ color, backgroundColor: bg, boxShadow: `0 0 16px ${bg}` }}>{icon}</div>
-      <div className="dom-radar__title">{title}</div>
-      <div className="dom-radar__value metric-value-premium" style={{ color }}>{value}</div>
-      <div className="dom-radar__desc">{desc}</div>
-      {action && <div className="dom-radar__action" style={{ color }}>{action} →</div>}
+    <div className={`card premium-glass-card premium-hover-lift dom-radar ${glowClass}`} onClick={onClick}>
+      <div className="dom-radar__icon" style={{ 
+        color, 
+        backgroundColor: bg, 
+        boxShadow: `0 4px 12px ${bg}`,
+        borderRadius: 'var(--radius-md)'
+      }}>{icon}</div>
+      <div className="premium-micro-label" style={{ marginTop: 'var(--space-3)', marginBottom: 'var(--space-1)' }}>{title}</div>
+      <div className="premium-heading" style={{ fontSize: '1.75rem', color: 'var(--color-text-primary)', marginBottom: 'var(--space-1)' }}>{value}</div>
+      <div className="dom-radar__desc" style={{ fontSize: '0.725rem', color: 'var(--color-text-secondary)' }}>{desc}</div>
+      {action && <div className="dom-radar__action" style={{ color, fontSize: '0.75rem', fontWeight: 700, marginTop: 'var(--space-2)' }}>{action} →</div>}
     </div>
   );
 }

@@ -358,28 +358,42 @@ function App() {
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           {/* Logo */}
           <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <img 
+                src="/logo.png" 
+                alt="LicitaSaaS Logo" 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.nextSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+                className="logo-glow-effect"
+                style={{
+                  width: 34,
+                  height: 34,
+                  objectFit: 'contain',
+                  flexShrink: 0,
+                }}
+              />
               <div style={{
-              width: 32,
-              height: 32,
-              borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(99,102,241,0.45)',
-              flexShrink: 0,
-            }}>
-              <Scale size={18} />
-            </div>
-            <span style={{
-              fontSize: 'var(--text-lg)',
-              fontWeight: 'var(--font-extrabold)',
-              color: '#ffffff',
-              letterSpacing: '-0.03em',
-              lineHeight: 1,
-            }}>LicitaSaaS</span>
+                display: 'none', // Fallback se a imagem falhar
+                width: 32,
+                height: 32,
+                borderRadius: 'var(--radius-md)',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                color: 'white',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(99,102,241,0.45)',
+                flexShrink: 0,
+              }}>
+                <Scale size={18} />
+              </div>
+              <span className="premium-heading" style={{
+                fontSize: '1.2rem',
+                color: '#ffffff',
+                lineHeight: 1,
+              }}>LicitaSaaS</span>
             </div>
             <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(false)} style={{ display: 'none' }}>
               <X size={20} />
@@ -453,9 +467,8 @@ function App() {
               >
                 <Menu size={20} />
               </button>
-              <span style={{
-                fontSize: 'var(--text-lg)',
-                fontWeight: 'var(--font-semibold)',
+              <span className="premium-heading" style={{
+                fontSize: '1.05rem',
                 color: 'var(--color-text-primary)'
               }}>
                 {currentPageLabel}
