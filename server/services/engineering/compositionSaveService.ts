@@ -27,6 +27,7 @@ export interface FlatItem {
     auxiliaryCompositionId?: string;
     coefficient: number;
     price: number;
+    unitPrice?: number;
     groupKey?: string | null;
     coefficientExpression?: string | null;
     code?: string;
