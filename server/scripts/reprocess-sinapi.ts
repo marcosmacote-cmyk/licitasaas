@@ -75,7 +75,7 @@ async function main() {
   const toArg = readArg('--to');
 
   let targetPeriods: Period[] | undefined;
-  let months = Number(readArg('--months') || 12);
+  let months = Number(readArg('--months') || 36);
 
   if (singlePeriod) {
     targetPeriods = [parsePeriod(singlePeriod, '--period')];
@@ -84,8 +84,8 @@ async function main() {
     if (!fromArg || !toArg) throw new Error('Use --from e --to juntos.');
     targetPeriods = buildRange(parsePeriod(fromArg, '--from'), parsePeriod(toArg, '--to'));
     months = targetPeriods.length;
-  } else if (!Number.isFinite(months) || months < 1 || months > 36) {
-    throw new Error('--months deve ser um numero entre 1 e 36.');
+  } else if (!Number.isFinite(months) || months < 1 || months > 48) {
+    throw new Error('--months deve ser um numero entre 1 e 48.');
   }
 
   if (uf === 'ALL' && force && !hasFlag('--confirm-all')) {

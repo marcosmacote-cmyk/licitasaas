@@ -224,7 +224,7 @@ router.post('/bases/sync-sinapi', async (req: any, res: any) => {
             });
         }
 
-        const { ufs = ['CE'], months = 12, includeDesonerado = true, force = false, targetPeriods } = req.body;
+        const { ufs = ['CE'], months = 36, includeDesonerado = true, force = false, targetPeriods } = req.body;
         const periods = Array.isArray(targetPeriods)
             ? targetPeriods
                 .map((p: any) => ({ month: Number(p.month), year: Number(p.year) }))
@@ -270,7 +270,7 @@ router.post('/bases/sync-sicro', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
-        const { ufs = ['ALL'], months = 12 } = req.body;
+        const { ufs = ['ALL'], months = 36 } = req.body;
 
         console.log(`[SICRO Sync] 🚀 Admin ${req.user?.email} disparou sync SICRO: UFs=${Array.isArray(ufs) ? ufs.join(',') : ufs}, meses=${months}`);
 
@@ -310,7 +310,7 @@ router.post('/bases/sync-sbc', async (req: any, res: any) => {
             return res.status(400).json({ error: 'Credenciais SBC não configuradas. Defina SBC_EMAIL e SBC_PASSWORD nas variáveis de ambiente.' });
         }
 
-        const { regions = ['ALL'], months = 12 } = req.body;
+        const { regions = ['ALL'], months = 36 } = req.body;
 
         console.log(`[SBC Sync] 🚀 Admin ${req.user?.email} disparou sync SBC: Regiões=${Array.isArray(regions) ? regions.join(',') : regions}, meses=${months}`);
 
@@ -378,7 +378,7 @@ router.post('/bases/sync-caern', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 router.get('/bases/orse/periods', async (req: any, res: any) => {
     try {
-        const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
+        const months = Math.max(1, Math.min(Number(req.query.months || 36), 48));
         const periods = await getLatestOrsePeriods(months);
         res.json({ periods });
     } catch (e: any) {
@@ -432,7 +432,7 @@ router.post('/bases/sync-orse', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
-        const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
+        const months = Math.max(1, Math.min(Number(req.body?.months || 36), 48));
         const force = Boolean(req.body?.force);
         const maxPagesPerPeriod = req.body?.maxPagesPerPeriod ? Number(req.body.maxPagesPerPeriod) : undefined;
 
@@ -506,7 +506,7 @@ router.get('/bases/sicor-mg/periods', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
         const authToken = String(req.headers['x-sicor-token'] || req.query.authToken || '') || undefined;
-        const months = Math.max(1, Math.min(Number(req.query.months || 12), 24));
+        const months = Math.max(1, Math.min(Number(req.query.months || 36), 48));
         const regionCodes = req.query.regionCodes
             ? String(req.query.regionCodes).split(',').map(value => value.trim()).filter(Boolean)
             : undefined;
@@ -528,7 +528,7 @@ router.post('/bases/sync-sicor-mg', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
-        const months = Math.max(1, Math.min(Number(req.body?.months || 12), 24));
+        const months = Math.max(1, Math.min(Number(req.body?.months || 36), 48));
         const force = Boolean(req.body?.force);
         const rawToken = req.headers['x-sicor-token'] || req.body?.authToken || '';
         const authToken = typeof rawToken === 'string' && rawToken.trim() ? rawToken.trim() : undefined;
@@ -943,10 +943,10 @@ router.get('/bases/status', async (req: any, res: any) => {
             ? new Date(Math.max(...bases.map(b => b.updatedAt.getTime())))
             : null;
 
-        // Check coverage for last 12 months
+        // Check coverage for last 36 months (3 years)
         const now = new Date();
         const expectedMonths: string[] = [];
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 36; i++) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             expectedMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
         }

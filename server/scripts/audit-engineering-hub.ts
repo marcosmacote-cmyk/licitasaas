@@ -247,7 +247,12 @@ Padrao: somente leitura. Use --fix-counters apenas para corrigir contadores exib
           { code: '' },
           { description: '' },
           { unit: '' },
-          { price: { lte: 0 } },
+          {
+            price: { lte: 0 },
+            NOT: {
+              code: { startsWith: 'OBS-' },
+            },
+          },
         ],
       },
       take: 10,

@@ -182,7 +182,7 @@ export async function discoverOrseUpdateFiles(year: number): Promise<Map<string,
   return files;
 }
 
-export async function getLatestOrsePeriods(months = 12): Promise<OrsePeriod[]> {
+export async function getLatestOrsePeriods(months = 36): Promise<OrsePeriod[]> {
   const html = await downloadText(ORSE_SERVICES_URL);
   const $ = cheerio.load(html);
   const periods: OrsePeriod[] = [];
@@ -647,7 +647,7 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
 
 export async function syncOrse(options: OrseSyncOptions = {}): Promise<OrseSyncReport> {
   const started = new Date().toISOString();
-  const months = Math.max(1, Math.min(Number(options.months || 12), 24));
+  const months = Math.max(1, Math.min(Number(options.months || 36), 48));
   const periods = await getLatestOrsePeriods(months);
   const results: OrseSyncResult[] = [];
 

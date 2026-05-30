@@ -30,6 +30,11 @@ async function main() {
     console.log(`  - UF: ${metadata.stateUf}`);
     console.log(`  - Versão: ${metadata.referenceDate}`);
     
+    const refDate = new Date(metadata.referenceDate);
+    const refYear = refDate.getUTCFullYear();
+    const refMonth = refDate.getUTCMonth() + 1;
+    const isDesonerado = Boolean(metadata.desonerado);
+
     // Evitar duplicidade: verificar se a database já existe
     let database = await prisma.engineeringDatabase.findFirst({
         where: {
@@ -45,6 +50,15 @@ async function main() {
         await prisma.engineeringItem.deleteMany({
             where: { databaseId: database.id }
         });
+        await prisma.engineeringDatabase.update({
+            where: { id: database.id },
+            data: {
+                referenceMonth: refMonth,
+                referenceYear: refYear,
+                payrollExemption: isDesonerado,
+                version: metadata.referenceDate.split('T')[0].substring(0, 7)
+            }
+        });
     } else {
         console.log(`  -> Criando nova Database Oficial no banco...`);
         database = await prisma.engineeringDatabase.create({
@@ -52,7 +66,10 @@ async function main() {
                 name: metadata.sourceName,
                 uf: metadata.stateUf,
                 version: metadata.referenceDate.split('T')[0].substring(0, 7),
-                type: "OFICIAL"
+                type: "OFICIAL",
+                referenceMonth: refMonth,
+                referenceYear: refYear,
+                payrollExemption: isDesonerado
             }
         });
     }
@@ -60,7 +77,7 @@ async function main() {
     console.log(`[2/3] Preparando ${items.length} insumos para inserção em lote (Bulk Insert)...`);
     
     const payload = items.map((it: any) => ({
-        databaseId: database.id,
+        databaseId: database!.id,
         code: it.code,
         description: it.description,
         unit: it.unit,
@@ -72,6 +89,14 @@ async function main() {
     const result = await prisma.engineeringItem.createMany({
         data: payload,
         skipDuplicates: true
+    });
+
+    await prisma.engineeringDatabase.update({
+        where: { id: database!.id },
+        data: {
+            itemCount: result.count,
+            compositionCount: 0
+        }
     });
     
     console.log(`✅ Sucesso! Inseridos ${result.count} insumos na base de Engenharia do LicitaSaaS.`);

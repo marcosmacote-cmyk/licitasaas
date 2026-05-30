@@ -146,8 +146,14 @@ async function seed() {
   if (sinapiDb) {
     await prisma.engineeringItem.deleteMany({ where: { databaseId: sinapiDb.id } });
     console.log('  → Base existente limpa.');
+    await prisma.engineeringDatabase.update({
+      where: { id: sinapiDb.id },
+      data: { referenceMonth: 4, referenceYear: 2026, payrollExemption: false, version: '2026-04' }
+    });
   } else {
-    sinapiDb = await prisma.engineeringDatabase.create({ data: { name: 'SINAPI', uf: 'CE', version: '2026-04', type: 'OFICIAL' } });
+    sinapiDb = await prisma.engineeringDatabase.create({
+      data: { name: 'SINAPI', uf: 'CE', version: '2026-04', type: 'OFICIAL', referenceMonth: 4, referenceYear: 2026, payrollExemption: false }
+    });
     console.log('  → Base criada:', sinapiDb.id);
   }
 
@@ -157,6 +163,10 @@ async function seed() {
     skipDuplicates: true,
   });
   console.log(`  ✅ ${r1.count} itens inseridos.`);
+  await prisma.engineeringDatabase.update({
+    where: { id: sinapiDb.id },
+    data: { itemCount: r1.count, compositionCount: 0 }
+  });
 
   // ── SEINFRA-CE ──
   console.log('[3/4] Criando base SEINFRA-CE...');
@@ -164,8 +174,14 @@ async function seed() {
   if (seinfraDb) {
     await prisma.engineeringItem.deleteMany({ where: { databaseId: seinfraDb.id } });
     console.log('  → Base existente limpa.');
+    await prisma.engineeringDatabase.update({
+      where: { id: seinfraDb.id },
+      data: { referenceMonth: 5, referenceYear: 2026, payrollExemption: false, version: '028.1' }
+    });
   } else {
-    seinfraDb = await prisma.engineeringDatabase.create({ data: { name: 'SEINFRA', uf: 'CE', version: '028.1', type: 'OFICIAL' } });
+    seinfraDb = await prisma.engineeringDatabase.create({
+      data: { name: 'SEINFRA', uf: 'CE', version: '028.1', type: 'OFICIAL', referenceMonth: 5, referenceYear: 2026, payrollExemption: false }
+    });
     console.log('  → Base criada:', seinfraDb.id);
   }
 
@@ -175,6 +191,10 @@ async function seed() {
     skipDuplicates: true,
   });
   console.log(`  ✅ ${r2.count} itens inseridos.`);
+  await prisma.engineeringDatabase.update({
+    where: { id: seinfraDb.id },
+    data: { itemCount: r2.count, compositionCount: 0 }
+  });
 
   console.log(`\n🎉 Seed concluído! Total: ${r1.count + r2.count} itens em 2 bases oficiais.`);
 }

@@ -334,7 +334,7 @@ async function listSicorPublicationsFor(authToken: string, year: number, conditi
 
 export async function getLatestSicorPublications(options: SicorSyncOptions = {}): Promise<SicorPublication[]> {
   const token = await getAuthToken(options.authToken);
-  const months = Math.max(1, Math.min(Number(options.months || 12), 24));
+  const months = Math.max(1, Math.min(Number(options.months || 36), 48));
   const conditions = (options.conditions?.length ? options.conditions : ['SD', 'CD'])
     .map(normalizeCondition)
     .filter((condition): condition is SicorConditionCode => Boolean(condition));

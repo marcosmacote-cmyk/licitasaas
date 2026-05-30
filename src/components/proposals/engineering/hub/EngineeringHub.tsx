@@ -260,8 +260,8 @@ export function EngineeringHub() {
     };
 
     const handleSyncSinapi = async (force = false) => {
-        let body: any = { ufs: ['ALL'], months: 12, includeDesonerado: true, force };
-        let confirmText = 'Iniciar download SINAPI Nacional?\n\n• Todos os 27 estados do Brasil\n• Últimos 12 meses\n• Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.';
+        let body: any = { ufs: ['ALL'], months: 36, includeDesonerado: true, force };
+        let confirmText = 'Iniciar download SINAPI Nacional?\n\n• Todos os 27 estados do Brasil\n• Últimos 36 meses (3 anos)\n• Onerado + Desonerado\n\nO processo roda em background via Puppeteer e pode levar ~30-60 minutos.\nBases já baixadas serão puladas automaticamente.';
 
         if (force) {
             const uf = (prompt('UF para reprocessar (ex: PA, CE, SP) ou ALL para todos os estados:', 'PA') || '').trim().toUpperCase();
@@ -338,7 +338,7 @@ export function EngineeringHub() {
     };
 
     const handleSyncOrse = async () => {
-        if (!confirm('Sincronizar ORSE?\n\nIsso vai buscar os últimos 12 períodos disponíveis na consulta pública oficial da ORSE e gravar as composições para auditoria de preços. O processo roda em background e pode levar alguns minutos.')) return;
+        if (!confirm('Sincronizar ORSE?\n\nIsso vai buscar os últimos 36 períodos disponíveis na consulta pública oficial da ORSE e gravar as composições para auditoria de preços. O processo roda em background e pode levar alguns minutos.')) return;
 
         setSyncingOrse(true);
         try {
@@ -348,7 +348,7 @@ export function EngineeringHub() {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ months: 12 })
+                body: JSON.stringify({ months: 36 })
             });
 
             const data = await res.json().catch(() => ({}));
@@ -368,7 +368,7 @@ export function EngineeringHub() {
     };
 
     const handleSyncSicor = async () => {
-        if (!confirm('Sincronizar SICOR-MG?\n\nIsso vai buscar as últimas 12 datas-base oficiais do DER-MG, nos regimes com e sem desoneração. O processo roda em background e pode levar alguns minutos.')) return;
+        if (!confirm('Sincronizar SICOR-MG?\n\nIsso vai buscar as últimas 36 datas-base oficiais do DER-MG, nos regimes com e sem desoneração. O processo roda em background e pode levar alguns minutos.')) return;
 
         setSyncingSicor(true);
         try {
@@ -379,7 +379,7 @@ export function EngineeringHub() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    months: 12,
+                    months: 36,
                     conditions: ['SD', 'CD'],
                     includeCompositionWorkbook: true,
                 })
@@ -412,7 +412,7 @@ export function EngineeringHub() {
                         'X-Sicor-Token': manualToken,
                     },
                     body: JSON.stringify({
-                        months: 12,
+                        months: 36,
                         conditions: ['SD', 'CD'],
                         includeCompositionWorkbook: true,
                         authToken: manualToken,
@@ -587,13 +587,13 @@ export function EngineeringHub() {
 
                         <button
                             onClick={async () => {
-                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n• Sistema de Custos Rodoviários\n• Todos os 27 estados\n• Últimos 12 meses\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
+                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n• Sistema de Custos Rodoviários\n• Todos os 27 estados\n• Últimos 36 meses (3 anos)\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
                                 setSyncingSicro(true);
                                 try {
                                     const res = await fetch('/api/engineering/bases/sync-sicro', {
                                         method: 'POST',
                                         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ ufs: ['ALL'], months: 12 })
+                                        body: JSON.stringify({ ufs: ['ALL'], months: 36 })
                                     });
                                     if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
                                     else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
@@ -615,13 +615,13 @@ export function EngineeringHub() {
 
                         <button
                             onClick={async () => {
-                                if (!confirm('Iniciar download SBC (Informativo SBC)?\n\n• Banco de Composições Analíticas\n• 30 regiões/praças do Brasil\n• Últimos 12 meses\n\nRequer credenciais SBC configuradas.\nO processo roda em background e pode levar ~30-60 min.')) return;
+                                if (!confirm('Iniciar download SBC (Informativo SBC)?\n\n• Banco de Composições Analíticas\n• 30 regiões/praças do Brasil\n• Últimos 36 meses (3 anos)\n\nRequer credenciais SBC configuradas.\nO processo roda em background e pode levar ~30-60 min.')) return;
                                 setSyncingSbc(true);
                                 try {
                                     const res = await fetch('/api/engineering/bases/sync-sbc', {
                                         method: 'POST',
                                         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ regions: ['ALL'], months: 12 })
+                                        body: JSON.stringify({ regions: ['ALL'], months: 36 })
                                     });
                                     if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
                                     else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
