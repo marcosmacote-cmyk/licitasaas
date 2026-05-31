@@ -375,6 +375,57 @@ export function EngineeringHub() {
         }
     };
 
+    const handleSyncSicro = async (force = false) => {
+        let body: any = { ufs: ['ALL'], months: 36, force };
+        let confirmText = 'Iniciar download SICRO (DNIT)?\n\n• Sistema de Custos Rodoviários\n• Todos os 27 estados\n• Últimos 36 meses (3 anos)\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.';
+
+        if (force) {
+            const uf = (prompt('UF para reprocessar (ex: PA, CE, SP) ou ALL para todos os estados:', 'CE') || '').trim().toUpperCase();
+            if (uf !== 'ALL' && !/^[A-Z]{2}$/.test(uf)) return alert('UF inválida.');
+            const dataBase = (prompt('Data-base SICRO para reprocessar (AAAA-MM):', '2026-01') || '').trim();
+            const match = dataBase.match(/^(\d{4})-(\d{2})$/);
+            if (!match) return alert('Data-base inválida. Use AAAA-MM.');
+            const year = Number(match[1]);
+            const month = Number(match[2]);
+            if (month < 1 || month > 12 || year < 2009) return alert('Data-base inválida.');
+
+            body = {
+                ufs: uf === 'ALL' ? ['ALL'] : [uf],
+                months: 1,
+                force: true,
+                targetPeriods: [{ month, year }]
+            };
+            confirmText = `Reprocessar SICRO ${uf} ${dataBase}?\n\nBases existentes ${uf === 'ALL' ? 'de todos os estados nessa data' : 'dessa UF/data'} serão reimportadas para reparar insumos e composições incompletas.`;
+        }
+
+        if (!confirm(confirmText)) return;
+
+        setSyncingSicro(true);
+        try {
+            const res = await fetch('/api/engineering/bases/sync-sicro', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert(`Sync SICRO iniciado em background${force ? ' (forçado)' : ''}!\n\n${data.message || ''}`);
+                setTimeout(fetchBases, 30000);
+                setTimeout(fetchBases, 90000);
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao iniciar sync SICRO'));
+            }
+        } catch (err) {
+            alert('Erro de conexão ao sincronizar SICRO');
+        } finally {
+            setSyncingSicro(false);
+        }
+    };
+
     const handleSyncOrse = async () => {
         if (!confirm('Sincronizar ORSE?\n\nIsso vai buscar os últimos 36 períodos disponíveis na consulta pública oficial da ORSE e gravar as composições para auditoria de preços. O processo roda em background e pode levar alguns minutos.')) return;
 
@@ -628,20 +679,7 @@ export function EngineeringHub() {
                         </button>
 
                         <button
-                            onClick={async () => {
-                                if (!confirm('Iniciar download SICRO (DNIT)?\n\n• Sistema de Custos Rodoviários\n• Todos os 27 estados\n• Últimos 36 meses (3 anos)\n\nO processo roda em background e pode levar ~30-60 minutos.\nBases já baixadas serão puladas.')) return;
-                                setSyncingSicro(true);
-                                try {
-                                    const res = await fetch('/api/engineering/bases/sync-sicro', {
-                                        method: 'POST',
-                                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ ufs: ['ALL'], months: 36 })
-                                    });
-                                    if (res.ok) { const d = await res.json(); alert('[OK] ' + d.message); }
-                                    else { const e = await res.json().catch(() => ({})); alert('Erro: ' + (e.error || res.statusText)); }
-                                } catch (err) { alert('Erro de conexão'); }
-                                setSyncingSicro(false);
-                            }}
+                            onClick={() => handleSyncSicro()}
                             disabled={syncingSicro}
                             style={{
                                 background: 'linear-gradient(135deg, #dc2626, #f97316)', color: '#fff', border: 'none',
@@ -653,6 +691,22 @@ export function EngineeringHub() {
                         >
                             {syncingSicro ? <RefreshCw size={16} className="spin" /> : <Zap size={16} />}
                             {syncingSicro ? 'Sincronizando...' : 'Sync SICRO (DNIT)'}
+                        </button>
+
+                        <button
+                            onClick={() => handleSyncSicro(true)}
+                            disabled={syncingSicro}
+                            title="Reimporta bases existentes para reparar insumos e composições analíticas incompletas"
+                            style={{
+                                background: 'linear-gradient(135deg, #b91c1c, #c2410c)', color: '#fff', border: 'none',
+                                padding: '10px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, whiteSpace: 'nowrap',
+                                display: 'flex', alignItems: 'center', gap: 8, cursor: syncingSicro ? 'wait' : 'pointer',
+                                opacity: syncingSicro ? 0.7 : 1, transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(185,28,28,0.25)'
+                            }}
+                        >
+                            {syncingSicro ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+                            Reprocessar SICRO
                         </button>
 
                         <button
