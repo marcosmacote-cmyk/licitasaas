@@ -431,6 +431,7 @@ export interface SicroSyncOptions {
   ufs: string[];
   months: number;
   targetPeriods?: { month: number; year: number }[];
+  force?: boolean;
 }
 
 export interface SicroSyncReport {
@@ -443,7 +444,7 @@ export interface SicroSyncReport {
 }
 
 export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncReport> {
-  const { ufs: requestedUfs, months, targetPeriods } = options;
+  const { ufs: requestedUfs, months, targetPeriods, force = false } = options;
   const isAllUfs = requestedUfs.includes('ALL') || requestedUfs.length >= 27;
   const ufs = isAllUfs ? ALL_UFS : requestedUfs;
   const started = new Date().toISOString();
@@ -467,7 +468,7 @@ export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncRep
     }
   }
 
-  console.log(`\n[SICRO Crawler] 🚀 Sync SICRO: ${isAllUfs ? 'ALL (27 UFs)' : ufs.join(',')} × ${months} meses`);
+  console.log(`\n[SICRO Crawler] 🚀 Sync SICRO: ${isAllUfs ? 'ALL (27 UFs)' : ufs.join(',')} × ${months} meses${force ? ' (FORÇADO)' : ''}`);
 
   for (const uf of ufs) {
     for (const { month, year } of targetMonths) {
@@ -475,9 +476,9 @@ export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncRep
 
       // Idempotency check
       const existing = await prisma.engineeringDatabase.findFirst({
-        where: { name: 'SICRO', uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL', itemCount: { gt: 0 } }
+        where: { name: 'SICRO', uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
       });
-      if (existing && (existing.itemCount || 0) > 0) {
+      if (existing && (existing.itemCount || 0) > 0 && !force) {
         console.log(`[SICRO Crawler] ⏭️ SICRO ${uf} ${version}: já existente (${existing.itemCount} itens)`);
         results.push({ success: true, message: `Já existente: ${uf} ${version}` });
         continue;

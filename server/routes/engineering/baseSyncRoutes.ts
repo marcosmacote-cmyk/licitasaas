@@ -287,17 +287,31 @@ router.post('/bases/sync-sicro', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito ao Super Administrador' });
         }
 
-        const { ufs = ['ALL'], months = 36 } = req.body;
+        const { ufs = ['ALL'], months = 36, force = false, targetPeriods } = req.body;
+        const periods = Array.isArray(targetPeriods)
+            ? targetPeriods
+                .map((p: any) => ({ month: Number(p.month), year: Number(p.year) }))
+                .filter((p: any) => p.month >= 1 && p.month <= 12 && p.year >= 2009)
+            : undefined;
 
-        console.log(`[SICRO Sync] 🚀 Admin ${req.user?.email} disparou sync SICRO: UFs=${Array.isArray(ufs) ? ufs.join(',') : ufs}, meses=${months}`);
+        const description = periods?.length
+            ? `UFs=${Array.isArray(ufs) ? ufs.join(',') : ufs}, períodos=${periods.map((p: any) => `${String(p.month).padStart(2, '0')}/${p.year}`).join(',')}${force ? ' (FORÇADO)' : ''}`
+            : `UFs=${Array.isArray(ufs) ? ufs.join(',') : ufs}, meses=${months}${force ? ' (FORÇADO)' : ''}`;
+
+        console.log(`[SICRO Sync] 🚀 Admin ${req.user?.email} disparou sync SICRO: ${description}`);
 
         res.json({
-            message: `Sync SICRO iniciado em background para ${Array.isArray(ufs) ? ufs.join(', ') : 'Todos os estados'} (${months} meses)`,
+            message: `Sync SICRO iniciado em background para ${description}`,
             status: 'started',
         });
 
         // Fire and forget
-        syncSicro({ ufs: Array.isArray(ufs) ? ufs : ['ALL'], months }).then(report => {
+        syncSicro({ 
+            ufs: Array.isArray(ufs) ? ufs : ['ALL'], 
+            months, 
+            force, 
+            targetPeriods: periods 
+        }).then(report => {
             console.log(`[SICRO Sync] 🏁 Relatório final: ${report.totalSuccess}/${report.totalAttempted} sucesso em ${report.finished}`);
         }).catch(err => {
             console.error(`[SICRO Sync] ❌ Erro fatal:`, err);
