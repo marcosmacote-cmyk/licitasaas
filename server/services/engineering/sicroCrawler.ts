@@ -206,7 +206,11 @@ function extract7z(filePath: string, outputDir: string): string[] {
   // Try using 7zip-bin npm package
   try {
     const sevenBin = require('7zip-bin');
-    binPaths.unshift(sevenBin.path7za);
+    const path7za = sevenBin.path7za;
+    try {
+      execSync(`chmod +x "${path7za}"`, { stdio: 'ignore' });
+    } catch (err) {}
+    binPaths.unshift(path7za);
   } catch (e) {}
 
   for (const bin of binPaths) {
@@ -254,6 +258,7 @@ function findExcelFiles(dir: string): string[] {
 function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
   const items: ParsedItem[] = [];
   const compositionItems: ParsedCompositionItem[] = [];
+  const fileNameUpper = path.basename(filePath).toUpperCase();
 
   try {
     const buffer = fs.readFileSync(filePath);
@@ -267,9 +272,18 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
       if (rows.length < 3) continue;
 
       // Detect if this is an items/insumos sheet or a compositions sheet
-      const isInsumo = upper.includes('INSUMO') || upper.includes('MATERIAL') || upper.includes('EQUIPAMENTO') || upper.includes('MÃO');
-      const isComposition = upper.includes('COMPOS') || upper.includes('SERVIÇO') || upper.includes('SERVICO') || upper.includes('SINTÉTIC') || upper.includes('SINTETICO') || upper.includes('RELATÓRIO') || upper.includes('RELATORIO');
-      const isAnalytic = upper.includes('ANALÍT') || upper.includes('ANALIT') || upper.includes('DETALH');
+      const isEquipmentFile = fileNameUpper.includes('EQUIPAMENTO');
+      const isMaterialFile = fileNameUpper.includes('MATERIA');
+      const isLaborFile = fileNameUpper.includes('MÃO DE OBRA') || fileNameUpper.includes('MAO DE OBRA');
+
+      const isInsumo = upper.includes('INSUMO') || upper.includes('MATERIAL') || upper.includes('EQUIPAMENTO') || upper.includes('MÃO') ||
+                       isEquipmentFile || isMaterialFile || isLaborFile;
+                       
+      const isComposition = upper.includes('COMPOS') || upper.includes('SERVIÇO') || upper.includes('SERVICO') || upper.includes('SINTÉTIC') || upper.includes('SINTETICO') || upper.includes('RELATÓRIO') || upper.includes('RELATORIO') ||
+                            fileNameUpper.includes('COMPOSIÇ') || fileNameUpper.includes('COMPOSIC');
+                            
+      const isAnalytic = upper.includes('ANALÍT') || upper.includes('ANALIT') || upper.includes('DETALH') ||
+                         fileNameUpper.includes('ANALÍTICO') || fileNameUpper.includes('ANALITICO');
 
       if (!isInsumo && !isComposition && !isAnalytic) {
         // Try to detect by column headers
@@ -286,13 +300,13 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
 
       for (let i = 0; i < Math.min(rows.length, 20); i++) {
         const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
-        const hasCode = row.some((c: string) => c.includes('CÓDIGO') || c.includes('CODIGO') || c === 'CÓD' || c === 'COD');
+        const hasCode = row.some((c: string) => c.includes('CÓDIGO') || c.includes('CODIGO') || c.includes('CÓD') || c.includes('COD'));
         const hasDesc = row.some((c: string) => c.includes('DESCRIÇÃO') || c.includes('DESCRICAO') || c.includes('DESCRIÇAO'));
         if (hasCode && hasDesc) {
           headerIdx = i;
           for (let j = 0; j < row.length; j++) {
             const c = row[j];
-            if (codeCol < 0 && (c.includes('CÓDIGO') || c.includes('CODIGO') || c === 'CÓD' || c === 'COD')) codeCol = j;
+            if (codeCol < 0 && (c.includes('CÓDIGO') || c.includes('CODIGO') || c.includes('CÓD') || c.includes('COD'))) codeCol = j;
             if (descCol < 0 && (c.includes('DESCRIÇÃO') || c.includes('DESCRICAO'))) descCol = j;
             if (unitCol < 0 && (c.includes('UNID') || c === 'UN' || c === 'UNIDADE')) unitCol = j;
             if (priceCol < 0 && (c.includes('PREÇO') || c.includes('PRECO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('TOTAL'))) priceCol = j;
@@ -331,7 +345,7 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
           }
         }
 
-        // Determine type from group column or sheet name
+        // Determine type from group column or sheet name or file name
         let type = 'SERVICO';
         if (typeCol >= 0) {
           const rawType = String(r[typeCol] ?? '').toUpperCase();
@@ -339,8 +353,8 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
           else if (rawType.includes('EQUIP')) type = 'EQUIPAMENTO';
           else if (rawType.includes('MATERIAL') || rawType.includes('INSUMO')) type = 'MATERIAL';
         } else if (isInsumo) {
-          if (upper.includes('EQUIP')) type = 'EQUIPAMENTO';
-          else if (upper.includes('MÃO') || upper.includes('MAO')) type = 'MAO_DE_OBRA';
+          if (upper.includes('EQUIP') || isEquipmentFile) type = 'EQUIPAMENTO';
+          else if (upper.includes('MÃO') || upper.includes('MAO') || isLaborFile) type = 'MAO_DE_OBRA';
           else type = 'MATERIAL';
         }
 
@@ -416,6 +430,7 @@ async function persistSicroItems(uf: string, month: number, year: number, data: 
 export interface SicroSyncOptions {
   ufs: string[];
   months: number;
+  targetPeriods?: { month: number; year: number }[];
 }
 
 export interface SicroSyncReport {
@@ -428,7 +443,7 @@ export interface SicroSyncReport {
 }
 
 export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncReport> {
-  const { ufs: requestedUfs, months } = options;
+  const { ufs: requestedUfs, months, targetPeriods } = options;
   const isAllUfs = requestedUfs.includes('ALL') || requestedUfs.length >= 27;
   const ufs = isAllUfs ? ALL_UFS : requestedUfs;
   const started = new Date().toISOString();
@@ -436,9 +451,20 @@ export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncRep
 
   const now = new Date();
   const targetMonths: { month: number; year: number }[] = [];
-  for (let i = 0; i < months; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    targetMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+  if (Array.isArray(targetPeriods) && targetPeriods.length > 0) {
+    for (const period of targetPeriods) {
+      const month = Number(period.month);
+      const year = Number(period.year);
+      if (month >= 1 && month <= 12 && year >= 2009 && year <= now.getFullYear() + 1) {
+        targetMonths.push({ month, year });
+      }
+    }
+  }
+  if (targetMonths.length === 0) {
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      targetMonths.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+    }
   }
 
   console.log(`\n[SICRO Crawler] 🚀 Sync SICRO: ${isAllUfs ? 'ALL (27 UFs)' : ufs.join(',')} × ${months} meses`);
