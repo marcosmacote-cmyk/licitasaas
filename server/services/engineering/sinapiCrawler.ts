@@ -428,42 +428,25 @@ async function hasCompleteAnalyticalCoverage(databaseId: string): Promise<boolea
   return coverage.incomplete === 0;
 }
 
-function normalizeSinapiLookupCode(code: string): string {
-  return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
+export function toCanonicalCode(code: string): string {
+  const raw = String(code || '').trim().toUpperCase().replace(/\s+/g, '');
+  const numeric = raw.match(/^0*(\d+)$/);
+  return numeric ? numeric[1] : raw;
 }
 
 function buildSinapiCodeVariants(code: string): string[] {
-  const raw = normalizeSinapiLookupCode(code);
-  const variants = new Set<string>();
-  if (!raw) return [];
-
-  variants.add(raw);
-  const numeric = raw.match(/^0*(\d+)$/);
-  if (numeric) {
-    const value = numeric[1];
-    variants.add(value);
-    variants.add(value.padStart(4, '0'));
-    variants.add(value.padStart(5, '0'));
-    variants.add(value.padStart(6, '0'));
-    variants.add(value.padStart(7, '0'));
-    variants.add(value.padStart(8, '0'));
-  }
-
-  return [...variants].filter(Boolean);
+  const canonical = toCanonicalCode(code);
+  return canonical ? [canonical] : [];
 }
 
 function setCodeVariants<T>(map: Map<string, T>, code: string, value: T) {
-  for (const variant of buildSinapiCodeVariants(code)) {
-    if (!map.has(variant)) map.set(variant, value);
-  }
+  const canonical = toCanonicalCode(code);
+  if (canonical && !map.has(canonical)) map.set(canonical, value);
 }
 
 function getByCodeVariants<T>(map: Map<string, T>, code: string): T | undefined {
-  for (const variant of buildSinapiCodeVariants(code)) {
-    const hit = map.get(variant);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
+  const canonical = toCanonicalCode(code);
+  return canonical ? map.get(canonical) : undefined;
 }
 
 async function persistItems(baseName: string, uf: string, month: number, year: number, desonerado: boolean, data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }): Promise<SyncResult> {
@@ -486,12 +469,90 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   const basicItems = data.items.filter(it => it.type !== 'SERVICO');
   const serviceItems = data.items.filter(it => it.type === 'SERVICO');
 
+  const compCodes = new Set<string>();
+  for (const s of serviceItems) compCodes.add(toCanonicalCode(s.code));
+
+  const itemCodes = new Set<string>();
+  for (const i of basicItems) itemCodes.add(toCanonicalCode(i.code));
+
+  const basicItemsMap = new Map<string, ParsedItem>();
+  for (const it of basicItems) basicItemsMap.set(toCanonicalCode(it.code), it);
+
+  const priceMap = new Map<string, number>();
+  for (const it of data.items) priceMap.set(toCanonicalCode(it.code), it.price);
+
+  const parentPrices = new Map<string, number>();
+  for (const s of serviceItems) parentPrices.set(toCanonicalCode(s.code), s.price);
+
+  const repairedKeys = new Set<string>();
+
+  // 1. Resolve prices of missing items (órfãos) completely in-memory
+  if (data.compositionItems && data.compositionItems.length > 0) {
+    const resolvedTotalByParent = new Map<string, number>();
+    const unresolvedByParent = new Map<string, ParsedCompositionItem[]>();
+
+    // Step 1a: Group composition items and compute resolved totals
+    for (const ci of data.compositionItems) {
+      const parentKey = toCanonicalCode(ci.parentCode);
+      const childKey = toCanonicalCode(ci.code);
+      const isSvc = ci.type === 'SERVICO';
+
+      const exists = isSvc ? compCodes.has(childKey) : itemCodes.has(childKey);
+      if (exists) {
+        const unitPrice = priceMap.get(childKey) || 0;
+        resolvedTotalByParent.set(parentKey, (resolvedTotalByParent.get(parentKey) || 0) + unitPrice * ci.quantity);
+      } else {
+        if (!isSvc) {
+          if (!unresolvedByParent.has(parentKey)) unresolvedByParent.set(parentKey, []);
+          unresolvedByParent.get(parentKey)!.push(ci);
+        }
+      }
+    }
+
+    // Step 1b: Resolve prices for parents with exactly 1 unresolved child
+    for (const [parentKey, unresolvedList] of unresolvedByParent.entries()) {
+      if (unresolvedList.length !== 1) continue;
+      const ci = unresolvedList[0];
+      const childKey = toCanonicalCode(ci.code);
+      const parentTotal = parentPrices.get(parentKey) || 0;
+      const resolvedTotal = resolvedTotalByParent.get(parentKey) || 0;
+      const residual = parentTotal - resolvedTotal;
+      const unitPrice = ci.quantity > 0 && residual > 0.01 ? residual / ci.quantity : 0;
+
+      if (unitPrice > 0) {
+        priceMap.set(childKey, unitPrice);
+        repairedKeys.add(childKey);
+
+        const existingItem = basicItemsMap.get(childKey);
+        if (existingItem) {
+          if (existingItem.price <= 0.01) existingItem.price = unitPrice;
+        } else {
+          const newItem: ParsedItem = {
+            code: ci.code,
+            description: ci.description || `Insumo SINAPI ${ci.code}`,
+            unit: ci.unit || 'UN',
+            price: unitPrice,
+            type: ci.type || 'MATERIAL'
+          };
+          basicItems.push(newItem);
+          basicItemsMap.set(childKey, newItem);
+          itemCodes.add(childKey);
+        }
+      }
+    }
+  }
+
+  // 2. Bulk insert all basic items (now including computed órfãos!)
   let insertedItems = 0;
   for (let i = 0; i < basicItems.length; i += 1000) {
-    const r = await prisma.engineeringItem.createMany({ data: basicItems.slice(i, i + 1000).map(it => ({ databaseId: db!.id, ...it })), skipDuplicates: true });
+    const r = await prisma.engineeringItem.createMany({
+      data: basicItems.slice(i, i + 1000).map(it => ({ databaseId: db!.id, ...it })),
+      skipDuplicates: true
+    });
     insertedItems += r.count;
   }
 
+  // 3. Bulk insert all compositions
   let insertedComps = 0;
   for (let i = 0; i < serviceItems.length; i += 1000) {
     const chunk = serviceItems.slice(i, i + 1000);
@@ -501,143 +562,56 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     });
     insertedComps += r.count;
   }
-  
-  // Create a map to lookup prices for the items
-  const priceMap = new Map<string, number>();
-  for (const it of data.items) setCodeVariants(priceMap, it.code, it.price);
-  
+
+  // 4. Bulk insert all composition items (in-memory lookup, zero database calls)
   let insertedCompItems = 0;
   if (data.compositionItems && data.compositionItems.length > 0) {
-    // Fetch all composition IDs inserted
     const comps = await prisma.engineeringComposition.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
     const compIdMap = new Map<string, string>();
-    for (const c of comps) setCodeVariants(compIdMap, c.code, c.id);
-    
-    // Fetch all item IDs inserted
+    for (const c of comps) compIdMap.set(toCanonicalCode(c.code), c.id);
+
     const itms = await prisma.engineeringItem.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
     const itemIdMap = new Map<string, string>();
-    for (const c of itms) setCodeVariants(itemIdMap, c.code, c.id);
-    
+    for (const i of itms) itemIdMap.set(toCanonicalCode(i.code), i.id);
+
     const dbCompItems = [];
     let unresolvedCompItems = 0;
     let unresolvedParents = 0;
     let repairedResidualItems = 0;
-    const resolvedTotalByParent = new Map<string, number>();
-    const unresolvedByParent = new Map<string, { compId: string; ci: ParsedCompositionItem }[]>();
-
-    const addResolvedTotal = (parentCode: string, price: number) => {
-      const key = buildSinapiCodeVariants(parentCode)[0] || parentCode;
-      resolvedTotalByParent.set(key, (resolvedTotalByParent.get(key) || 0) + price);
-    };
-
-    const getResolvedTotal = (parentCode: string) => {
-      const key = buildSinapiCodeVariants(parentCode)[0] || parentCode;
-      return resolvedTotalByParent.get(key) || 0;
-    };
-
-    const addUnresolved = (compId: string, ci: ParsedCompositionItem) => {
-      const key = buildSinapiCodeVariants(ci.parentCode)[0] || ci.parentCode;
-      unresolvedByParent.set(key, [...(unresolvedByParent.get(key) || []), { compId, ci }]);
-    };
 
     for (const ci of data.compositionItems) {
-      const compId = getByCodeVariants(compIdMap, ci.parentCode);
-      if (!compId) {
+      const parentId = compIdMap.get(toCanonicalCode(ci.parentCode));
+      if (!parentId) {
         unresolvedParents++;
         continue;
       }
-      
-      const unitPrice = getByCodeVariants(priceMap, ci.code) || 0;
+
+      const childKey = toCanonicalCode(ci.code);
+      const unitPrice = priceMap.get(childKey) || 0;
       const totalPrice = unitPrice * ci.quantity;
-      
+
       const isSvc = ci.type === 'SERVICO';
-      const itemId = isSvc ? null : (getByCodeVariants(itemIdMap, ci.code) || null);
-      const auxCompId = isSvc ? (getByCodeVariants(compIdMap, ci.code) || null) : null;
+      const itemId = isSvc ? null : (itemIdMap.get(childKey) || null);
+      const auxCompId = isSvc ? (compIdMap.get(childKey) || null) : null;
 
       if (!itemId && !auxCompId) {
-        if (!isSvc) addUnresolved(compId, ci);
-        else unresolvedCompItems++;
+        unresolvedCompItems++;
         continue;
       }
 
-      addResolvedTotal(ci.parentCode, totalPrice);
-      
+      if (!isSvc && repairedKeys.has(childKey) && itemId) {
+        repairedResidualItems++;
+      }
+
       dbCompItems.push({
-        compositionId: compId,
-        itemId: itemId,
+        compositionId: parentId,
+        itemId,
         auxiliaryCompositionId: auxCompId,
         coefficient: ci.quantity,
         price: totalPrice
       });
     }
 
-    for (const unresolvedRows of unresolvedByParent.values()) {
-      if (unresolvedRows.length !== 1) {
-        unresolvedCompItems += unresolvedRows.length;
-        continue;
-      }
-
-      const { compId, ci } = unresolvedRows[0];
-      const parentTotal = getByCodeVariants(priceMap, ci.parentCode) || 0;
-      const residual = parentTotal - getResolvedTotal(ci.parentCode);
-      const unitPrice = ci.quantity > 0 && residual > 0.01 ? residual / ci.quantity : 0;
-
-      if (unitPrice <= 0) {
-        unresolvedCompItems++;
-        continue;
-      }
-
-      let repairedId = getByCodeVariants(itemIdMap, ci.code);
-      let repairedCode = ci.code;
-
-      if (!repairedId) {
-        const existing = await prisma.engineeringItem.findFirst({
-          where: { databaseId: db!.id, code: { in: buildSinapiCodeVariants(ci.code) } },
-          select: { id: true, code: true, price: true },
-        });
-        if (existing) {
-          repairedId = existing.id;
-          repairedCode = existing.code;
-          if ((Number(existing.price) || 0) <= 0.01) {
-            await prisma.engineeringItem.update({ where: { id: existing.id }, data: { price: unitPrice } });
-          }
-        }
-      }
-
-      if (!repairedId) {
-        const repaired = await prisma.engineeringItem.upsert({
-          where: { databaseId_code: { databaseId: db!.id, code: ci.code } },
-          create: {
-            databaseId: db!.id,
-            code: ci.code,
-            description: ci.description || `Insumo SINAPI ${ci.code}`,
-            unit: ci.unit || 'UN',
-            price: unitPrice,
-            type: ci.type || 'MATERIAL',
-          },
-          update: { price: unitPrice },
-          select: { id: true, code: true },
-        });
-        repairedId = repaired.id;
-        repairedCode = repaired.code;
-        insertedItems++;
-      }
-
-      if (repairedId) {
-        setCodeVariants(itemIdMap, repairedCode, repairedId);
-        dbCompItems.push({
-          compositionId: compId,
-          itemId: repairedId,
-          auxiliaryCompositionId: null,
-          coefficient: ci.quantity,
-          price: residual,
-        });
-        repairedResidualItems++;
-      } else {
-        unresolvedCompItems++;
-      }
-    }
-    
     for (let i = 0; i < dbCompItems.length; i += 2000) {
       const chunk = dbCompItems.slice(i, i + 2000);
       const r = await prisma.engineeringCompositionItem.createMany({ data: chunk, skipDuplicates: true });
@@ -854,12 +828,10 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
   // For 2025+ national format: download once, extract all UFs
   for (const { month, year } of targetMonths) {
     if (year >= 2025 && isAllUfs) {
-      const regimes = includeDesonerado ? [false, true] : [false];
-      for (const desonerado of regimes) {
-        const regime = desonerado ? 'Desonerado' : 'Onerado';
-        const version = `${String(month).padStart(2, '0')}/${year}`;
-
-        // Check if ALL UFs already synced for this month
+      const regimesNeeded: boolean[] = [];
+      const regimesToCheck = includeDesonerado ? [false, true] : [false];
+      
+      for (const desonerado of regimesToCheck) {
         const existingDbs = force ? [] : await prisma.engineeringDatabase.findMany({
           where: {
             name: baseName,
@@ -876,25 +848,51 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         for (const existingDb of existingDbs) {
           if (await hasCompleteAnalyticalCoverage(existingDb.id)) existingCount++;
         }
-        if (existingCount >= 27) { console.log(`[SINAPI Crawler] ⏭️ ${version} ${regime}: ${existingCount}/27 UFs já completas`); continue; }
+        if (existingCount < 27) {
+          regimesNeeded.push(desonerado);
+        } else {
+          const regimeLabel = desonerado ? 'Desonerado' : 'Onerado';
+          console.log(`[SINAPI Crawler] ⏭️ ${String(month).padStart(2, '0')}/${year} ${regimeLabel}: ${existingCount}/27 UFs já completas`);
+        }
+      }
 
-        console.log(`\n[SINAPI Crawler] 📥 Nacional ${version} ${regime} (${27 - existingCount} UFs pendentes)...`);
-        let zipBuffer: Buffer | null = null;
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sinapi-'));
-        try {
-          const filePath = await downloadSinapiViaBrowser('CE', month, year, desonerado, tmpDir);
-          if (filePath && fs.existsSync(filePath)) {
-            const buf = fs.readFileSync(filePath);
-            if (buf.length > 100 && buf[0] === 0x50 && buf[1] === 0x4B) zipBuffer = buf;
-          }
-        } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }
+      if (regimesNeeded.length === 0) continue;
 
-        if (!zipBuffer) { console.log(`[SINAPI Crawler] ❌ Download falhou: ${version} ${regime}`); results.push({ success: false, message: `Download falhou: ${version} ${regime}` }); continue; }
+      const version = `${String(month).padStart(2, '0')}/${year}`;
+      console.log(`\n[SINAPI Crawler] 📥 Nacional ${version} (Requer regimes: ${regimesNeeded.map(r => r ? 'Desonerado' : 'Onerado').join(', ')})`);
+      
+      let zipBuffer: Buffer | null = null;
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sinapi-'));
+      try {
+        const filePath = await downloadSinapiViaBrowser('CE', month, year, false, tmpDir);
+        if (filePath && fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          if (buf.length > 100 && buf[0] === 0x50 && buf[1] === 0x4B) zipBuffer = buf;
+        }
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
 
-        const excels = extractExcelFromZip(zipBuffer);
-        if (excels.length === 0) { results.push({ success: false, message: `ZIP sem Excel` }); continue; }
+      if (!zipBuffer) {
+        console.log(`[SINAPI Crawler] ❌ Download falhou: ${version}`);
+        for (const desonerado of regimesNeeded) {
+          results.push({ success: false, message: `Download falhou: ${version} ${desonerado ? 'Desonerado' : 'Onerado'}` });
+        }
+        continue;
+      }
 
-        console.log(`[SINAPI Crawler] 🌎 Parsing multi-UF (${excels.length} planilhas)...`);
+      const excels = extractExcelFromZip(zipBuffer);
+      if (excels.length === 0) {
+        for (const desonerado of regimesNeeded) {
+          results.push({ success: false, message: `ZIP sem Excel: ${version} ${desonerado ? 'Desonerado' : 'Onerado'}` });
+        }
+        continue;
+      }
+
+      for (const desonerado of regimesNeeded) {
+        const regime = desonerado ? 'Desonerado' : 'Onerado';
+        console.log(`[SINAPI Crawler] 🌎 Parsing multi-UF para regime ${regime} (${excels.length} planilhas)...`);
+        
         const allUfData = new Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }>();
         for (const uf of ALL_UFS) allUfData.set(uf, { items: [], compositionItems: [] });
 
@@ -909,8 +907,11 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
 
         for (const uf of ALL_UFS) {
           const data = allUfData.get(uf)!;
-          if (data.items.length === 0) { results.push({ success: false, message: `${uf}: sem dados` }); continue; }
-          // Check if this specific UF already synced
+          if (data.items.length === 0) {
+            results.push({ success: false, message: `${uf}: sem dados` });
+            continue;
+          }
+          
           const ex = force ? null : await prisma.engineeringDatabase.findFirst({
             where: {
               name: baseName,
@@ -923,11 +924,16 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
               compositionCount: { gt: 0 },
             }
           });
-          if (ex && await hasCompleteAnalyticalCoverage(ex.id)) { results.push({ success: true, message: `Já existente: ${uf}` }); continue; }
+          if (ex && await hasCompleteAnalyticalCoverage(ex.id)) {
+            results.push({ success: true, message: `Já existente: ${uf} ${regime}` });
+            continue;
+          }
+          
           results.push(await persistItems(baseName, uf, month, year, desonerado, data));
         }
-        await new Promise(r => setTimeout(r, 3000));
       }
+      
+      await new Promise(r => setTimeout(r, 3000));
       continue; // Skip per-UF loop for this month
     }
   }
