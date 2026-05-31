@@ -69,6 +69,23 @@ router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any
             }
 
             if (headerRowIdx < 0) {
+                // Fallback para planilhas FNDE (onde o código/descrição não têm nomes explícitos no cabeçalho)
+                for (let i = 0; i < Math.min(rows.length, 15); i++) {
+                    const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+                    const hasFonte = row.includes('FONTE');
+                    const unitIdx = row.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UND' || c.includes('UNIDADE'));
+                    const priceIdx = row.findIndex((c: string) => c.includes('PRECO') || c.includes('PREÇO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('PREÇO UNITÁRIO') || c.includes('MEDIANA'));
+
+                    if (hasFonte && priceIdx >= 0) {
+                        headerRowIdx = i;
+                        colMap = { code: 0, desc: 1, unit: unitIdx >= 0 ? unitIdx : -1, price: priceIdx };
+                        console.log(`[Eng Import] Fallback FNDE ativado na linha ${i + 1} para a aba "${sheetName}"`);
+                        break;
+                    }
+                }
+            }
+
+            if (headerRowIdx < 0) {
                 console.log(`[Eng Import] Sheet "${sheetName}": header não encontrado, pulando...`);
                 continue;
             }
