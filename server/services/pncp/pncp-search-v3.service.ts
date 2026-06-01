@@ -56,6 +56,18 @@ const MODALIDADE_MAP: Record<string, string> = {
     '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
 };
 
+const MODALIDADE_EXACT_MAP: Record<string, string[]> = {
+    '1': ['Pregão', 'Pregão Eletrônico', 'Pregão Presencial', 'Pregão - Eletrônico', 'Pregão - Presencial'],
+    '2': ['Concorrência', 'Concorrência Eletrônica', 'Concorrência Presencial', 'Concorrência - Eletrônica', 'Concorrência - Presencial'],
+    '3': ['Concurso'],
+    '4': ['Leilão', 'Leilão Eletrônico', 'Leilão Presencial', 'Leilão - Eletrônico', 'Leilão - Presencial'],
+    '5': ['Diálogo Competitivo'],
+    '6': ['Dispensa de Licitação', 'Dispensa'],
+    '7': ['Inexigibilidade de Licitação', 'Inexigibilidade'],
+    '8': ['Tomada de Preços'],
+    '9': ['Convite'],
+};
+
 const STATUS_TO_SITUACAO: Record<string, string[]> = {
     'recebendo_proposta': ['Divulgada', 'Aberta'],
     'encerrada': ['Encerrada'],
@@ -114,11 +126,17 @@ export class PncpSearchV3 {
             }
         }
 
-        // ── Modalidade filter ──
+        // ── Modalidade filter (uses exact list mapping to leverage index where possible) ──
         if (input.modalidade && input.modalidade !== 'todas') {
-            const modalText = MODALIDADE_MAP[input.modalidade] || input.modalidade;
-            conditions.push(`"modalidade" ILIKE $${paramIdx++}`);
-            params.push(`%${modalText}%`);
+            const exactNames = MODALIDADE_EXACT_MAP[input.modalidade];
+            if (exactNames) {
+                conditions.push(`"modalidade" = ANY($${paramIdx++})`);
+                params.push(exactNames);
+            } else {
+                const modalText = MODALIDADE_MAP[input.modalidade] || input.modalidade;
+                conditions.push(`"modalidade" ILIKE $${paramIdx++}`);
+                params.push(`%${modalText}%`);
+            }
         }
 
         // ── Esfera filter ──
@@ -194,7 +212,7 @@ export class PncpSearchV3 {
             }
         }
 
-        // ── Keywords (ILIKE for partial matching on Objeto OR Item Descricao) ──
+        // ── Keywords (PostgreSQL GIN-indexed Full-Text Search on searchVector + PncpItem fallback) ──
         if (input.keywords && input.keywords.trim()) {
             // Split by comma to support multiple keywords like "Gêneros, Escola"
             const kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
@@ -202,15 +220,17 @@ export class PncpSearchV3 {
             if (kws.length > 0) {
                 const kwConditions: string[] = [];
                 for (const kw of kws) {
-                    const paramStr = `$${paramIdx++}`;
+                    const ftsParamStr = `$${paramIdx++}`;
+                    const ilikeParamStr = `$${paramIdx++}`;
                     kwConditions.push(`(
-                        "objeto" ILIKE ${paramStr}
+                        "searchVector" @@ websearch_to_tsquery('pt_unaccent', ${ftsParamStr})
                         OR EXISTS (
                             SELECT 1 FROM "PncpItem" pi 
                             WHERE pi."contratacaoId" = "PncpContratacao".id 
-                            AND pi.descricao ILIKE ${paramStr}
+                            AND pi.descricao ILIKE ${ilikeParamStr}
                         )
                     )`);
+                    params.push(kw);
                     params.push(`%${kw}%`);
                 }
                 // Use OR if they separated by comma

@@ -39,9 +39,11 @@ interface PncpSearchResult {
     uf: string;
     municipio: string;
     valor_estimado: number;
+    data_abertura?: string;
     data_encerramento_proposta: string;
     modalidade_nome: string;
     link_sistema: string;
+    esfera_id?: string;
 }
 
 /** Resultado do scan por pesquisa — usado para sumário e badges */
@@ -59,6 +61,8 @@ interface SearchScanResult {
  * Fallback: busca diretamente na API PNCP Search (Elasticsearch) quando
  * a base local está vazia ou desatualizada. Garante que o scanner funcione
  * mesmo quando o worker/aggregator está offline.
+ * 
+ * Melhora a precisão aplicando localmente todos os filtros salvos na pesquisa.
  */
 async function searchPncpApiDirect(search: {
     keywords: string | null;
@@ -66,13 +70,38 @@ async function searchPncpApiDirect(search: {
     states: string | null;
 }): Promise<PncpSearchResult[]> {
     let ufs = '';
+    let modalidade = '';
+    let esfera = '';
+    let orgao = '';
+    let orgaosLista = '';
+    let excludeKeywords = '';
+    let dataInicio = '';
+    let dataFim = '';
+    let valorMin: number | undefined;
+    let valorMax: number | undefined;
+
     if (search.states) {
         try {
             const parsed = JSON.parse(search.states);
-            if (Array.isArray(parsed)) ufs = parsed.join(',');
-            else if (typeof parsed === 'object' && parsed.uf) ufs = parsed.uf;
-            else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed;
-        } catch { ufs = search.states || ''; }
+            if (Array.isArray(parsed)) {
+                ufs = parsed.join(',');
+            } else if (typeof parsed === 'object' && parsed !== null) {
+                if (parsed.uf) ufs = parsed.uf;
+                modalidade = parsed.modalidade || '';
+                esfera = parsed.esfera || '';
+                orgao = parsed.orgao || '';
+                orgaosLista = parsed.orgaosLista || '';
+                excludeKeywords = parsed.excludeKeywords || '';
+                dataInicio = parsed.dataInicio || '';
+                dataFim = parsed.dataFim || '';
+                if (parsed.valorMin) valorMin = Number(parsed.valorMin);
+                if (parsed.valorMax) valorMax = Number(parsed.valorMax);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                ufs = parsed;
+            }
+        } catch { 
+            ufs = search.states || ''; 
+        }
     }
 
     const params = new URLSearchParams();
@@ -84,9 +113,9 @@ async function searchPncpApiDirect(search: {
     // Map status to PNCP API parameter
     const statusStr = search.status || 'recebendo_proposta';
     if (statusStr === 'recebendo_proposta') params.set('status', 'recebendo_proposta');
-    else if (statusStr === 'encerrada') params.set('status', 'encerrada');
+    else if (statusStr === 'encerrada') params.set('status', 'encerradas');
 
-    if (ufs) params.set('ufs', ufs);
+    if (ufs) params.set('ufs', ufs.replace(/\s/g, ''));
     if (search.keywords) params.set('q', search.keywords);
 
     const url = `https://pncp.gov.br/api/search/?${params.toString()}`;
@@ -96,38 +125,122 @@ async function searchPncpApiDirect(search: {
     const data = resp.data as any;
     const items = data?.items || [];
 
-    return items
-        .filter((item: any) => {
-            // Apply keyword filter (API "q" param is fuzzy — verify locally)
-            if (search.keywords) {
-                const kws = search.keywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-                const text = `${item.description || ''} ${item.title || ''}`.toLowerCase();
-                return kws.some((kw: string) => text.includes(kw));
-            }
-            return true;
-        })
+    // Map to PncpSearchResult first
+    let results = items
+        .filter(Boolean)
         .map((item: any): PncpSearchResult => {
-            const cnpj = item.orgao_cnpj || '';
-            const ano = item.ano || '';
-            const nSeq = item.numero_sequencial || '';
+            const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+            const ano = item.ano || item.anoCompra || '';
+            const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
+            const esferaId = item.esfera_id || item.esferaId || item.orgaoEntidade?.esferaId || '';
+
             return {
                 id: item.numero_controle_pncp || `${cnpj}-${ano}-${nSeq}`,
                 titulo: (item.title || item.description || '').substring(0, 120),
                 objeto: item.description || '',
-                orgao_nome: item.orgao_nome || '',
+                orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
                 orgao_cnpj: cnpj,
-                ano,
-                numero_sequencial: nSeq,
-                uf: item.uf || '',
-                municipio: item.municipio_nome || '',
-                valor_estimado: item.valor_global ? Number(item.valor_global) : 0,
-                data_encerramento_proposta: item.data_fim_vigencia || '',
-                modalidade_nome: item.modalidade_licitacao_nome || '',
+                ano: String(ano),
+                numero_sequencial: String(nSeq),
+                uf: item.uf || item.unidadeOrgao?.ufSigla || '',
+                municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || '',
+                valor_estimado: item.valor_global || item.valor_estimado ? Number(item.valor_global || item.valor_estimado) : 0,
+                data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
+                data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
+                modalidade_nome: item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidade || '',
                 link_sistema: cnpj && ano && nSeq
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
-                    : (item.item_url ? `https://pncp.gov.br${item.item_url}` : ''),
+                    : (item.linkSistemaOrigem || item.link || ''),
+                esfera_id: String(esferaId),
             };
         });
+
+    // Apply strict user filters to prevent spam/false-positives on direct API fallback
+    if (search.keywords) {
+        const kws = search.keywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+        results = results.filter((it: any) => {
+            const text = `${it.objeto || ''} ${it.titulo || ''}`.toLowerCase();
+            return kws.some((kw: string) => text.includes(kw));
+        });
+    }
+
+    if (esfera && esfera !== 'todas') {
+        const esferaMap: Record<string, string[]> = { 'F': ['1', 'F', 'E'], 'E': ['2', 'E'], 'M': ['3', 'M'], 'D': ['4', 'D'] };
+        const allowedIds = esferaMap[esfera] || [esfera];
+        results = results.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
+    }
+
+    if (modalidade && modalidade !== 'todas') {
+        const MODALIDADE_NAMES: Record<string, string[]> = {
+            '1': ['pregão', 'pregao'],
+            '2': ['concorrência', 'concorrencia'],
+            '3': ['concurso'],
+            '4': ['leilão', 'leilao'],
+            '5': ['diálogo', 'dialogo'],
+            '6': ['dispensa'],
+            '7': ['inexigibilidade'],
+        };
+        const targetNames = MODALIDADE_NAMES[modalidade] || [];
+        if (targetNames.length > 0) {
+            results = results.filter((it: any) => {
+                const modNome = (it.modalidade_nome || '').toLowerCase();
+                return targetNames.some(t => modNome.includes(t));
+            });
+        }
+    }
+
+    if (dataInicio || dataFim) {
+        const filterStart = dataInicio ? new Date(dataInicio + 'T00:00:00-03:00').getTime() : 0;
+        const filterEnd = dataFim ? new Date(dataFim + 'T23:59:59-03:00').getTime() : Infinity;
+        results = results.filter((it: any) => {
+            const deadlineStr = it.data_encerramento_proposta || it.data_abertura;
+            if (!deadlineStr) return true;
+            const t = new Date(deadlineStr).getTime();
+            return t >= filterStart && t <= filterEnd;
+        });
+    }
+
+    if (orgao || orgaosLista) {
+        const ol1 = (orgao || '').split(/[\n,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        const ol2 = (orgaosLista || '').split(/[\n,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        const allOrgaos = [...ol1, ...ol2];
+        if (allOrgaos.length > 0) {
+            results = results.filter((it: any) => {
+                const nome = (it.orgao_nome || '').toLowerCase();
+                const cnpj = (it.orgao_cnpj || '').replace(/[^\d]/g, '');
+                const mun = (it.municipio || '').toLowerCase();
+                return allOrgaos.some(o => {
+                    if (o.match(/^\d+$/)) {
+                        return cnpj.includes(o.replace(/[^\d]/g, ''));
+                    }
+                    return nome.includes(o) || mun.includes(o);
+                });
+            });
+        }
+    }
+
+    if (excludeKeywords) {
+        const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const exKws = excludeKeywords.split(',').map((k: string) => normalize(k.trim())).filter(Boolean);
+        if (exKws.length > 0) {
+            results = results.filter((it: any) => {
+                const text = normalize((it.objeto || '') + ' ' + (it.titulo || ''));
+                return !exKws.some((ex: string) => text.includes(ex));
+            });
+        }
+    }
+
+    if (valorMin !== undefined || valorMax !== undefined) {
+        const min = valorMin !== undefined ? Number(valorMin) : 0;
+        const max = valorMax !== undefined ? Number(valorMax) : Infinity;
+        results = results.filter((it: any) => {
+            const val = Number(it.valor_estimado) || 0;
+            if (val === 0) return true;
+            return val >= min && val <= max;
+        });
+    }
+
+    return results;
 }
 
 /**
