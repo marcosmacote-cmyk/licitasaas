@@ -545,52 +545,151 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', flex: 1, maxHeight: '350px', overflowY: 'auto' }}>
-                                {productionStats.bases.map((base) => {
-                                    const isOfficial = base.type === 'OFICIAL';
-                                    const lastSync = base.updatedAt ? new Date(base.updatedAt).toLocaleDateString('pt-BR') : 'N/A';
+                                {(() => {
+                                    // 1. Agrupar bases oficiais por nome
+                                    const officialBases = productionStats.bases.filter(b => b.type === 'OFICIAL');
+                                    const officialGrouped: Record<string, {
+                                        name: string;
+                                        ufs: string[];
+                                        versions: string[];
+                                        compositionCount: number;
+                                        itemCount: number;
+                                        updatedAt: string | null;
+                                        regimes: string[];
+                                    }> = {};
+
+                                    officialBases.forEach(base => {
+                                        if (!officialGrouped[base.name]) {
+                                            officialGrouped[base.name] = {
+                                                name: base.name,
+                                                ufs: [],
+                                                versions: [],
+                                                compositionCount: 0,
+                                                itemCount: 0,
+                                                updatedAt: base.updatedAt,
+                                                regimes: []
+                                            };
+                                        }
+                                        const group = officialGrouped[base.name];
+                                        if (base.uf && !group.ufs.includes(base.uf)) {
+                                            group.ufs.push(base.uf);
+                                        }
+                                        if (base.version && !group.versions.includes(base.version)) {
+                                            group.versions.push(base.version);
+                                        }
+                                        const regimeStr = base.payrollExemption ? 'Desonerado' : 'Onerado';
+                                        if (!group.regimes.includes(regimeStr)) {
+                                            group.regimes.push(regimeStr);
+                                        }
+                                        group.compositionCount += base.compositionCount || 0;
+                                        group.itemCount += base.itemCount || 0;
+                                        if (base.updatedAt && (!group.updatedAt || new Date(base.updatedAt) > new Date(group.updatedAt))) {
+                                            group.updatedAt = base.updatedAt;
+                                        }
+                                    });
+
+                                    // 2. Agrupar bases próprias em um sumário único
+                                    const propriaBases = productionStats.bases.filter(b => b.type === 'PROPRIA');
+                                    const totalPropria = propriaBases.length;
+                                    const totalPropriaCompositions = propriaBases.reduce((acc, curr) => acc + (curr.compositionCount || 0), 0);
+                                    const totalPropriaItems = propriaBases.reduce((acc, curr) => acc + (curr.itemCount || 0), 0);
+                                    let lastPropriaUpdate: string | null = null;
+                                    propriaBases.forEach(base => {
+                                        if (base.updatedAt && (!lastPropriaUpdate || new Date(base.updatedAt) > new Date(lastPropriaUpdate))) {
+                                            lastPropriaUpdate = base.updatedAt;
+                                        }
+                                    });
+
                                     return (
-                                        <div key={base.id} style={{
-                                            padding: 'var(--space-3)',
-                                            borderRadius: 'var(--radius-md)',
-                                            background: 'var(--color-bg-surface-hover)',
-                                            border: '1px solid var(--color-border)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: 'var(--space-2)'
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                    <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                                                        {base.name}
-                                                    </span>
-                                                    {base.uf && (
-                                                        <span className="badge badge-primary" style={{ fontSize: '10px', padding: '1px 6px' }}>
-                                                            {base.uf}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                            {/* Renderizar oficiais */}
+                                            {Object.values(officialGrouped).map((group) => {
+                                                const lastSync = group.updatedAt ? new Date(group.updatedAt).toLocaleDateString('pt-BR') : 'N/A';
+                                                return (
+                                                    <div key={group.name} style={{
+                                                        padding: 'var(--space-3)',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        background: 'var(--color-bg-surface-hover)',
+                                                        border: '1px solid var(--color-border)',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: 'var(--space-2)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                                <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                                                    {group.name}
+                                                                </span>
+                                                                <span className="badge badge-ai" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                                                    Oficial
+                                                                </span>
+                                                                {group.ufs.length > 0 && (
+                                                                    <span className="badge badge-primary" style={{ fontSize: '9px', padding: '1px 4px' }}>
+                                                                        {group.ufs.join(', ')}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                                                                Versão: {group.versions.join(', ') || 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                                                            <span>Regimes: <b>{group.regimes.join(' / ')}</b></span>
+                                                            <span>Sincronia: <b>{lastSync}</b></span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: '2px', fontSize: 'var(--text-xs)' }}>
+                                                            <div style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                                <b>{group.compositionCount.toLocaleString('pt-BR')}</b> Composições (CPUs)
+                                                            </div>
+                                                            <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                                <b>{group.itemCount.toLocaleString('pt-BR')}</b> Insumos
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Renderizar sumário de próprias */}
+                                            {totalPropria > 0 && (
+                                                <div style={{
+                                                    padding: 'var(--space-3)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    background: 'var(--color-bg-surface-hover)',
+                                                    border: '1px dashed var(--color-primary-border)',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 'var(--space-2)'
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                            <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                                                Bases Próprias de Propostas
+                                                            </span>
+                                                            <span className="badge badge-neutral" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                                                Customizadas
+                                                            </span>
+                                                        </div>
+                                                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)' }}>
+                                                            {totalPropria} {totalPropria === 1 ? 'tabela ativa' : 'tabelas ativas'}
                                                         </span>
-                                                    )}
-                                                    <span className={`badge ${isOfficial ? 'badge-ai' : 'badge-neutral'}`} style={{ fontSize: '10px', padding: '1px 6px' }}>
-                                                        {isOfficial ? 'Oficial' : 'Própria'}
-                                                    </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                                                        <span>Escopo: <b>Tabelas por Proposta</b></span>
+                                                        <span>Última Sincronia: <b>{lastPropriaUpdate ? new Date(lastPropriaUpdate).toLocaleDateString('pt-BR') : 'N/A'}</b></span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: '2px', fontSize: 'var(--text-xs)' }}>
+                                                        <div style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                            <b>{totalPropriaCompositions.toLocaleString('pt-BR')}</b> Composições (CPUs)
+                                                        </div>
+                                                        <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                            <b>{totalPropriaItems.toLocaleString('pt-BR')}</b> Insumos
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                                                    Ref: {base.version || 'Última'}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                                                <span>Regime: <b>{base.payrollExemption ? 'Desonerado' : 'Onerado'}</b></span>
-                                                <span>Sincronia: <b>{lastSync}</b></span>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: '2px', fontSize: 'var(--text-xs)' }}>
-                                                <div style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
-                                                    <b>{base.compositionCount}</b> Composições (CPUs)
-                                                </div>
-                                                <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
-                                                    <b>{base.itemCount}</b> Insumos
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     );
-                                })}
+                                })()}
                             </div>
                         )}
                     </div>
