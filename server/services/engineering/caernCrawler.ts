@@ -382,8 +382,8 @@ async function persistCaernData(
   });
 
   if (db) {
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({
       data: { name: baseName, uf, version, type: 'OFICIAL', payrollExemption: false, referenceMonth: month, referenceYear: year }

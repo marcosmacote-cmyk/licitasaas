@@ -585,11 +585,8 @@ async function persistOrsePeriod(period: OrsePeriod, services: OrseServiceRow[],
   } else {
     // Delete old data only when we have new data to replace it
     console.log(`[ORSE Sync] Cleaning old data for ${period.version} (old: ${db.itemCount} items, ${db.compositionCount} comps) before inserting ${inputs.length} inputs + ${services.length} services`);
-    await prisma.engineeringCompositionItem.deleteMany({
-      where: { composition: { databaseId: db.id } },
-    });
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   }
 
   let insertedInputs = 0;

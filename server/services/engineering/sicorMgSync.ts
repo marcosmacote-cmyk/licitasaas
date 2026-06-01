@@ -471,8 +471,8 @@ async function persistSicorPublication(publication: SicorPublication, rows: Sico
   }
 
   if (db) {
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({
       data: {

@@ -405,9 +405,11 @@ async function getAnalyticalCoverage(databaseId: string): Promise<{ total: numbe
       ), 1)::float AS "worstCoverage"
     FROM "EngineeringComposition" c
     LEFT JOIN (
-      SELECT "compositionId", SUM(price) AS total
-      FROM "EngineeringCompositionItem"
-      GROUP BY "compositionId"
+      SELECT ci."compositionId", SUM(ci.price) AS total
+      FROM "EngineeringCompositionItem" ci
+      INNER JOIN "EngineeringComposition" comp ON comp.id = ci."compositionId"
+      WHERE comp."databaseId" = ${databaseId}
+      GROUP BY ci."compositionId"
     ) ci ON ci."compositionId" = c.id
     WHERE c."databaseId" = ${databaseId}
   `;
@@ -458,8 +460,8 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   });
 
   if (db) {
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({
       data: { name: baseName, uf, version, type: 'OFICIAL', payrollExemption: desonerado, referenceMonth: month, referenceYear: year }

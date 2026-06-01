@@ -299,8 +299,8 @@ async function persistSbcItems(regionCode: string, uf: string, month: number, ye
 
   let db = await prisma.engineeringDatabase.findFirst({ where: { name: 'SBC', uf: ufKey, referenceMonth: month, referenceYear: year, type: 'OFICIAL' } });
   if (db) {
-    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
     await prisma.engineeringComposition.deleteMany({ where: { databaseId: db.id } });
+    await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({ data: { name: 'SBC', uf: ufKey, version, type: 'OFICIAL', payrollExemption: false, referenceMonth: month, referenceYear: year } });
   }
