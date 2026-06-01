@@ -327,6 +327,86 @@ export function ReportConfigPanel({ config, onChange, companyName, logoBase64 }:
                 </div>
             </div>
 
+            {/* ═══ CONFIGURAÇÕES DE LAYOUT DA PÁGINA ═══ */}
+            <div style={S.section}>
+                <div style={S.sectionHeader}>
+                    <Settings size={16} color="var(--color-primary)" />
+                    Configurações de Layout da Página
+                </div>
+                <div style={S.sectionBody}>
+                    <Field label="Orientação Padrão dos Relatórios" hint="Define a orientação da página (Retrato ou Paisagem) para todos os relatórios que usarem a opção padrão.">
+                        <div style={{ display: 'flex', gap: 6, maxWidth: 350 }}>
+                            {(['portrait', 'landscape'] as const).map(orient => (
+                                <button key={orient} type="button"
+                                    onClick={() => set('defaultOrientation', orient)}
+                                    style={{
+                                        flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-md)',
+                                        border: c.defaultOrientation === orient ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                        background: c.defaultOrientation === orient ? 'rgba(37,99,235,0.06)' : 'var(--color-bg-base)',
+                                        cursor: 'pointer', fontSize: '0.8rem', fontWeight: c.defaultOrientation === orient ? 700 : 400,
+                                        color: c.defaultOrientation === orient ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                    }}
+                                >
+                                    {orient === 'portrait' ? 'Vertical (Retrato)' : 'Horizontal (Paisagem)'}
+                                </button>
+                            ))}
+                        </div>
+                    </Field>
+
+                    <div style={{ marginTop: 8 }}>
+                        <span style={S.label}>Orientação Personalizada por Relatório</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12, marginTop: 6 }}>
+                            {([
+                                { id: 'resumido', label: 'Orçamento Resumido' },
+                                { id: 'sintetico', label: 'Orçamento Sintético' },
+                                { id: 'analitico', label: 'Orçamento Analítico' },
+                                { id: 'memoria', label: 'Memória de Cálculo' },
+                                { id: 'cpu', label: 'Caderno de Composições (CPU)' },
+                                { id: 'abc_servicos', label: 'Curva ABC de Serviços' },
+                                { id: 'abc_insumos', label: 'Curva ABC de Insumos' },
+                                { id: 'cronograma', label: 'Cronograma Físico-Fin.' },
+                                { id: 'bdi', label: 'BDI e Encargos Sociais' },
+                            ] as { id: string; label: string }[]).map(rep => {
+                                const currentVal = c.reportOrientations?.[rep.id] || '';
+                                return (
+                                    <div key={rep.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: 8, background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{rep.label}</span>
+                                        <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
+                                            {([
+                                                { val: '', label: 'Padrão' },
+                                                { val: 'portrait', label: 'Retrato' },
+                                                { val: 'landscape', label: 'Paisagem' },
+                                            ] as const).map(opt => (
+                                                <button key={opt.val} type="button"
+                                                    onClick={() => {
+                                                        const orientations = { ...(c.reportOrientations || {}) };
+                                                        if (opt.val === '') {
+                                                            delete orientations[rep.id];
+                                                        } else {
+                                                            orientations[rep.id] = opt.val;
+                                                        }
+                                                        set('reportOrientations', orientations);
+                                                    }}
+                                                    style={{
+                                                        flex: 1, padding: '4px 6px', borderRadius: 'var(--radius-sm)',
+                                                        border: currentVal === opt.val ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                                        background: currentVal === opt.val ? 'rgba(37,99,235,0.06)' : 'var(--color-bg-surface)',
+                                                        cursor: 'pointer', fontSize: '0.68rem', fontWeight: currentVal === opt.val ? 700 : 400,
+                                                        color: currentVal === opt.val ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* ═══ OPÇÕES DE EXIBIÇÃO ═══ */}
             <div style={S.section}>
                 <div style={S.sectionHeader}>

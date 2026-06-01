@@ -370,6 +370,10 @@ export interface ReportConfig {
     compositionNotes?: Record<string, string>;
     /** Logo da empresa em Base64 (data:image/...). Populado em runtime, não persistido. */
     logoBase64?: string;
+    /** Orientação padrão da página para todos os relatórios: 'portrait' (retrato) ou 'landscape' (paisagem) */
+    defaultOrientation?: 'portrait' | 'landscape';
+    /** Orientação por relatório (chave = ID do relatório: 'resumido', 'sintetico', etc.) */
+    reportOrientations?: Record<string, 'portrait' | 'landscape'>;
 }
 
 export const DEFAULT_REPORT_CONFIG: ReportConfig = {
@@ -394,6 +398,8 @@ export const DEFAULT_REPORT_CONFIG: ReportConfig = {
     showBancoOrigem: true,
     exportExcelWithFormulas: false,
     colorPalette: { ...DEFAULT_COLOR_PALETTE },
+    defaultOrientation: 'portrait',
+    reportOrientations: {},
 };
 
 export interface AuditChangeLog {

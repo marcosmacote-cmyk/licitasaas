@@ -83,6 +83,34 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
   .no-print { display:none; }
   body { padding:0; }
 }
+
+/* Portrait-specific responsive adjustments to prevent table clipping/wrapping */
+[data-orientation="portrait"] table {
+    font-size: 8.5px;
+}
+[data-orientation="portrait"] th {
+    padding: 3px 4px;
+    font-size: 7.5px;
+}
+[data-orientation="portrait"] td {
+    padding: 3px 4px;
+    font-size: 8px;
+}
+[data-orientation="portrait"] .cronograma-table th, 
+[data-orientation="portrait"] .cronograma-table td {
+    font-size: 7px;
+    padding: 2px 2px;
+}
+
+/* Landscape-specific layout tweaks for premium look */
+[data-orientation="landscape"] th {
+    padding: 6px 8px;
+    font-size: 8.5px;
+}
+[data-orientation="landscape"] td {
+    padding: 5px 8px;
+    font-size: 9.5px;
+}
 `;
 }
 
@@ -90,6 +118,22 @@ const CSS_LANDSCAPE = `@media print { @page { size:A4 landscape; } }`;
 const CSS_PORTRAIT = `@media print { @page { size:A4 portrait; } }`;
 
 export type DocMode = 'view' | 'download' | 'blob';
+
+export function getOrientation(docId: string, reportConfig?: any, defaultVal: boolean = false): boolean {
+    if (!reportConfig) return defaultVal;
+    
+    // 1. Check per-report override
+    const perReport = reportConfig.reportOrientations?.[docId];
+    if (perReport === 'landscape') return true;
+    if (perReport === 'portrait') return false;
+    
+    // 2. Check global default
+    if (reportConfig.defaultOrientation === 'landscape') return true;
+    if (reportConfig.defaultOrientation === 'portrait') return false;
+    
+    // 3. Fallback to defaultVal
+    return defaultVal;
+}
 
 /** Build a complete standalone HTML document string with embedded CSS */
 function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): string {
@@ -180,7 +224,7 @@ ${fixedFooterHtml}
 <thead><tr><td style="height:${topMargin}px;"></td></tr></thead>
 <tfoot><tr><td style="height:${bottomMargin}px;"></td></tr></tfoot>
 <tbody><tr><td>
-<div class="content-wrapper">
+<div class="content-wrapper" data-orientation="${landscape ? 'landscape' : 'portrait'}">
 ${bodyHtml}
 ${obsHtml}
 ${sigHtml}
@@ -357,7 +401,7 @@ ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
-${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, false, engineeringConfig?.reportConfig, mode);
+${renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig)}`, getOrientation('resumido', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -385,7 +429,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
     }
     html += `<table><tfoot><tr class="grand"><td colspan="${6 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
     html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
-    return openDoc('Orçamento Sintético', html, false, engineeringConfig?.reportConfig, mode);
+    return openDoc('Orçamento Sintético', html, getOrientation('sintetico', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -413,7 +457,7 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, m
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
+<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, getOrientation('abc_servicos', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -438,7 +482,7 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, false, engineeringConfig?.reportConfig, mode);
+<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`, getOrientation('abc_insumos', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -481,12 +525,11 @@ export function docCronograma(result: CronogramaResult, mode: DocMode = 'downloa
     for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentAcumulado[m])}</td>`;
     rows += `<td class="r">100%</td></tr>`;
 
-    // FIX D5: Cronograma uses landscape orientation
     return openDoc('Cronograma Físico-Financeiro', `
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable((result as any).engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, true, (result as any).engineeringConfig?.reportConfig, mode);
+<table class="cronograma-table"><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>`, getOrientation('cronograma', (result as any).engineeringConfig?.reportConfig, true), (result as any).engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -667,7 +710,7 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     }
     esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
 
-    return openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, false, engConfig?.reportConfig, mode);
+    return openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, getOrientation('bdi', engConfig?.reportConfig, false), engConfig?.reportConfig, mode);
 }
 
 // Helper para renderizar Composição no padrão TCU
@@ -927,7 +970,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
     }
 
     html += renderGlobalTotals(billable, bdi, engineeringConfig?.reportConfig);
-    return openDoc('Planilha Orçamentária Analítica', html, false, engineeringConfig?.reportConfig, mode);
+    return openDoc('Planilha Orçamentária Analítica', html, getOrientation('analitico', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -971,7 +1014,7 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         html += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
     }
 
-    return openDoc('Caderno de Composições', html, false, engineeringConfig?.reportConfig, mode);
+    return openDoc('Caderno de Composições', html, getOrientation('cpu', engineeringConfig?.reportConfig, false), engineeringConfig?.reportConfig, mode);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1009,7 +1052,7 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
 
     // ── Carta Proposta (optional, pre-built HTML) ──
     if (params.cartaHtml) {
-        parts.push(params.cartaHtml);
+        parts.push(`<div data-orientation="portrait">${params.cartaHtml}</div>`);
     }
 
     // ── Orçamento Resumido ──
@@ -1019,11 +1062,13 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
             const pct = total > 0 ? (ch.total / total * 100) : 0;
             rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
         }
-        parts.push(`<h1>ORÇAMENTO RESUMIDO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}
+        parts.push(`<div data-orientation="${getOrientation('resumido', rc, false) ? 'landscape' : 'portrait'}">
+<h1>ORÇAMENTO RESUMIDO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>Nº</th><th>Etapa</th><th class="r">Itens</th><th class="r">Valor (R$)</th><th class="r">%</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr class="grand"><td colspan="3">TOTAL GERAL</td><td class="r">${fmt(total)}</td><td class="r">100%</td></tr></tfoot></table>
-${renderGlobalTotals(billable, bdi, rc)}`);
+${renderGlobalTotals(billable, bdi, rc)}
+</div>`);
     }
 
     // ── Orçamento Sintético ──
@@ -1040,7 +1085,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
         }
         h += `<table><tfoot><tr class="grand"><td colspan="${6 + (showCU ? 1 : 0) + (showPU ? 1 : 0)}" class="r">TOTAL GERAL DO ORÇAMENTO</td><td class="r">${fmt(total)}</td></tr></tfoot></table>`;
         h += renderGlobalTotals(billable, bdi, rc);
-        parts.push(h);
+        parts.push(`<div data-orientation="${getOrientation('sintetico', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);
     }
 
     // ── Memória de Cálculo ──
@@ -1105,7 +1150,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
         if (rowsHtml) {
             h += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
         }
-        parts.push(h);
+        parts.push(`<div data-orientation="${getOrientation('memoria', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);
     }
 
 
@@ -1153,7 +1198,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             h += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar relatório analítico: ${e.message}</div>`;
         }
         h += renderGlobalTotals(billable, bdi, rc);
-        parts.push(h);
+        parts.push(`<div data-orientation="${getOrientation('analitico', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);
     }
 
     // ── CPU — Composições ──
@@ -1188,7 +1233,7 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
         } catch (e: any) {
             h += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;
         }
-        parts.push(h);
+        parts.push(`<div data-orientation="${getOrientation('cpu', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);
     }
 
     // ── Curva ABC de Serviços ──
@@ -1206,12 +1251,14 @@ ${renderGlobalTotals(billable, bdi, rc)}`);
             const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
             rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
-        parts.push(`<h1>CURVA ABC DE SERVIÇOS</h1>
+        parts.push(`<div data-orientation="${getOrientation('abc_servicos', rc, false) ? 'landscape' : 'portrait'}">
+<h1>CURVA ABC DE SERVIÇOS</h1>
 <div class="meta">${validItems.length} serviços · Total: ${fmt(svTotal)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th class="r">Valor</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(svTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="6">TOTAL</td><td class="r">${fmt(svTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>
+</div>`);
     }
 
     // ── Curva ABC de Insumos ──
@@ -1227,12 +1274,14 @@ ${renderConfigTable(engineeringConfig)}
             const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
             rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
-        parts.push(`<h1>CURVA ABC DE INSUMOS</h1>
+        parts.push(`<div data-orientation="${getOrientation('abc_insumos', rc, false) ? 'landscape' : 'portrait'}">
+<h1>CURVA ABC DE INSUMOS</h1>
 <div class="meta">${insumos.length} insumos · Total: ${fmt(insTotal)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(insTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>`);
+<tfoot><tr class="grand"><td colspan="8">TOTAL</td><td class="r">${fmt(insTotal)}</td><td class="r">100%</td><td class="r">100%</td></tr></tfoot></table>
+</div>`);
     }
 
     // ── Cronograma ──
@@ -1263,11 +1312,11 @@ ${renderConfigTable(engineeringConfig)}
         rows += `<tr class="total"><td>% ACUMULADO</td><td></td>`;
         for (let m = 0; m < meses; m++) rows += `<td class="r">${fmtPct(percentAcumulado[m])}</td>`;
         rows += `<td class="r">100%</td></tr>`;
-        parts.push(`<div data-orientation="landscape">
+        parts.push(`<div data-orientation="${getOrientation('cronograma', rc, true) ? 'landscape' : 'portrait'}">
 <h1>CRONOGRAMA FÍSICO-FINANCEIRO</h1>
 <div class="meta">${meses} meses · ${etapas.length} etapas · Total: ${fmt(totalGlobal)}</div>
 ${renderConfigTable(engineeringConfig)}
-<table><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>
+<table class="cronograma-table"><thead><tr>${headerCols}</tr></thead><tbody>${rows}</tbody></table>
 </div>`);
     }
 
@@ -1291,12 +1340,12 @@ ${renderConfigTable(engineeringConfig)}
                 h += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split('—')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
             }
         }
-        parts.push(h);
+        parts.push(`<div data-orientation="${getOrientation('bdi', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);
     }
 
     // Combine with page breaks
     const combined = parts.map((p, i) => i === 0 ? p : `<div style="page-break-before:always;"></div>${p}`).join('\n');
-    return openDoc('Proposta Completa', combined, false, rc, params.mode || 'download');
+    return openDoc('Proposta Completa', combined, getOrientation('proposta', rc, false), rc, params.mode || 'download');
 }
 
 // ── 9. MEMÓRIA DE CÁLCULO — dedicated HTML/PDF report ─────────────────────────
@@ -1374,6 +1423,6 @@ export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mod
         html += `<table><thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th>Detalhamento da Memória</th><th class="r">Quant/Mult</th><th class="r">Compr (m)</th><th class="r">Larg (m)</th><th class="r">Alt (m)</th><th class="r">Subtotal</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
     }
 
-    return openDoc('Memória de Cálculo', html, false, rc, mode);
+    return openDoc('Memória de Cálculo', html, getOrientation('memoria', rc, false), rc, mode);
 }
 
