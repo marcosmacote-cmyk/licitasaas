@@ -605,6 +605,18 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                             {/* Renderizar oficiais */}
                                             {Object.values(officialGrouped).map((group) => {
                                                 const lastSync = group.updatedAt ? new Date(group.updatedAt).toLocaleDateString('pt-BR') : 'N/A';
+                                                const ufsLimit = 3;
+                                                const ufsDisplay = group.ufs.length > ufsLimit
+                                                    ? `${group.ufs.slice(0, ufsLimit).join(', ')} +${group.ufs.length - ufsLimit}`
+                                                    : group.ufs.join(', ');
+                                                const ufsTooltip = group.ufs.join(', ');
+
+                                                const versionsLimit = 2;
+                                                const versionsDisplay = group.versions.length > versionsLimit
+                                                    ? `${group.versions.slice(0, versionsLimit).join(', ')} +${group.versions.length - versionsLimit}`
+                                                    : group.versions.join(', ');
+                                                const versionsTooltip = group.versions.join(', ');
+
                                                 return (
                                                     <div key={group.name} style={{
                                                         padding: 'var(--space-3)',
@@ -615,22 +627,29 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                                         flexDirection: 'column',
                                                         gap: 'var(--space-2)'
                                                     }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                                <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minWidth: 0, gap: 'var(--space-2)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0, flex: 1 }}>
+                                                                <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', flexShrink: 0 }}>
                                                                     {group.name}
                                                                 </span>
-                                                                <span className="badge badge-ai" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                                                <span className="badge badge-ai" style={{ fontSize: '10px', padding: '1px 6px', flexShrink: 0 }}>
                                                                     Oficial
                                                                 </span>
                                                                 {group.ufs.length > 0 && (
-                                                                    <span className="badge badge-primary" style={{ fontSize: '9px', padding: '1px 4px' }}>
-                                                                        {group.ufs.join(', ')}
+                                                                    <span 
+                                                                        className="badge badge-primary" 
+                                                                        title={ufsTooltip}
+                                                                        style={{ fontSize: '9px', padding: '1px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px', cursor: 'help' }}
+                                                                    >
+                                                                        {ufsDisplay}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                                                                Versão: {group.versions.join(', ') || 'N/A'}
+                                                            <span 
+                                                                title={versionsTooltip}
+                                                                style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0, cursor: 'help' }}
+                                                            >
+                                                                Versão: <b>{versionsDisplay || 'N/A'}</b>
                                                             </span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
