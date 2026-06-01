@@ -70,7 +70,7 @@ export function PerformanceDashboard({ biddings }: Props) {
         };
     }, [filteredBiddings]);
 
-    const COLORS = ['#2563eb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+    const COLORS = ['var(--color-primary)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-danger)', '#8b5cf6', '#64748b'];
 
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
@@ -88,12 +88,13 @@ export function PerformanceDashboard({ biddings }: Props) {
 
     // ── tooltip shared style ──
     const tooltipStyle = {
-        borderRadius: '10px',
+        borderRadius: 'var(--radius-lg)',
         border: 'none',
-        boxShadow: '0 0 0 1px var(--color-border), 0 4px 16px rgba(0,0,0,0.12)',
-        fontSize: '0.8rem',
+        boxShadow: '0 0 0 1px var(--color-border), var(--shadow-lg)',
+        fontSize: 'var(--text-sm)',
         background: 'var(--color-bg-surface)',
         color: 'var(--color-text-primary)',
+        padding: '6px 12px',
     };
 
     return (
@@ -184,9 +185,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                         <span style={{ color: '#22c55e', fontWeight: 700 }}>{metrics.wonCount} ganhos</span>
                         {totalCompleted > 0 && <> · <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{metrics.lostCount} perdidos</span></>}
                     </div>
-                    {totalCompleted > 0 && (
-                        <ProgressBar value={winRateNum} color="#22c55e" />
-                    )}
+                    <ProgressBar value={winRateNum} color="#22c55e" />
                 </KpiCard>
 
                 {/* Montante Ganho */}

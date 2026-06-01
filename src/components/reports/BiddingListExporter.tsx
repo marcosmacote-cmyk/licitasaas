@@ -91,13 +91,15 @@ export function BiddingListExporter({ biddings, companies }: Props) {
         const selectedCols = availableColumns.filter(col => visibleColumns.includes(col.id));
 
         // Title
-        doc.setFontSize(18);
-        doc.text('Relatório de Processos Licitatórios', 14, 22);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59); // Slate-800
+        doc.text('Relatório de Processos Licitatórios', 14, 18);
 
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 30);
-        doc.text(`Status Filtrado: ${statusFilter}`, 14, 35);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139); // Slate-500
+        doc.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')} · Status Filtrado: ${statusFilter}`, 14, 25);
 
         const tableColumn = selectedCols.map(col => col.label);
         const tableRows = filteredBiddings.map(b => {
@@ -113,6 +115,9 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                 if (col.id === 'sessionDate') {
                     return format(new Date(val), 'dd/MM/yy HH:mm');
                 }
+                if (col.id === 'link') {
+                    return val ? 'Acessar Link' : '-';
+                }
                 return val || '';
             });
         });
@@ -120,12 +125,27 @@ export function BiddingListExporter({ biddings, companies }: Props) {
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
-            startY: 45,
+            startY: 32,
             theme: 'striped',
-            headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+            headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 8, fontStyle: 'bold' },
             styles: { fontSize: 8, cellPadding: 3 },
             columnStyles: {
                 0: { cellWidth: 'auto' }
+            },
+            didParseCell: (data) => {
+                if (data.section === 'body' && selectedCols[data.column.index]?.id === 'link' && data.cell.text[0] === 'Acessar Link') {
+                    data.cell.styles.textColor = [37, 99, 235]; // Azul
+                    data.cell.styles.fontStyle = 'underline' as any;
+                }
+            },
+            didDrawCell: (data) => {
+                if (data.section === 'body' && selectedCols[data.column.index]?.id === 'link' && data.cell.text[0] === 'Acessar Link') {
+                    const bidding = filteredBiddings[data.row.index];
+                    const urlReal = bidding?.link;
+                    if (urlReal && (urlReal.startsWith('http://') || urlReal.startsWith('https://'))) {
+                        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: urlReal });
+                    }
+                }
             }
         });
 

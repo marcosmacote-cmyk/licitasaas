@@ -2,7 +2,14 @@ import { useMemo, useState, useCallback } from 'react';
 import { AlertTriangle, Clock, ShieldCheck, Building2, Search, AlertCircle, Download, FileSpreadsheet, FileText, Filter, X } from 'lucide-react';
 import type { CompanyProfile } from '../../types';
 import { API_BASE_URL } from '../../config';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const getFullDocUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE_URL}${url}`;
+};
 
 interface Props {
     companies: CompanyProfile[];
@@ -100,14 +107,13 @@ export function DocumentExpirationList({ companies }: Props) {
         });
     }, [allDocuments, searchTerm, filterCompany, filterStatus, filterDateFrom, filterDateTo]);
 
-    // Summary stats
     const stats = useMemo(() => {
-        const expired = filteredDocuments.filter(d => d.status === 'expired').length;
-        const warning = filteredDocuments.filter(d => d.status === 'warning').length;
-        const valid = filteredDocuments.filter(d => d.status === 'valid').length;
-        const unknown = filteredDocuments.filter(d => d.status === 'unknown').length;
-        return { expired, warning, valid, unknown, total: filteredDocuments.length };
-    }, [filteredDocuments]);
+        const expired = allDocuments.filter(d => d.status === 'expired').length;
+        const warning = allDocuments.filter(d => d.status === 'warning').length;
+        const valid = allDocuments.filter(d => d.status === 'valid').length;
+        const unknown = allDocuments.filter(d => d.status === 'unknown').length;
+        return { expired, warning, valid, unknown, total: allDocuments.length };
+    }, [allDocuments]);
 
     const activeFilterCount = useMemo(() => {
         let c = 0;
@@ -152,121 +158,105 @@ export function DocumentExpirationList({ companies }: Props) {
 
     // ── Export PDF ──
     const exportPDF = useCallback(() => {
-        const doc = new jsPDF({ orientation: 'landscape' });
+        const doc = new jsPDF('l', 'mm', 'a4');
         const pw = doc.internal.pageSize.getWidth();
-        const ph = doc.internal.pageSize.getHeight();
-        const m = 14;
-        const mw = pw - m * 2;
-        let y = m;
 
         // Title
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30);
-        doc.text('Relatório de Validade de Documentos', pw / 2, y, { align: 'center' });
-        y += 6;
+        doc.setTextColor(30, 41, 59); // Slate-800
+        doc.text('Relatório de Validade de Documentos', 14, 15);
+
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} — ${filteredDocuments.length} documentos`, pw / 2, y, { align: 'center' });
-        y += 8;
+        doc.setTextColor(100, 116, 139); // Slate-500
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} · totalizando ${filteredDocuments.length} documento(s) com os filtros atuais`, 14, 20);
 
-        // Summary bar
-        doc.setFillColor(239, 68, 68);
-        doc.roundedRect(m, y, 50, 8, 1, 1, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(7);
+        // Sumário de Status (estilizado como caixas no topo)
+        doc.setFillColor(248, 250, 252); // Slate-50
+        doc.setDrawColor(226, 232, 240); // Slate-200
+        doc.roundedRect(14, 24, pw - 28, 12, 1, 1, 'FD');
+
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${stats.expired} Vencidos`, m + 25, y + 5.5, { align: 'center' });
+        doc.setTextColor(220, 38, 38); // Red-600
+        doc.text(`Vencidos: ${stats.expired}`, 20, 31.5);
+        doc.setTextColor(217, 119, 6); // Amber-600
+        doc.text(`Próx. Vencimento: ${stats.warning}`, 65, 31.5);
+        doc.setTextColor(22, 163, 74); // Green-600
+        doc.text(`Válidos: ${stats.valid}`, 125, 31.5);
+        doc.setTextColor(100, 116, 139); // Slate-500
+        doc.text(`Sem Validade: ${stats.unknown}`, 175, 31.5);
 
-        doc.setFillColor(245, 158, 11);
-        doc.roundedRect(m + 54, y, 50, 8, 1, 1, 'F');
-        doc.setTextColor(255);
-        doc.text(`${stats.warning} Próx. Vencimento`, m + 79, y + 5.5, { align: 'center' });
-
-        doc.setFillColor(34, 197, 94);
-        doc.roundedRect(m + 108, y, 50, 8, 1, 1, 'F');
-        doc.setTextColor(255);
-        doc.text(`${stats.valid} Válidos`, m + 133, y + 5.5, { align: 'center' });
-        y += 14;
-
-        // Table header
-        const cols = [
-            { label: 'Status', x: m, w: 32 },
-            { label: 'Documento', x: m + 32, w: 80 },
-            { label: 'Empresa', x: m + 112, w: 80 },
-            { label: 'Vencimento', x: m + 192, w: 35 },
-            { label: 'Dias Rest.', x: m + 227, w: 30 }
-        ];
-
-        const drawTableHeader = () => {
-            doc.setFillColor(240, 243, 248);
-            doc.rect(m, y, mw, 7, 'F');
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(60);
-            cols.forEach(c => doc.text(c.label, c.x + 2, y + 5));
-            y += 9;
+        // Tabela de Documentos
+        const tableColumn = ['Status', 'Documento', 'Grupo', 'Empresa', 'Vencimento', 'Dias Restantes'];
+        
+        const statusLabel = (s: DocStatus) => {
+            if (s === 'expired') return 'VENCIDO';
+            if (s === 'warning') return 'ATENÇÃO';
+            if (s === 'valid') return 'VÁLIDO';
+            return 'SEM VALIDADE';
         };
 
-        drawTableHeader();
+        const tableRows = filteredDocuments.map(d => [
+            statusLabel(d.status),
+            d.title,
+            d.docGroup || '-',
+            d.companyName,
+            d.expirationDate ? new Date(d.expirationDate).toLocaleDateString('pt-BR') : '-',
+            d.daysRemaining !== null ? `${d.daysRemaining} dias` : '-'
+        ]);
 
-        const statusLabel = (s: DocStatus) => s === 'expired' ? 'VENCIDO' : s === 'warning' ? 'ATENÇÃO' : s === 'valid' ? 'VÁLIDO' : 'S/ VALIDADE';
-        const statusColor = (s: DocStatus): [number, number, number] => s === 'expired' ? [220, 38, 38] : s === 'warning' ? [217, 119, 6] : s === 'valid' ? [22, 163, 74] : [120, 120, 120];
-
-        filteredDocuments.forEach(d => {
-            if (y > ph - 15) {
-                doc.setFontSize(6.5);
-                doc.setTextColor(150);
-                doc.text(`Página ${doc.getNumberOfPages()}`, pw - m, ph - 6, { align: 'right' });
-                doc.addPage();
-                y = m;
-                drawTableHeader();
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 42,
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 8.5 },
+            styles: { cellPadding: 3.5 },
+            columnStyles: {
+                0: { cellWidth: 35, fontStyle: 'bold' }, // Status
+                1: { cellWidth: 'auto' }, // Documento
+                2: { cellWidth: 45 }, // Grupo
+                3: { cellWidth: 'auto' }, // Empresa
+                4: { cellWidth: 30, halign: 'center' }, // Vencimento
+                5: { cellWidth: 30, halign: 'center', fontStyle: 'bold' } // Dias Restantes
+            },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 0) {
+                    const statusText = data.cell.text[0];
+                    if (statusText === 'VENCIDO') {
+                        data.cell.styles.textColor = [220, 38, 38];
+                    } else if (statusText === 'ATENÇÃO') {
+                        data.cell.styles.textColor = [217, 119, 6];
+                    } else if (statusText === 'VÁLIDO') {
+                        data.cell.styles.textColor = [22, 163, 74];
+                    } else {
+                        data.cell.styles.textColor = [100, 116, 139];
+                    }
+                }
+                if (data.section === 'body' && data.column.index === 5) {
+                    const statusText = data.row.cells[0].text[0];
+                    if (statusText === 'VENCIDO') {
+                        data.cell.styles.textColor = [220, 38, 38];
+                    } else if (statusText === 'ATENÇÃO') {
+                        data.cell.styles.textColor = [217, 119, 6];
+                    } else if (statusText === 'VÁLIDO') {
+                        data.cell.styles.textColor = [22, 163, 74];
+                    }
+                }
             }
-
-            // Zebra striping
-            const idx = filteredDocuments.indexOf(d);
-            if (idx % 2 === 0) {
-                doc.setFillColor(250, 250, 253);
-                doc.rect(m, y - 3.5, mw, 7, 'F');
-            }
-
-            doc.setFontSize(6.5);
-            doc.setFont('helvetica', 'normal');
-
-            // Status with color
-            const [r, g, b] = statusColor(d.status);
-            doc.setTextColor(r, g, b);
-            doc.setFont('helvetica', 'bold');
-            doc.text(statusLabel(d.status), cols[0].x + 2, y);
-
-            // Title
-            doc.setTextColor(30);
-            doc.setFont('helvetica', 'normal');
-            const titleTrunc = d.title.length > 50 ? d.title.substring(0, 48) + '...' : d.title;
-            doc.text(titleTrunc, cols[1].x + 2, y);
-
-            // Company
-            doc.setTextColor(80);
-            const compTrunc = d.companyName.length > 50 ? d.companyName.substring(0, 48) + '...' : d.companyName;
-            doc.text(compTrunc, cols[2].x + 2, y);
-
-            // Date
-            doc.setTextColor(60);
-            doc.text(d.expirationDate ? new Date(d.expirationDate).toLocaleDateString('pt-BR') : '-', cols[3].x + 2, y);
-
-            // Days remaining
-            doc.setTextColor(r, g, b);
-            doc.setFont('helvetica', 'bold');
-            doc.text(d.daysRemaining !== null ? `${d.daysRemaining} dias` : '-', cols[4].x + 2, y);
-
-            y += 7;
         });
 
-        // Footer on last page
-        doc.setFontSize(6.5);
-        doc.setTextColor(150);
-        doc.text(`Página ${doc.getNumberOfPages()}`, pw - m, ph - 6, { align: 'right' });
+        // Add page numbers
+        const totalPages = doc.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184); // Slate-400
+            doc.text(`Página ${i} de ${totalPages}`, pw - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+        }
 
         doc.save(`Validade_Documentos_${new Date().toISOString().slice(0, 10)}.pdf`);
     }, [filteredDocuments, stats]);
@@ -503,7 +493,7 @@ export function DocumentExpirationList({ companies }: Props) {
                                         {formatDate(doc.expirationDate)}
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
-                                        <a href={`${API_BASE_URL}${doc.url}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <a href={getFullDocUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                             <Download size={12} /> PDF
                                         </a>
                                     </td>
