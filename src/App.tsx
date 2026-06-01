@@ -538,6 +538,8 @@ function App() {
                     const clean = { ...filter } as any;
                     delete clean.targetProcessId;
                     setNavFilter(Object.keys(clean).length > 0 ? clean : null);
+                } else if (tab === 'production' && filter) {
+                    setModuleContext(filter as any);
                 } else {
                     setNavFilter(filter || null); 
                 }

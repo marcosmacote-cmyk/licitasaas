@@ -316,6 +316,112 @@ router.get('/bases', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /api/engineering/dashboard-stats
+// Estatísticas de produção e bases de engenharia para o dashboard
+// ═══════════════════════════════════════════════════════════
+router.get('/dashboard-stats', async (req: any, res: any) => {
+    try {
+        const tenantId = req.user?.tenantId;
+
+        // 1. Bases de engenharia cadastradas (oficiais e do próprio tenant)
+        const bases = await prisma.engineeringDatabase.findMany({
+            where: {
+                OR: [
+                    { type: 'OFICIAL' },
+                    { tenantId: tenantId }
+                ]
+            },
+            select: {
+                id: true,
+                name: true,
+                uf: true,
+                version: true,
+                type: true,
+                payrollExemption: true,
+                itemCount: true,
+                compositionCount: true,
+                updatedAt: true
+            },
+            orderBy: [
+                { type: 'desc' }, // OFICIAL primeiro
+                { name: 'asc' }
+            ]
+        });
+
+        // 2. Estatísticas de Propostas de Preços (PriceProposal)
+        const proposalsStats = await prisma.priceProposal.groupBy({
+            by: ['objectType'],
+            where: { tenantId },
+            _count: { id: true },
+            _sum: { totalValue: true }
+        });
+
+        const totalProposalsCount = await prisma.priceProposal.count({ where: { tenantId } });
+        const totalProposalsValue = await prisma.priceProposal.aggregate({
+            where: { tenantId },
+            _sum: { totalValue: true }
+        });
+
+        // 3. Propostas Recentes
+        const recentProposals = await prisma.priceProposal.findMany({
+            where: { tenantId },
+            orderBy: { updatedAt: 'desc' },
+            take: 5,
+            include: {
+                biddingProcess: {
+                    select: {
+                        id: true,
+                        title: true,
+                        processNumber: true
+                    }
+                }
+            }
+        });
+
+        // 4. Estatísticas de Geração de Documentos via IA
+        const declarationsCount = await prisma.aiUsageLog.count({
+            where: { tenantId, operation: 'declaration' }
+        });
+
+        const petitionsCount = await prisma.aiUsageLog.count({
+            where: { 
+                tenantId, 
+                operation: { in: ['petition', 'generate_petition'] } 
+            }
+        });
+
+        const dossiersCount = await prisma.aiUsageLog.count({
+            where: { 
+                tenantId, 
+                operation: { in: ['dossier', 'export_dossier'] } 
+            }
+        });
+
+        res.json({
+            bases,
+            proposals: {
+                totalCount: totalProposalsCount,
+                totalValue: totalProposalsValue._sum.totalValue || 0,
+                statsByObjectType: proposalsStats.map(s => ({
+                    objectType: s.objectType,
+                    count: s._count.id,
+                    totalValue: s._sum.totalValue || 0
+                })),
+                recent: recentProposals
+            },
+            documents: {
+                declarationsCount,
+                petitionsCount,
+                dossiersCount
+            }
+        });
+    } catch (e) {
+        console.error('Error fetching dashboard production stats', e);
+        res.status(500).json({ error: 'Erro ao buscar dados estatísticos de produção' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/bases/:id/items
 // Buscar/Paginador de itens dentro de uma base
 // ═══════════════════════════════════════════════════════════

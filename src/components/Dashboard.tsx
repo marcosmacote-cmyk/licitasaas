@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell,
 } from 'recharts';
 import {
     DollarSign,
@@ -9,7 +10,7 @@ import {
     ArrowRight, Timer, ChevronDown, ChevronUp,
     ScanSearch, RadioTower, FileCheck, ExternalLink, Eye,
     FileText, CheckCircle, TrendingUp, Building2, Edit3,
-    Clock, BadgeCheck, Crosshair,
+    Clock, BadgeCheck, Crosshair, Loader2, Database,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import {
@@ -23,7 +24,36 @@ import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 interface Props {
     items: BiddingProcess[];
     companies?: CompanyProfile[];
-    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string }) => void;
+    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string; subTab?: string; processId?: string; hubOriginId?: string }) => void;
+}
+
+interface DashboardProductionStats {
+    bases: {
+        id: string;
+        name: string;
+        uf: string | null;
+        version: string | null;
+        type: string;
+        payrollExemption: boolean;
+        itemCount: number;
+        compositionCount: number;
+        updatedAt: string;
+    }[];
+    proposals: {
+        totalCount: number;
+        totalValue: number;
+        statsByObjectType: {
+            objectType: string;
+            count: number;
+            totalValue: number;
+        }[];
+        recent: any[];
+    };
+    documents: {
+        declarationsCount: number;
+        petitionsCount: number;
+        dossiersCount: number;
+    };
 }
 
 export function Dashboard({ items, companies = [], onNavigate }: Props) {
@@ -38,6 +68,27 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     const [editingTarget, setEditingTarget] = useState(false);
     const [targetInput, setTargetInput] = useState('');
     const [auditStats, setAuditStats] = useState({ isLoaded: false, missingCredsCount: 0, invalidLinkCount: 0 });
+    const [productionStats, setProductionStats] = useState<DashboardProductionStats | null>(null);
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    useEffect(() => {
+        const fetchProductionStats = async () => {
+            try {
+                const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/engineering/dashboard-stats`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setProductionStats(data);
+                }
+            } catch (e) {
+                console.error('[Dashboard] Error fetching production stats:', e);
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+        fetchProductionStats();
+    }, []);
 
     React.useEffect(() => {
         const fetchAudit = async () => {
@@ -459,6 +510,241 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                             </div>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* ═══ SEÇÃO DE PRODUÇÃO E ENGENHARIA ═══ */}
+            <div className="premium-entrance stagger-5 mb-5 animate-fade-in-down" style={{ marginTop: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
+                <div className="flex-between mb-4">
+                    <h3 className="dash-section-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <Building2 size={18} color="var(--color-primary)" /> Módulo de Produção e Engenharia
+                        <TooltipHelp text="Dados de propostas ativas, estatísticas de IA operacional e monitoramento de bases oficiais sincronizadas (SINAPI, SEINFRA, etc.)." />
+                    </h3>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
+                    {/* BASES OFICIAIS */}
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <div className="flex-between mb-3">
+                            <h4 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', margin: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <span>🗄️</span> Bases Oficiais e de Preços
+                            </h4>
+                            <span className="badge badge-success" style={{ fontSize: 'var(--text-xs)' }}>Sincronizadas</span>
+                        </div>
+                        <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                            Tabelas de engenharia ativas na plataforma para enriquecimento automático de insumos e composições.
+                        </p>
+
+                        {loadingStats ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)', flex: 1 }}>
+                                <Loader2 size={24} className="spinner" color="var(--color-primary)" />
+                            </div>
+                        ) : !productionStats || productionStats.bases.length === 0 ? (
+                            <div className="empty-state" style={{ padding: 'var(--space-6) 0' }}>
+                                <p style={{ margin: 0 }}>Nenhuma base de engenharia cadastrada.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', flex: 1, maxHeight: '350px', overflowY: 'auto' }}>
+                                {productionStats.bases.map((base) => {
+                                    const isOfficial = base.type === 'OFICIAL';
+                                    const lastSync = base.updatedAt ? new Date(base.updatedAt).toLocaleDateString('pt-BR') : 'N/A';
+                                    return (
+                                        <div key={base.id} style={{
+                                            padding: 'var(--space-3)',
+                                            borderRadius: 'var(--radius-md)',
+                                            background: 'var(--color-bg-surface-hover)',
+                                            border: '1px solid var(--color-border)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 'var(--space-2)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                    <span style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                                        {base.name}
+                                                    </span>
+                                                    {base.uf && (
+                                                        <span className="badge badge-primary" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                                            {base.uf}
+                                                        </span>
+                                                    )}
+                                                    <span className={`badge ${isOfficial ? 'badge-ai' : 'badge-neutral'}`} style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                                        {isOfficial ? 'Oficial' : 'Própria'}
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                                                    Ref: {base.version || 'Última'}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                                                <span>Regime: <b>{base.payrollExemption ? 'Desonerado' : 'Onerado'}</b></span>
+                                                <span>Sincronia: <b>{lastSync}</b></span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: '2px', fontSize: 'var(--text-xs)' }}>
+                                                <div style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                    <b>{base.compositionCount}</b> Composições (CPUs)
+                                                </div>
+                                                <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                                                    <b>{base.itemCount}</b> Insumos
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* PROPOSTAS & PRODUTIVIDADE */}
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <h4 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', margin: '0 0 var(--space-1)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <span>📊</span> Propostas Recentes & IA
+                        </h4>
+                        <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                            Atividades de precificação de engenharia, aquisições e geração de minutas com suporte da inteligência artificial.
+                        </p>
+
+                        {loadingStats ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)', flex: 1 }}>
+                                <Loader2 size={24} className="spinner" color="var(--color-primary)" />
+                            </div>
+                        ) : !productionStats ? (
+                            <div className="empty-state" style={{ padding: 'var(--space-6) 0' }}>
+                                <p style={{ margin: 0 }}>Nenhuma estatística disponível.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
+                                
+                                {/* IA Documental Grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-2)' }}>
+                                    <div style={{ textAlign: 'center', padding: 'var(--space-2)', background: 'var(--color-ai-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-ai-border)' }}>
+                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-ai)' }}>
+                                            {productionStats.documents.declarationsCount}
+                                        </div>
+                                        <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>Declarações IA</div>
+                                    </div>
+                                    <div style={{ textAlign: 'center', padding: 'var(--space-2)', background: 'var(--color-warning-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-warning-border)' }}>
+                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning)' }}>
+                                            {productionStats.documents.petitionsCount}
+                                        </div>
+                                        <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>Petições Geradas</div>
+                                    </div>
+                                    <div style={{ textAlign: 'center', padding: 'var(--space-2)', background: 'var(--color-urgency-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-urgency-border)' }}>
+                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-urgency)' }}>
+                                            {productionStats.documents.dossiersCount}
+                                        </div>
+                                        <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>Dossiês ZIP</div>
+                                    </div>
+                                </div>
+
+                                {/* Donut Chart + Totais */}
+                                <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', background: 'var(--color-bg-surface-hover)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                    {(() => {
+                                        const engData = productionStats.proposals.statsByObjectType.find(s => s.objectType === 'ENGENHARIA');
+                                        const acqData = productionStats.proposals.statsByObjectType.find(s => s.objectType === 'AQUISICAO');
+                                        const engVal = engData?.totalValue || 0;
+                                        const acqVal = acqData?.totalValue || 0;
+
+                                        const chartData = [
+                                            { name: 'Engenharia', value: engVal || 0.001, fill: 'var(--color-primary)' },
+                                            { name: 'Aquisição/Serviços', value: acqVal || 0.001, fill: 'var(--color-success)' }
+                                        ];
+
+                                        return (
+                                            <>
+                                                <div style={{ width: 80, height: 80, flexShrink: 0 }}>
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <PieChart>
+                                                            <Pie data={chartData} dataKey="value" innerRadius={24} outerRadius={38} paddingAngle={2} stroke="none">
+                                                                {chartData.map((entry, index) => (
+                                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                                ))}
+                                                            </Pie>
+                                                        </PieChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '2px' }}>Volume de Propostas</div>
+                                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                                        {fmt(productionStats.proposals.totalValue)}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-1)', fontSize: '10px' }}>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)' }} />
+                                                            Eng: <b>{fmt(engVal)}</b>
+                                                        </span>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)' }} />
+                                                            Aq: <b>{fmt(acqVal)}</b>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+
+                                {/* Propostas Recentes */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Últimas Propostas
+                                    </div>
+                                    {productionStats.proposals.recent.length === 0 ? (
+                                        <div style={{ textAlign: 'center', padding: 'var(--space-3)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                                            Nenhuma proposta criada.
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            {productionStats.proposals.recent.map((prop) => {
+                                                const title = prop.biddingProcess?.title || 'Licitação';
+                                                const isEng = prop.objectType === 'ENGENHARIA';
+                                                return (
+                                                    <div key={prop.id} style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        padding: 'var(--space-2) var(--space-3)',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        background: 'var(--color-bg-surface-hover)',
+                                                        border: '1px solid var(--color-border)'
+                                                    }}>
+                                                        <div style={{ minWidth: 0, flex: 1, marginRight: 'var(--space-3)' }}>
+                                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={title}>
+                                                                {normalizeTitle(title)}
+                                                            </div>
+                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: '1px' }}>
+                                                                <span>v{prop.version}</span>
+                                                                <span>·</span>
+                                                                <span className={`badge ${isEng ? 'badge-primary' : 'badge-success'}`} style={{ fontSize: '8px', padding: '0 4px', textTransform: 'none' }}>
+                                                                    {isEng ? 'Engenharia' : 'Aquisição'}
+                                                                </span>
+                                                                <span>·</span>
+                                                                <span>{prop.status}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                                                                {fmt(prop.totalValue)}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => onNavigate?.('production', { subTab: 'proposal', processId: prop.biddingProcessId, hubOriginId: prop.biddingProcessId })}
+                                                                className="dash-cal-btn"
+                                                                title="Editar Proposta"
+                                                                style={{ padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                            >
+                                                                <Edit3 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
