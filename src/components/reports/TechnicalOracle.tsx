@@ -4,6 +4,14 @@ import { ConfirmDialog } from '../ui';
 import { useTechnicalOracle, CATEGORIES_HIERARCHY } from '../hooks/useTechnicalOracle';
 import { OraclePdfExporter } from '../hooks/OraclePdfExporter';
 
+const formatQuantity = (val: any) => {
+    if (val === null || val === undefined) return '-';
+    const cleanStr = String(val).trim();
+    const num = Number(cleanStr.replace(',', '.'));
+    if (isNaN(num)) return cleanStr;
+    return num.toLocaleString('pt-BR');
+};
+
 interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
@@ -69,7 +77,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                     <label className="btn btn-primary w-full" style={{ justifyContent: 'center', height: '42px', opacity: (o.isUploading || !o.selectedCompanyId) ? 0.7 : 1, cursor: (o.isUploading || !o.selectedCompanyId) ? 'not-allowed' : 'pointer', fontWeight: 'var(--font-bold)' }}>
                         {o.isUploading ? 'Processando IA...' : 'Enviar Novo Atestado'}
                         <Upload size={18} />
-                        <input type="file" hidden onChange={o.handleFileUpload} disabled={o.isUploading || !o.selectedCompanyId} accept=".pdf" />
+                        <input type="file" hidden onChange={o.handleFileUpload} disabled={o.isUploading || !o.selectedCompanyId} accept=".pdf,.png,.jpg,.jpeg,.webp" />
                     </label>
                     {o.uploadError && (
                         <div className="info-panel info-panel--danger mt-3">
@@ -159,8 +167,15 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                     {o.isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
                                 </button>
                                 {o.isAnalyzing && (
-                                    <div style={{ width: '100%', height: '6px', background: 'var(--color-bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
-                                        <div style={{ height: '100%', background: 'var(--color-primary)', width: `${o.analysisProgress}%`, transition: 'width 0.3s ease' }}></div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                                        <div style={{ width: '100%', height: '6px', background: 'var(--color-bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                            <div style={{ height: '100%', background: 'var(--color-primary)', width: `${o.analysisProgress}%`, transition: 'width 0.3s ease' }}></div>
+                                        </div>
+                                        {o.analysisProgressMsg && (
+                                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', textAlign: 'right', fontStyle: 'italic' }}>
+                                                {o.analysisProgressMsg}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -258,7 +273,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                             <p style={{ margin: '0 0 var(--space-2) 0', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>{item.foundExperience}</p>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)' }}>
                                                 <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>Total Somado:</span>
-                                                <span style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)' }}>{item.foundQuantity?.toLocaleString()}</span>
+                                                <span style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)' }}>{formatQuantity(item.foundQuantity)}</span>
                                             </div>
                                             <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
                                                 <strong>Atestados utilizados:</strong> {item.matchingCertificate}

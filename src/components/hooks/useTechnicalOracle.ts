@@ -85,6 +85,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(initialBiddingId || null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
+    const [analysisProgressMsg, setAnalysisProgressMsg] = useState<string>('');
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -166,6 +167,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         if (event.jobId === activeJobId) {
             if (event.type === 'job_progress') {
                 setAnalysisProgress(event.progress || 0);
+                setAnalysisProgressMsg(event.progressMsg || '');
             } else if (event.type === 'job_completed') {
                 fetchJobResult(event.jobId).then(res => {
                     setAnalysisProgress(100);
@@ -194,6 +196,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         
         setIsAnalyzing(true);
         setAnalysisProgress(0);
+        setAnalysisProgressMsg('');
         setAnalysisResult(null);
 
         try {
@@ -217,6 +220,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
 
     const handleNewSearch = () => {
         setAnalysisResult(null);
+        setAnalysisProgressMsg('');
         setSelectedCertIds(new Set());
         setSelectedBiddingId(null);
         setViewingCert(null);
@@ -339,7 +343,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         selectedCompanyId, setSelectedCompanyId,
         confirmDeleteId, setConfirmDeleteId,
         selectedBiddingId, setSelectedBiddingId,
-        isAnalyzing, analysisResult, analysisProgress,
+        isAnalyzing, analysisResult, analysisProgress, analysisProgressMsg,
         expandedCompanies, selectedCategory, setSelectedCategory,
         requirementsToAnalyze, disabledRequirements, toggleRequirement,
         // Derived

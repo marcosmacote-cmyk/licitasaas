@@ -124,6 +124,97 @@ router.delete('/documents/:id', authenticateToken, async (req: any, res) => {
 
 // ── Technical Certificates (Oráculo de Atestados) ──
 
+router.get('/technical-certificates/stats', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+
+        // Métricas Rápidas
+        const totalCertificates = await prisma.technicalCertificate.count({
+            where: { tenantId }
+        });
+
+        const totalExperiences = await prisma.certificateExperience.count({
+            where: { certificate: { tenantId } }
+        });
+
+        const totalCompanies = await prisma.companyProfile.count({
+            where: { technicalCertificates: { some: { tenantId } } }
+        });
+
+        const totalOracleJobs = await prisma.backgroundJob.count({
+            where: {
+                tenantId,
+                type: 'oracle',
+                status: 'COMPLETED'
+            }
+        });
+
+        // Distribuição por Categoria
+        const categoriesGroup = await prisma.technicalCertificate.groupBy({
+            by: ['category'],
+            where: { tenantId },
+            _count: { id: true }
+        });
+
+        const statsByCategory = categoriesGroup.map(cg => ({
+            name: cg.category || 'Não Informada',
+            value: cg._count.id
+        }));
+
+        // Distribuição por Empresa
+        const companiesGroup = await prisma.technicalCertificate.groupBy({
+            by: ['companyProfileId'],
+            where: { tenantId, companyProfileId: { not: null } },
+            _count: { id: true }
+        });
+
+        const activeCompanies = await prisma.companyProfile.findMany({
+            where: {
+                id: { in: companiesGroup.map(cg => cg.companyProfileId as string) },
+                tenantId
+            },
+            select: { id: true, razaoSocial: true }
+        });
+
+        const companyMap = new Map(activeCompanies.map(c => [c.id, c.razaoSocial]));
+        const statsByCompany = companiesGroup.map(cg => ({
+            name: companyMap.get(cg.companyProfileId!) || 'Outros',
+            value: cg._count.id
+        })).sort((a, b) => b.value - a.value);
+
+        // Últimos Lançamentos (Top 5)
+        const recentCertificates = await prisma.technicalCertificate.findMany({
+            where: { tenantId },
+            include: { company: { select: { razaoSocial: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 5
+        });
+
+        res.json({
+            metrics: {
+                totalCertificates,
+                totalExperiences,
+                totalCompanies,
+                totalOracleJobs
+            },
+            statsByCategory,
+            statsByCompany,
+            recentCertificates: recentCertificates.map(cert => ({
+                id: cert.id,
+                title: cert.title,
+                fileName: cert.fileName,
+                fileUrl: cert.fileUrl,
+                companyName: cert.company?.razaoSocial || 'Não Vinculada',
+                category: cert.category || 'Não Informada',
+                createdAt: cert.createdAt
+            }))
+        });
+    } catch (error) {
+        console.error('[Oracle Stats] Failed to fetch stats:', error);
+        res.status(500).json({ error: 'Failed to fetch certificate statistics' });
+    }
+});
+
 router.get('/technical-certificates', authenticateToken, async (req: any, res) => {
     try {
         const certificates = await prisma.technicalCertificate.findMany({

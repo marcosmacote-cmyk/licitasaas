@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ScanSearch } from 'lucide-react';
+import { ScanSearch, LayoutDashboard } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { TechnicalOracle } from './reports/TechnicalOracle';
+import { InteligenciaDashboard } from './reports/InteligenciaDashboard';
 import { TabNav } from './ui';
 import { BackToHubBanner } from './ui/BackToHubBanner';
 import { GovernanceBlockedBanner } from './ui/GovernanceBlockedBanner';
@@ -17,10 +18,12 @@ interface Props {
     onReturnToHub?: (processId: string) => void;
 }
 
-type InteligenciaTab = 'oracle';
+type InteligenciaTab = 'dashboard' | 'oracle';
 
 export function InteligenciaPage({ biddings, companies, onRefresh, initialProcessId, hubOriginId, onContextConsumed, onReturnToHub }: Props) {
-    const [activeTab, setActiveTab] = useState<InteligenciaTab>('oracle');
+    const [activeTab, setActiveTab] = useState<InteligenciaTab>(
+        initialProcessId ? 'oracle' : 'dashboard'
+    );
 
     useEffect(() => {
         if (initialProcessId) {
@@ -29,6 +32,7 @@ export function InteligenciaPage({ biddings, companies, onRefresh, initialProces
     }, [initialProcessId]);
 
     const tabs: { key: InteligenciaTab; label: string; icon: React.ReactNode; description: string }[] = [
+        { key: 'dashboard', label: 'Visão Geral', icon: <LayoutDashboard size={16} />, description: 'Estatísticas e visão geral de inteligência técnica' },
         { key: 'oracle', label: 'Oráculo Técnico', icon: <ScanSearch size={16} />, description: 'Compare exigências técnicas com acervos da empresa' },
     ];
 
@@ -80,9 +84,13 @@ export function InteligenciaPage({ biddings, companies, onRefresh, initialProces
 
             {/* Content — governance check */}
             {(() => {
+                if (activeTab === 'dashboard') {
+                    return <InteligenciaDashboard onNavigateToOracle={() => setActiveTab('oracle')} />;
+                }
+
                 if (hubProcess) {
                     const stage = resolveStage(hubProcess.status);
-                    const module = activeTab === 'oracle' ? 'oracle' as const : 'intelligence' as const;
+                    const module = 'oracle' as const;
                     if (!isModuleAllowed(stage, hubProcess.substage, module)) {
                         return (
                             <div style={{ marginTop: 'var(--space-4)' }}>
