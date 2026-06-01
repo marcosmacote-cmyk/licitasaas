@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin, CircleDollarSign } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
@@ -157,7 +157,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
             {/* ═══ Edit Saved Search Modal ═══ */}
             {p.editingSearch && (() => {
                 const es = p.editingSearch;
-                let parsedStates = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
+                let parsedStates = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '', valorMin: '', valorMax: '' };
                 try { parsedStates = { ...parsedStates, ...JSON.parse(es.states || '{}') }; } catch {}
                 return (
                     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
@@ -173,6 +173,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                                     esfera: fd.get('esfera') || 'todas', orgao: fd.get('orgao') || '',
                                     orgaosLista: fd.get('orgaosLista') || '', excludeKeywords: fd.get('excludeKeywords') || '',
                                     dataInicio: fd.get('dataInicio') || '', dataFim: fd.get('dataFim') || '',
+                                    valorMin: fd.get('valorMin') || '', valorMax: fd.get('valorMax') || '',
                                 });
                                 const ok = await p.updateSavedSearch(es.id, {
                                     name: fd.get('name') as string,
@@ -240,6 +241,20 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                                     <div>
                                         <label className="form-label">Publicado até</label>
                                         <input type="date" name="dataFim" defaultValue={parsedStates.dataFim} className="form-select" />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                    <div>
+                                        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <CircleDollarSign size={14} style={{ color: 'var(--color-success)' }} /> Valor Mínimo (R$)
+                                        </label>
+                                        <input type="number" name="valorMin" defaultValue={parsedStates.valorMin} className="form-select" placeholder="Ex: 50000" min="0" step="1000" style={{ fontSize: '0.875rem' }} />
+                                    </div>
+                                    <div>
+                                        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <CircleDollarSign size={14} style={{ color: 'var(--color-success)' }} /> Valor Máximo (R$)
+                                        </label>
+                                        <input type="number" name="valorMax" defaultValue={parsedStates.valorMax} className="form-select" placeholder="Ex: 5000000" min="0" step="1000" style={{ fontSize: '0.875rem' }} />
                                     </div>
                                 </div>
                                 <div>
