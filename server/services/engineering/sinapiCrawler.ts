@@ -682,7 +682,7 @@ async function persistItemsWithRetry(
   year: number,
   desonerado: boolean,
   data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] },
-  retries = 3
+  retries = 5
 ): Promise<SyncResult> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -690,7 +690,7 @@ async function persistItemsWithRetry(
     } catch (err: any) {
       console.warn(`[SINAPI Crawler] ⚠️ Erro ao persistir ${uf} (${attempt}/${retries}): ${err.message || err}`);
       if (attempt === retries) throw err;
-      await new Promise(r => setTimeout(r, 5000 * attempt));
+      await new Promise(r => setTimeout(r, 30000 * attempt));
       await prisma.$connect().catch(() => {});
     }
   }
