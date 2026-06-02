@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { prisma } from '../../lib/prisma';
 import { classifyInsumoType } from './insumoClassifier';
 
@@ -552,11 +553,43 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
     }
   }
 
+  const itemIdMap = new Map<string, string>();
+  const compIdMap = new Map<string, string>();
+
+  // Pre-generate UUIDs for basic items in memory
+  const basicItemsWithIds = basicItems.map(it => {
+    const id = randomUUID();
+    itemIdMap.set(toCanonicalCode(it.code), id);
+    return {
+      id,
+      databaseId: db!.id,
+      code: it.code,
+      description: it.description,
+      unit: it.unit,
+      price: it.price,
+      type: it.type
+    };
+  });
+
+  // Pre-generate UUIDs for compositions in memory
+  const serviceItemsWithIds = serviceItems.map(svc => {
+    const id = randomUUID();
+    compIdMap.set(toCanonicalCode(svc.code), id);
+    return {
+      id,
+      databaseId: db!.id,
+      code: svc.code,
+      description: svc.description,
+      unit: svc.unit,
+      totalPrice: svc.price
+    };
+  });
+
   // 2. Bulk insert all basic items (now including computed órfãos!)
   let insertedItems = 0;
-  for (let i = 0; i < basicItems.length; i += 5000) {
+  for (let i = 0; i < basicItemsWithIds.length; i += 5000) {
     const r = await prisma.engineeringItem.createMany({
-      data: basicItems.slice(i, i + 5000).map(it => ({ databaseId: db!.id, ...it })),
+      data: basicItemsWithIds.slice(i, i + 5000),
       skipDuplicates: true
     });
     insertedItems += r.count;
@@ -564,10 +597,10 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 
   // 3. Bulk insert all compositions
   let insertedComps = 0;
-  for (let i = 0; i < serviceItems.length; i += 8000) {
-    const chunk = serviceItems.slice(i, i + 8000);
+  for (let i = 0; i < serviceItemsWithIds.length; i += 8000) {
+    const chunk = serviceItemsWithIds.slice(i, i + 8000);
     const r = await prisma.engineeringComposition.createMany({
-      data: chunk.map(svc => ({ databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price })),
+      data: chunk,
       skipDuplicates: true
     });
     insertedComps += r.count;
@@ -576,14 +609,6 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   // 4. Bulk insert all composition items (in-memory lookup, zero database calls)
   let insertedCompItems = 0;
   if (data.compositionItems && data.compositionItems.length > 0) {
-    const comps = await prisma.engineeringComposition.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
-    const compIdMap = new Map<string, string>();
-    for (const c of comps) compIdMap.set(toCanonicalCode(c.code), c.id);
-
-    const itms = await prisma.engineeringItem.findMany({ where: { databaseId: db!.id }, select: { id: true, code: true } });
-    const itemIdMap = new Map<string, string>();
-    for (const i of itms) itemIdMap.set(toCanonicalCode(i.code), i.id);
-
     const dbCompItems = [];
     let unresolvedCompItems = 0;
     let unresolvedParents = 0;
@@ -915,31 +940,41 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
           }
         }
 
-        for (const uf of ALL_UFS) {
-          const data = allUfData.get(uf)!;
-          if (data.items.length === 0) {
-            results.push({ success: false, message: `${uf}: sem dados` });
-            continue;
-          }
-          
-          const ex = force ? null : await prisma.engineeringDatabase.findFirst({
-            where: {
-              name: baseName,
-              uf,
-              referenceMonth: month,
-              referenceYear: year,
-              payrollExemption: desonerado,
-              type: 'OFICIAL',
-              itemCount: { gt: 0 },
-              compositionCount: { gt: 0 },
+        const ufList = ALL_UFS.filter(uf => allUfData.get(uf)!.items.length > 0);
+
+        // Process UFs in chunks of 3 in parallel (optimized database load)
+        const chunkSize = 3;
+        for (let i = 0; i < ufList.length; i += chunkSize) {
+          const chunk = ufList.slice(i, i + chunkSize);
+          await Promise.all(chunk.map(async (uf) => {
+            const data = allUfData.get(uf)!;
+            const ex = force ? null : await prisma.engineeringDatabase.findFirst({
+              where: {
+                name: baseName,
+                uf,
+                referenceMonth: month,
+                referenceYear: year,
+                payrollExemption: desonerado,
+                type: 'OFICIAL',
+                itemCount: { gt: 0 },
+                compositionCount: { gt: 0 },
+              }
+            });
+            if (ex && await hasCompleteAnalyticalCoverage(ex.id)) {
+              results.push({ success: true, message: `Já existente: ${uf} ${regime}` });
+              return;
             }
-          });
-          if (ex && await hasCompleteAnalyticalCoverage(ex.id)) {
-            results.push({ success: true, message: `Já existente: ${uf} ${regime}` });
-            continue;
+            
+            const res = await persistItems(baseName, uf, month, year, desonerado, data);
+            results.push(res);
+          }));
+        }
+
+        // Handle UFs with no data
+        for (const uf of ALL_UFS) {
+          if (allUfData.get(uf)!.items.length === 0) {
+            results.push({ success: false, message: `${uf}: sem dados` });
           }
-          
-          results.push(await persistItems(baseName, uf, month, year, desonerado, data));
         }
       }
       
