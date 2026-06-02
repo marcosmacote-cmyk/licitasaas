@@ -675,6 +675,28 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
   return { success: true, message: `${baseName} ${uf} ${version} ${regime}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
 }
 
+async function persistItemsWithRetry(
+  baseName: string,
+  uf: string,
+  month: number,
+  year: number,
+  desonerado: boolean,
+  data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] },
+  retries = 3
+): Promise<SyncResult> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await persistItems(baseName, uf, month, year, desonerado, data);
+    } catch (err: any) {
+      console.warn(`[SINAPI Crawler] ⚠️ Erro ao persistir ${uf} (${attempt}/${retries}): ${err.message || err}`);
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, 5000 * attempt));
+      await prisma.$connect().catch(() => {});
+    }
+  }
+  throw new Error('Unreachable code');
+}
+
 // ═══════════════════════════════════════════════════════════
 // Main Orchestrator
 // ═══════════════════════════════════════════════════════════
@@ -965,7 +987,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
               return;
             }
             
-            const res = await persistItems(baseName, uf, month, year, desonerado, data);
+            const res = await persistItemsWithRetry(baseName, uf, month, year, desonerado, data);
             results.push(res);
           }));
         }
@@ -1036,7 +1058,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         console.log(`[SINAPI Crawler] 📊 Total de itens parseados: ${allItems.length}, dependências: ${allCompItems.length}`);
         if (allItems.length === 0) { console.log(`[SINAPI Crawler] ❌ Nenhum item válido encontrado`); results.push({ success: false, message: `Nenhum item válido` }); continue; }
 
-        results.push(await persistItems(baseName, uf, month, year, desonerado, { items: allItems, compositionItems: allCompItems }));
+        results.push(await persistItemsWithRetry(baseName, uf, month, year, desonerado, { items: allItems, compositionItems: allCompItems }));
         await new Promise(r => setTimeout(r, 3000)); // Respect rate limits
       }
     }
