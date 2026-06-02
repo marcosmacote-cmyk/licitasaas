@@ -942,8 +942,8 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
 
         const ufList = ALL_UFS.filter(uf => allUfData.get(uf)!.items.length > 0);
 
-        // Process UFs in chunks of 3 in parallel (optimized database load)
-        const chunkSize = 3;
+        // Process UFs sequentially (chunkSize = 1) to avoid Postgres index locks and proxy bottlenecks
+        const chunkSize = 1;
         for (let i = 0; i < ufList.length; i += chunkSize) {
           const chunk = ufList.slice(i, i + chunkSize);
           await Promise.all(chunk.map(async (uf) => {
