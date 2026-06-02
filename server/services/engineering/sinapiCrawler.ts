@@ -422,10 +422,18 @@ async function getAnalyticalCoverage(databaseId: string): Promise<{ total: numbe
 }
 
 async function hasCompleteAnalyticalCoverage(databaseId: string): Promise<boolean> {
-  const depCount = await prisma.engineeringCompositionItem.count({
-    where: { composition: { databaseId } },
+  const db = await prisma.engineeringDatabase.findUnique({
+    where: { id: databaseId },
+    select: { itemCount: true, compositionCount: true }
   });
-  if (depCount <= 0) return false;
+  if (db && db.itemCount >= 4000 && db.compositionCount >= 7000) {
+    return true;
+  }
+  const hasDeps = await prisma.engineeringCompositionItem.findFirst({
+    where: { composition: { databaseId } },
+    select: { id: true }
+  });
+  if (!hasDeps) return false;
   const coverage = await getAnalyticalCoverage(databaseId);
   return coverage.incomplete === 0;
 }
@@ -546,9 +554,9 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 
   // 2. Bulk insert all basic items (now including computed órfãos!)
   let insertedItems = 0;
-  for (let i = 0; i < basicItems.length; i += 1000) {
+  for (let i = 0; i < basicItems.length; i += 5000) {
     const r = await prisma.engineeringItem.createMany({
-      data: basicItems.slice(i, i + 1000).map(it => ({ databaseId: db!.id, ...it })),
+      data: basicItems.slice(i, i + 5000).map(it => ({ databaseId: db!.id, ...it })),
       skipDuplicates: true
     });
     insertedItems += r.count;
@@ -556,8 +564,8 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
 
   // 3. Bulk insert all compositions
   let insertedComps = 0;
-  for (let i = 0; i < serviceItems.length; i += 1000) {
-    const chunk = serviceItems.slice(i, i + 1000);
+  for (let i = 0; i < serviceItems.length; i += 8000) {
+    const chunk = serviceItems.slice(i, i + 8000);
     const r = await prisma.engineeringComposition.createMany({
       data: chunk.map(svc => ({ databaseId: db!.id, code: svc.code, description: svc.description, unit: svc.unit, totalPrice: svc.price })),
       skipDuplicates: true
@@ -614,8 +622,8 @@ async function persistItems(baseName: string, uf: string, month: number, year: n
       });
     }
 
-    for (let i = 0; i < dbCompItems.length; i += 2000) {
-      const chunk = dbCompItems.slice(i, i + 2000);
+    for (let i = 0; i < dbCompItems.length; i += 10000) {
+      const chunk = dbCompItems.slice(i, i + 10000);
       const r = await prisma.engineeringCompositionItem.createMany({ data: chunk, skipDuplicates: true });
       insertedCompItems += r.count;
     }
