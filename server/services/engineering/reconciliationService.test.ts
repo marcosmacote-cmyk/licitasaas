@@ -119,6 +119,42 @@ describe('reconciliationService', () => {
             expect(alert?.actualValue).toBe(200);
         });
 
+        it('detects COMPOSITION_ITEMS_SUM_MISMATCH when custom composition totalPrice does not match its items sum', async () => {
+            mocks.itemFindMany.mockResolvedValueOnce([
+                {
+                    id: 'item-1',
+                    itemNumber: '1.1',
+                    code: 'COMP-001',
+                    sourceName: 'PROPRIA',
+                    type: 'COMPOSICAO',
+                    description: 'Composicao Teste',
+                    quantity: 1,
+                    unitCost: 150.00,
+                    unitPrice: 187.50,
+                    totalPrice: 187.50,
+                    discount: 0,
+                }
+            ]);
+            mocks.compositionFindMany.mockResolvedValueOnce([
+                {
+                    id: 'comp-1',
+                    code: 'COMP-001',
+                    totalPrice: 200.00,
+                    items: [
+                        { id: 'ci-1', price: 100.00, coefficient: 1 },
+                        { id: 'ci-2', price: 50.00, coefficient: 1 },
+                    ],
+                }
+            ]);
+
+            const report = await getReconciliationReport('proposal-1', 'tenant-1');
+            const alert = report.alerts.find(a => a.type === 'COMPOSITION_ITEMS_SUM_MISMATCH');
+            expect(alert).toBeDefined();
+            expect(alert?.severity).toBe('WARNING');
+            expect(alert?.expectedValue).toBe(150);
+            expect(alert?.actualValue).toBe(200);
+        });
+
         it('detects BUDGET_MATH_INCONSISTENCY when item unitPrice/totalPrice math is incorrect', async () => {
             mocks.itemFindMany.mockResolvedValueOnce([
                 {

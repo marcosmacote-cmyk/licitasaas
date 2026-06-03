@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
 async function main() {
   console.log("=== TRANSAÇÕES ATIVAS ===");
   const activeQueries = await prisma.$queryRawUnsafe<any[]>(`
-    SELECT pid, age(clock_timestamp(), query_start) as age, state, query
+    SELECT pid, age(clock_timestamp(), query_start)::text as age, state, query
     FROM pg_stat_activity
     WHERE state != 'idle' AND query NOT LIKE '%pg_stat_activity%'
     LIMIT 20;

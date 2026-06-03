@@ -172,6 +172,13 @@ async function getFileBufferSafe(fileNameOrUrl: string, tenantId?: string): Prom
                 }
             });
             if (doc && doc.fileContent) {
+                logger.info(`[Persistence] Recovered file ${pureName} from DB for tenant ${tenantId} (${Math.round(doc.fileContent.length / 1024)}KB)`);
+                try {
+                    await fs.promises.writeFile(localPath, doc.fileContent);
+                    logger.info(`[Persistence] Cached recovered file ${pureName} to local disk.`);
+                } catch (writeErr: any) {
+                    logger.warn(`[Persistence] Failed to cache recovered file ${pureName} to disk: ${writeErr.message}`);
+                }
                 return Buffer.from(doc.fileContent);
             }
         }

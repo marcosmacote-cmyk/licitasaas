@@ -170,7 +170,7 @@ export async function getReconciliationReport(proposalId: string, tenantId: stri
                         itemNumber: item.itemNumber,
                         code: item.code || undefined,
                         description: item.description,
-                        type: 'COMPOSICAO_ITEMS_SUM_MISMATCH' as any, // mapping to COMPOSITION_ITEMS_SUM_MISMATCH
+                        type: 'COMPOSITION_ITEMS_SUM_MISMATCH',
                         severity: 'WARNING',
                         message: `O campo totalPrice R$ ${comp.totalPrice.toFixed(2)} da composição própria "${comp.code}" diverge da soma de suas linhas R$ ${roundedCompSum.toFixed(2)}.`,
                         expectedValue: roundedCompSum,

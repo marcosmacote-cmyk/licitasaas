@@ -126,7 +126,9 @@ export async function downloadSinapiViaBrowser(uf: string, month: number, year: 
 // ZIP + Excel Processing (handles nested ZIPs for national bundles)
 // ═══════════════════════════════════════════════════════════
 
-function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
+interface ExcelFile { fileName: string; buffer: Buffer; }
+
+function extractExcelFromZip(zipBuffer: Buffer): ExcelFile[] {
   const AdmZip = require('adm-zip');
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
@@ -135,14 +137,14 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
   console.log(`[SINAPI Parse] 📦 ZIP contém ${entries.length} entradas:`);
   names.forEach((n: string) => console.log(`  → ${n}`));
   
-  const excels: Buffer[] = [];
+  const excels: ExcelFile[] = [];
   
   for (const entry of entries) {
     const name = (entry as any).entryName.toUpperCase();
     
     if (name.endsWith('.XLSX') && !name.startsWith('__MACOSX') && !name.includes('~$')) {
       console.log(`[SINAPI Parse] 📋 Excel: ${(entry as any).entryName} (${((entry as any).header.size / 1024).toFixed(0)} KB)`);
-      excels.push((entry as any).getData());
+      excels.push({ fileName: (entry as any).entryName, buffer: (entry as any).getData() });
     } else if (name.endsWith('.ZIP')) {
       console.log(`[SINAPI Parse] 📦 ZIP aninhado: ${(entry as any).entryName}`);
       try {
@@ -154,7 +156,7 @@ function extractExcelFromZip(zipBuffer: Buffer): Buffer[] {
     }
   }
   
-  excels.sort((a, b) => b.length - a.length);
+  excels.sort((a, b) => b.buffer.length - a.buffer.length);
   console.log(`[SINAPI Parse] ✅ ${excels.length} planilhas Excel extraídas`);
   return excels;
 }
@@ -200,7 +202,7 @@ function readSinapiCodeCell(workbook: XLSX.WorkBook, sheetName: string, rowIndex
   return code;
 }
 
-function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
+function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean, fileName?: string): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellFormula: true });
   const items: ParsedItem[] = [];
   const compositionItems: ParsedCompositionItem[] = [];
@@ -208,8 +210,6 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
 
   console.log(`[SINAPI Parse] 📄 ${workbook.SheetNames.length} abas: ${workbook.SheetNames.join(', ')}`);
 
-  // Target sheets: IND/ISD=Insumos NãoDesonerado, ICD=Insumos Desonerado
-  // CSD=Composições SemDesoneração, CCD=Composições ComDesoneração
   let insumoSheets = ['IND', 'ISD', 'ICD', 'ISE'];
   let compSheets = ['CSD', 'CCD', 'CNE', 'CSE'];
   
@@ -222,24 +222,43 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
 
   for (const sheetName of workbook.SheetNames) {
     const upper = sheetName.toUpperCase().trim();
-    const isTarget = allTargets.includes(upper);
+    let isTarget = allTargets.includes(upper);
+    let forceType: 'INSUMO' | 'COMPOSITION' | 'ANALITICO' | null = null;
+
+    if (!isTarget && fileName) {
+      const upperFile = fileName.toUpperCase();
+      if (upperFile.includes('ANALITICO')) {
+        isTarget = true;
+        forceType = 'ANALITICO';
+      } else if (upperFile.includes('SINTETICO')) {
+        isTarget = true;
+        forceType = 'COMPOSITION';
+      } else if (upperFile.includes('INSUMOS') || upperFile.includes('PRECO_REF')) {
+        isTarget = true;
+        forceType = 'INSUMO';
+      }
+    }
+
     if (!isTarget) continue;
 
     const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     if (rows.length < 5) continue;
 
-    if (upper === 'ANALÍTICO' || upper === 'ANALITICO') {
+    if (upper === 'ANALÍTICO' || upper === 'ANALITICO' || forceType === 'ANALITICO') {
       let headerIdx = -1;
       let parentCodeCol = 1, typeCol = 2, codeCol = 3, descCol = 4, unitCol = 5, qtyCol = 6;
-      for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      for (let i = 0; i < Math.min(rows.length, 30); i++) {
         const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
-        if (row.includes('GRUPO') && row.some((c: string) => c.includes('COEFICIENTE'))) {
+        if (row.some((c: string) => c.includes('COEFICIENTE')) && 
+            (row.includes('GRUPO') || row.includes('CODIGO ITEM') || row.includes('CÓDIGO ITEM') || 
+             row.includes('CODIGO DA COMPOSICAO') || row.includes('CODIGO DA COMPOSIÇÃO') || 
+             row.some(c => c.includes('CÓDIGO DO ITEM') || c.includes('CODIGO DO ITEM')))) {
           headerIdx = i;
-          parentCodeCol = row.findIndex((c: string) => c.includes('COMPOSIÇÃO'));
-          typeCol = row.findIndex((c: string) => c.includes('TIPO ITEM'));
-          codeCol = row.findIndex((c: string) => c.includes('CÓDIGO DO ITEM') || c.includes('CÓDIGO DO\r\nITEM'));
-          descCol = row.findIndex((c: string) => c === 'DESCRIÇÃO');
-          unitCol = row.findIndex((c: string) => c === 'UNIDADE');
+          parentCodeCol = row.findIndex((c: string) => c.includes('COMPOSIÇÃO') || c.includes('COMPOSICAO') || c.includes('COMPOSIC'));
+          typeCol = row.findIndex((c: string) => c.includes('TIPO ITEM') || c.includes('TIPO'));
+          codeCol = row.findIndex((c: string) => c.includes('CÓDIGO DO ITEM') || c.includes('CÓDIGO DO\r\nITEM') || c.includes('CODIGO ITEM') || c.includes('CÓDIGO ITEM') || c.includes('CODIGO DO ITEM'));
+          descCol = row.findIndex((c: string) => c === 'DESCRIÇÃO' || c === 'DESCRIÇÃO ITEM' || c === 'DESCRICAO ITEM' || c.includes('DESCRIÇÃO DO ITEM'));
+          unitCol = row.findIndex((c: string) => c === 'UNIDADE' || c === 'UNIDADE ITEM' || c === 'UNIDADE DE MEDIDA');
           qtyCol = row.findIndex((c: string) => c === 'COEFICIENTE');
           break;
         }
@@ -275,110 +294,99 @@ function parseExcelToItems(buffer: Buffer, uf?: string, desonerado?: boolean): {
           compositionItems.push({ parentCode, type, code, description, unit, quantity: qty });
           count++;
         }
-        console.log(`[SINAPI Parse] ✅ Aba "Analítico": ${count} itens de composição parseados`);
+        console.log(`[SINAPI Parse] ✅ Aba "${sheetName}" (Analítico): ${count} itens de composição parseados`);
       }
       continue;
     }
 
-    const isComposition = compSheets.includes(upper);
+    const isComposition = forceType === 'COMPOSITION' || compSheets.includes(upper);
 
-    // Find the header row with UF columns (AC, AL, AM, ..., CE, ..., TO)
+    // Find the header row
     let headerIdx = -1, ufColIdx = -1, fallbackUfColIdx = -1;
     let codeCol = -1, descCol = -1, unitCol = -1, groupCol = -1;
 
-    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
       const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+      
+      const isPre2025SinteticoHeader = row.some(c => c.includes('CODIGO  DA COMPOSICAO') || c.includes('CODIGO DA COMPOSICAO')) && row.includes('CUSTO TOTAL');
+      const isPre2025InsumoHeader = row.some(c => c.includes('DESCRICAO DO INSUMO') || c.includes('PRECO MEDIANO R$') || c.includes('PREÇO MEDIANO R$'));
+      
       const ceIdx = row.indexOf(targetUf);
-      if (ceIdx >= 0) {
-        // This row has the UF as a column header
+      const isNationalHeader = ceIdx >= 0 && (row.includes('CODIGO') || row.includes('CÓDIGO') || row.includes('CODIGO  ') || row.includes('CODIGO DA COMPOSICAO') || row.includes('CODIGO  DA COMPOSICAO'));
+
+      if (isPre2025SinteticoHeader || isPre2025InsumoHeader || isNationalHeader) {
         headerIdx = i;
-        ufColIdx = ceIdx;
-        fallbackUfColIdx = row.indexOf(SINAPI_ATTRIBUTED_PRICE_UF);
-        // Find other columns in this row or previous rows
-        for (let j = Math.max(0, i - 3); j <= i; j++) {
-          const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
-          if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'CÓDIGO SINAPI' || c.includes('COMPOSIÇÃO'));
-          if (descCol < 0) descCol = r2.findIndex((c: string) => c.includes('DESCRI'));
-          if (unitCol < 0) unitCol = r2.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UNIDADE');
-          if (groupCol < 0) groupCol = r2.findIndex((c: string) => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO'));
+        
+        if (isPre2025SinteticoHeader) {
+          ufColIdx = row.findIndex(c => c.includes('CUSTO TOTAL'));
+          codeCol = row.findIndex(c => c.includes('CODIGO  DA COMPOSICAO') || c.includes('CODIGO DA COMPOSICAO'));
+          descCol = row.findIndex(c => c.includes('DESCRICAO DA COMPOSICAO') || c.includes('DESCRIÇÃO DA COMPOSIÇÃO'));
+          unitCol = row.findIndex(c => c === 'UNIDADE');
+          groupCol = row.findIndex(c => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO') || c.includes('CLASSE'));
+        } else if (isPre2025InsumoHeader) {
+          ufColIdx = row.findIndex(c => c.includes('PRECO MEDIANO') || c.includes('PREÇO MEDIANO') || c.includes('PRECO MEDIANO R$') || c.includes('PREÇO MEDIANO R$'));
+          if (ufColIdx < 0) ufColIdx = 4;
+          codeCol = row.findIndex(c => c.includes('CODIGO'));
+          descCol = row.findIndex(c => c.includes('DESCRICAO DO INSUMO') || c.includes('DESCRIÇÃO DO INSUMO'));
+          unitCol = row.findIndex(c => c.includes('UNIDADE DE MEDIDA') || c.includes('UNIDADE'));
+          groupCol = row.findIndex(c => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO') || c.includes('FAMILIA') || c.includes('FAMÍLIA'));
+        } else {
+          // National format
+          ufColIdx = ceIdx;
+          fallbackUfColIdx = row.indexOf(SINAPI_ATTRIBUTED_PRICE_UF);
+          
+          for (let j = Math.max(0, i - 3); j <= i; j++) {
+            const r2 = rows[j].map((c: any) => String(c).trim().toUpperCase());
+            if (codeCol < 0) codeCol = r2.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'CÓDIGO SINAPI' || c.includes('COMPOSIÇÃO') || c.includes('COMPOSICAO'));
+            if (descCol < 0) descCol = r2.findIndex((c: string) => c.includes('DESCRI'));
+            if (unitCol < 0) unitCol = r2.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UNIDADE');
+            if (groupCol < 0) groupCol = r2.findIndex((c: string) => c.includes('GRUPO') || c.includes('TIPO') || c.includes('CLASSIFICAÇÃO'));
+          }
         }
         break;
       }
     }
 
     if (headerIdx < 0 || ufColIdx < 0) {
-      console.log(`[SINAPI Parse] ⚠️ Aba "${sheetName}": UF ${targetUf} não encontrada nas colunas`);
+      console.log(`[SINAPI Parse] ⚠️ Aba "${sheetName}": colunas de preço ou cabeçalho não encontrados`);
       continue;
     }
 
-    // Fallback column detection
-    if (codeCol < 0) codeCol = 1; // Column B typically
+    if (codeCol < 0) codeCol = 1;
     if (descCol < 0) descCol = codeCol + 1;
     if (unitCol < 0) unitCol = codeCol + 2;
 
-    console.log(`[SINAPI Parse] 🎯 Aba "${sheetName}": UF ${targetUf}=col${ufColIdx}, código=col${codeCol}, desc=col${descCol}, unid=col${unitCol}`);
+    console.log(`[SINAPI Parse] 🎯 Aba "${sheetName}": UFCol=${ufColIdx}, códigoCol=${codeCol}, descCol=${descCol}, unidCol=${unitCol}`);
 
     let count = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
       const code = readSinapiCodeCell(workbook, sheetName, i, codeCol, r[codeCol]);
-
       const desc = String(r[descCol] ?? '').trim();
       const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
       if (!code || !desc || code.length < 2 || code === '0') continue;
 
-      // Read price from the UF column
       const localPrice = parseSinapiNumber(r[ufColIdx]);
-      const attributedPrice = !isComposition && targetUf !== SINAPI_ATTRIBUTED_PRICE_UF && fallbackUfColIdx >= 0
+      const attributedPrice = !isComposition && fallbackUfColIdx >= 0
         ? parseSinapiNumber(r[fallbackUfColIdx])
         : 0;
       const price = localPrice > 0 ? localPrice : attributedPrice;
       if (price <= 0) continue;
 
-      const group = String(r[groupCol] ?? '').toUpperCase();
+      const group = groupCol >= 0 ? String(r[groupCol] ?? '').toUpperCase() : '';
       let groupType: string | undefined;
       if (group.includes('MÃO') || group.includes('MAO') || group.includes('OBRA')) groupType = 'MAO_DE_OBRA';
       else if (group.includes('EQUIP')) groupType = 'EQUIPAMENTO';
       else if (group.includes('COMPOS') || group.includes('SERV')) groupType = 'SERVICO';
       else if (group.includes('MATERIAL') || group.includes('INSUMO')) groupType = 'MATERIAL';
-      // When GRUPO column doesn't provide a clear type, use the classifier
+      
       const classification = classifyInsumoType(desc, unit, groupType);
       const type = isComposition ? 'SERVICO' : (groupType || classification.type);
 
       items.push({ code, description: desc, unit, price, type });
       count++;
     }
-    console.log(`[SINAPI Parse] ✅ Aba "${sheetName}": ${count} itens para ${targetUf}`);
-  }
-
-  // Fallback for isolated files (unlikely in national bundles but good for safety)
-  if (items.length === 0) {
-    for (const sheetName of workbook.SheetNames) {
-      if (!sheetName.toUpperCase().includes('DESONERA')) continue;
-      const rows: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-      if (rows.length < 5) continue;
-      // Look for header with CODIGO + DESCRI + UF column
-      for (let i = 0; i < Math.min(rows.length, 20); i++) {
-        const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
-        const ceIdx = row.indexOf(targetUf);
-        const cI = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c.includes('COMPOSIÇÃO'));
-        const dI = row.findIndex((c: string) => c.includes('DESCRI'));
-        if (ceIdx >= 0 && cI >= 0 && dI >= 0) {
-          const uI = row.findIndex((c: string) => c.includes('UNID'));
-          console.log(`[SINAPI Parse] 🔄 Fallback aba "${sheetName}": UF col=${ceIdx}`);
-          for (let j = i + 1; j < rows.length; j++) {
-            const r = rows[j];
-            const code = readSinapiCodeCell(workbook, sheetName, j, cI, r[cI]);
-            const desc = String(r[dI] ?? '').trim();
-            if (!code || !desc || code.length < 2 || code === '0') continue;
-            const price = parseSinapiNumber(r[ceIdx]);
-            if (price <= 0) continue;
-            items.push({ code, description: desc, unit: uI >= 0 ? String(r[uI] ?? 'UN').trim() : 'UN', price, type: 'SERVICO' });
-          }
-          break;
-        }
-      }
-    }
+    console.log(`[SINAPI Parse] ✅ Aba "${sheetName}": ${count} itens extraídos`);
   }
 
   return { items, compositionItems };
@@ -953,8 +961,8 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         const allUfData = new Map<string, { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }>();
         for (const uf of ALL_UFS) allUfData.set(uf, { items: [], compositionItems: [] });
 
-        for (const buf of excels) {
-          const ufData = parseExcelAllUFs(buf, desonerado);
+        for (const file of excels) {
+          const ufData = parseExcelAllUFs(file.buffer, desonerado);
           for (const [uf, data] of ufData.entries()) {
             const existing = allUfData.get(uf)!;
             existing.items.push(...data.items);
@@ -1051,7 +1059,7 @@ export async function syncSinapi(options: SyncOptions): Promise<SyncReport> {
         if (excels.length === 0) { console.log(`[SINAPI Crawler] ❌ ZIP sem Excel`); results.push({ success: false, message: `ZIP sem Excel` }); continue; }
 
         console.log(`[SINAPI Crawler] 📊 Parseando ${excels.length} planilhas...`);
-        const allExtracted = excels.map(buf => parseExcelToItems(buf, uf, desonerado));
+        const allExtracted = excels.map(item => parseExcelToItems(item.buffer, uf, desonerado, item.fileName));
         const allItems = allExtracted.flatMap(e => e.items);
         const allCompItems = allExtracted.flatMap(e => e.compositionItems);
         

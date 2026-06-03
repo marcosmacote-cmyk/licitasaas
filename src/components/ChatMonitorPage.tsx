@@ -494,12 +494,19 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
           {/* Watcher */}
-          <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-success-bg)', boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.15)' }}>
+          <div style={{
+            padding: 'var(--space-3)',
+            borderRadius: 'var(--radius-md)',
+            background: c.watcherStatus?.isOnline ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)',
+            boxShadow: c.watcherStatus?.isOnline ? '0 0 0 1px rgba(16, 185, 129, 0.15)' : '0 0 0 1px var(--color-border)'
+          }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>Agente Local (ComprasNet)</div>
             <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
               {c.watcherStatus?.isOnline
                 ? `✓ Sincronizado: ${c.watcherStatus.machineName} (${c.watcherStatus.activeSessions || 0} abas)`
-                : '✕ Offline — inicie o agente na sua máquina'}
+                : c.watcherStatus?.lastHeartbeatAt
+                  ? `✕ Offline (Último sinal: ${new Date(c.watcherStatus.lastHeartbeatAt).toLocaleDateString('pt-BR')} ${new Date(c.watcherStatus.lastHeartbeatAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}) — inicie o agente na sua máquina`
+                  : '✕ Offline — inicie o agente na sua máquina'}
             </div>
           </div>
           {/* Health */}
@@ -620,7 +627,11 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
           {c.watcherStatus && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: c.watcherStatus.isOnline ? 'var(--color-success)' : 'var(--color-text-tertiary)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: c.watcherStatus.isOnline ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)', border: 'none', boxShadow: '0 0 0 1px ' + (c.watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
               {c.watcherStatus.isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-              {c.watcherStatus.isOnline ? `Agente ativo (${c.watcherStatus.activeSessions || 0} abas)` : 'Agente offline'}
+              {c.watcherStatus.isOnline
+                ? `Agente ativo (${c.watcherStatus.activeSessions || 0} abas)`
+                : c.watcherStatus.lastHeartbeatAt
+                  ? `Agente offline (Último sinal: ${new Date(c.watcherStatus.lastHeartbeatAt).toLocaleDateString('pt-BR')} ${new Date(c.watcherStatus.lastHeartbeatAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`
+                  : 'Agente offline'}
             </div>
           )}
 
