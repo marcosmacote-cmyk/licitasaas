@@ -147,7 +147,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
                     const text = textExtractionResponse.text;
                     if (!text) throw new Error('Gemini retornou vazio após Zerox');
                     extractionJson = robustJsonParse(text, 'V3-ZeroxExtraction');
-                    modelsUsed.push('gemini-2.5-flash(zerox)');
+                    modelsUsed.push(`${GEMINI_PROFILES.MULTIMODAL_OCR}(zerox)`);
                     logger.info(`[AI-V3] ✅ Etapa 1 (Zerox+Gemini) em ${((Date.now() - t1Start) / 1000).toFixed(1)}s`);
                 } else {
                     logger.warn(`[AI-V3] ⚠️ Zerox retornou conteúdo insuficiente — fallback para inline`);
@@ -177,7 +177,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
 
                 if (!resp.text) throw new Error('Vazio');
                 extractionJson = robustJsonParse(resp.text, 'V3-InlineFallback');
-                modelsUsed.push('gemini-2.5-flash(inline)');
+                modelsUsed.push(`${GEMINI_PROFILES.MULTIMODAL_OCR}(inline)`);
             } catch (gemErr: any) {
                 // Final fallback: OpenAI
                 logger.warn(`[AI-V3] ⚠️ Gemini inline falhou: ${gemErr.message}. Tentando OpenAI...`);
@@ -262,7 +262,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
             await Promise.allSettled(tasks as Promise<any>[]);
             normalizationJson = { requirements_normalized: mergedReqs, operational_outputs: { documents_to_prepare: mergedDocs } };
             result.analysis_meta.workflow_stage_status.normalization = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(GEMINI_PROFILES.LIGHTWEIGHT);
             logger.info(`[AI-V3] ✅ Etapa 2 em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ${totalNorm} itens`);
         } catch (err: any) {
             result.analysis_meta.workflow_stage_status.normalization = 'failed';
@@ -288,7 +288,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
 
             const riskJson = robustJsonParse(riskResp.text, 'V3-Risk');
             result.analysis_meta.workflow_stage_status.risk_review = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(GEMINI_PROFILES.HIGH_INTELLIGENCE);
             if (riskJson.legal_risk_review) result.legal_risk_review = riskJson.legal_risk_review;
             if (riskJson.operational_outputs_risk) {
                 if (riskJson.operational_outputs_risk.questions_for_consultor_chat) result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
