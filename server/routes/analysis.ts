@@ -18,7 +18,7 @@ import { normalizeModality } from '../lib/biddingHelpers';
 import path from 'path';
 import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import { robustJsonParse, robustJsonParseDetailed } from '../services/ai/parser.service';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from '../services/ai/analysis-schema-v1';
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from '../services/ai/openai.service';
 import { enforceSchema } from '../services/ai/schemaEnforcer';
@@ -133,7 +133,7 @@ router.post('/', authenticateToken, aiLimiter, async (req: any, res) => {
 
         try {
             response = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
                 contents: [
                     {
                         role: 'user',
@@ -607,7 +607,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
 
         try {
             const extractionResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.MULTIMODAL_OCR,
                 contents: [{
                     role: 'user',
                     parts: [
@@ -628,7 +628,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
 
             extractionJson = robustJsonParse(extractionText, 'V2-Extraction');
             result.analysis_meta.workflow_stage_status.extraction = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(GEMINI_PROFILES.MULTIMODAL_OCR);
             logger.info(`[AI-V2] ✅ Etapa 1 concluída em ${((Date.now() - t1Start) / 1000).toFixed(1)}s — ` +
                 `${(extractionJson.evidence_registry || []).length} evidências, ` +
                 `${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
@@ -657,7 +657,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
                 result.analysis_meta.workflow_stage_status.extraction = 'failed';
                 result.confidence.warnings.push(`Etapa 1 (Extração) falhou em ambos os modelos: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
                 result.confidence.overall_confidence = 'baixa';
-                result.analysis_meta.model_used = 'gemini-2.5-flash+openai-failed';
+                result.analysis_meta.model_used = `${GEMINI_PROFILES.MULTIMODAL_OCR}+openai-failed`;
                 return res.json({ schemaV2: result, partial: true, error: `Etapa 1 falhou` });
             }
         }
@@ -736,7 +736,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
 
                     try {
                         const resp = await callGeminiWithRetry(ai.models, {
-                            model: 'gemini-2.5-flash',
+                            model: GEMINI_PROFILES.LIGHTWEIGHT,
                             contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                             config: {
                                 systemInstruction: systemPrompt,
@@ -790,7 +790,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
                 operational_outputs: { documents_to_prepare: mergedDocs },
             };
             result.analysis_meta.workflow_stage_status.normalization = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(GEMINI_PROFILES.LIGHTWEIGHT);
             logger.info(`[AI-V2] ✅ Etapa 2 em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ${totalNormalized} itens, ${categoriesFailed} falhas`);
 
             if (categoriesFailed > 0) {
@@ -824,7 +824,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
                 + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
             const riskResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
                 contents: [{
                     role: 'user',
                     parts: [{ text: riskUserInstruction }]
@@ -842,7 +842,7 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
 
             const riskJson = robustJsonParse(riskText, 'V2-RiskReview');
             result.analysis_meta.workflow_stage_status.risk_review = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(GEMINI_PROFILES.HIGH_INTELLIGENCE);
             logger.info(`[AI-V2] ✅ Etapa 3 concluída em ${((Date.now() - t3Start) / 1000).toFixed(1)}s — ` +
                 `${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
 
@@ -1346,7 +1346,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
         }
 
         const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
+            model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
             contents: [
                 {
                     role: 'user',
@@ -1539,7 +1539,7 @@ ${analysisContext}
         }
 
         const chatResult = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
             contents: historyWithContext,
             config: {
                 systemInstruction,

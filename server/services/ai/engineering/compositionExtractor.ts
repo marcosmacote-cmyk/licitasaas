@@ -231,9 +231,9 @@ export async function extractCompositionFromImage(
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
 
+    const { callGeminiWithRetry, GEMINI_PROFILES } = require('../gemini.service');
     const genAI = new GoogleGenAI({ apiKey });
-    const { callGeminiWithRetry } = require('../gemini.service');
-
+ 
     // ─────────────────────────────────────────────────
     // STEP 1: AI EXTRACTION with anti-hallucination prompt
     // ─────────────────────────────────────────────────
@@ -242,7 +242,7 @@ export async function extractCompositionFromImage(
         const response = await callGeminiWithRetry(
             genAI.models,
             {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.MULTIMODAL_OCR,
                 contents: [
                     { role: 'user', parts: [
                         { inlineData: { data: fileBuffer.toString('base64'), mimeType } },

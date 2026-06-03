@@ -50,7 +50,7 @@ import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTI
 
 // Import shared utilities from the engineering routes
 // We import the callGeminiWithRetry from gemini service
-import { callGeminiWithRetry } from './ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from './ai/gemini.service';
 
 function collectSourceRowIdsFromItems(items: any[]): Set<string> {
     const rowIds = new Set<string>();
@@ -827,7 +827,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 {
                     callGemini: async (contents, systemPrompt) => {
                         const result = await callGeminiWithRetry(aiForProbe.models, {
-                            model: 'gemini-2.5-flash',
+                            model: GEMINI_PROFILES.LIGHTWEIGHT,
                             contents,
                             config: {
                                 systemInstruction: systemPrompt,
@@ -897,7 +897,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
     let engItems: any[] = [];
     let screening: EngineeringItemScreeningResult | null = null;
-    let modelUsed = 'gemini-2.5-flash';
+    let modelUsed = GEMINI_PROFILES.MULTIMODAL_OCR;
     let ocrRowCoverageMeta: any = null;
 
     try {
@@ -1156,7 +1156,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 // PERF-06: Use Flash for OCR row mode — text is already pre-structured by Zerox.
                 // Pro is 2-3x slower and unnecessary for clean text input. Pro is reserved for
                 // visual batch mode where the model must read images directly.
-                const ocrRowModel = 'gemini-2.5-flash';
+                const ocrRowModel = GEMINI_PROFILES.LIGHTWEIGHT;
 
                 // PERF-06: Process batches in parallel groups of 3 for ~3x throughput.
                 // Sequential processing took ~30min for 30 batches. Parallel groups of 3
@@ -1280,7 +1280,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                 const totalBatches = Math.ceil(actualPages.length / PAGES_PER_BATCH);
 
                 // PERF-07: Use Flash + parallel groups for text batch mode too
-                logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando gemini-2.5-flash (paralelo 3).`);
+                logger.info(`[Engineering-BG] 📦 TEXT BATCH MODE: ${actualPages.length} páginas detectadas. Dividindo em ${totalBatches} lotes usando ${GEMINI_PROFILES.LIGHTWEIGHT} (paralelo 3).`);
 
                 const TEXT_PARALLEL = 3;
                 for (let g = 0; g < totalBatches; g += TEXT_PARALLEL) {
@@ -1290,7 +1290,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         const batchOcr = header + '\n' + batchPages.join('\n');
                         const batchLabel = `Lote OCR ${i + 1}/${totalBatches}`;
                         const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens deste trecho da planilha (${batchLabel}). NÃO pule linhas.\n\n${batchOcr}`;
-                        group.push(extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, 'gemini-2.5-flash', true));
+                        group.push(extractChunk([{ role: 'user', parts: [{ text: batchInstruction }] }], batchLabel, batchInstruction, GEMINI_PROFILES.LIGHTWEIGHT, true));
                     }
                     await updateJobProgress(job.id, tenantId, {
                         progress: Math.min(30 + Math.round(((g + group.length) / totalBatches) * 50), 80),
@@ -1309,7 +1309,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             const visualPhaseStart = Date.now();
             logger.warn(
                 `[Engineering-BG] 📸 SCANNED VISUAL BATCH MODE: processando ` +
-                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via gemini-2.5-flash (paralelo 3).`
+                `${scannedPdfVisualBatches.length} lote(s) de páginas escaneadas via ${GEMINI_PROFILES.MULTIMODAL_OCR} (paralelo 3).`
             );
 
             // PERF-09: Use Flash instead of Pro for visual batches.
@@ -1375,7 +1375,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         }],
                         batchLabel,
                         batchInstruction,
-                        'gemini-2.5-flash',
+                        GEMINI_PROFILES.MULTIMODAL_OCR,
                         false
                     );
                 });
@@ -1387,9 +1387,9 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
 
         if (pdfParts.length > 0) {
             // ── STANDARD MODE: Native PDFs ──
-            logger.info(`[Engineering-BG] 🤖 STANDARD MODE: Extração unificada para PDFs não escaneados (gemini-2.5-flash).`);
+            logger.info(`[Engineering-BG] 🤖 STANDARD MODE: Extração unificada para PDFs não escaneados (${GEMINI_PROFILES.MULTIMODAL_OCR}).`);
             const batchInstruction = `${userInstruction}\n\n🚨 ATENÇÃO: Extraia TODOS os itens orçamentários das páginas visuais fornecidas.\nCOMECE OBRIGATORIAMENTE do Item 1.0 (primeiro item/etapa) e vá sequencialmente até o final.\nNÃO pule o início do documento. NÃO comece do meio.`;
-            await extractChunk([{ role: 'user', parts: [...pdfParts, { text: batchInstruction }] }], 'Lote PDF Nativo', batchInstruction, 'gemini-2.5-flash', false);
+            await extractChunk([{ role: 'user', parts: [...pdfParts, { text: batchInstruction }] }], 'Lote PDF Nativo', batchInstruction, GEMINI_PROFILES.MULTIMODAL_OCR, false);
 
             // ── GAP DETECTION: Check if early etapas were skipped ──
             // When Gemini hits MAX_TOKENS on large PDFs, it may start mid-document
@@ -1431,7 +1431,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                     [{ role: 'user', parts: [...pdfParts, { text: gapInstruction }] }],
                     `Gap Recovery (Etapas 1-${firstTopLevel - 1})`,
                     gapInstruction,
-                    'gemini-2.5-flash',
+                    GEMINI_PROFILES.MULTIMODAL_OCR,
                     false
                 );
 
@@ -1505,7 +1505,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
                         [{ role: 'user', parts: [...pdfParts, { text: tailInstruction }] }],
                         `Tail Continuation (após ${lastItemNum})`,
                         tailInstruction,
-                        'gemini-2.5-flash',
+                        GEMINI_PROFILES.MULTIMODAL_OCR,
                         false
                     );
 
@@ -1730,7 +1730,7 @@ export async function engineeringExtractionHandler(job: any): Promise<any> {
             }));
 
             const retryResult = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.MULTIMODAL_OCR,
                 contents: [{ role: 'user', parts: [...fullPdfParts, { text: `${ENGINEERING_PROPOSAL_USER_INSTRUCTION}${ocrContext}` }] }],
                 config: {
                     systemInstruction: ENGINEERING_PROPOSAL_SYSTEM_PROMPT,

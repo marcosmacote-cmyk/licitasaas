@@ -17,7 +17,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
             (err) => { clearTimeout(timer); reject(err); }
         );
     });
-}
+}export const GEMINI_PROFILES = {
+    HIGH_INTELLIGENCE: process.env.GEMINI_MODEL_HIGH_INTELLIGENCE || 'gemini-3.1-flash-lite',
+    MULTIMODAL_OCR: process.env.GEMINI_MODEL_MULTIMODAL_OCR || 'gemini-2.5-flash',
+    LIGHTWEIGHT: process.env.GEMINI_MODEL_LIGHTWEIGHT || 'gemini-2.5-flash-lite',
+};
 
 /**
  * Gemini model cascade: when the primary model is unavailable (503),
@@ -25,13 +29,13 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
  * This preserves multimodal capability (critical for scanned PDFs).
  */
 const GEMINI_FALLBACK_MODELS: Record<string, string[]> = {
-    // gemini-2.0-flash removed: deprecated by Google (404 NOT_FOUND since Apr 2026)
-    // gemini-3.1-pro removed: returns 404 NOT_FOUND (model doesn't exist)
-    // Cascade: primary → 2.5-flash-lite (lightweight, available)
+    'gemini-3.1-flash-lite': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-3-flash-preview': ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'],
     'gemini-2.5-flash': ['gemini-2.5-flash-lite'],
     'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
     'gemini-2.5-flash-lite': [],
 };
+
 
 /** Check if an error indicates 503/UNAVAILABLE/high demand */
 function isServiceUnavailable(error: any): boolean {
@@ -151,7 +155,7 @@ export async function callGeminiWithRetry(
     trackingContext?: Pick<AiUsageContext, 'tenantId' | 'userId' | 'operation' | 'metadata'>
 ): Promise<any> {
     let lastError: any;
-    const requestedModel = options.model || 'gemini-2.5-flash';
+    const requestedModel = options.model || GEMINI_PROFILES.HIGH_INTELLIGENCE;
     const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — engineering PDFs need 3-4 min to process
 
     // Global outage fast-fail: if ALL models are circuit-open, skip entirely

@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import prisma from '../../lib/prisma';
-import { callGeminiWithRetry } from '../ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../ai/gemini.service';
 import axios from 'axios';
 import https from 'https';
 import { classifyEngineeringAttachments } from './documentClassifier';
@@ -302,7 +302,7 @@ Retorne números sem %.`;
                     if (pdfParts.length > 0) {
                         console.log(`[BDI-AI] 📄 Enviando ${pdfParts.length} PDFs ao Gemini para extração multimodal de BDI`);
                         const result = await callGeminiWithRetry(ai.models, {
-                            model: 'gemini-2.5-flash',
+                            model: GEMINI_PROFILES.LIGHTWEIGHT,
                             contents: [{ role: 'user', parts: [...pdfParts, { text: bdiPrompt }] }],
                             config: {
                                 responseMimeType: 'application/json',
@@ -338,7 +338,7 @@ COPIE os valores EXATOS do documento. Se um campo não aparece, coloque 0.
 NUNCA coloque o BDI total (${sanitized.globalBdi}%) no campo lucro. Lucro é só a margem de lucro.`;
                                     try {
                                         const retryResult = await callGeminiWithRetry(ai.models, {
-                                            model: 'gemini-2.5-flash',
+                                            model: GEMINI_PROFILES.LIGHTWEIGHT,
                                             contents: [{ role: 'user', parts: [...pdfParts, { text: retryPrompt }] }],
                                             config: { responseMimeType: 'application/json', responseSchema: forcedSchema, temperature: 0.02 }
                                         });
@@ -409,7 +409,7 @@ NUNCA coloque o BDI total (${sanitized.globalBdi}%) no campo lucro. Lucro é só
 
     console.log(`[BDI-AI] 📝 Fallback texto: ${chunk.length} chars`);
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_PROFILES.LIGHTWEIGHT,
         contents: bdiPrompt + '\n\nTEXTO DO EDITAL:\n' + chunk,
         config: {
             responseMimeType: 'application/json',

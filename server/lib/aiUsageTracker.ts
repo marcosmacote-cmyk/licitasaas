@@ -297,7 +297,7 @@ export async function trackAiUsage<T>(
         let inputTokens = 0;
         let outputTokens = 0;
         let totalTokens = 0;
-        let modelUsed = ctx.model || 'gemini-2.5-flash';
+        let modelUsed = ctx.model || 'gemini-3.1-flash-lite';
 
         try {
             if (result && typeof result === 'object') {
@@ -486,7 +486,11 @@ export async function getSystemUsageSummary(
 //  Ref: https://ai.google.dev/pricing
 // ══════════════════════════════════════════════════════════════
 const GEMINI_PRICING_PER_1M: Record<string, { input: number; output: number }> = {
-    'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+    'gemini-3.1-flash-lite': { input: 0.25, output: 1.50 },
+    'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+    'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
+    'gemini-3.5-flash': { input: 1.50, output: 9.00 },
+    'gemini-2.5-flash': { input: 0.30, output: 2.50 },
     'gemini-2.5-pro':   { input: 1.25, output: 5.00 },
     'gemini-2.0-flash': { input: 0.10, output: 0.40 },
     'gemini-1.5-flash': { input: 0.075, output: 0.30 },

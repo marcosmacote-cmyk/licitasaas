@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
@@ -5590,7 +5590,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 if (pdfParts.length > 0) {
                     console.log(`[Engineering AI-Populate] 📄 ${pdfParts.length} PDFs prontos para envio ao Gemini`);
                     result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.MULTIMODAL_OCR,
                         contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
                         config: {
                             systemInstruction: { role: 'system', parts: [{ text: prompt }] },
@@ -5608,7 +5608,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
         if (!result && extractionText && extractionText.length > 50) {
             const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText.slice(0, 120000);
             result = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.LIGHTWEIGHT,
                 contents: [{ role: 'user', parts: [{ text: userInput }] }],
                 config: {
                     systemInstruction: { role: 'system', parts: [{ text: prompt }] },
@@ -5632,7 +5632,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                 const pdfParts = await downloadPncpPdfsForEngineering(biddingId);
                 if (pdfParts.length > 0) {
                     const pdfResult = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.MULTIMODAL_OCR,
                         contents: [{ role: 'user', parts: [...pdfParts, { text: ENGINEERING_PROPOSAL_USER_INSTRUCTION }] }],
                         config: {
                             systemInstruction: { role: 'system', parts: [{ text: prompt }] },
@@ -5830,7 +5830,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
             if (pdfParts.length > 0) {
                 console.log(`[Engineering AI-Compositions] 📄 ${pdfParts.length} PDFs prontos para extração multimodal de composições (${budgetItemCodes.length} itens contextuais)`);
                 result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.MULTIMODAL_OCR,
                     contents: [{ role: 'user', parts: [...pdfParts, { text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + itemsContext }] }],
                     config: {
                         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
@@ -5875,7 +5875,7 @@ router.post('/ai-extract-compositions', async (req: any, res: any) => {
             if (extractionText.length >= 50) {
                 console.log(`[Engineering AI-Compositions] 📝 Fallback texto: ${extractionText.length} chars`);
                 result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
                     contents: [{
                         role: 'user',
                         parts: [{ text: COMPOSITION_EXTRACTION_USER_INSTRUCTION + '\n\nDOCUMENTO:\n' + extractionText.slice(0, 120000) }]

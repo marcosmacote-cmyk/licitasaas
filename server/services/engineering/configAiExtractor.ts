@@ -4,7 +4,7 @@
  */
 import { GoogleGenAI, Type } from '@google/genai';
 import prisma from '../../lib/prisma';
-import { callGeminiWithRetry } from '../ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../ai/gemini.service';
 import axios from 'axios';
 import https from 'https';
 import { classifyEngineeringAttachments } from './documentClassifier';
@@ -402,7 +402,7 @@ Retorne JSON.`;
         try {
             console.log(`[Config-AI] 📄 Enviando ${pdfParts.length} PDF(s) ao Gemini com responseSchema`);
             const result = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.LIGHTWEIGHT,
                 contents: [{ role: 'user', parts: [...pdfParts, { text: configPrompt }] }],
                 config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
             });
@@ -422,7 +422,7 @@ Retorne JSON.`;
 
     console.log(`[Config-AI] 📝 Fallback texto: ${text.length} chars`);
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_PROFILES.LIGHTWEIGHT,
         contents: configPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
         config: { responseMimeType: 'application/json', responseSchema, temperature: 0.05 }
     });
@@ -552,7 +552,7 @@ IMPORTANTE: Os valores acima são apenas EXEMPLO de formato. Extraia os valores 
             try {
                 console.log(`[Encargos-AI] 📄 PASS 1: ${pdfParts.length} PDF(s) ranked for encargos`);
                 const result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
                     contents: [{ role: 'user', parts: [...pdfParts, { text: encargosPrompt }] }],
                     config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
                 });
@@ -577,7 +577,7 @@ Se há MAIS tabelas, retorne CADA UMA com todos os 52 campos analíticos:
 IMPORTANTE: Os valores acima são EXEMPLO. Extraia os valores REAIS de cada tabela adicional.
 Cada tabela DEVE ter basePrincipal, totalHorista, totalMensalista e todos os 52 campos (${fieldsList}).`;
                             const multiResult = await ai.models.generateContent({
-                                model: 'gemini-2.5-flash',
+                                model: GEMINI_PROFILES.LIGHTWEIGHT,
                                 contents: [{ role: 'user', parts: [...pdfParts, { text: multiPrompt }] }],
                                 config: { responseMimeType: 'application/json', temperature: 0.1 }
                             });
@@ -613,7 +613,7 @@ Cada tabela DEVE ter basePrincipal, totalHorista, totalMensalista e todos os 52 
             try {
                 console.log(`[Encargos-AI] 📄 PASS 2: ${allPdfParts.length} PDF(s) broad search (config-ranked)`);
                 const result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
                     contents: [{ role: 'user', parts: [...allPdfParts, { text: encargosPrompt }] }],
                     config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
                 });
@@ -637,7 +637,7 @@ Cada tabela DEVE ter basePrincipal, totalHorista, totalMensalista e todos os 52 
         }
         console.log(`[Encargos-AI] 📝 PASS 3 Texto: ${text.length} chars`);
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: encargosPrompt + '\n\nTEXTO DO EDITAL:\n' + text.substring(0, 100000),
             config: { responseMimeType: 'application/json', responseSchema: encargosSchema, temperature: 0.1 }
         });
@@ -665,7 +665,7 @@ d1(Reinc.A/B), d2(Reinc.A/AP+FGTS). Valores % sem símbolo. Se item=0, retorne 0
 
     try {
         const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: [{ role: 'user', parts: [
                 { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
                 { text: prompt }
@@ -741,7 +741,7 @@ Retorne JSON.`;
 
     try {
         const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: [{ role: 'user', parts: [
                 { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
                 { text: prompt }
@@ -803,7 +803,7 @@ Onde N é o número percentual sem o símbolo % (ex: 3.00, 0.65, 1.20). Se um it
 
     try {
         const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: [{ role: 'user', parts: [
                 { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
                 { text: prompt }
@@ -866,7 +866,7 @@ Se não conseguir identificar um cronograma na imagem, retorne { "found": false 
 
     try {
         const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: [{ role: 'user', parts: [
                 { inlineData: { data: imageBase64, mimeType: mimeType || 'image/png' } },
                 { text: prompt }

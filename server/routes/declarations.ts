@@ -15,7 +15,7 @@ const router = express.Router();
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { fallbackToOpenAi } from '../services/ai/openai.service';
 import { buildModuleContext, ModuleName } from '../services/ai/modules/moduleContextContracts';
@@ -182,7 +182,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         // ── Step 7: Chamar IA ──
         logger.info(`[Declaration v5] Step 7: Calling Gemini (attempt 1)...`);
         const result = await callGeminiWithRetry(genAI.models, {
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 temperature: 0.3,
@@ -225,7 +225,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             logger.info(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
             attempts = 2;
 
-            const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry, 'gemini-2.5-flash', { tenantId: req.user.tenantId, operation: 'repair_declaration', metadata: { docType: 'declaration' } });
+            const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry, GEMINI_PROFILES.LIGHTWEIGHT, { tenantId: req.user.tenantId, operation: 'repair_declaration', metadata: { docType: 'declaration' } });
             const repair = await repairDeclaration(
                 finalText, finalTitle, issues, facts,
                 validateDeclaration, aiCallFn,

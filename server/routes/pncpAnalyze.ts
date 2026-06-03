@@ -2,7 +2,7 @@
 import { Sentry, sentryErrorHandler, captureError, setSentryUser } from '../lib/sentry';
 
 import { robustJsonParse, robustJsonParseDetailed } from "../services/ai/parser.service";
-import { callGeminiWithRetry } from "../services/ai/gemini.service";
+import { callGeminiWithRetry, GEMINI_PROFILES } from "../services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, MANUAL_EXTRACTION_ADDON } from "../services/ai/prompt.service";
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from "../services/ai/modules/prompts/engineeringPromptV1";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "../services/ai/analysis-schema-v1";
@@ -661,8 +661,8 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // V5.0: Only 2 AI stages remain (extraction + risk review)
         // Normalization is 100% server-side, re-extraction eliminated
         const PIPELINE_MODELS = {
-            extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal)
-            riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis
+            extraction: GEMINI_PROFILES.MULTIMODAL_OCR,         // Etapa 1: PDF parsing (multimodal)
+            riskReview: GEMINI_PROFILES.HIGH_INTELLIGENCE,          // Etapa 3: text-only risk analysis
         };
         logger.info(`[PNCP-V2] 🤖 V5.0 Modelos: E1=${PIPELINE_MODELS.extraction} | E3=${PIPELINE_MODELS.riskReview} (norm=server-side, re-extraction=eliminada)`);
 
@@ -1399,7 +1399,7 @@ Responda APENAS com JSON array:
 [{"itemNumber":"1","description":"...","unit":"UN","quantity":1,"referencePrice":0,"multiplier":1,"multiplierLabel":""}]`;
 
                     const itemResult = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.MULTIMODAL_OCR,
                         contents: [{
                             role: 'user',
                             parts: [

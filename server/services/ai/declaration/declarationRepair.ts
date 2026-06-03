@@ -210,7 +210,7 @@ export async function repairDeclaration(
 export function createGeminiRepairFn(
     models: any,
     callFn: (model: any, options: any, maxRetries?: number, trackingOptions?: any) => Promise<any>,
-    modelName = 'gemini-2.5-flash',
+    modelName = 'gemini-2.5-flash-lite',
     trackingOptions?: any
 ): AiCallFn {
     return async (prompt: string): Promise<string> => {

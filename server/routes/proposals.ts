@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import { robustJsonParse, robustJsonParseDetailed } from '../services/ai/parser.service';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from '../services/ai/analysis-schema-v1';
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from '../services/ai/openai.service';
 import { enforceSchema } from '../services/ai/schemaEnforcer';
@@ -636,7 +636,7 @@ Responda APENAS com um JSON array válido:
             try {
                 if (req.body.__jobId) {
                     const resultStream = await ai.models.generateContentStream({
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.LIGHTWEIGHT,
                         contents: prompt,
                         config: { temperature: 0.05, maxOutputTokens: 65536 },
                     });
@@ -661,7 +661,7 @@ Responda APENAS com um JSON array válido:
                     }
                 } else {
                     const result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.LIGHTWEIGHT,
                         contents: prompt,
                         config: { temperature: 0.05, maxOutputTokens: 65536, responseMimeType: 'application/json' },
                     }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
@@ -915,7 +915,7 @@ Responda APENAS com JSON array compacto:
         try {
             if (req.body.__jobId) {
                 const resultStream = await ai.models.generateContentStream({
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
                     contents: [{
                         role: 'user',
                         parts: [
@@ -949,7 +949,7 @@ Responda APENAS com JSON array compacto:
                 }
             } else {
                 const result = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
                     contents: [{
                         role: 'user',
                         parts: [
@@ -1108,7 +1108,7 @@ IMPORTANTE:
 - NÃO retorne texto, markdown ou explicações — APENAS o JSON`;
 
         const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: prompt,
             config: { 
                 temperature: 0.2, 
@@ -1304,7 +1304,7 @@ REGRAS:
 - Se não encontrar o objeto claramente, retorne o trecho mais relevante que descreva o escopo da contratação.`;
 
                     const result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.LIGHTWEIGHT,
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
                     }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'object' } });
@@ -1343,7 +1343,7 @@ REGRAS CRÍTICAS:
 - Formato obrigatório: "Local de execução: [endereço completo]. Prazo de execução: [prazo]. Vigência contratual: [vigência]."`;
 
                     const result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.LIGHTWEIGHT,
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 1024 },
                     }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'execution' } });
@@ -1383,7 +1383,7 @@ REGRAS CRÍTICAS:
 - Sem markdown, sem títulos, sem numeração.`;
 
                     const result = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.LIGHTWEIGHT,
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
                     }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'commercial_extras' } });
@@ -1512,7 +1512,7 @@ IMPORTANTE: Inclua uma entrada para CADA exigência (R0 a R${requirements.length
 Responda somente com o JSON array, sem markdown, sem texto adicional:`;
 
         const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
+            model: GEMINI_PROFILES.LIGHTWEIGHT,
             contents: prompt,
             config: {
                 temperature: 0.05,

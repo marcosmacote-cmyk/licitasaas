@@ -15,9 +15,9 @@ export async function extractItemsFromImage(
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
 
+    const { callGeminiWithRetry, GEMINI_PROFILES } = require('../gemini.service');
     const genAI = new GoogleGenAI({ apiKey });
-    const { callGeminiWithRetry } = require('../gemini.service');
-
+ 
     const userPrompt = `Extraia todos os itens da planilha orçamentária que estão visíveis na imagem fornecida. 
 Certifique-se de extrair as etapas, subetapas e composições com seus respectivos números de item (i), códigos (c), descrições (d), unidades (u), quantidades (q), custos unitários s/ BDI (uc), preços unitários c/ BDI (up) e preços totais (tp) de forma precisa. 
 Lembre-se de retornar APENAS o JSON válido no formato de chaves curtas especificado no prompt do sistema:
@@ -27,13 +27,13 @@ Lembre-se de retornar APENAS o JSON válido no formato de chaves curtas especifi
     ...
   ]
 }`;
-
+ 
     let text: string;
     try {
         const response = await callGeminiWithRetry(
             genAI.models,
             {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.MULTIMODAL_OCR,
                 contents: [
                     {
                         role: 'user',

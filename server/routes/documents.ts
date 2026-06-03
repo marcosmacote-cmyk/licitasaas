@@ -6,7 +6,7 @@ import { aiLimiter } from '../lib/security';
 import { storageService } from '../storage';
 import { GoogleGenAI } from '@google/genai';
 import { robustJsonParse } from '../services/ai/parser.service';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { fallbackToOpenAiV2 } from '../services/ai/openai.service';
 import { EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT } from '../services/ai/prompt.service';
 import { buildModuleContext } from '../services/ai/modules/moduleContextContracts';
@@ -245,7 +245,7 @@ router.post('/technical-certificates', authenticateToken, aiLimiter, upload.sing
         let result: any;
         try {
             result = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.LIGHTWEIGHT,
                 contents: [{
                     role: 'user',
                     parts: [...pdfParts, { text: userInstruction }]
@@ -385,7 +385,7 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
         let result: any;
         try {
             result = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.LIGHTWEIGHT,
                 contents: [{ role: 'user', parts: [{ text: userContent }] }],
                 config: {
                     systemInstruction: COMPARE_CERTIFICATE_SYSTEM_PROMPT,

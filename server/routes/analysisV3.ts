@@ -22,7 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { robustJsonParse, robustJsonParseDetailed } from '../services/ai/parser.service';
-import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { createEmptyAnalysisSchema } from '../services/ai/analysis-schema-v1';
 import { fallbackToOpenAiV2 } from '../services/ai/openai.service';
 import { enforceSchema } from '../services/ai/schemaEnforcer';
@@ -131,7 +131,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
 
                     // Send CLEAN TEXT (not PDF) to Gemini for structured extraction
                     const textExtractionResponse = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: GEMINI_PROFILES.MULTIMODAL_OCR,
                         contents: [{
                             role: 'user',
                             parts: [{ text: `${manualUserInstruction}\n\n── CONTEÚDO DO EDITAL (extraído via OCR) ──\n\n${zeroxResult.markdown}` }]
@@ -162,7 +162,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
             logger.info(`[AI-V3] 📎 Usando fallback V2 (PDF inline)...`);
             try {
                 const resp = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: GEMINI_PROFILES.MULTIMODAL_OCR,
                     contents: [{
                         role: 'user',
                         parts: [...pdfPartsLegacy, { text: manualUserInstruction }]
@@ -242,7 +242,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
                 return (async () => {
                     try {
                         const resp = await callGeminiWithRetry(ai.models, {
-                            model: 'gemini-2.5-flash',
+                            model: GEMINI_PROFILES.LIGHTWEIGHT,
                             contents: [{ role: 'user', parts: [{ text: buildCategoryNormUser(cat, items) }] }],
                             config: { systemInstruction: buildCategoryNormPrompt(cat), temperature: 0.1, maxOutputTokens: 16384, responseMimeType: 'application/json' }
                         }, 1, { tenantId: req.user.tenantId, operation: 'analysis_v3', metadata: { stage: `norm-${cat.key}` } });
@@ -281,7 +281,7 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
                 + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
             const riskResp = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
                 contents: [{ role: 'user', parts: [{ text: riskUser }] }],
                 config: { systemInstruction: V2_RISK_REVIEW_PROMPT, temperature: 0.2, maxOutputTokens: 16384, responseMimeType: 'application/json' }
             }, 4, { tenantId: req.user.tenantId, operation: 'analysis_v3', metadata: { stage: 'risk_review' } });

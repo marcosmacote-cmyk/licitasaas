@@ -27,6 +27,7 @@
  */
 
 import { logger } from '../../lib/logger';
+import { GEMINI_PROFILES } from './gemini.service';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -140,7 +141,7 @@ export interface ZeroxConfig {
     apiKey?: string;
     /** Number of pages to process in parallel (default: 5) */
     concurrency?: number;
-    /** Vision model to use (default: gemini-2.5-flash) */
+    /** Vision model to use (default: GEMINI_PROFILES.MULTIMODAL_OCR) */
     model?: string;
     /** Whether to maintain format consistency across pages (default: false — faster) */
     maintainFormat?: boolean;
@@ -253,7 +254,7 @@ export async function extractMarkdownFromPdf(
         const zeroxPromise = zeroxFn!({
             filePath: tempPath,
             modelProvider: 'GOOGLE',
-            model: config?.model || 'gemini-2.5-flash',
+            model: config?.model || GEMINI_PROFILES.MULTIMODAL_OCR,
             credentials: {
                 apiKey,
             },
@@ -307,7 +308,7 @@ export async function extractMarkdownFromPdf(
             pages,
             durationMs,
             fromCache: false,
-            model: config?.model || 'gemini-2.5-flash',
+            model: config?.model || GEMINI_PROFILES.MULTIMODAL_OCR,
         };
 
         // 6. Cache the result
