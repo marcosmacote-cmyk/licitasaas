@@ -206,7 +206,6 @@ router.post('/', authenticateToken, planGuard, async (req: any, res) => {
                 }
             });
         }
-        res.json(bidding);
     } catch (error) {
         logger.error("Create bidding error:", error);
         handleApiError(res, error, 'create-bidding');
@@ -388,7 +387,6 @@ router.put('/:id', authenticateToken, planGuard, async (req: any, res) => {
                 }
             });
         }
-        res.json(bidding);
     } catch (error) {
         logger.error("Update bidding error:", error);
         handleApiError(res, error, 'update-bidding');
