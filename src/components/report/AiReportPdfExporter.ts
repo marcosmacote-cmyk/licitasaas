@@ -158,7 +158,13 @@ function buildReportHtml(data: ReportPdfData): string {
             --danger: #ef4444;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
         body { font-family: 'Inter', -apple-system, sans-serif; color: var(--text); line-height: 1.6; font-size: 10pt; background: var(--bg); }
 
         .page { padding: 24px 32px; max-width: 210mm; margin: 0 auto; }
@@ -405,18 +411,6 @@ function buildReportHtml(data: ReportPdfData): string {
             body { font-size: 9pt; }
             .page { padding: 0; max-width: none; }
             @page { size: A4 portrait; margin: 12mm 10mm; }
-            
-            /* Ensure header is visible when background is removed by the printer */
-            .report-header {
-                background: none !important;
-                color: var(--text) !important;
-                padding: 10px 0 20px 0 !important;
-            }
-            .report-header::before { display: none !important; }
-            .report-header .brand { color: var(--text-muted) !important; }
-            .report-header .title { color: var(--text) !important; }
-            .report-header .subtitle { color: var(--text-secondary) !important; max-width: 100% !important; }
-            .report-header .confidence-badge .label { color: var(--text-muted) !important; }
         }
     </style>
 </head>
