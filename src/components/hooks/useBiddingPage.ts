@@ -179,8 +179,8 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 (item.title || '').replace(/"/g, '""'),
                 (item.summary || '').replace(/"/g, '""'),
                 companyName.replace(/"/g, '""'),
-                new Date(item.sessionDate).toLocaleDateString(),
-                item.estimatedValue || '0',
+                item.sessionDate ? new Date(item.sessionDate).toLocaleDateString('pt-BR') : '',
+                item.estimatedValue || 0,
                 item.modality || '',
                 item.portal || '',
                 item.risk || '',
@@ -192,7 +192,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
 
     const exportToCsv = () => {
         const { headers, rows } = getExportData();
-        const csvContent = [headers.join(','), ...rows.map(r => `"${r.join('","')}"`)] .join('\n');
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => `"${r.join('","')}"`)].join('\n');
         downloadFile(csvContent, 'licitacoes.csv', 'text/csv;charset=utf-8;');
     };
 
@@ -212,6 +212,9 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
             if (typeof r[1] === 'string' && r[1].length > 250) {
                 r[1] = r[1].substring(0, 247) + '...';
             }
+            // Format estimated value as BRL currency visually for PDF
+            const rawVal = parseFloat(r[4] as string);
+            r[4] = isNaN(rawVal) ? 'R$ 0,00' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rawVal);
             return r;
         });
         doc.setFontSize(18);
@@ -229,6 +232,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 0: { cellWidth: 40 }, 1: { cellWidth: 65, halign: 'justify' as any },
                 2: { cellWidth: 35 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 },
                 5: { cellWidth: 25 }, 6: { cellWidth: 25 },
+                7: { cellWidth: 18 }, 8: { cellWidth: 21 },
             }
         });
         doc.save(`relatorio_licitacoes_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
