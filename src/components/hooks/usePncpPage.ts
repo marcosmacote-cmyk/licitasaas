@@ -141,7 +141,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
 
     const loadSavedSearch = (s: PncpSavedSearch) => {
         const searchKeywords = s.keywords || '';
-        const searchStatus = s.status || 'recebendo_proposta';
+        const searchStatus = (s.status === 'aberta' || !s.status) ? 'recebendo_proposta' : s.status;
         let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '', valorMin: '', valorMax: '' };
         try {
             const parsedStates = JSON.parse(s.states || '{}');

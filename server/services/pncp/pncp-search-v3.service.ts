@@ -109,9 +109,10 @@ export class PncpSearchV3 {
 
         // ── Status/situação filter ──
         if (input.status && input.status !== 'todas') {
-            const mapped = STATUS_TO_SITUACAO[input.status];
+            const searchStatus = (input.status === 'aberta' || !input.status) ? 'recebendo_proposta' : input.status;
+            const mapped = STATUS_TO_SITUACAO[searchStatus];
             if (mapped) {
-                if (input.status === 'recebendo_proposta') {
+                if (searchStatus === 'recebendo_proposta') {
                     // Include NULL situacao (newly imported records)
                     conditions.push(`("situacao" = ANY($${paramIdx++}) OR "situacao" IS NULL)`);
                     params.push(mapped);

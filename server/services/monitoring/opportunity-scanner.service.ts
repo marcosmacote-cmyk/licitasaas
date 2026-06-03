@@ -281,9 +281,11 @@ async function executePncpSearch(search: {
         }
     }
 
+    const searchStatus = (search.status === 'aberta' || !search.status) ? 'recebendo_proposta' : search.status;
+
     const input = {
         keywords: search.keywords || '',
-        status: search.status || 'recebendo_proposta',
+        status: searchStatus,
         uf: ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords,
         dataInicio, dataFim, valorMin, valorMax,
         pagina: 1,
@@ -298,7 +300,7 @@ async function executePncpSearch(search: {
     if (result.items.length === 0) {
         logger.info(`[OpportunityScanner] ⚠️ Base local vazia para keywords="${search.keywords}", tentando API PNCP direta...`);
         try {
-            return await searchPncpApiDirect(search);
+            return await searchPncpApiDirect({ ...search, status: searchStatus });
         } catch (err: any) {
             logger.warn(`[OpportunityScanner] API fallback failed: ${err.message}`);
             return [];
@@ -324,7 +326,7 @@ async function executePncpSearch(search: {
     // ── Enriquecimento: buscar também na API PNCP para capturar editais publicados hoje ──
     // Isso garante que mesmo com o aggregator atrasado, editais do dia sejam encontrados.
     try {
-        const apiResults = await searchPncpApiDirect(search);
+        const apiResults = await searchPncpApiDirect({ ...search, status: searchStatus });
         if (apiResults.length > 0) {
             const existingIds = new Set(localResults.map(r => r.id));
             let addedFromApi = 0;
