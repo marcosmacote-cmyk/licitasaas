@@ -1628,23 +1628,25 @@ router.post('/analysis', authenticateToken, async (req: any, res) => {
         // Debug log to confirm what was actually saved
         logger.info(`[Analysis] SUCCESS for ${payload.biddingProcessId}. Saved sourceFiles: ${analysis.sourceFileNames?.substring(0, 100)}`);
 
-        // Fire & Forget Indexing -> Vector Database para RAG
+        // Fire & Forget Indexing -> Vector Database para RAG (Defer to next tick)
         if (payload.biddingProcessId && payload.sourceFileNames) {
-            try {
-                const parsedFileNames = JSON.parse(payload.sourceFileNames);
-                if (Array.isArray(parsedFileNames) && parsedFileNames.length > 0) {
-                    logger.info(`[Background RAG] Disparando indexação assíncrona para ${payload.biddingProcessId}...`);
-                    fetchPdfPartsForProcess(payload.biddingProcessId, parsedFileNames, req.user.tenantId)
-                        .then(pdfParts => {
-                            if (pdfParts && pdfParts.length > 0) {
-                                return indexDocumentChunks(payload.biddingProcessId, pdfParts);
-                            }
-                        })
-                        .catch(err => logger.error(`[Background RAG] Erro interno: ${err.message}`));
+            setImmediate(() => {
+                try {
+                    const parsedFileNames = JSON.parse(payload.sourceFileNames);
+                    if (Array.isArray(parsedFileNames) && parsedFileNames.length > 0) {
+                        logger.info(`[Background RAG] Disparando indexação assíncrona para ${payload.biddingProcessId}...`);
+                        fetchPdfPartsForProcess(payload.biddingProcessId, parsedFileNames, req.user.tenantId)
+                            .then(pdfParts => {
+                                if (pdfParts && pdfParts.length > 0) {
+                                    return indexDocumentChunks(payload.biddingProcessId, pdfParts);
+                                }
+                            })
+                            .catch(err => logger.error(`[Background RAG] Erro interno: ${err.message}`));
+                    }
+                } catch (e) {
+                    logger.warn(`[Background RAG] Não foi possível mapear sourceFileNames para o processo ${payload.biddingProcessId}`);
                 }
-            } catch (e) {
-                logger.warn(`[Background RAG] Não foi possível mapear sourceFileNames para o processo ${payload.biddingProcessId}`);
-            }
+            });
         }
 
         res.json(analysis);

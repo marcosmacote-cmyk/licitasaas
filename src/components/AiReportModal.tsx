@@ -89,6 +89,9 @@ export function AiReportModal({ analysis: initialAnalysis, process, onClose, onU
             deadlineList: report.deadlineList,
             penaltiesStructured: report.penaltiesStructured,
             penaltiesText: report.penaltiesText,
+            technicalOpinion: report.technicalOpinion || '',
+            biddingItems: report.itensLicitados || [],
+            biddingItemsText: report.biddingItemsText || '',
             pipelineDurationS: analysis?.pipelineDurationS ?? null,
             traceability: report.pipelineMeta?.traceabilityPercentage !== null
                 ? `${report.pipelineMeta?.tracedRequirements}/${report.pipelineMeta?.totalRequirements} (${report.pipelineMeta?.traceabilityPercentage}%)`

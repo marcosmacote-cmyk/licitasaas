@@ -66,6 +66,19 @@ export interface ReportPdfData {
     } | null;
     penaltiesText: string;
 
+    // Optional/New Sections
+    technicalOpinion?: string;
+    biddingItems?: Array<{
+        itemNumber: string;
+        description: string;
+        unit: string;
+        quantity: number;
+        multiplier: number;
+        multiplierLabel?: string;
+        referencePrice: number;
+    }>;
+    biddingItemsText?: string;
+
     // Pipeline metrics
     pipelineDurationS: number | null;
     traceability: string;
@@ -220,7 +233,7 @@ function buildReportHtml(data: ReportPdfData): string {
         }
 
         /* Section */
-        .section { margin-bottom: 18px; page-break-inside: avoid; }
+        .section { margin-bottom: 18px; }
         .section-title {
             font-size: 10pt;
             font-weight: 800;
@@ -233,6 +246,7 @@ function buildReportHtml(data: ReportPdfData): string {
             display: flex;
             align-items: center;
             gap: 6px;
+            page-break-after: avoid;
         }
 
         /* Metadata grid */
@@ -317,6 +331,9 @@ function buildReportHtml(data: ReportPdfData): string {
             border-collapse: collapse;
             font-size: 8pt;
             margin-bottom: 8px;
+        }
+        .req-table tr {
+            page-break-inside: avoid;
         }
         .req-table th {
             text-align: left;
@@ -469,6 +486,17 @@ function buildReportHtml(data: ReportPdfData): string {
             }).join('')}
         </div>
         ` : ''}
+
+        <!-- TECHNICAL OPINION -->
+        ${data.technicalOpinion ? `
+        <div class="section">
+            <div class="section-title">🔍 Parecer Técnico-Jurídico</div>
+            <div class="summary-text" style="border-left-color: var(--warning);">${formatMarkdownSimple(data.technicalOpinion)}</div>
+        </div>
+        ` : ''}
+
+        <!-- ITEMS -->
+        ${buildItemsSection(data.biddingItems, data.biddingItemsText)}
 
         <!-- REQUIREMENTS -->
         ${buildRequirementsSection(data.categorizedDocs)}
@@ -637,6 +665,84 @@ function buildPenaltiesSection(structured: ReportPdfData['penaltiesStructured'],
         }
     } else if (text) {
         html += `<div style="font-size:8.5pt;color:#991b1b;white-space:pre-wrap;line-height:1.5;">${esc(text)}</div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function formatMarkdownSimple(text: string | null | undefined): string {
+    if (!text) return '';
+    let formatted = esc(text);
+    // Negrito **texto** -> <strong>texto</strong>
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Bullet points no início da linha
+    formatted = formatted.replace(/^\s*[-*]\s+(.*)$/gm, '• $1');
+    // Quebras de linha -> <br>
+    formatted = formatted.replace(/\n/g, '<br>');
+    return formatted;
+}
+
+function buildItemsSection(itens: any[] | undefined, text: string | undefined): string {
+    const hasStructured = Array.isArray(itens) && itens.length > 0;
+    const hasText = text && text.trim().length > 0;
+    if (!hasStructured && !hasText) return '';
+
+    let html = '<div class="section"><div class="section-title">📦 Itens Licitados / Escopo</div>';
+
+    if (hasStructured) {
+        const totalRef = itens.reduce((sum: number, it: any) => {
+            const qty = (it.quantity || 1) * (it.multiplier || 1);
+            return sum + qty * (it.referencePrice || 0);
+        }, 0);
+
+        html += `<table class="req-table">
+            <thead>
+                <tr>
+                    <th style="width:40px;text-align:center;">Item</th>
+                    <th>Descrição</th>
+                    <th style="width:50px;text-align:center;">Unid</th>
+                    <th style="width:65px;text-align:center;">Qtd</th>
+                    <th style="width:50px;text-align:center;">Mult.</th>
+                    <th style="width:95px;text-align:right;">Ref. Unit.</th>
+                    <th style="width:105px;text-align:right;">Ref. Total</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        itens.forEach((it: any, i: number) => {
+            const qty = (it.quantity || 1) * (it.multiplier || 1);
+            const total = qty * (it.referencePrice || 0);
+            const unitPriceStr = it.referencePrice ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.referencePrice) : '-';
+            const totalPriceStr = total > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total) : '-';
+
+            html += `<tr>
+                <td style="text-align:center;font-weight:700;color:var(--primary);">${esc(it.itemNumber || String(i + 1))}</td>
+                <td><strong>${esc(it.description || '')}</strong></td>
+                <td style="text-align:center;">${esc(it.unit || 'UN')}</td>
+                <td style="text-align:center;">${(it.quantity || 1).toLocaleString('pt-BR')}</td>
+                <td style="text-align:center;color:${it.multiplier > 1 ? 'var(--primary)' : 'inherit'}">${it.multiplier > 1 ? esc(`${it.multiplier} ${it.multiplierLabel || ''}`.trim()) : '1'}</td>
+                <td style="text-align:right;white-space:nowrap;">${unitPriceStr}</td>
+                <td style="text-align:right;font-weight:700;white-space:nowrap;">${totalPriceStr}</td>
+            </tr>`;
+        });
+
+        html += `</tbody>`;
+        if (totalRef > 0) {
+            html += `<tfoot>
+                <tr style="background:var(--surface);font-weight:800;">
+                    <td colSpan="6" style="padding:6px;text-align:right;border-top:2px solid var(--border);">TOTAL ESTIMADO</td>
+                    <td style="padding:6px;text-align:right;border-top:2px solid var(--border);color:#166534;white-space:nowrap;">
+                        ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRef)}
+                    </td>
+                </tr>
+            </tfoot>`;
+        }
+        html += `</table>`;
+    } else if (hasText) {
+        html += `<div class="info-block" style="background:var(--surface);border-color:var(--border);">
+            <div style="white-space:pre-wrap;font-size:8.5pt;line-height:1.5;">${esc(text)}</div>
+        </div>`;
     }
 
     html += '</div>';

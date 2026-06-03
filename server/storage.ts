@@ -76,7 +76,7 @@ class LocalStorageService implements StorageService {
         const uniqueName = `${prefix}${uuidv4()}${path.extname(file.originalname)}`;
         const filePath = path.join(this.uploadDir, uniqueName);
 
-        fs.writeFileSync(filePath, file.buffer);
+        await fs.promises.writeFile(filePath, file.buffer);
 
         return {
             url: `/uploads/${uniqueName}`,
@@ -87,18 +87,21 @@ class LocalStorageService implements StorageService {
     async deleteFile(fileUrl: string): Promise<void> {
         const fileName = extractFileName(fileUrl);
         const filePath = path.join(this.uploadDir, fileName);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        try {
+            await fs.promises.unlink(filePath);
+        } catch (err) {
+            // Ignore if file doesn't exist
         }
     }
 
     async getFileBuffer(fileUrlOrName: string): Promise<Buffer> {
         const fileName = extractFileName(fileUrlOrName);
         const filePath = path.join(this.uploadDir, fileName);
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`File not found: ${filePath}`);
+        try {
+            return await fs.promises.readFile(filePath);
+        } catch (err: any) {
+            throw new Error(`File not found: ${filePath}. Inner: ${err.message}`);
         }
-        return fs.readFileSync(filePath);
     }
 }
 

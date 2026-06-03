@@ -154,8 +154,10 @@ async function getFileBufferSafe(fileNameOrUrl: string, tenantId?: string): Prom
         // 1. Local disk fallback (legacy or local mode)
         const pureName = path.basename(fileNameOrUrl).split('?')[0];
         const localPath = path.join(uploadDir, pureName);
-        if (fs.existsSync(localPath)) {
-            return fs.readFileSync(localPath);
+        try {
+            return await fs.promises.readFile(localPath);
+        } catch {
+            // Ignore and proceed to DB fallback
         }
 
         // 2. Database fallback (recovering from blob if exists)
