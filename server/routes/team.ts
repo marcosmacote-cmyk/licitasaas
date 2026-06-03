@@ -2,6 +2,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
 import { authenticateToken, requireAdmin } from '../middlewares/auth';
+import { planGuard } from '../middlewares/planGuard';
+import { checkTenantLimits } from '../lib/planLimits';
 
 const router = express.Router();
 
@@ -30,10 +32,16 @@ router.get('/', authenticateToken, requireAdmin, async (req: any, res) => {
 });
 
 // 2. Create a new user (Admin only)
-router.post('/', authenticateToken, requireAdmin, async (req: any, res) => {
+router.post('/', authenticateToken, requireAdmin, planGuard, async (req: any, res) => {
     try {
         const { name, email, password, role, isActive, opportunityScannerEnabled } = req.body;
         
+        // Verifica limite do plano
+        const limitCheck = await checkTenantLimits(req.user.tenantId, 'users');
+        if (!limitCheck.allowed) {
+            return res.status(403).json({ error: limitCheck.message });
+        }
+
         // Verifica se o e-mail já existe
         const existing = await prisma.user.findUnique({ where: { email } });
         if (existing) {
@@ -66,7 +74,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: any, res) => {
 });
 
 // 3. Update user (Admin only)
-router.put('/:id', authenticateToken, requireAdmin, async (req: any, res) => {
+router.put('/:id', authenticateToken, requireAdmin, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const { name, role, isActive, opportunityScannerEnabled } = req.body;
@@ -75,6 +83,11 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: any, res) => {
         const user = await prisma.user.findFirst({ where: { id, tenantId: req.user.tenantId } });
         if (!user) {
             return res.status(404).json({ error: 'Usuário não encontrado nesta organização.' });
+        }
+
+        // Prevenir que admin comum altere dados de um SUPER_ADMIN
+        if (user.role === 'SUPER_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso negado. Apenas super administradores podem editar outro super administrador.' });
         }
 
         // Prevent admin from deactivating themselves
@@ -106,7 +119,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: any, res) => {
 });
 
 // 4. Force reset password (Admin only)
-router.put('/:id/reset', authenticateToken, requireAdmin, async (req: any, res) => {
+router.put('/:id/reset', authenticateToken, requireAdmin, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const { newPassword } = req.body;
@@ -114,6 +127,11 @@ router.put('/:id/reset', authenticateToken, requireAdmin, async (req: any, res) 
         const user = await prisma.user.findFirst({ where: { id, tenantId: req.user.tenantId } });
         if (!user) {
             return res.status(404).json({ error: 'Usuário não encontrado.' });
+        }
+
+        // Prevenir que admin comum resete a senha de um SUPER_ADMIN
+        if (user.role === 'SUPER_ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Acesso negado. Apenas super administradores podem redefinir a senha de outro super administrador.' });
         }
 
         const passwordHash = await bcrypt.hash(newPassword, 10);

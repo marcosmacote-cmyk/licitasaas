@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { authenticateToken, requireAdmin, requireSuperAdmin } from '../middlewares/auth';
 import { handleApiError } from '../middlewares/errorHandler';
 import { getPipelineHealth } from '../services/ai/telemetry/analysisTelemetry';
+import { PLAN_LIMITS } from '../lib/planLimits';
 
 const router = express.Router();
 
@@ -25,6 +26,9 @@ router.get('/tenants', authenticateToken, requireSuperAdmin, async (req: any, re
             id: t.id,
             razaoSocial: t.razaoSocial,
             rootCnpj: t.rootCnpj,
+            plan: t.plan,
+            planStatus: t.planStatus,
+            planExpiresAt: t.planExpiresAt,
             createdAt: t.createdAt,
             stats: {
                 users: t._count.users,
@@ -52,6 +56,85 @@ router.post('/tenants', authenticateToken, requireSuperAdmin, async (req: any, r
     }
 });
 
+// Update tenant details (super-admin only)
+router.put('/tenants/:id', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { razaoSocial, rootCnpj, plan, planStatus, planExpiresAt } = req.body;
+
+        if (!razaoSocial || !rootCnpj) {
+            return res.status(400).json({ error: 'Razão Social e CNPJ raiz são obrigatórios.' });
+        }
+
+        // Check rootCnpj duplicate for other tenants
+        const existing = await prisma.tenant.findFirst({
+            where: { rootCnpj, NOT: { id } }
+        });
+        if (existing) {
+            return res.status(409).json({ error: `Já existe outra organização com o CNPJ ${rootCnpj}` });
+        }
+
+        // Get current tenant to check if plan is changing
+        const currentTenant = await prisma.tenant.findUnique({
+            where: { id },
+            select: { plan: true }
+        });
+
+        if (!currentTenant) {
+            return res.status(404).json({ error: 'Organização não encontrada.' });
+        }
+
+        const planChanged = plan && plan.toUpperCase() !== currentTenant.plan.toUpperCase();
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const t = await tx.tenant.update({
+                where: { id },
+                data: {
+                    razaoSocial,
+                    rootCnpj,
+                    plan: plan || 'BASIC',
+                    planStatus: planStatus || 'ACTIVE',
+                    planExpiresAt: planExpiresAt ? new Date(planExpiresAt) : null,
+                }
+            });
+
+            // If the plan changed, update default AI limits in GlobalConfig
+            if (planChanged) {
+                const limits = PLAN_LIMITS[plan.toUpperCase()] || PLAN_LIMITS.BASIC;
+                
+                const gc = await tx.globalConfig.findUnique({ where: { tenantId: id } });
+                let conf: any = {};
+                if (gc) {
+                    try { conf = JSON.parse(gc.config || '{}'); } catch {}
+                }
+                
+                conf.aiQuota = {
+                    hardLimit: limits.defaultAiQuotaHard,
+                    softLimit: limits.defaultAiQuotaSoft
+                };
+
+                await tx.globalConfig.upsert({
+                    where: { tenantId: id },
+                    create: { tenantId: id, config: JSON.stringify(conf) },
+                    update: { config: JSON.stringify(conf) }
+                });
+
+                // Invalidate quota cache
+                const { invalidateTenantQuotaCache } = await import('../lib/aiUsageTracker');
+                invalidateTenantQuotaCache(id);
+            }
+
+            return t;
+        });
+
+        logger.info(`[Admin] Organização atualizada: "${updated.razaoSocial}" (Plano: ${updated.plan}, Status: ${updated.planStatus})`);
+        res.json(updated);
+    } catch (error: any) {
+        logger.error('[Admin] Erro ao atualizar tenant:', error?.message);
+        res.status(500).json({ error: 'Erro ao atualizar dados da organização.' });
+    }
+});
+
 // Audit Log List (Admin-only)
 router.get('/audit-logs', authenticateToken, requireAdmin, async (req: any, res) => {
     try {
@@ -70,7 +153,7 @@ router.get('/audit-logs', authenticateToken, requireAdmin, async (req: any, res)
 // Onboard new client — creates Tenant + Admin User in one step
 router.post('/onboard', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
-        const { razaoSocial, rootCnpj, adminName, adminEmail, adminPassword } = req.body;
+        const { razaoSocial, rootCnpj, adminName, adminEmail, adminPassword, plan } = req.body;
 
         // ── Validações ──
         if (!razaoSocial || !rootCnpj || !adminName || !adminEmail || !adminPassword) {
@@ -95,7 +178,20 @@ router.post('/onboard', authenticateToken, requireSuperAdmin, async (req: any, r
         // ── Criar Tenant + Admin em transação ──
         const result = await prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
-                data: { razaoSocial, rootCnpj }
+                data: { razaoSocial, rootCnpj, plan: plan || 'BASIC', planStatus: 'ACTIVE' }
+            });
+
+            const limits = PLAN_LIMITS[(plan || 'BASIC').toUpperCase()] || PLAN_LIMITS.BASIC;
+            await tx.globalConfig.create({
+                data: {
+                    tenantId: tenant.id,
+                    config: JSON.stringify({
+                        aiQuota: {
+                            hardLimit: limits.defaultAiQuotaHard,
+                            softLimit: limits.defaultAiQuotaSoft
+                        }
+                    })
+                }
             });
 
             const passwordHash = await bcrypt.hash(adminPassword, 10);
@@ -113,7 +209,7 @@ router.post('/onboard', authenticateToken, requireSuperAdmin, async (req: any, r
             return { tenant, admin };
         });
 
-        logger.info(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail}`);
+        logger.info(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail} (Plano: ${plan || 'BASIC'})`);
 
         res.status(201).json({
             message: `Cliente "${razaoSocial}" provisionado com sucesso!`,

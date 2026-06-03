@@ -12,6 +12,9 @@ model Tenant {
   id                     String                  @id @default(uuid())
   rootCnpj               String                  @unique
   razaoSocial            String
+  plan                   String                  @default("BASIC")
+  planStatus             String                  @default("ACTIVE")
+  planExpiresAt          DateTime?
   createdAt              DateTime                @default(now())
   biddingProcesses       BiddingProcess[]
   companies              CompanyProfile[]

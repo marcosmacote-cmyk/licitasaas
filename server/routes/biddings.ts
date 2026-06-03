@@ -15,6 +15,8 @@ import {
     normalizeModality,
     hasMonitorableDomain,
 } from '../lib/biddingHelpers';
+import { planGuard } from '../middlewares/planGuard';
+import { checkTenantLimits } from '../lib/planLimits';
 
 const router = express.Router();
 
@@ -70,10 +72,17 @@ router.get('/:id', authenticateToken, async (req: any, res) => {
 });
 
 // ── POST /biddings — Create new bidding ──
-router.post('/', authenticateToken, async (req: any, res) => {
+router.post('/', authenticateToken, planGuard, async (req: any, res) => {
     try {
         let { companyProfileId, ...rawData } = req.body;
         const tenantId = req.user.tenantId;
+
+        // Verify plan limits
+        const limitCheck = await checkTenantLimits(tenantId, 'biddings');
+        if (!limitCheck.allowed) {
+            return res.status(403).json({ error: limitCheck.message });
+        }
+
         let biddingData = sanitizeBiddingData(rawData);
 
         if (companyProfileId === '') {
@@ -205,7 +214,7 @@ router.post('/', authenticateToken, async (req: any, res) => {
 });
 
 // ── PUT /biddings/:id/oracle-evidence — Persist oracle evidence ──
-router.put('/:id/oracle-evidence', authenticateToken, async (req: any, res) => {
+router.put('/:id/oracle-evidence', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const { oracleEvidence } = req.body;
@@ -242,7 +251,7 @@ router.put('/:id/oracle-evidence', authenticateToken, async (req: any, res) => {
 });
 
 // ── PUT /biddings/:id — Update bidding ──
-router.put('/:id', authenticateToken, async (req: any, res) => {
+router.put('/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenantId;
@@ -387,7 +396,7 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
 });
 
 // ── DELETE /biddings/:id — Delete bidding ──
-router.delete('/:id', authenticateToken, async (req: any, res) => {
+router.delete('/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const bidding = await prisma.biddingProcess.findUnique({ where: { id } });

@@ -2,13 +2,15 @@ import express from 'express';
 import prisma from '../lib/prisma';
 import { authenticateToken } from '../middlewares/auth';
 import { encryptCredential, decryptCredential, isEncrypted, isEncryptionConfigured } from '../lib/crypto';
+import { planGuard } from '../middlewares/planGuard';
+import { checkTenantLimits } from '../lib/planLimits';
 
 const router = express.Router();
 
 // ── Companies CRUD ──
 
 // PUT Company Proposal Template — save default header/footer
-router.put('/companies/:id/proposal-template', authenticateToken, async (req: any, res) => {
+router.put('/companies/:id/proposal-template', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const {
@@ -157,7 +159,7 @@ router.get('/companies', authenticateToken, async (req: any, res) => {
 });
 
 // Update company
-router.put('/companies/:id', authenticateToken, async (req: any, res) => {
+router.put('/companies/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenantId;
@@ -245,9 +247,15 @@ router.put('/companies/:id', authenticateToken, async (req: any, res) => {
 });
 
 // Create company
-router.post('/companies', authenticateToken, async (req: any, res) => {
+router.post('/companies', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const tenantId = req.user.tenantId;
+
+        // Verify plan limits
+        const limitCheck = await checkTenantLimits(tenantId, 'companies');
+        if (!limitCheck.allowed) {
+            return res.status(403).json({ error: limitCheck.message });
+        }
 
         const company = await prisma.companyProfile.create({
             data: { ...req.body, tenantId }
@@ -261,7 +269,7 @@ router.post('/companies', authenticateToken, async (req: any, res) => {
 });
 
 // Delete company
-router.delete('/companies/:id', authenticateToken, async (req: any, res) => {
+router.delete('/companies/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const company = await prisma.companyProfile.findUnique({ where: { id } });
@@ -281,7 +289,7 @@ router.delete('/companies/:id', authenticateToken, async (req: any, res) => {
 
 // ── Credentials CRUD ──
 
-router.post('/credentials', authenticateToken, async (req: any, res) => {
+router.post('/credentials', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { companyProfileId, login, password, ...rest } = req.body;
         const company = await prisma.companyProfile.findUnique({
@@ -306,7 +314,7 @@ router.post('/credentials', authenticateToken, async (req: any, res) => {
     }
 });
 
-router.put('/credentials/:id', authenticateToken, async (req: any, res) => {
+router.put('/credentials/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const credential = await prisma.companyCredential.findUnique({
@@ -342,7 +350,7 @@ router.put('/credentials/:id', authenticateToken, async (req: any, res) => {
     }
 });
 
-router.delete('/credentials/:id', authenticateToken, async (req: any, res) => {
+router.delete('/credentials/:id', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { id } = req.params;
         const credential = await prisma.companyCredential.findUnique({
@@ -378,7 +386,7 @@ router.get('/config/alerts', authenticateToken, async (req: any, res) => {
     }
 });
 
-router.post('/config/alerts', authenticateToken, async (req: any, res) => {
+router.post('/config/alerts', authenticateToken, planGuard, async (req: any, res) => {
     try {
         const { defaultAlertDays, groupAlertDays, applyToExisting } = req.body;
         const configStr = JSON.stringify({ defaultAlertDays, groupAlertDays });

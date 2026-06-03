@@ -463,7 +463,6 @@ app.use('/api', governanceRoutes);   // ai governance + company + strategy
 // These endpoints are called by Dashboard, BiddingPage, and SSE hooks on mount.
 // Without stubs, they return 404 and keep TCP connections in pending/closing state,
 // saturating the browser's per-domain connection limit (6 for HTTP/1.1).
-app.get('/api/documents', authenticateToken, (_req: any, res: any) => { res.json([]); });
 app.get('/api/jobs', authenticateToken, (_req: any, res: any) => { res.json([]); });
 app.get('/api/admin/monitoring-audit', authenticateToken, (_req: any, res: any) => { res.json({ recentAnalyses: [], errorRate: 0, avgLatency: 0 }); });
 // ═══════════════════════════════════════════════════════════════

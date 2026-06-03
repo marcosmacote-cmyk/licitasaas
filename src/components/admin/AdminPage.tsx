@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Users, Briefcase, Loader2, CheckCircle2, Copy, ExternalLink, X, ShieldAlert, Shield, AlertCircle } from 'lucide-react';
+import { Building2, Plus, Users, Briefcase, Loader2, CheckCircle2, Copy, ExternalLink, X, ShieldAlert, Shield, AlertCircle, Edit3, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 import { AiQuotaManager } from './AiQuotaManager';
@@ -9,6 +9,9 @@ interface TenantInfo {
     id: string;
     razaoSocial: string;
     rootCnpj: string;
+    plan?: string;
+    planStatus?: string;
+    planExpiresAt?: string | null;
     createdAt: string;
     stats: {
         users: number;
@@ -34,12 +37,22 @@ export function AdminPage() {
     const [submitting, setSubmitting] = useState(false);
     const [onboardResult, setOnboardResult] = useState<OnboardResult | null>(null);
 
-    // Form states
+    // Form states (Onboarding)
     const [razaoSocial, setRazaoSocial] = useState('');
     const [rootCnpj, setRootCnpj] = useState('');
     const [adminName, setAdminName] = useState('');
     const [adminEmail, setAdminEmail] = useState('');
     const [adminPassword, setAdminPassword] = useState('');
+    const [plan, setPlan] = useState('BASIC');
+
+    // Edit tenant states
+    const [editingTenant, setEditingTenant] = useState<TenantInfo | null>(null);
+    const [editRazaoSocial, setEditRazaoSocial] = useState('');
+    const [editRootCnpj, setEditRootCnpj] = useState('');
+    const [editPlan, setEditPlan] = useState('BASIC');
+    const [editPlanStatus, setEditPlanStatus] = useState('ACTIVE');
+    const [editPlanExpiresAt, setEditPlanExpiresAt] = useState('');
+    const [editSubmitting, setEditSubmitting] = useState(false);
 
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -78,9 +91,13 @@ export function AdminPage() {
     };
 
     const handleCnpjInput = (value: string) => {
-        // Keep only digits
         const clean = value.replace(/\D/g, '').slice(0, 14);
         setRootCnpj(clean);
+    };
+
+    const handleEditCnpjInput = (value: string) => {
+        const clean = value.replace(/\D/g, '').slice(0, 14);
+        setEditRootCnpj(clean);
     };
 
     const generatePassword = () => {
@@ -96,7 +113,17 @@ export function AdminPage() {
         setAdminName('');
         setAdminEmail('');
         setAdminPassword('');
+        setPlan('BASIC');
         setIsModalOpen(true);
+    };
+
+    const openEditModal = (t: TenantInfo) => {
+        setEditingTenant(t);
+        setEditRazaoSocial(t.razaoSocial);
+        setEditRootCnpj(t.rootCnpj);
+        setEditPlan(t.plan || 'BASIC');
+        setEditPlanStatus(t.planStatus || 'ACTIVE');
+        setEditPlanExpiresAt(t.planExpiresAt ? t.planExpiresAt.split('T')[0] : '');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -108,7 +135,7 @@ export function AdminPage() {
             const res = await fetch(`${API_BASE_URL}/api/admin/onboard`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ razaoSocial, rootCnpj, adminName, adminEmail, adminPassword })
+                body: JSON.stringify({ razaoSocial, rootCnpj, adminName, adminEmail, adminPassword, plan })
             });
 
             const data = await res.json();
@@ -126,6 +153,41 @@ export function AdminPage() {
             toast.error('Falha de conexão ao servidor.');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleEditSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingTenant) return;
+        setEditSubmitting(true);
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/admin/tenants/${editingTenant.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    razaoSocial: editRazaoSocial,
+                    rootCnpj: editRootCnpj,
+                    plan: editPlan,
+                    planStatus: editPlanStatus,
+                    planExpiresAt: editPlanExpiresAt || null
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                toast.success('Organização atualizada com sucesso!');
+                setEditingTenant(null);
+                fetchTenants();
+            } else {
+                toast.error(data.error || 'Erro ao atualizar organização.');
+            }
+        } catch {
+            toast.error('Falha de conexão ao servidor.');
+        } finally {
+            setEditSubmitting(false);
         }
     };
 
@@ -202,10 +264,13 @@ export function AdminPage() {
                                     <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Organização</th>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600 }}>CNPJ</th>
+                                        <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Plano</th>
+                                        <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Status</th>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Usuários</th>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Empresas</th>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Licitações</th>
                                         <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Criado em</th>
+                                        <th style={{ padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-secondary)', fontWeight: 600, textAlign: 'center' }}>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -234,6 +299,30 @@ export function AdminPage() {
                                             </td>
                                             <td style={{ padding: 'var(--space-4) var(--space-6)', fontFamily: 'monospace', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
                                                 {formatCnpj(tenant.rootCnpj)}
+                                            </td>
+                                            <td style={{ padding: 'var(--space-4) var(--space-6)', textAlign: 'center' }}>
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center',
+                                                    padding: '2px 10px', borderRadius: 12,
+                                                    background: tenant.plan === 'ENTERPRISE' ? 'rgba(245, 158, 11, 0.08)' : tenant.plan === 'PRO' ? 'rgba(139, 92, 246, 0.08)' : 'var(--color-bg-base)',
+                                                    color: tenant.plan === 'ENTERPRISE' ? '#d97706' : tenant.plan === 'PRO' ? '#7c3aed' : 'var(--color-text-secondary)',
+                                                    border: tenant.plan === 'ENTERPRISE' ? '1px solid rgba(245, 158, 11, 0.2)' : tenant.plan === 'PRO' ? '1px solid rgba(139, 92, 246, 0.2)' : '1px solid var(--color-border)',
+                                                    fontSize: 'var(--text-xs)', fontWeight: 700
+                                                 }}>
+                                                     {tenant.plan || 'BASIC'}
+                                                 </span>
+                                            </td>
+                                            <td style={{ padding: 'var(--space-4) var(--space-6)', textAlign: 'center' }}>
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center',
+                                                    padding: '2px 10px', borderRadius: 12,
+                                                    background: tenant.planStatus === 'SUSPENDED' ? 'rgba(220, 38, 38, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                                                     color: tenant.planStatus === 'SUSPENDED' ? '#dc2626' : '#059669',
+                                                     border: tenant.planStatus === 'SUSPENDED' ? '1px solid rgba(220, 38, 38, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)',
+                                                     fontSize: 'var(--text-xs)', fontWeight: 700
+                                                 }}>
+                                                     {tenant.planStatus === 'SUSPENDED' ? 'Suspenso' : 'Ativo'}
+                                                 </span>
                                             </td>
                                             <td style={{ padding: 'var(--space-4) var(--space-6)', textAlign: 'center' }}>
                                                 <span style={{
@@ -271,10 +360,19 @@ export function AdminPage() {
                                             <td style={{ padding: 'var(--space-4) var(--space-6)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
                                                 {new Date(tenant.createdAt).toLocaleDateString('pt-BR')}
                                             </td>
+                                            <td style={{ padding: 'var(--space-4) var(--space-6)', textAlign: 'center' }}>
+                                                <button
+                                                    className="btn btn-outline"
+                                                    style={{ padding: '4px 8px', fontSize: 'var(--text-xs)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                    onClick={() => openEditModal(tenant)}
+                                                >
+                                                    <Edit3 size={12} /> Editar
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                     {tenants.length === 0 && (
-                                        <tr><td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                        <tr><td colSpan={9} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                             Nenhuma organização encontrada.
                                         </td></tr>
                                     )}
@@ -335,6 +433,19 @@ export function AdminPage() {
                                         onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
                                         onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
                                     />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Plano *</label>
+                                    <select value={plan} onChange={e => setPlan(e.target.value)}
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    >
+                                        <option value="BASIC">BASIC (2 Usuários, 1 Empresa, 3 Licitações)</option>
+                                        <option value="PRO">PRO (10 Usuários, 5 Empresas, 20 Licitações)</option>
+                                        <option value="ENTERPRISE">ENTERPRISE (Ilimitado)</option>
+                                    </select>
                                 </div>
 
                                 {/* Seção: Administrador */}
@@ -464,6 +575,101 @@ export function AdminPage() {
                         <div style={{ padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--color-bg-surface-hover)' }}>
                             <button className="btn btn-primary" onClick={() => setIsResultOpen(false)}>Concluído</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Editar Organização */}
+            {editingTenant && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease-out' }}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)',
+                        width: '100%', maxWidth: 500, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden', display: 'flex', flexDirection: 'column'
+                    }} className="animate-slide-up">
+                        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-base)' }}>
+                            <div>
+                                <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>Editar Organização</h3>
+                                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: 2 }}>Atualize as informações cadastrais e planos da empresa</p>
+                            </div>
+                            <button onClick={() => setEditingTenant(null)} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={18} /></button>
+                        </div>
+                        <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                                
+                                {/* Seção: Cadastro */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
+                                    <Building2 size={14} color="var(--color-primary)" />
+                                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary)', letterSpacing: '0.05em' }}>Dados Cadastrais</span>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Razão Social *</label>
+                                    <input required type="text" value={editRazaoSocial} onChange={e => setEditRazaoSocial(e.target.value)} placeholder="Ex: Construtora XYZ LTDA"
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>CNPJ *</label>
+                                    <input required type="text" value={formatCnpj(editRootCnpj)} onChange={e => handleEditCnpjInput(e.target.value)} placeholder="00.000.000/0000-00"
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s', fontFamily: 'monospace' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    />
+                                </div>
+
+                                {/* Seção: Plano & Assinatura */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)', marginTop: 'var(--space-2)' }}>
+                                    <Calendar size={14} color="#8b5cf6" />
+                                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', color: '#8b5cf6', letterSpacing: '0.05em' }}>Plano e Assinatura</span>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Plano *</label>
+                                    <select value={editPlan} onChange={e => setEditPlan(e.target.value)}
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    >
+                                        <option value="BASIC">BASIC (2 Usuários, 1 Empresa, 3 Licitações)</option>
+                                        <option value="PRO">PRO (10 Usuários, 5 Empresas, 20 Licitações)</option>
+                                        <option value="ENTERPRISE">ENTERPRISE (Ilimitado)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Status do Plano *</label>
+                                    <select value={editPlanStatus} onChange={e => setEditPlanStatus(e.target.value)}
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    >
+                                        <option value="ACTIVE">ACTIVE (Ativo)</option>
+                                        <option value="SUSPENDED">SUSPENDED (Suspenso)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Data de Expiração (Opcional)</label>
+                                    <input type="date" value={editPlanExpiresAt} onChange={e => setEditPlanExpiresAt(e.target.value)}
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    />
+                                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: 4, display: 'block' }}>Deixe em branco para acesso sem expiração automática.</span>
+                                </div>
+
+                            </div>
+                            <div style={{ padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', background: 'var(--color-bg-surface-hover)' }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setEditingTenant(null)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" disabled={editSubmitting} style={{ padding: 'var(--space-2) var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    {editSubmitting ? <><Loader2 size={14} className="spinner" /> Salvando...</> : <><Edit3 size={14} /> Salvar Alterações</>}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

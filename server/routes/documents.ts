@@ -415,29 +415,77 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
 // ═══════════════════════════════════════════
 // Documents List + Upload (extracted from index.ts)
 // ═══════════════════════════════════════════
-router.get('/', authenticateToken, async (req: any, res) => {
+router.get('/documents', authenticateToken, async (req: any, res) => {
     try {
+        const tenantId = req.user.tenantId;
         const documents = await prisma.document.findMany({
-            where: { tenantId: req.user.tenantId },
-            select: {
-                id: true,
-                tenantId: true,
-                companyProfileId: true,
-                docType: true,
-                fileUrl: true,
-                expirationDate: true,
-                status: true,
-                autoRenew: true,
-                docGroup: true,
-                issuerLink: true,
-                fileName: true,
-                alertDays: true,
-                uploadDate: true
+            where: { tenantId },
+            include: {
+                company: {
+                    select: {
+                        razaoSocial: true
+                    }
+                }
             },
             orderBy: { uploadDate: 'desc' }
         });
-        res.json(documents);
+
+        const config = await prisma.globalConfig.findUnique({
+            where: { tenantId }
+        });
+        const parsedConfig = config ? JSON.parse(config.config) : { defaultAlertDays: 15 };
+        const defaultAlertDays = parsedConfig.defaultAlertDays || 15;
+
+        const toValido: string[] = [];
+        const toVencendo: string[] = [];
+        const toVencido: string[] = [];
+
+        const mapped = documents.map(d => {
+            let status = 'Válido';
+            if (d.expirationDate) {
+                const diffTime = new Date(d.expirationDate).getTime() - new Date().getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays < 0) status = 'Vencido';
+                else if (diffDays <= (d.alertDays || defaultAlertDays)) status = 'Vencendo';
+            }
+
+            if (d.status !== status) {
+                d.status = status;
+                if (status === 'Válido') toValido.push(d.id);
+                else if (status === 'Vencendo') toVencendo.push(d.id);
+                else if (status === 'Vencido') toVencido.push(d.id);
+            }
+
+            return {
+                id: d.id,
+                tenantId: d.tenantId,
+                companyProfileId: d.companyProfileId,
+                docType: d.docType,
+                fileUrl: d.fileUrl,
+                expirationDate: d.expirationDate,
+                status: d.status,
+                autoRenew: d.autoRenew,
+                docGroup: d.docGroup,
+                issuerLink: d.issuerLink,
+                fileName: d.fileName,
+                alertDays: d.alertDays,
+                uploadDate: d.uploadDate,
+                companyName: d.company?.razaoSocial || 'Não vinculada'
+            };
+        });
+
+        // Fire-and-forget background update to keep DB in sync
+        if (toValido.length > 0 || toVencendo.length > 0 || toVencido.length > 0) {
+            Promise.resolve().then(async () => {
+                if (toValido.length > 0) await prisma.document.updateMany({ where: { id: { in: toValido } }, data: { status: 'Válido' } });
+                if (toVencendo.length > 0) await prisma.document.updateMany({ where: { id: { in: toVencendo } }, data: { status: 'Vencendo' } });
+                if (toVencido.length > 0) await prisma.document.updateMany({ where: { id: { in: toVencido } }, data: { status: 'Vencido' } });
+            }).catch(e => console.error("[Documents Route] Auto DB Update error:", e));
+        }
+
+        res.json(mapped);
     } catch (error) {
+        console.error('[Documents Route] Error fetching documents:', error);
         res.status(500).json({ error: 'Failed to fetch documents' });
     }
 });
