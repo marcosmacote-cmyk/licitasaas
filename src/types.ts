@@ -65,6 +65,7 @@ export interface AiAnalysis {
     modelUsed?: string; // e.g. "gemini-2.5-flash"
     pipelineDurationS?: number; // Total pipeline duration in seconds
     overallConfidence?: string; // baixa | media | alta
+    requiresHumanAudit?: boolean;
     analyzedAt: string;
 }
 export const COLUMNS: BiddingStatus[] = [

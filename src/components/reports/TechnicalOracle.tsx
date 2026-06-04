@@ -331,6 +331,14 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </div>
                         ) : (
                             <div style={{ display: 'flex', gap: '8px', flex: o.activeOracleTab === 'free' ? 1 : 'none', flexWrap: 'wrap' }}>
+                                <button className="btn btn-primary" disabled={
+                                    (o.activeOracleTab === 'bidding' && !o.selectedBiddingId) || 
+                                    (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0) || 
+                                    o.selectedCertIds.size === 0 || 
+                                    o.isAnalyzing
+                                } onClick={o.handleAnalyzeCompatibility} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} title="Reanalisar compatibilidade com as exigências selecionadas">
+                                    {o.isAnalyzing ? 'Reanalisando...' : 'Reanalisar Somatório'}
+                                </button>
                                 {o.activeOracleTab === 'bidding' && (
                                     <button className="btn btn-outline" onClick={handleExportPdf} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} title="Gerar Relatório Premium em PDF">
                                         <FileText size={16} /> Exportar PDF
@@ -362,7 +370,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                     )}
 
                     {/* Pre-analysis Requirements Checklist (Bidding Mode) */}
-                    {o.activeOracleTab === 'bidding' && o.selectedBiddingId && !o.analysisResult && o.requirementsToAnalyze.length > 0 && (
+                    {o.activeOracleTab === 'bidding' && o.selectedBiddingId && o.requirementsToAnalyze.length > 0 && (
                         <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                             <h4 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <CheckCircle2 size={16} /> Exigências que serão analisadas
@@ -372,22 +380,38 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
                                 {o.requirementsToAnalyze.map(req => (
-                                    <label key={req.id} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px', background: o.disabledRequirements.has(req.id) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(req.id) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, cursor: 'pointer', transition: 'all 0.2s', opacity: o.disabledRequirements.has(req.id) ? 0.6 : 1 }}>
-                                        <input type="checkbox" checked={!o.disabledRequirements.has(req.id)} onChange={() => o.toggleRequirement(req.id)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
-                                        <div style={{ flex: 1 }}>
-                                            <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                                                {req.type}
-                                            </span>
-                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>{req.text}</div>
-                                        </div>
-                                    </label>
+                                    <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: o.disabledRequirements.has(req.id) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(req.id) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, transition: 'all 0.2s', opacity: o.disabledRequirements.has(req.id) ? 0.6 : 1 }}>
+                                        <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flex: 1, cursor: 'pointer', margin: 0 }}>
+                                            <input type="checkbox" checked={!o.disabledRequirements.has(req.id)} onChange={() => o.toggleRequirement(req.id)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
+                                            <div style={{ flex: 1 }}>
+                                                <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                    {req.type}
+                                                </span>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>{req.text}</div>
+                                            </div>
+                                        </label>
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.confirm('Tem certeza de que deseja excluir permanentemente esta exigência do processo?')) {
+                                                    o.handleDeleteRequirement(req.id);
+                                                }
+                                            }}
+                                            style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '6px', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                            title="Excluir do Processo"
+                                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-danger)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
                     {/* Pre-analysis Requirements Checklist (Free Mode) */}
-                    {o.activeOracleTab === 'free' && !o.analysisResult && o.freeTextRequirements.length > 0 && (
+                    {o.activeOracleTab === 'free' && o.freeTextRequirements.length > 0 && (
                         <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                             <h4 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <CheckCircle2 size={16} /> Exigências extraídas que serão analisadas
@@ -399,15 +423,29 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                 {o.freeTextRequirements.map((req, idx) => {
                                     const reqId = req.requirement_id || req.title || String(idx);
                                     return (
-                                        <label key={reqId} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px', background: o.disabledRequirements.has(reqId) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(reqId) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, cursor: 'pointer', transition: 'all 0.2s', opacity: o.disabledRequirements.has(reqId) ? 0.6 : 1 }}>
-                                            <input type="checkbox" checked={!o.disabledRequirements.has(reqId)} onChange={() => o.toggleRequirement(reqId)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
-                                            <div style={{ flex: 1 }}>
-                                                <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                                                    {req.type || 'Exigência'}
-                                                </span>
-                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}><strong>{req.title}</strong>: {req.description}</div>
-                                            </div>
-                                        </label>
+                                        <div key={reqId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: o.disabledRequirements.has(reqId) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(reqId) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, transition: 'all 0.2s', opacity: o.disabledRequirements.has(reqId) ? 0.6 : 1 }}>
+                                            <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flex: 1, cursor: 'pointer', margin: 0 }}>
+                                                <input type="checkbox" checked={!o.disabledRequirements.has(reqId)} onChange={() => o.toggleRequirement(reqId)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
+                                                <div style={{ flex: 1 }}>
+                                                    <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                        {req.type || 'Exigência'}
+                                                    </span>
+                                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}><strong>{req.title}</strong>: {req.description}</div>
+                                                </div>
+                                            </label>
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    o.handleDeleteRequirement(reqId);
+                                                }}
+                                                style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '6px', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                title="Excluir Exigência"
+                                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-danger)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     );
                                 })}
                             </div>

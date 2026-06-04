@@ -299,6 +299,94 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         toast.success('Evidências vinculadas ao Dossiê com sucesso!');
     };
 
+    const handleDeleteRequirement = async (reqId: string) => {
+        if (activeOracleTab === 'free') {
+            setFreeTextRequirements(prev => prev.filter((r, idx) => {
+                const id = r.requirement_id || r.title || String(idx);
+                return id !== reqId;
+            }));
+            toast.success('Exigência removida com sucesso.');
+        } else {
+            if (!selectedBiddingId) return;
+            const bidding = biddingsWithAnalysis.find(b => b.id === selectedBiddingId);
+            if (!bidding?.aiAnalysis?.schemaV2) {
+                toast.error('Nenhum dado estruturado do edital encontrado para atualizar.');
+                return;
+            }
+
+            let schema: any;
+            try {
+                schema = typeof bidding.aiAnalysis.schemaV2 === 'string'
+                    ? JSON.parse(bidding.aiAnalysis.schemaV2)
+                    : JSON.parse(JSON.stringify(bidding.aiAnalysis.schemaV2));
+            } catch (e) {
+                toast.error('Erro ao ler dados estruturados do edital.');
+                return;
+            }
+
+            let deleted = false;
+
+            if (schema.requirements?.qualificacao_tecnica_operacional) {
+                const origLength = schema.requirements.qualificacao_tecnica_operacional.length;
+                schema.requirements.qualificacao_tecnica_operacional = schema.requirements.qualificacao_tecnica_operacional.filter(
+                    (r: any) => (r.requirement_id || r.title) !== reqId
+                );
+                if (schema.requirements.qualificacao_tecnica_operacional.length < origLength) deleted = true;
+            }
+
+            if (schema.requirements?.qualificacao_tecnica_profissional) {
+                const origLength = schema.requirements.qualificacao_tecnica_profissional.length;
+                schema.requirements.qualificacao_tecnica_profissional = schema.requirements.qualificacao_tecnica_profissional.filter(
+                    (r: any) => (r.requirement_id || r.title) !== reqId
+                );
+                if (schema.requirements.qualificacao_tecnica_profissional.length < origLength) deleted = true;
+            }
+
+            if (schema.technical_analysis?.parcelas_relevantes) {
+                const origLength = schema.technical_analysis.parcelas_relevantes.length;
+                schema.technical_analysis.parcelas_relevantes = schema.technical_analysis.parcelas_relevantes.filter(
+                    (p: any) => (p.item || p.descricao) !== reqId
+                );
+                if (schema.technical_analysis.parcelas_relevantes.length < origLength) deleted = true;
+            }
+
+            if (!deleted) {
+                toast.error('Exigência não encontrada no processo.');
+                return;
+            }
+
+            try {
+                const aiAnalysis = bidding.aiAnalysis;
+                const payload = {
+                    biddingProcessId: selectedBiddingId,
+                    requiredDocuments: aiAnalysis.requiredDocuments,
+                    deadlines: aiAnalysis.deadlines,
+                    chatHistory: aiAnalysis.chatHistory,
+                    biddingItems: aiAnalysis.biddingItems,
+                    pricingConsiderations: aiAnalysis.pricingConsiderations,
+                    fullSummary: aiAnalysis.fullSummary,
+                    penalties: aiAnalysis.penalties,
+                    qualificationRequirements: aiAnalysis.qualificationRequirements,
+                    irregularitiesFlags: aiAnalysis.irregularitiesFlags,
+                    sourceFileNames: aiAnalysis.sourceFileNames,
+                    schemaV2: schema,
+                    promptVersion: aiAnalysis.promptVersion,
+                    modelUsed: aiAnalysis.modelUsed,
+                    pipelineDurationS: aiAnalysis.pipelineDurationS,
+                    overallConfidence: aiAnalysis.overallConfidence,
+                    requiresHumanAudit: aiAnalysis.requiresHumanAudit
+                };
+
+                await axios.post(`${API_BASE_URL}/api/analysis`, payload, getAuthHeaders());
+                toast.success('Exigência excluída permanentemente do processo.');
+                if (onRefresh) onRefresh();
+            } catch (err: any) {
+                console.error('Failed to delete requirement:', err);
+                toast.error(err.response?.data?.error || 'Erro ao excluir exigência.');
+            }
+        }
+    };
+
     const filteredCertificates = useMemo(() => {
         if (!searchTerm) return certificates;
         const low = searchTerm.toLowerCase();
@@ -403,6 +491,6 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         handleFileUpload, handleDeleteCert, executeDeleteCert,
         toggleCertSelection, handleAnalyzeCompatibility,
         handleNewSearch, handleAddToDossier, toggleCompanyExpansion,
-        handleExtractRequirements,
+        handleExtractRequirements, handleDeleteRequirement,
     };
 }
