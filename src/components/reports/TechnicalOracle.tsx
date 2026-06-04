@@ -338,7 +338,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                             </div>
                                             <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                                                    {exp.quantity?.toLocaleString() || '-'} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{exp.unit}</span>
+                                                    {exp.quantity?.toLocaleString('pt-BR') || '-'} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{exp.unit}</span>
                                                 </div>
                                             </div>
                                         </div>

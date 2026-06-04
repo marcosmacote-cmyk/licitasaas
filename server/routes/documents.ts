@@ -14,6 +14,12 @@ import { buildModuleContext } from '../services/ai/modules/moduleContextContract
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } }); // 30MB max
 
+function parseSafeDate(dStr: any): Date | null {
+    if (!dStr) return null;
+    const d = new Date(dStr);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 // ── Documents CRUD ──
 
 // Create document
@@ -280,7 +286,7 @@ router.post('/technical-certificates', authenticateToken, aiLimiter, upload.sing
                 fileUrl,
                 fileName: req.file.originalname,
                 issuer: extracted.issuer || null,
-                issueDate: extracted.issueDate ? new Date(extracted.issueDate) : null,
+                issueDate: parseSafeDate(extracted.issueDate),
                 object: extracted.object || null,
                 executingCompany: extracted.executingCompany || null,
                 technicalResponsible: extracted.technicalResponsible || null,

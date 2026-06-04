@@ -41,7 +41,7 @@ export class OraclePdfExporter {
                             <p style="margin:0 0 5px 0; color: #1e3a8a;">${this.esc(req.foundExperience)}</p>
                             <div class="qty-line">
                                 <span>Quantitativo Aceito:</span>
-                                <strong>${req.foundQuantity}</strong>
+                                <strong>${this.formatQuantity(req.foundQuantity)}</strong>
                             </div>
                         </div>
 
@@ -139,6 +139,14 @@ export class OraclePdfExporter {
     </div>
 </body>
 </html>`;
+    }
+
+    private formatQuantity(val: any): string {
+        if (val === null || val === undefined) return '-';
+        const cleanStr = String(val).trim();
+        const num = Number(cleanStr.replace(',', '.'));
+        if (isNaN(num)) return cleanStr;
+        return num.toLocaleString('pt-BR');
     }
 
     private esc(text?: string): string {
