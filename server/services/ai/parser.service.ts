@@ -13,9 +13,20 @@ export function robustJsonParse(rawText: string, label = 'AI'): any {
 export function robustJsonParseDetailed(rawText: string, label = 'AI'): ParseResult {
     // Step 1: Clean markdown wrappers and control chars
     let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    // Find the first occurrence of either '{' or '[' to support both objects and arrays
     const firstBrace = cleaned.indexOf('{');
-    if (firstBrace === -1) throw new Error('JSON inválido retornado pela IA (no opening brace)');
-    cleaned = cleaned.substring(firstBrace);
+    const firstBracket = cleaned.indexOf('[');
+    let startIndex = -1;
+    if (firstBrace !== -1 && firstBracket !== -1) {
+        startIndex = Math.min(firstBrace, firstBracket);
+    } else if (firstBrace !== -1) {
+        startIndex = firstBrace;
+    } else if (firstBracket !== -1) {
+        startIndex = firstBracket;
+    }
+    
+    if (startIndex === -1) throw new Error('JSON inválido retornado pela IA (no opening brace or bracket)');
+    cleaned = cleaned.substring(startIndex);
     cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
 
     // Step 2: Try direct parse first (fastest path)
