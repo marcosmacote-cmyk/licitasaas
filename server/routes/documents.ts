@@ -395,6 +395,7 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
         }
 
         let requirements: string;
+        let biddingTitle = 'Busca Livre';
 
         if (customRequirements && Array.isArray(customRequirements)) {
             requirements = customRequirements.map((r: any) => `- [${r.type || 'Exigência'}] ${r.title}: ${r.description}`).join('\n');
@@ -408,6 +409,7 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
             if (!bidding) {
                 return res.status(404).json({ error: 'Processo não encontrado ou não autorizado.' });
             }
+            biddingTitle = bidding.title;
 
             if (bidding.aiAnalysis?.schemaV2) {
                 let schemaToUse = bidding.aiAnalysis.schemaV2 as any;
@@ -451,7 +453,7 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
         const ai = new GoogleGenAI({ apiKey: apiKey! });
         const userContent = `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}`;
 
-        console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${bidding.title}`);
+        console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${biddingTitle}`);
         let result: any;
         try {
             result = await callGeminiWithRetry(ai.models, {
