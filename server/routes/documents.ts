@@ -477,6 +477,21 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
         }
 
         const analysis = robustJsonParse(result.text);
+
+        // Override overallStatus based on individual requirement statuses to prevent AI hallucinations
+        if (analysis && Array.isArray(analysis.analysis)) {
+            const hasNoAtende = analysis.analysis.some((item: any) => item.status === 'Não Atende');
+            const hasSimilar = analysis.analysis.some((item: any) => item.status === 'Similar');
+            
+            if (hasNoAtende) {
+                analysis.overallStatus = 'Inapto';
+            } else if (hasSimilar) {
+                analysis.overallStatus = 'Risco';
+            } else {
+                analysis.overallStatus = 'Apto';
+            }
+        }
+
         res.json(analysis);
     } catch (error: any) {
         console.error("Comparison error:", error);
