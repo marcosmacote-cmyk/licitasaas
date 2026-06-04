@@ -8,7 +8,7 @@ import { GoogleGenAI } from '@google/genai';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { callGeminiWithRetry, GEMINI_PROFILES } from '../services/ai/gemini.service';
 import { fallbackToOpenAiV2 } from '../services/ai/openai.service';
-import { EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT } from '../services/ai/prompt.service';
+import { EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, EXTRACT_REQUIREMENTS_SYSTEM_PROMPT } from '../services/ai/prompt.service';
 import { buildModuleContext } from '../services/ai/modules/moduleContextContracts';
 
 const router = express.Router();
@@ -326,48 +326,112 @@ router.delete('/technical-certificates/:id', authenticateToken, async (req: any,
     }
 });
 
+router.post('/technical-certificates/extract-requirements', authenticateToken, aiLimiter, upload.single('file'), async (req: any, res: any) => {
+    try {
+        const { text } = req.body;
+        
+        let pdfParts: any[] = [];
+        let userInstruction = "Extraia as exigências técnicas relevantes deste fragmento seguindo o formato JSON especificado.";
+
+        if (req.file) {
+            pdfParts = [{ inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } }];
+            userInstruction = "Extraia as exigências técnicas relevantes desta imagem seguindo o formato JSON especificado.";
+        } else if (text) {
+            userInstruction = `Extraia as exigências técnicas relevantes do seguinte texto:\n\n${text}\n\nSeguindo o formato JSON especificado.`;
+        } else {
+            return res.status(400).json({ error: 'É necessário fornecer texto ou uma imagem.' });
+        }
+
+        console.log(`[AI Oracle] Extracting requirements: ${req.file ? req.file.originalname : 'texto livre'}`);
+        const apiKey = process.env.GEMINI_API_KEY;
+        const ai = new GoogleGenAI({ apiKey: apiKey! });
+        
+        let result: any;
+        try {
+            result = await callGeminiWithRetry(ai.models, {
+                model: GEMINI_PROFILES.LIGHTWEIGHT,
+                contents: [{
+                    role: 'user',
+                    parts: [...pdfParts, { text: userInstruction }]
+                }],
+                config: {
+                    systemInstruction: EXTRACT_REQUIREMENTS_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
+                }
+            }, 3, { tenantId: req.user.tenantId, operation: 'extract_requirements', metadata: { type: 'free_search' } });
+        } catch (geminiErr: any) {
+            console.warn(`[AI Oracle] Gemini falhou na extração de exigências: ${geminiErr.message}. Fallback → OpenAI...`);
+            const oaiResult = await fallbackToOpenAiV2({
+                systemPrompt: EXTRACT_REQUIREMENTS_SYSTEM_PROMPT,
+                userPrompt: userInstruction,
+                pdfParts,
+                temperature: 0.1,
+                stageName: 'oracle-extract-req'
+            });
+            result = { text: oaiResult.text };
+        }
+
+        const extracted = robustJsonParse(result.text);
+        res.json(extracted);
+    } catch (error: any) {
+        console.error("Requirements extraction error:", error);
+        res.status(500).json({ error: 'Falha ao extrair exigências.', details: error.message });
+    }
+});
+
 router.post('/technical-certificates/compare', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
-        const { biddingProcessId, technicalCertificateIds, disabledRequirements } = req.body;
+        const { biddingProcessId, technicalCertificateIds, disabledRequirements, customRequirements } = req.body;
         const tenantId = req.user.tenantId;
-
-        const bidding = await prisma.biddingProcess.findUnique({
-            where: { id: biddingProcessId, tenantId },
-            include: { aiAnalysis: true }
-        });
 
         const certificates = await prisma.technicalCertificate.findMany({
             where: { id: { in: technicalCertificateIds }, tenantId },
             include: { experiences: true }
         });
 
-        if (!bidding || certificates.length === 0) {
-            return res.status(404).json({ error: 'Processo ou atestados não encontrados.' });
+        if (certificates.length === 0) {
+            return res.status(404).json({ error: 'Nenhum atestado encontrado.' });
         }
 
         let requirements: string;
-        if (bidding.aiAnalysis?.schemaV2) {
-            let schemaToUse = bidding.aiAnalysis.schemaV2 as any;
-            if (typeof schemaToUse === 'string') {
-                try { schemaToUse = JSON.parse(schemaToUse); } catch (e) { }
-            }
 
-            if (disabledRequirements && Array.isArray(disabledRequirements) && disabledRequirements.length > 0) {
-                schemaToUse = JSON.parse(JSON.stringify(schemaToUse));
-                ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional'].forEach(key => {
-                    if (schemaToUse?.requirements?.[key]) {
-                        schemaToUse.requirements[key] = schemaToUse.requirements[key].filter((r: any) => !disabledRequirements.includes(r.requirement_id || r.title));
-                    }
-                });
-                if (schemaToUse?.technical_analysis?.parcelas_relevantes) {
-                    schemaToUse.technical_analysis.parcelas_relevantes = schemaToUse.technical_analysis.parcelas_relevantes.filter((p: any) => !disabledRequirements.includes(p.item || p.descricao));
-                }
-            }
-
-            requirements = buildModuleContext(schemaToUse, 'oracle');
-            console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
+        if (customRequirements && Array.isArray(customRequirements)) {
+            requirements = customRequirements.map((r: any) => `- [${r.type || 'Exigência'}] ${r.title}: ${r.description}`).join('\n');
+            console.log(`[AI Oracle] Using customRequirements for comparison`);
         } else {
-            requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
+            const bidding = await prisma.biddingProcess.findUnique({
+                where: { id: biddingProcessId, tenantId },
+                include: { aiAnalysis: true }
+            });
+
+            if (!bidding) {
+                return res.status(404).json({ error: 'Processo não encontrado ou não autorizado.' });
+            }
+
+            if (bidding.aiAnalysis?.schemaV2) {
+                let schemaToUse = bidding.aiAnalysis.schemaV2 as any;
+                if (typeof schemaToUse === 'string') {
+                    try { schemaToUse = JSON.parse(schemaToUse); } catch (e) { }
+                }
+
+                if (disabledRequirements && Array.isArray(disabledRequirements) && disabledRequirements.length > 0) {
+                    schemaToUse = JSON.parse(JSON.stringify(schemaToUse));
+                    ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional'].forEach(key => {
+                        if (schemaToUse?.requirements?.[key]) {
+                            schemaToUse.requirements[key] = schemaToUse.requirements[key].filter((r: any) => !disabledRequirements.includes(r.requirement_id || r.title));
+                        }
+                    });
+                    if (schemaToUse?.technical_analysis?.parcelas_relevantes) {
+                        schemaToUse.technical_analysis.parcelas_relevantes = schemaToUse.technical_analysis.parcelas_relevantes.filter((p: any) => !disabledRequirements.includes(p.item || p.descricao));
+                    }
+                }
+
+                requirements = buildModuleContext(schemaToUse, 'oracle');
+                console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
+            } else {
+                requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
+            }
         }
 
         const aggregatedCertData = certificates.map(cert => ({

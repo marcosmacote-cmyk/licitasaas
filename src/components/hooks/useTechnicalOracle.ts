@@ -90,6 +90,11 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [disabledRequirements, setDisabledRequirements] = useState<Set<string>>(new Set());
+    const [activeOracleTab, setActiveOracleTab] = useState<'bidding' | 'free'>('bidding');
+    const [customRequirementsText, setCustomRequirementsText] = useState('');
+    const [freeTextRequirements, setFreeTextRequirements] = useState<any[]>([]);
+    const [isExtractingRequirements, setIsExtractingRequirements] = useState(false);
+    const [extractError, setExtractError] = useState<string | null>(null);
 
     useEffect(() => { fetchCertificates(); }, []);
 
@@ -189,8 +194,40 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         }
     });
 
+    const handleExtractRequirements = async (file?: File) => {
+        if (!customRequirementsText && !file) {
+            setExtractError('Digite algum texto ou selecione uma imagem para extração.');
+            return;
+        }
+
+        setIsExtractingRequirements(true);
+        setExtractError(null);
+
+        const formData = new FormData();
+        if (file) {
+            formData.append('file', file);
+        } else {
+            formData.append('text', customRequirementsText);
+        }
+
+        try {
+            const res = await axios.post(`${API_BASE_URL}/api/technical-certificates/extract-requirements`, formData, getAuthHeaders());
+            setFreeTextRequirements(res.data || []);
+            setDisabledRequirements(new Set()); // Reset selected checklist
+            toast.success('Exigências extraídas com sucesso pela IA!');
+        } catch (error: any) {
+            console.error('Failed to extract requirements:', error);
+            setExtractError(error.response?.data?.error || 'Erro ao extrair exigências do edital.');
+            toast.error('Erro ao extrair exigências.');
+        } finally {
+            setIsExtractingRequirements(false);
+        }
+    };
+
     const handleAnalyzeCompatibility = async () => {
-        if (!selectedBiddingId || selectedCertIds.size === 0) return;
+        const isFree = activeOracleTab === 'free';
+        if (!isFree && (!selectedBiddingId || selectedCertIds.size === 0)) return;
+        if (isFree && (freeTextRequirements.length === 0 || selectedCertIds.size === 0)) return;
         
         const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
         
@@ -200,15 +237,22 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         setAnalysisResult(null);
 
         try {
+            const payload: any = {
+                technicalCertificateIds: Array.from(selectedCertIds),
+                disabledRequirements: Array.from(disabledRequirements)
+            };
+
+            if (isFree) {
+                payload.customRequirements = freeTextRequirements.filter(r => !disabledRequirements.has(r.requirement_id || r.title));
+            } else {
+                payload.biddingProcessId = selectedBiddingId;
+            }
+
             const { jobId } = await submitBackgroundJob({
                 type: 'oracle',
-                targetId: selectedBiddingId,
-                targetTitle: selectedBidding?.title || 'Licitação',
-                input: {
-                    biddingProcessId: selectedBiddingId,
-                    technicalCertificateIds: Array.from(selectedCertIds),
-                    disabledRequirements: Array.from(disabledRequirements)
-                }
+                targetId: isFree ? 'free_search' : selectedBiddingId!,
+                targetTitle: isFree ? 'Busca Livre' : (selectedBidding?.title || 'Licitação'),
+                input: payload
             });
             setActiveJobId(jobId);
         } catch (error) {
@@ -224,6 +268,9 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         setSelectedCertIds(new Set());
         setSelectedBiddingId(null);
         setViewingCert(null);
+        setCustomRequirementsText('');
+        setFreeTextRequirements([]);
+        setDisabledRequirements(new Set());
     };
 
     const handleAddToDossier = async () => {
@@ -346,11 +393,16 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         isAnalyzing, analysisResult, analysisProgress, analysisProgressMsg,
         expandedCompanies, selectedCategory, setSelectedCategory,
         requirementsToAnalyze, disabledRequirements, toggleRequirement,
+        activeOracleTab, setActiveOracleTab,
+        customRequirementsText, setCustomRequirementsText,
+        freeTextRequirements, setFreeTextRequirements,
+        isExtractingRequirements, extractError,
         // Derived
         filteredCertificates, biddingsWithAnalysis, groupedCertificates,
         // Handlers
         handleFileUpload, handleDeleteCert, executeDeleteCert,
         toggleCertSelection, handleAnalyzeCompatibility,
         handleNewSearch, handleAddToDossier, toggleCompanyExpansion,
+        handleExtractRequirements,
     };
 }

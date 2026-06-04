@@ -29,6 +29,24 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
         new OraclePdfExporter().export(bidding, o.analysisResult);
     };
 
+    const handleExportPdfForFreeSearch = () => {
+        if (!o.analysisResult) return;
+        const mockBidding = {
+            id: 'free_search',
+            title: 'Busca Livre - Exigências Customizadas',
+            summary: o.customRequirementsText || 'Análise de compatibilidade sob demanda no Oráculo Técnico.',
+            status: 'ANALISE',
+            substage: 'oraculo',
+            portal: 'Busca Livre',
+            link: '',
+            sessionDate: null,
+            estimatedValue: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        } as any;
+        new OraclePdfExporter().export(mockBidding, o.analysisResult);
+    };
+
     return (
         <>
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 250px)' }}>
@@ -154,39 +172,180 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </span>
                         )}
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                            <select className="form-control" style={{ width: '100%' }} value={o.selectedBiddingId || ''} onChange={(e) => o.setSelectedBiddingId(e.target.value)}>
-                                <option value="">Selecione uma licitação para análise conjunta...</option>
-                                {o.biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-                            </select>
+
+                    {/* Tabs Seleção de Modo */}
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-2)' }}>
+                        <button 
+                            onClick={() => { o.setActiveOracleTab('bidding'); o.handleNewSearch(); }}
+                            style={{ 
+                                padding: 'var(--space-2) var(--space-4)', 
+                                border: 'none', 
+                                background: o.activeOracleTab === 'bidding' ? 'var(--color-primary-light)' : 'transparent', 
+                                color: o.activeOracleTab === 'bidding' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                fontWeight: o.activeOracleTab === 'bidding' ? 'bold' : 'normal',
+                                borderRadius: 'var(--radius-md)', 
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: 'var(--text-sm)'
+                            }}
+                        >
+                            <Building2 size={16} /> Análise por Licitação
+                        </button>
+                        <button 
+                            onClick={() => { o.setActiveOracleTab('free'); o.handleNewSearch(); }}
+                            style={{ 
+                                padding: 'var(--space-2) var(--space-4)', 
+                                border: 'none', 
+                                background: o.activeOracleTab === 'free' ? 'var(--color-primary-light)' : 'transparent', 
+                                color: o.activeOracleTab === 'free' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                fontWeight: o.activeOracleTab === 'free' ? 'bold' : 'normal',
+                                borderRadius: 'var(--radius-md)', 
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: 'var(--text-sm)'
+                            }}
+                        >
+                            <FileText size={16} /> Busca Livre / Copiar e Colar
+                        </button>
+                    </div>
+
+                    {/* Area de inputs da Busca Livre */}
+                    {o.activeOracleTab === 'free' && !o.analysisResult && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', width: '100%', marginBottom: 'var(--space-4)' }}>
+                            <div>
+                                <label className="form-label section-label" style={{ fontWeight: 'var(--font-bold)', marginBottom: '4px', display: 'block' }}>Cole o texto com as exigências técnicas</label>
+                                <textarea 
+                                    className="form-control" 
+                                    style={{ width: '100%', minHeight: '100px', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', resize: 'vertical' }}
+                                    placeholder="Exemplo: Execução de pavimentação asfáltica em CBUQ - quantidade mínima de 5.000 m²..."
+                                    value={o.customRequirementsText}
+                                    onChange={(e) => o.setCustomRequirementsText(e.target.value)}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="form-label section-label" style={{ fontWeight: 'var(--font-bold)', marginBottom: '4px', display: 'block' }}>Ou envie um Printscreen da tabela de exigências</label>
+                                <div 
+                                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+                                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.currentTarget.style.borderColor = 'var(--color-border)';
+                                        const file = e.dataTransfer.files?.[0];
+                                        if (file) {
+                                            o.handleExtractRequirements(file);
+                                        }
+                                    }}
+                                    style={{ 
+                                        border: '2px dashed var(--color-border)', 
+                                        borderRadius: 'var(--radius-lg)', 
+                                        padding: 'var(--space-5) var(--space-6)', 
+                                        textAlign: 'center', 
+                                        background: 'var(--color-bg-secondary)', 
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onClick={() => {
+                                        const fileInput = document.getElementById('free-image-input');
+                                        fileInput?.click();
+                                    }}
+                                >
+                                    <Upload size={24} style={{ margin: '0 auto var(--space-2) auto', opacity: 0.6, color: 'var(--color-primary)' }} />
+                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'block' }}>
+                                        Arraste um print da tabela ou clique para selecionar (PNG, JPG, WEBP)
+                                    </span>
+                                    <input 
+                                        type="file" 
+                                        id="free-image-input" 
+                                        hidden 
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                o.handleExtractRequirements(file);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    disabled={o.isExtractingRequirements || !o.customRequirementsText}
+                                    onClick={() => o.handleExtractRequirements()}
+                                    style={{ height: '40px', padding: '0 var(--space-4)', fontWeight: 'var(--font-bold)' }}
+                                >
+                                    {o.isExtractingRequirements ? 'Extraindo via IA...' : 'Extrair Exigências via IA'}
+                                </button>
+                            </div>
+
+                            {o.extractError && (
+                                <div className="info-panel info-panel--danger" style={{ fontSize: 'var(--text-base)', padding: 'var(--space-3)' }}>
+                                    <AlertTriangle size={14} /> {o.extractError}
+                                </div>
+                            )}
                         </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', marginTop: o.activeOracleTab === 'free' ? 'var(--space-3)' : '0' }}>
+                        {o.activeOracleTab === 'bidding' && (
+                            <div style={{ flex: 1 }}>
+                                <select className="form-control" style={{ width: '100%', height: '42px', fontSize: 'var(--text-base)' }} value={o.selectedBiddingId || ''} onChange={(e) => o.setSelectedBiddingId(e.target.value)}>
+                                    <option value="">Selecione uma licitação para análise conjunta...</option>
+                                    {o.biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                                </select>
+                            </div>
+                        )}
                         {!o.analysisResult ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <button className="btn btn-primary" disabled={!o.selectedBiddingId || o.selectedCertIds.size === 0 || o.isAnalyzing} onClick={o.handleAnalyzeCompatibility} style={{ padding: '10px 24px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: o.activeOracleTab === 'free' ? 1 : 'none' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    disabled={
+                                        (o.activeOracleTab === 'bidding' && !o.selectedBiddingId) || 
+                                        (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0) || 
+                                        o.selectedCertIds.size === 0 || 
+                                        o.isAnalyzing
+                                    } 
+                                    onClick={o.handleAnalyzeCompatibility} 
+                                    style={{ padding: '10px 24px', justifyContent: 'center', height: '42px', fontWeight: 'var(--font-bold)' }}
+                                >
                                     {o.isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
                                 </button>
                                 {o.isAnalyzing && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
-                                        <div style={{ width: '100%', height: '6px', background: 'var(--color-bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', marginTop: '8px' }}>
+                                        <div style={{ width: '100%', height: '8px', background: 'var(--color-bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
                                             <div style={{ height: '100%', background: 'var(--color-primary)', width: `${o.analysisProgress}%`, transition: 'width 0.3s ease' }}></div>
                                         </div>
                                         {o.analysisProgressMsg && (
                                             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', textAlign: 'right', fontStyle: 'italic' }}>
-                                                {o.analysisProgressMsg}
+                                                {o.analysisProgressMsg} ({o.analysisProgress}%)
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button className="btn btn-outline" onClick={handleExportPdf} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} title="Gerar Relatório Premium em PDF">
-                                    <FileText size={16} /> Exportar PDF
-                                </button>
-                                <button className="btn btn-primary" onClick={o.handleAddToDossier} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} title="Vincular certificados selecionados ao Dossiê desta licitação">
-                                    <Package size={16} /> Adicionar ao Dossiê
-                                </button>
+                            <div style={{ display: 'flex', gap: '8px', flex: o.activeOracleTab === 'free' ? 1 : 'none', flexWrap: 'wrap' }}>
+                                {o.activeOracleTab === 'bidding' && (
+                                    <button className="btn btn-outline" onClick={handleExportPdf} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} title="Gerar Relatório Premium em PDF">
+                                        <FileText size={16} /> Exportar PDF
+                                    </button>
+                                )}
+                                {o.activeOracleTab === 'free' && (
+                                    <button className="btn btn-outline" onClick={handleExportPdfForFreeSearch} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} title="Gerar Relatório Premium em PDF">
+                                        <FileText size={16} /> Exportar PDF
+                                    </button>
+                                )}
+                                {o.activeOracleTab === 'bidding' && (
+                                    <button className="btn btn-primary" onClick={o.handleAddToDossier} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} title="Vincular certificados selecionados ao Dossiê desta licitação">
+                                        <Package size={16} /> Adicionar ao Dossiê
+                                    </button>
+                                )}
                                 <button className="btn btn-outline" onClick={o.handleNewSearch} style={{ padding: '10px 16px' }} title="Zerar análise e começar nova pesquisa">
                                     <Layers size={16} /> Nova Pesquisa
                                 </button>
@@ -202,8 +361,8 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         </div>
                     )}
 
-                    {/* Pre-analysis Requirements Checklist */}
-                    {o.selectedBiddingId && !o.analysisResult && o.requirementsToAnalyze.length > 0 && (
+                    {/* Pre-analysis Requirements Checklist (Bidding Mode) */}
+                    {o.activeOracleTab === 'bidding' && o.selectedBiddingId && !o.analysisResult && o.requirementsToAnalyze.length > 0 && (
                         <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                             <h4 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <CheckCircle2 size={16} /> Exigências que serão analisadas
@@ -223,6 +382,34 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                         </div>
                                     </label>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pre-analysis Requirements Checklist (Free Mode) */}
+                    {o.activeOracleTab === 'free' && !o.analysisResult && o.freeTextRequirements.length > 0 && (
+                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                            <h4 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <CheckCircle2 size={16} /> Exigências extraídas que serão analisadas
+                            </h4>
+                            <p style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                Desmarque as exigências extraídas pela IA que deseja excluir ou ignorar nesta análise comparativa.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
+                                {o.freeTextRequirements.map((req, idx) => {
+                                    const reqId = req.requirement_id || req.title || String(idx);
+                                    return (
+                                        <label key={reqId} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px', background: o.disabledRequirements.has(reqId) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(reqId) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, cursor: 'pointer', transition: 'all 0.2s', opacity: o.disabledRequirements.has(reqId) ? 0.6 : 1 }}>
+                                            <input type="checkbox" checked={!o.disabledRequirements.has(reqId)} onChange={() => o.toggleRequirement(reqId)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
+                                            <div style={{ flex: 1 }}>
+                                                <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                    {req.type || 'Exigência'}
+                                                </span>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}><strong>{req.title}</strong>: {req.description}</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
