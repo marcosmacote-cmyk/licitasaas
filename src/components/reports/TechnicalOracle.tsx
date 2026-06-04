@@ -1,4 +1,5 @@
-import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info, Building2, ChevronRight, Layers, Package } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info, Building2, ChevronRight, Layers, Package, Loader2, Clipboard } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
 import { useTechnicalOracle, CATEGORIES_HIERARCHY } from '../hooks/useTechnicalOracle';
@@ -21,6 +22,31 @@ interface Props {
 
 export function TechnicalOracle({ biddings, companies, onRefresh, initialBiddingId }: Props) {
     const o = useTechnicalOracle({ biddings, onRefresh, initialBiddingId });
+
+    // Global paste listener for Free Search mode to extract requirements from pasted prints/images
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            if (o.activeOracleTab !== 'free' || o.analysisResult) return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        o.handleExtractRequirements(file);
+                        break;
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+        };
+    }, [o.activeOracleTab, o.analysisResult, o.handleExtractRequirements]);
 
     const handleExportPdf = () => {
         if (!o.analysisResult || !o.selectedBiddingId) return;
@@ -259,19 +285,38 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                         transition: 'all 0.2s'
                                     }}
                                     onClick={() => {
+                                        if (o.isExtractingRequirements) return;
                                         const fileInput = document.getElementById('free-image-input');
                                         fileInput?.click();
                                     }}
                                 >
-                                    <Upload size={24} style={{ margin: '0 auto var(--space-2) auto', opacity: 0.6, color: 'var(--color-primary)' }} />
-                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'block' }}>
-                                        Arraste um print da tabela ou clique para selecionar (PNG, JPG, WEBP)
-                                    </span>
+                                    {o.isExtractingRequirements ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '12px 0' }}>
+                                            <Loader2 className="spin" size={28} color="var(--color-primary)" />
+                                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', fontWeight: 'bold' }}>
+                                                Processando imagem com Inteligência Artificial...
+                                            </span>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
+                                                Identificando exigências técnicas da planilha
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <Upload size={24} style={{ margin: '0 auto var(--space-2) auto', opacity: 0.6, color: 'var(--color-primary)' }} />
+                                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'block' }}>
+                                                Arraste um print da tabela ou clique para selecionar (PNG, JPG, WEBP)
+                                            </span>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
+                                                Você também pode simplesmente pressionar <strong>Ctrl + V</strong> para colar um printscreen
+                                            </span>
+                                        </>
+                                    )}
                                     <input 
                                         type="file" 
                                         id="free-image-input" 
                                         hidden 
                                         accept="image/*"
+                                        disabled={o.isExtractingRequirements}
                                         onChange={(e) => {
                                             const file = e.target.files?.[0];
                                             if (file) {
@@ -283,6 +328,35 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+                                <button 
+                                    className="btn btn-outline"
+                                    type="button"
+                                    onClick={async () => {
+                                        try {
+                                            const clipItems = await navigator.clipboard.read();
+                                            let imageBlob: Blob | null = null;
+                                            for (const item of clipItems) {
+                                                for (const type of item.types) {
+                                                    if (type.startsWith('image/')) { imageBlob = await item.getType(type); break; }
+                                                }
+                                                if (imageBlob) break;
+                                            }
+                                            if (!imageBlob) { 
+                                                alert('Nenhuma imagem encontrada na área de transferência (clipboard). Tire um printscreen ou copie uma imagem e tente novamente.'); 
+                                                return; 
+                                            }
+                                            const file = new File([imageBlob], "clipboard-image.png", { type: imageBlob.type });
+                                            o.handleExtractRequirements(file);
+                                        } catch (err: any) {
+                                            alert('Erro ao acessar a área de transferência. Certifique-se de dar permissão ao navegador ou use o atalho Ctrl+V diretamente na tela.');
+                                        }
+                                    }}
+                                    disabled={o.isExtractingRequirements}
+                                    style={{ height: '40px', padding: '0 var(--space-4)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'var(--font-bold)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                                    title="Extrair exigências a partir de imagem copiada no clipboard"
+                                >
+                                    <Clipboard size={16} /> Extrair de Print (Ctrl+V)
+                                </button>
                                 <button 
                                     className="btn btn-primary" 
                                     disabled={o.isExtractingRequirements || !o.customRequirementsText}
