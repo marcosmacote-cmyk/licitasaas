@@ -158,8 +158,8 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         }
     };
 
-    const toggleCertSelection = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
+    const toggleCertSelection = (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         const newSelected = new Set(selectedCertIds);
         if (newSelected.has(id)) newSelected.delete(id);
         else newSelected.add(id);

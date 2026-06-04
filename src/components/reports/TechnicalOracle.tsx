@@ -138,7 +138,16 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                                 style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: o.viewingCert?.id === cert.id ? '0 4px 12px rgba(0,0,0,0.06), 0 0 0 2px var(--color-primary)' : o.selectedCertIds.has(cert.id) ? '0 0 0 1px var(--color-primary)' : '0 0 0 1px var(--color-border)', background: o.viewingCert?.id === cert.id ? 'var(--color-bg-surface)' : o.selectedCertIds.has(cert.id) ? 'rgba(37, 99, 235, 0.04)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', flex: 1, paddingRight: '8px' }}>
-                                                        <input type="checkbox" checked={o.selectedCertIds.has(cert.id)} onChange={() => {}} onClick={(e) => o.toggleCertSelection(cert.id, e)} style={{ cursor: 'pointer', width: '16px', height: '16px', margin: 0 }} />
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={o.selectedCertIds.has(cert.id)} 
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                o.toggleCertSelection(cert.id);
+                                                            }} 
+                                                            onClick={(e) => e.stopPropagation()} 
+                                                            style={{ cursor: 'pointer', width: '16px', height: '16px', margin: 0 }} 
+                                                        />
                                                         <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center' }}>{cert.type}</span>
                                                         {cert.category && <span style={{ fontSize: '0.65rem', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-border)', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{cert.category}</span>}
                                                     </div>
