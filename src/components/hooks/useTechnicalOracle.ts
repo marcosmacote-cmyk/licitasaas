@@ -226,8 +226,9 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
 
     const handleAnalyzeCompatibility = async () => {
         const isFree = activeOracleTab === 'free';
+        const hasCustomText = customRequirementsText.trim().length > 0;
         if (!isFree && (!selectedBiddingId || selectedCertIds.size === 0)) return;
-        if (isFree && (freeTextRequirements.length === 0 || selectedCertIds.size === 0)) return;
+        if (isFree && ((freeTextRequirements.length === 0 && !hasCustomText) || selectedCertIds.size === 0)) return;
         
         const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
         
@@ -243,7 +244,16 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
             };
 
             if (isFree) {
-                payload.customRequirements = freeTextRequirements.filter(r => !disabledRequirements.has(r.requirement_id || r.title));
+                let reqs = freeTextRequirements.filter(r => !disabledRequirements.has(r.requirement_id || r.title));
+                if (reqs.length === 0 && hasCustomText) {
+                    reqs = [{
+                        requirement_id: 'custom_text_req',
+                        title: 'Exigência Informada',
+                        description: customRequirementsText.trim(),
+                        type: 'Busca'
+                    }];
+                }
+                payload.customRequirements = reqs;
             } else {
                 payload.biddingProcessId = selectedBiddingId;
             }

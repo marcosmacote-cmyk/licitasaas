@@ -316,7 +316,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                     className="btn btn-primary" 
                                     disabled={
                                         (o.activeOracleTab === 'bidding' && !o.selectedBiddingId) || 
-                                        (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0) || 
+                                        (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0 && !o.customRequirementsText.trim()) || 
                                         o.selectedCertIds.size === 0 || 
                                         o.isAnalyzing
                                     } 
@@ -342,7 +342,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             <div style={{ display: 'flex', gap: '8px', flex: o.activeOracleTab === 'free' ? 1 : 'none', flexWrap: 'wrap' }}>
                                 <button className="btn btn-primary" disabled={
                                     (o.activeOracleTab === 'bidding' && !o.selectedBiddingId) || 
-                                    (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0) || 
+                                    (o.activeOracleTab === 'free' && o.freeTextRequirements.length === 0 && !o.customRequirementsText.trim()) || 
                                     o.selectedCertIds.size === 0 || 
                                     o.isAnalyzing
                                 } onClick={o.handleAnalyzeCompatibility} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} title="Reanalisar compatibilidade com as exigências selecionadas">
