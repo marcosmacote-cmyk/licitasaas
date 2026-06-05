@@ -255,10 +255,17 @@ function findExcelFiles(dir: string): string[] {
 // SICRO has different sheet structures than SINAPI
 // Typically: "Relatório Sintético", "Composições", "Insumos"
 // ═══════════════════════════════════════════════════════════
-function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } {
+function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionItems: ParsedCompositionItem[]; regime: 'ONERADO' | 'DESONERADO' | 'COMMON' } {
   const items: ParsedItem[] = [];
   const compositionItems: ParsedCompositionItem[] = [];
   const fileNameUpper = path.basename(filePath).toUpperCase();
+
+  let regime: 'ONERADO' | 'DESONERADO' | 'COMMON' = 'COMMON';
+  if (fileNameUpper.includes('DESONERAC') || fileNameUpper.includes('DESONERAD')) {
+    regime = 'DESONERADO';
+  } else if (fileNameUpper.includes('MÃO DE OBRA') || fileNameUpper.includes('MAO DE OBRA') || fileNameUpper.includes('EQUIPAMENTO')) {
+    regime = 'ONERADO';
+  }
 
   try {
     const buffer = fs.readFileSync(filePath);
@@ -308,9 +315,28 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
             const c = row[j];
             if (codeCol < 0 && (c.includes('CÓDIGO') || c.includes('CODIGO') || c.includes('CÓD') || c.includes('COD'))) codeCol = j;
             if (descCol < 0 && (c.includes('DESCRIÇÃO') || c.includes('DESCRICAO'))) descCol = j;
-            if (unitCol < 0 && (c.includes('UNID') || c === 'UN' || c === 'UNIDADE')) unitCol = j;
-            if (priceCol < 0 && (c.includes('PREÇO') || c.includes('PRECO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('TOTAL'))) priceCol = j;
+            
+            // For equipment, unit is implicitly 'H' (hour). The sheet does not have a real unit column.
+            if (!isEquipmentFile) {
+              if (unitCol < 0 && (c.includes('UNID') || c === 'UN' || c === 'UNIDADE')) unitCol = j;
+            }
+            
+            // Prioritize Custo Produtivo for equipment
+            if (isEquipmentFile) {
+              if (priceCol < 0 && (c.includes('CUSTO PRODUTIVO') || c.includes('PRODUTIVO'))) priceCol = j;
+            } else {
+              if (priceCol < 0 && (c.includes('PREÇO') || c.includes('PRECO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('TOTAL'))) priceCol = j;
+            }
+            
             if (typeCol < 0 && (c.includes('TIPO') || c.includes('GRUPO') || c.includes('CLASSIF'))) typeCol = j;
+          }
+          
+          // Fallback if priceCol wasn't found for equipment
+          if (isEquipmentFile && priceCol < 0) {
+            for (let j = 0; j < row.length; j++) {
+              const c = row[j];
+              if (c.includes('PREÇO') || c.includes('PRECO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('TOTAL')) priceCol = j;
+            }
           }
           break;
         }
@@ -318,8 +344,8 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
 
       if (headerIdx < 0 || codeCol < 0) continue;
       if (descCol < 0) descCol = codeCol + 1;
-      if (unitCol < 0) unitCol = descCol + 1;
-      if (priceCol < 0) priceCol = unitCol + 1;
+      if (!isEquipmentFile && unitCol < 0) unitCol = descCol + 1;
+      if (priceCol < 0) priceCol = unitCol >= 0 ? unitCol + 1 : descCol + 1;
 
       console.log(`[SICRO Parse] 📋 Aba "${sheetName}": header@row${headerIdx}, cols: code=${codeCol} desc=${descCol} unit=${unitCol} price=${priceCol}`);
 
@@ -330,7 +356,7 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
         const desc = String(r[descCol] ?? '').trim();
         if (!code || !desc || code.length < 2) continue;
 
-        const unit = String(r[unitCol] ?? '').trim().toUpperCase() || 'UN';
+        const unit = isEquipmentFile ? 'H' : (String(r[unitCol] ?? '').trim().toUpperCase() || 'UN');
 
         let price = 0;
         const rawPrice = r[priceCol];
@@ -376,18 +402,19 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
     console.error(`[SICRO Parse] ❌ Erro: ${e.message}`);
   }
 
-  return { items, compositionItems };
+  return { items, compositionItems, regime };
 }
 
 // ═══════════════════════════════════════════════════════════
 // Persist Items (reuses same logic as SINAPI)
 // ═══════════════════════════════════════════════════════════
-async function persistSicroItems(uf: string, month: number, year: number, data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }): Promise<SyncResult> {
+async function persistSicroItems(uf: string, month: number, year: number, desonerado: boolean, data: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] }): Promise<SyncResult> {
   const baseName = 'SICRO';
   const version = `${String(month).padStart(2, '0')}/${year}`;
+  const regimeStr = desonerado ? 'Desonerado' : 'Onerado';
 
   let db = await prisma.engineeringDatabase.findFirst({
-    where: { name: baseName, uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
+    where: { name: baseName, uf, referenceMonth: month, referenceYear: year, payrollExemption: desonerado, type: 'OFICIAL' }
   });
 
   if (db) {
@@ -395,7 +422,7 @@ async function persistSicroItems(uf: string, month: number, year: number, data: 
     await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
   } else {
     db = await prisma.engineeringDatabase.create({
-      data: { name: baseName, uf, version, type: 'OFICIAL', payrollExemption: false, referenceMonth: month, referenceYear: year }
+      data: { name: baseName, uf, version, type: 'OFICIAL', payrollExemption: desonerado, referenceMonth: month, referenceYear: year }
     });
   }
 
@@ -420,8 +447,8 @@ async function persistSicroItems(uf: string, month: number, year: number, data: 
   }
 
   await prisma.engineeringDatabase.update({ where: { id: db!.id }, data: { itemCount: insertedItems, compositionCount: insertedComps } });
-  console.log(`[SICRO Crawler] ✅ SICRO ${uf} ${version}: ${insertedItems} insumos + ${insertedComps} composições`);
-  return { success: true, message: `SICRO ${uf} ${version}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
+  console.log(`[SICRO Crawler] ✅ SICRO ${uf} ${version} ${regimeStr}: ${insertedItems} insumos + ${insertedComps} composições`);
+  return { success: true, message: `SICRO ${uf} ${version} ${regimeStr}: ${insertedItems} insumos + ${insertedComps} composições`, databaseId: db!.id, itemCount: insertedItems, compositionCount: insertedComps };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -474,12 +501,19 @@ export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncRep
     for (const { month, year } of targetMonths) {
       const version = `${String(month).padStart(2, '0')}/${year}`;
 
-      // Idempotency check
-      const existing = await prisma.engineeringDatabase.findFirst({
-        where: { name: 'SICRO', uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
+      // Idempotency check for both Onerado and Desonerado
+      const existingOnerado = await prisma.engineeringDatabase.findFirst({
+        where: { name: 'SICRO', uf, referenceMonth: month, referenceYear: year, payrollExemption: false, type: 'OFICIAL' }
       });
-      if (existing && (existing.itemCount || 0) > 0 && !force) {
-        console.log(`[SICRO Crawler] ⏭️ SICRO ${uf} ${version}: já existente (${existing.itemCount} itens)`);
+      const existingDesonerado = await prisma.engineeringDatabase.findFirst({
+        where: { name: 'SICRO', uf, referenceMonth: month, referenceYear: year, payrollExemption: true, type: 'OFICIAL' }
+      });
+
+      const hasOnerado = existingOnerado && (existingOnerado.itemCount || 0) > 0;
+      const hasDesonerado = existingDesonerado && (existingDesonerado.itemCount || 0) > 0;
+
+      if (hasOnerado && hasDesonerado && !force) {
+        console.log(`[SICRO Crawler] ⏭️ SICRO ${uf} ${version}: Onerado e Desonerado já existentes`);
         results.push({ success: true, message: `Já existente: ${uf} ${version}` });
         continue;
       }
@@ -506,23 +540,47 @@ export async function syncSicro(options: SicroSyncOptions): Promise<SicroSyncRep
 
         console.log(`[SICRO Crawler] 📊 ${excelFiles.length} planilha(s) encontrada(s)`);
 
-        // Parse all Excel files
-        const allData: { items: ParsedItem[]; compositionItems: ParsedCompositionItem[] } = { items: [], compositionItems: [] };
+        // Parse and separate by regime
+        const oneradoItems: ParsedItem[] = [];
+        const desoneradoItems: ParsedItem[] = [];
+
         for (const excelFile of excelFiles) {
           const data = parseSicroExcel(excelFile);
-          allData.items.push(...data.items);
-          allData.compositionItems.push(...data.compositionItems);
+          if (data.regime === 'ONERADO') {
+            oneradoItems.push(...data.items);
+          } else if (data.regime === 'DESONERADO') {
+            desoneradoItems.push(...data.items);
+          } else {
+            // COMMON: add to both
+            oneradoItems.push(...data.items);
+            desoneradoItems.push(...data.items);
+          }
         }
 
-        if (allData.items.length === 0) {
+        if (oneradoItems.length === 0 && desoneradoItems.length === 0) {
           console.log(`[SICRO Crawler] ⚠️ SICRO ${uf} ${version}: nenhum item extraído`);
           results.push({ success: false, message: `Sem itens: ${uf} ${version}` });
           continue;
         }
 
-        // Persist
-        const result = await persistSicroItems(uf, month, year, allData);
-        results.push(result);
+        // Persist Onerado database
+        let successCount = 0;
+        if (oneradoItems.length > 0) {
+          const resOnerado = await persistSicroItems(uf, month, year, false, { items: oneradoItems, compositionItems: [] });
+          results.push(resOnerado);
+          if (resOnerado.success) successCount++;
+        }
+
+        // Persist Desonerado database
+        if (desoneradoItems.length > 0) {
+          const resDesonerado = await persistSicroItems(uf, month, year, true, { items: desoneradoItems, compositionItems: [] });
+          results.push(resDesonerado);
+          if (resDesonerado.success) successCount++;
+        }
+
+        if (successCount === 0) {
+          throw new Error('Falha ao persistir ambos os regimes');
+        }
       } catch (e: any) {
         console.error(`[SICRO Crawler] ❌ SICRO ${uf} ${version}: ${e.message}`);
         results.push({ success: false, message: `Erro: ${uf} ${version} - ${e.message}` });

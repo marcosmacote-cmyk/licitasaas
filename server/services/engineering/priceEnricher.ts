@@ -188,7 +188,7 @@ export function buildCandidateScore(
     // Regime match scoring. ORSE/SICRO do not expose dual onerado/desonerado
     // catalogs in the same way SINAPI/SEINFRA do, so they must not produce
     // false base-incompatible alerts only because the project has a payroll regime.
-    const supportsPayrollRegime = ['SINAPI', 'SEINFRA', 'SICOR'].includes(dbName);
+    const supportsPayrollRegime = ['SINAPI', 'SEINFRA', 'SICOR', 'SICRO'].includes(dbName);
     if (desiredDesonerado !== null && supportsPayrollRegime) {
         if (Boolean(db.payrollExemption) === desiredDesonerado) score += 20;
         else warnings.push(`regime ${db.payrollExemption ? 'desonerado' : 'onerado'} incompatível`);

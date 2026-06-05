@@ -1079,7 +1079,7 @@ export function EngineeringHub() {
                                                     {items.map((b, i) => {
                                                         const ver = b.referenceMonth && b.referenceYear ? `${String(b.referenceMonth).padStart(2, '0')}/${b.referenceYear}` : (b.version || 'N/I');
                                                         const hasData = (b.itemCount || 0) + (b.compositionCount || 0) > 0;
-                                                        const regime = ['SINAPI', 'SEINFRA', 'SICOR'].includes(b.name) ? (b.payrollExemption ? 'Desonerado' : 'Onerado') : 'Único';
+                                                        const regime = ['SINAPI', 'SEINFRA', 'SICOR', 'SICRO'].includes(b.name) ? (b.payrollExemption ? 'Desonerado' : 'Onerado') : 'Único';
                                                         const regColor = b.payrollExemption ? '#f59e0b' : '#059669';
                                                         const srcColor = SOURCE_COLORS[b.name] || '#64748b';
                                                         return (

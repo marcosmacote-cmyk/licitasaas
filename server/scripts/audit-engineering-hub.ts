@@ -44,7 +44,7 @@ type AuditReport = {
   findings: Finding[];
 };
 
-const SOURCE_WITH_REGIME = new Set(['SINAPI', 'SEINFRA', 'SICOR']);
+const SOURCE_WITH_REGIME = new Set(['SINAPI', 'SEINFRA', 'SICOR', 'SICRO']);
 const NUMERIC_CODE_SOURCES = new Set(['SINAPI', 'SEDOP']);
 
 function readArg(name: string): string | undefined {
