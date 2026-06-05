@@ -82,13 +82,15 @@ const DICTIONARY: Record<InsumoCategoria, string[]> = {
         'vibrador de imersao', 'vibrador de concreto',
         'compactador de solos', 'placa vibratoria',
         'guindaste', 'guincho', 'grua', 'elevador de obra',
-        'bomba de concreto', 'bomba submersivel',
-        'compressor de ar', 'gerador de energia', 'gerador eletric',
+        'bomba de concreto', 'bomba submersivel', 'bomba',
+        'compressor de ar', 'gerador de energia', 'gerador eletric', 'gerador',
         'serra circular', 'serra eletrica', 'furadeira',
         'martelete', 'martelo demolidor', 'rompedor',
         'andaime metalico', 'andaime tubular', 'escoramento',
         'forma metalica', 'forma de aco',
-        'plataforma elevatoria', 'carrinho de mao',
+        'plataforma elevatoria', 'plataforma', 'carrinho de mao',
+        'rolo compactador', 'rolo compressor', 'rolo',
+        'tanque', 'grupo gerador', 'cacamba',
         // Termos genéricos de equipamento (prioridade menor)
         'equipamento', 'maquina', 'ferramenta',
         // Aluguel de equipamentos
@@ -97,6 +99,7 @@ const DICTIONARY: Record<InsumoCategoria, string[]> = {
 
     MATERIAL: [
         // Materiais de construção básicos
+        'material de', 'materiais', 'kit de',
         'cimento portland', 'cimento', 'areia media', 'areia fina', 'areia grossa',
         'brita 1', 'brita 2', 'brita 0', 'brita graduada', 'pedra britada',
         'concreto usinado', 'concreto fck', 'concreto magro',
@@ -227,6 +230,9 @@ export function classifyInsumoType(
         for (const keyword of keywords) {
             const normalizedKw = normalizeText(keyword);
             if (normalizedDesc.includes(normalizedKw)) {
+                if (category === 'MAO_DE_OBRA' && !LABOR_UNITS.has(normalizedUnit)) {
+                    continue;
+                }
                 return {
                     type: category,
                     confidence: 'HIGH',
@@ -245,10 +251,29 @@ export function classifyInsumoType(
             normalizedDesc.includes('locacao') ||
             normalizedDesc.includes('veiculo') ||
             normalizedDesc.includes('caminhao') ||
-            normalizedDesc.includes('maquina');
+            normalizedDesc.includes('maquina') ||
+            normalizedDesc.includes('equipamento') ||
+            normalizedDesc.includes('rolo') ||
+            normalizedDesc.includes('tanque') ||
+            normalizedDesc.includes('bomba') ||
+            normalizedDesc.includes('gerador') ||
+            normalizedDesc.includes('plataforma') ||
+            normalizedDesc.includes('grupo');
 
         if (hasEquipHint) {
             return { type: 'EQUIPAMENTO', confidence: 'MEDIUM', source: 'UNIT_HEURISTIC' };
+        }
+
+        // Check for material keywords in hourly/monthly items (like cleaning materials monthly)
+        const hasMaterialHint = normalizedDesc.includes('material') ||
+            normalizedDesc.includes('materiais') ||
+            normalizedDesc.includes('kit') ||
+            normalizedDesc.includes('ferramenta') ||
+            normalizedDesc.includes('peca') ||
+            normalizedDesc.includes('peça');
+
+        if (hasMaterialHint) {
+            return { type: 'MATERIAL', confidence: 'MEDIUM', source: 'UNIT_HEURISTIC' };
         }
 
         // Otherwise H/MES/DIA most likely indicates labor

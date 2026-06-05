@@ -317,7 +317,7 @@ function parseInsumosHtml(html: string, period: OrsePeriod, page: number): OrseI
       description,
       unit,
       price: Math.round(price * 100) / 100,
-      type: detectInsumoType(description),
+      type: detectInsumoType(description, unit),
     });
   });
 
@@ -363,7 +363,7 @@ function parseCompositionDetailHtml(html: string): { items: OrseCompositionDetai
       coefficient,
       unitPrice,
       totalPrice,
-      type: detectDetailType(marker, description),
+      type: detectDetailType(marker, description, unit),
     });
   });
 
