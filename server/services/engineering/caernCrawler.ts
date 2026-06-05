@@ -648,12 +648,18 @@ export async function syncCaern(options: CaernSyncOptions = {}): Promise<CaernSy
       }
 
       if (allItems.length === 0) {
-        // Even if we couldn't parse items, register the database entry with the PDF URLs
-        // so the user knows the period exists
-        console.log(`[CAERN Crawler] ⚠️ CAERN ${period}: PDFs baixados mas sem itens parseáveis (PDF complexo)`);
-        // Still persist with 0 items but version has PDF info
-        const result = await persistCaernData(period, year, month, [], pdfUrls);
-        results.push({ ...result, message: `CAERN ${period}: ${pdfUrls.length} PDFs registrados (parsing pendente)` });
+        console.log(`[CAERN Crawler] ⚠️ CAERN ${period}: PDFs baixados mas sem itens parseáveis (ignorado)`);
+        // If an empty database exists from a previous run, delete it to clean up
+        const existingEmpty = await prisma.engineeringDatabase.findFirst({
+          where: { name: 'CAERN', uf: 'RN', referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
+        });
+        if (existingEmpty && (existingEmpty.itemCount || 0) === 0 && (existingEmpty.compositionCount || 0) === 0) {
+          await prisma.engineeringComposition.deleteMany({ where: { databaseId: existingEmpty.id } });
+          await prisma.engineeringItem.deleteMany({ where: { databaseId: existingEmpty.id } });
+          await prisma.engineeringDatabase.delete({ where: { id: existingEmpty.id } });
+          console.log(`[CAERN Crawler] 🗑️ Removida base vazia CAERN RN ${month}/${year}`);
+        }
+        results.push({ success: true, message: `CAERN ${period}: Sem itens (ignorado)` });
         continue;
       }
 
