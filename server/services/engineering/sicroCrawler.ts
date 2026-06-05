@@ -371,9 +371,18 @@ function parseSicroExcel(filePath: string): { items: ParsedItem[]; compositionIt
           }
         }
 
-        // Determine type from group column or sheet name or file name
+        // Determine type from code prefix, group column, or sheet name
         let type = 'SERVICO';
-        if (typeCol >= 0) {
+        const firstChar = code.charAt(0).toUpperCase();
+        if (firstChar === 'M') {
+          type = 'MATERIAL';
+        } else if (firstChar === 'E') {
+          type = 'EQUIPAMENTO';
+        } else if (firstChar === 'P') {
+          type = 'MAO_DE_OBRA';
+        } else if (firstChar === 'A') {
+          type = 'MATERIAL'; // Atividades auxiliares / insumos
+        } else if (typeCol >= 0) {
           const rawType = String(r[typeCol] ?? '').toUpperCase();
           if (rawType.includes('MÃO') || rawType.includes('MAO') || rawType.includes('OBRA')) type = 'MAO_DE_OBRA';
           else if (rawType.includes('EQUIP')) type = 'EQUIPAMENTO';

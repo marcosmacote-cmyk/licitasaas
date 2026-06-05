@@ -15,6 +15,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import AdmZip from 'adm-zip';
+import { classifyInsumoType } from './insumoClassifier';
+
 
 const CAERN_URL = 'https://www.caern.com.br/servicos/tabela-de-precos/';
 const MZ_BASE = 'https://api.mziq.com/mzfilemanager/v2/d/2a1a75a3-21f9-46ef-9aa4-487f2d2b709b/';
@@ -423,6 +425,59 @@ async function persistCaernData(
   const uf = 'RN';
   const version = period;
 
+  // Get unique codes
+  const uniqueCodes = [...new Set(allItems.map(it => it.code))];
+
+  // Fetch matches in SINAPI databases to classify items accurately
+  const sinapiDbs = await prisma.engineeringDatabase.findMany({
+    where: { name: 'SINAPI' },
+    select: { id: true }
+  });
+  const sinapiDbIds = sinapiDbs.map(d => d.id);
+
+  const matchedComps = await prisma.engineeringComposition.findMany({
+    where: {
+      code: { in: uniqueCodes },
+      databaseId: { in: sinapiDbIds }
+    },
+    select: { code: true }
+  });
+  const sinapiComps = new Set(matchedComps.map(c => c.code));
+
+  const matchedInsumos = await prisma.engineeringItem.findMany({
+    where: {
+      code: { in: uniqueCodes },
+      databaseId: { in: sinapiDbIds }
+    },
+    select: { code: true }
+  });
+  const sinapiInsumos = new Set(matchedInsumos.map(i => i.code));
+
+  // Classify all items dynamically
+  const classifiedItems = allItems.map(it => {
+    let type: 'MATERIAL' | 'MAO_DE_OBRA' | 'EQUIPAMENTO' | 'SERVICO' = 'SERVICO';
+
+    if (it.code.length === 7) {
+      type = 'SERVICO';
+    } else if (sinapiComps.has(it.code)) {
+      type = 'SERVICO';
+    } else if (sinapiInsumos.has(it.code)) {
+      const cls = classifyInsumoType(it.description, it.unit);
+      type = cls.type === 'SERVICO' ? 'MATERIAL' : cls.type; // Insumos cannot be SERVICO
+    } else {
+      // Fallback for codes not in SINAPI database
+      const isSvc = /fornecimento|instala|execu|aplica|assenta|loca|limpeza|constru|transp/i.test(it.description) || 
+                    ['M', 'M2', 'M²', 'M3', 'M³', 'UN', 'MES', 'MÊS', 'H', 'DIA'].includes(it.unit.toUpperCase());
+      const cls = classifyInsumoType(it.description, it.unit);
+      type = isSvc ? 'SERVICO' : (cls.type === 'SERVICO' ? 'MATERIAL' : cls.type);
+    }
+
+    return {
+      ...it,
+      type
+    };
+  });
+
   let db = await prisma.engineeringDatabase.findFirst({
     where: { name: baseName, uf, referenceMonth: month, referenceYear: year, type: 'OFICIAL' }
   });
@@ -436,14 +491,14 @@ async function persistCaernData(
     });
   }
 
-  // Separate items by type
-  const materials = allItems.filter((it: { type: string }) => it.type === 'MATERIAL');
-  const services = allItems.filter((it: { type: string }) => it.type !== 'MATERIAL');
+  // Separate items by type (Insumos vs Compositions)
+  const materials = classifiedItems.filter((it) => it.type === 'MATERIAL' || it.type === 'MAO_DE_OBRA' || it.type === 'EQUIPAMENTO');
+  const services = classifiedItems.filter((it) => it.type === 'SERVICO');
 
   let insItems = 0;
   for (let i = 0; i < materials.length; i += 1000) {
     const r = await prisma.engineeringItem.createMany({
-      data: materials.slice(i, i + 1000).map((it: { code: string; description: string; unit: string; price: number; type: string }) => ({ databaseId: db!.id, ...it })),
+      data: materials.slice(i, i + 1000).map((it) => ({ databaseId: db!.id, ...it })),
       skipDuplicates: true,
     });
     insItems += r.count;
@@ -452,7 +507,7 @@ async function persistCaernData(
   let insComps = 0;
   for (let i = 0; i < services.length; i += 1000) {
     const r = await prisma.engineeringComposition.createMany({
-      data: services.slice(i, i + 1000).map((s: { code: string; description: string; unit: string; price: number }) => ({
+      data: services.slice(i, i + 1000).map((s) => ({
         databaseId: db!.id, code: s.code, description: s.description, unit: s.unit, totalPrice: s.price,
       })),
       skipDuplicates: true,
