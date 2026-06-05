@@ -14,6 +14,7 @@ import { prisma } from '../../lib/prisma';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import AdmZip from 'adm-zip';
 
 const CAERN_URL = 'https://www.caern.com.br/servicos/tabela-de-precos/';
 const MZ_BASE = 'https://api.mziq.com/mzfilemanager/v2/d/2a1a75a3-21f9-46ef-9aa4-487f2d2b709b/';
@@ -51,7 +52,14 @@ async function launchBrowser(): Promise<any> {
   try { ppt = require('puppeteer-core'); } catch {
     try { ppt = require('puppeteer'); } catch { throw new Error('Puppeteer not available'); }
   }
-  for (const p of ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/google-chrome', process.env.CHROME_PATH].filter(Boolean)) {
+  for (const p of [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome',
+    process.env.CHROME_PATH
+  ].filter(Boolean)) {
     try {
       return await ppt.launch({ executablePath: p as string, headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
     } catch { continue; }
@@ -129,20 +137,24 @@ async function discoverPdfLinks(years: number[]): Promise<CaernPdfEntry[]> {
       });
 
       for (const link of links) {
-        // Try to extract period from the link title or section headers
         let period = `${year}`;
-        for (const header of sectionHeaders) {
-          // "Tabela de Preços - Julho 2025" → "Julho 2025"
-          const periodMatch = header.match(/(Janeiro|Fevereiro|Março|Abril|Maio|Junho|Julho|Agosto|Setembro|Outubro|Novembro|Dezembro)\s*(?:de\s*)?(\d{4})/i);
-          if (periodMatch && parseInt(periodMatch[2]) === year) {
-            period = `${periodMatch[1]} ${periodMatch[2]}`;
-          }
-        }
-
-        // Also try extracting from the title itself
+        
+        // 1. Try to extract from the link title (e.g. "Janeiro 2026", "Julho 2025")
         const titlePeriod = link.title.match(/(Janeiro|Fevereiro|Março|Abril|Maio|Junho|Julho|Agosto|Setembro|Outubro|Novembro|Dezembro)\s*(?:de\s*)?(\d{4})/i);
         if (titlePeriod) {
           period = `${titlePeriod[1]} ${titlePeriod[2]}`;
+        } else {
+          // 2. Try to extract from the publish date (format DD/MM/YYYY)
+          const dateMatch = link.publishDate.match(/\d{2}\/(\d{2})\/(\d{4})/);
+          if (dateMatch) {
+            const mNum = parseInt(dateMatch[1]);
+            const yr = parseInt(dateMatch[2]);
+            if (yr === year) {
+              const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+              const mName = monthNames[mNum - 1] || 'Janeiro';
+              period = `${mName} ${yr}`;
+            }
+          }
         }
 
         allEntries.push({ ...link, year, period });
@@ -164,6 +176,7 @@ const KNOWN_UNITS_LIST = [
   'UN', 'M', 'M2', 'M²', 'M3', 'M³', 'KG', 'L', 'CJ', 'VB', 'GB', 'PC', 'H',
   'MÊS', 'MES', 'DIA', 'KM', 'PAR', 'JG', 'BD', 'GL', 'CX', 'TB', 'SC', 'LT',
   'TN', 'TF', 'CH', 'CM', 'T', 'KWH', 'HA', 'CHP', 'CHI', 'MJ', 'CONJ',
+  'UNID', 'UND', 'PT X DIA',
 ];
 const KNOWN_UNITS = new Set(KNOWN_UNITS_LIST);
 // Regex to match the combined line: "UNIT PRICE1 PRICE2"
@@ -245,9 +258,109 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 //   INTERFERÊNCIAS...              ← description line 3
 //   M 7,10 6,55                    ← UNIT + PRICE1 + PRICE2 on SAME line
 // ═══════════════════════════════════════════════════════════
-async function downloadAndParsePdf(url: string): Promise<{ items: { code: string; description: string; unit: string; price: number; type: string }[]; rawText: string }> {
+async function parsePdfBuffer(buffer: Buffer): Promise<{ code: string; description: string; unit: string; price: number; type: string }[]> {
   const items: { code: string; description: string; unit: string; price: number; type: string }[] = [];
+  const text = await extractPdfText(buffer);
 
+  if (!text) {
+    console.log(`[CAERN Crawler] ⚠️ Não foi possível extrair texto do PDF`);
+    return [];
+  }
+
+  const lines: string[] = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
+
+  // State machine parser
+  type State = 'SEEK_CODE' | 'READ_DESC';
+  let state: State = 'SEEK_CODE';
+  let curCode = '';
+  let curDesc: string[] = [];
+  let descLineCount = 0;
+
+  const isCode = (l: string) => /^\d{3,7}$/.test(l);
+  const isHeaderLine = (l: string) => /^(CÓDIGO|DESCRIÇÃO|UNIDADE|PREÇO|ITEM|BANCO DE PREÇOS|COMPOSIÇÕES|TABELA|PÁG|PAG|CAERN|OBSERVAÇÕES|DATA BASE|PREÇOS SERVIÇOS|SERVIÇOS SINAPI|COM DESONERAÇÃO|SEM DESONERAÇÃO|SEM BDI)/i.test(l);
+  const isPageMarker = (l: string) => /^--\s*\d+\s*of\s*\d+\s*--$/.test(l);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Skip headers, footers, page markers
+    if (isHeaderLine(line) || isPageMarker(line)) {
+      if (state === 'READ_DESC' && descLineCount > 0) state = 'SEEK_CODE';
+      continue;
+    }
+
+    switch (state) {
+      case 'SEEK_CODE':
+        if (isCode(line)) {
+          curCode = line;
+          curDesc = [];
+          descLineCount = 0;
+          state = 'READ_DESC';
+        }
+        break;
+
+      case 'READ_DESC': {
+        // Check if this line is the combined UNIT + PRICE line
+        const matchDouble = line.match(UNIT_PRICE_REGEX);
+        if (matchDouble && descLineCount > 0) {
+          items.push({
+            code: curCode,
+            description: curDesc.join(' '),
+            unit: matchDouble[1].toUpperCase(),
+            price: parseBrPrice(matchDouble[2]),
+            type: 'SERVICO',
+          });
+          state = 'SEEK_CODE';
+          break;
+        }
+
+        // Check single price variant: "UN 13,24"
+        const matchSingle = line.match(UNIT_SINGLE_PRICE_REGEX);
+        if (matchSingle && descLineCount > 0) {
+          items.push({
+            code: curCode,
+            description: curDesc.join(' '),
+            unit: matchSingle[1].toUpperCase(),
+            price: parseBrPrice(matchSingle[2]),
+            type: 'SERVICO',
+          });
+          state = 'SEEK_CODE';
+          break;
+        }
+
+        // Check if this is a new code (description was empty or we need to restart)
+        if (isCode(line)) {
+          curCode = line;
+          curDesc = [];
+          descLineCount = 0;
+          break;
+        }
+
+        // Otherwise it's a description line
+        if (line.length > 2) {
+          curDesc.push(line);
+          descLineCount++;
+          if (descLineCount > 6) { state = 'SEEK_CODE'; }
+        }
+        break;
+      }
+    }
+  }
+
+  // Log results
+  if (items.length > 0) {
+    const s = items[0];
+    console.log(`[CAERN Crawler] 📊 ${items.length} itens (ex: ${s.code} | ${s.description.substring(0, 50)}... | ${s.unit} | R$${s.price})`);
+  } else {
+    const codeLikes = lines.filter(l => /^\d{3,7}$/.test(l)).slice(0, 3);
+    const unitPriceLikes = lines.filter(l => UNIT_PRICE_REGEX.test(l) || UNIT_SINGLE_PRICE_REGEX.test(l)).slice(0, 3);
+    console.log(`[CAERN Crawler] 📊 0 itens de ${lines.length} linhas. Códigos: [${codeLikes}] UnitPrice: [${unitPriceLikes}]`);
+  }
+
+  return items;
+}
+
+async function downloadAndParsePdf(url: string): Promise<{ items: { code: string; description: string; unit: string; price: number; type: string }[]; rawText: string }> {
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -259,106 +372,39 @@ async function downloadAndParsePdf(url: string): Promise<{ items: { code: string
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    const text = await extractPdfText(buffer);
-
-    if (!text) {
-      console.log(`[CAERN Crawler] ⚠️ Não foi possível extrair texto do PDF`);
-      return { items: [], rawText: '' };
-    }
-
-    const lines: string[] = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
-
-    // State machine parser
-    type State = 'SEEK_CODE' | 'READ_DESC';
-    let state: State = 'SEEK_CODE';
-    let curCode = '';
-    let curDesc: string[] = [];
-    let descLineCount = 0;
-
-    const isCode = (l: string) => /^\d{3,6}$/.test(l);
-    const isHeaderLine = (l: string) => /^(CÓDIGO|DESCRIÇÃO|UNIDADE|PREÇO|ITEM|BANCO DE PREÇOS|COMPOSIÇÕES|TABELA|PÁG|PAG|CAERN|OBSERVAÇÕES|DATA BASE|PREÇOS SERVIÇOS|SERVIÇOS SINAPI|COM DESONERAÇÃO|SEM DESONERAÇÃO|SEM BDI)/i.test(l);
-    const isPageMarker = (l: string) => /^--\s*\d+\s*of\s*\d+\s*--$/.test(l);
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Skip headers, footers, page markers
-      if (isHeaderLine(line) || isPageMarker(line)) {
-        if (state === 'READ_DESC' && descLineCount > 0) state = 'SEEK_CODE';
-        continue;
-      }
-
-      switch (state) {
-        case 'SEEK_CODE':
-          if (isCode(line)) {
-            curCode = line;
-            curDesc = [];
-            descLineCount = 0;
-            state = 'READ_DESC';
-          }
-          break;
-
-        case 'READ_DESC': {
-          // Check if this line is the combined UNIT + PRICE line
-          const matchDouble = line.match(UNIT_PRICE_REGEX);
-          if (matchDouble && descLineCount > 0) {
-            items.push({
-              code: curCode,
-              description: curDesc.join(' '),
-              unit: matchDouble[1].toUpperCase(),
-              price: parseBrPrice(matchDouble[2]),
-              type: 'SERVICO',
-            });
-            state = 'SEEK_CODE';
-            break;
-          }
-
-          // Check single price variant: "UN 13,24"
-          const matchSingle = line.match(UNIT_SINGLE_PRICE_REGEX);
-          if (matchSingle && descLineCount > 0) {
-            items.push({
-              code: curCode,
-              description: curDesc.join(' '),
-              unit: matchSingle[1].toUpperCase(),
-              price: parseBrPrice(matchSingle[2]),
-              type: 'SERVICO',
-            });
-            state = 'SEEK_CODE';
-            break;
-          }
-
-          // Check if this is a new code (description was empty or we need to restart)
-          if (isCode(line)) {
-            curCode = line;
-            curDesc = [];
-            descLineCount = 0;
-            break;
-          }
-
-          // Otherwise it's a description line
-          if (line.length > 2) {
-            curDesc.push(line);
-            descLineCount++;
-            if (descLineCount > 6) { state = 'SEEK_CODE'; }
-          }
-          break;
+    
+    // Check if buffer is a ZIP file
+    const isZip = buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+    
+    if (isZip) {
+      console.log(`[CAERN Crawler] 📦 Arquivo ZIP detectado para URL: ${url}`);
+      const zip = new AdmZip(buffer);
+      const entries = zip.getEntries();
+      const allItems: { code: string; description: string; unit: string; price: number; type: string }[] = [];
+      
+      for (const entry of entries) {
+        if (entry.isDirectory || !entry.entryName.toLowerCase().endsWith('.pdf')) continue;
+        
+        const nameLower = entry.entryName.toLowerCase();
+        // Skip detailed CPU files or background materials
+        if (nameLower.includes('cpu') || nameLower.includes('encargos') || nameLower.includes('miv') || nameLower.includes('política') || nameLower.includes('privacidade')) {
+          console.log(`[CAERN Crawler] ⏭️ Pulando entrada do ZIP irrelevante: ${entry.entryName}`);
+          continue;
         }
+        
+        console.log(`[CAERN Crawler] 📄 Processando PDF do ZIP: ${entry.entryName}`);
+        const pdfBuffer = entry.getData();
+        const items = await parsePdfBuffer(pdfBuffer);
+        allItems.push(...items);
       }
-    }
-
-    // Log results
-    if (items.length > 0) {
-      const s = items[0];
-      console.log(`[CAERN Crawler] 📊 ${items.length} itens (ex: ${s.code} | ${s.description.substring(0, 50)}... | ${s.unit} | R$${s.price})`);
+      
+      return { items: allItems, rawText: `ZIP file with ${entries.length} entries` };
     } else {
-      const codeLikes = lines.filter(l => /^\d{3,6}$/.test(l)).slice(0, 3);
-      const unitPriceLikes = lines.filter(l => UNIT_PRICE_REGEX.test(l) || UNIT_SINGLE_PRICE_REGEX.test(l)).slice(0, 3);
-      console.log(`[CAERN Crawler] 📊 0 itens de ${lines.length} linhas. Códigos: [${codeLikes}] UnitPrice: [${unitPriceLikes}]`);
+      const items = await parsePdfBuffer(buffer);
+      return { items, rawText: '' };
     }
-    return { items, rawText: text.substring(0, 500) };
-
   } catch (e: any) {
-    console.error(`[CAERN Crawler] ❌ Erro ao baixar/parsear PDF: ${e.message}`);
+    console.error(`[CAERN Crawler] ❌ Erro ao baixar/parsear: ${e.message}`);
     return { items: [], rawText: '' };
   }
 }
@@ -463,7 +509,7 @@ export interface CaernSyncReport {
 export async function syncCaern(options: CaernSyncOptions = {}): Promise<CaernSyncReport> {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const years = options.years || [currentYear, currentYear - 1, currentYear - 2];
+  const years = options.years || [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
   const started = new Date().toISOString();
   const results: SyncResult[] = [];
 
@@ -493,10 +539,20 @@ export async function syncCaern(options: CaernSyncOptions = {}): Promise<CaernSy
 
       // Idempotency check
       const existing = await prisma.engineeringDatabase.findFirst({
-        where: { name: 'CAERN', uf: 'RN', referenceMonth: month, referenceYear: year, type: 'OFICIAL', itemCount: { gt: 0 } }
+        where: {
+          name: 'CAERN',
+          uf: 'RN',
+          referenceMonth: month,
+          referenceYear: year,
+          type: 'OFICIAL',
+          OR: [
+            { itemCount: { gt: 0 } },
+            { compositionCount: { gt: 0 } }
+          ]
+        }
       });
-      if (existing && (existing.itemCount || 0) > 0) {
-        console.log(`[CAERN Crawler] ⏭️ CAERN RN ${period}: já existente (${existing.itemCount} itens)`);
+      if (existing && ((existing.itemCount || 0) > 0 || (existing.compositionCount || 0) > 0)) {
+        console.log(`[CAERN Crawler] ⏭️ CAERN RN ${period}: já existente (${existing.itemCount} insumos, ${existing.compositionCount} composições)`);
         results.push({ success: true, message: `Já existente: CAERN ${period}` });
         continue;
       }
