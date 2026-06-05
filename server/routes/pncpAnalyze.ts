@@ -776,8 +776,9 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s [${zeroxUsed ? 'ZEROX' : 'INLINE'}] — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
             const errMsg = err?.message || String(err);
-            const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
-            logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
+            const isPrepaymentDepleted = errMsg.toLowerCase().includes('prepayment') || errMsg.toLowerCase().includes('depleted') || errMsg.toLowerCase().includes('credits');
+            const isServiceOverload = !isPrepaymentDepleted && (errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429'));
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isPrepaymentDepleted ? 'SALDO ESGOTADO' : isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
             pipelineHealth.fallbacksUsed++;
             try {
                 const openAiResult = await fallbackToOpenAiV2({
@@ -795,8 +796,12 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                 stageTimes.extraction = (Date.now() - t1Start) / 1000;
                 logger.info(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
             } catch (openAiErr: any) {
-                logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
-                // User-friendly error message that distinguishes service overload from document issues
+                logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos). Gemini: ${errMsg} | OpenAI: ${openAiErr.message || openAiErr}`);
+                // User-friendly error message that distinguishes service overload / credit depletion from document issues
+                if (isPrepaymentDepleted) {
+                    throw new Error(`Os créditos de pré-pagamento da API do Gemini no Google AI Studio estão esgotados. ` +
+                        `Por favor, acesse o painel do Google AI Studio para recarregar o saldo de sua chave API.`);
+                }
                 if (isServiceOverload) {
                     throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
                         `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
