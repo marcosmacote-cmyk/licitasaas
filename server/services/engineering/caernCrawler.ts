@@ -440,6 +440,7 @@ async function persistCaernData(
       code: { in: uniqueCodes },
       databaseId: { in: sinapiDbIds }
     },
+    distinct: ['code'],
     select: { code: true }
   });
   const sinapiComps = new Set(matchedComps.map(c => c.code));
@@ -449,6 +450,7 @@ async function persistCaernData(
       code: { in: uniqueCodes },
       databaseId: { in: sinapiDbIds }
     },
+    distinct: ['code'],
     select: { code: true }
   });
   const sinapiInsumos = new Set(matchedInsumos.map(i => i.code));
@@ -459,11 +461,11 @@ async function persistCaernData(
 
     if (it.code.length === 7) {
       type = 'SERVICO';
-    } else if (sinapiComps.has(it.code)) {
-      type = 'SERVICO';
     } else if (sinapiInsumos.has(it.code)) {
       const cls = classifyInsumoType(it.description, it.unit);
       type = cls.type === 'SERVICO' ? 'MATERIAL' : cls.type; // Insumos cannot be SERVICO
+    } else if (sinapiComps.has(it.code)) {
+      type = 'SERVICO';
     } else {
       // Fallback for codes not in SINAPI database
       const isSvc = /fornecimento|instala|execu|aplica|assenta|loca|limpeza|constru|transp/i.test(it.description) || 
