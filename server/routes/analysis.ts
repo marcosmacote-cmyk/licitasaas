@@ -1576,14 +1576,23 @@ router.post('/analysis', authenticateToken, async (req: any, res) => {
             return res.status(403).json({ error: 'Unauthorized to add analysis to this process' });
         }
 
-        if (typeof payload.requiredDocuments === 'object') {
+        if (payload.requiredDocuments === undefined || payload.requiredDocuments === null) {
+            payload.requiredDocuments = JSON.stringify([]);
+        } else if (typeof payload.requiredDocuments === 'object') {
             payload.requiredDocuments = JSON.stringify(payload.requiredDocuments);
         }
-        if (typeof payload.deadlines === 'object') {
+        if (payload.deadlines === undefined || payload.deadlines === null) {
+            payload.deadlines = JSON.stringify([]);
+        } else if (typeof payload.deadlines === 'object') {
             payload.deadlines = JSON.stringify(payload.deadlines);
         }
-        if (typeof payload.chatHistory === 'object') {
+        if (payload.chatHistory === undefined || payload.chatHistory === null) {
+            payload.chatHistory = JSON.stringify([]);
+        } else if (typeof payload.chatHistory === 'object') {
             payload.chatHistory = JSON.stringify(payload.chatHistory);
+        }
+        if (payload.irregularitiesFlags === undefined || payload.irregularitiesFlags === null) {
+            payload.irregularitiesFlags = JSON.stringify([]);
         }
 
         const stringifyIfObject = (field: string) => {
