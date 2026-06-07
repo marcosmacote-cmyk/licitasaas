@@ -1042,15 +1042,39 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
         }
     }
 
-    // ── ON-DEMAND HYDRATION FOR PAST/DATE-FILTERED SEARCH ──
-    if (dataInicio) {
+    // ── ON-DEMAND HYDRATION (Auto-Cura por Busca ou por Data) ──
+    const hasKeywordsOrOrgao = (keywords && keywords.trim() !== '') || (orgao && String(orgao).trim() !== '') || (orgaosLista && String(orgaosLista).trim() !== '');
+    if (hasKeywordsOrOrgao) {
+        try {
+            let queryParts: string[] = [];
+            if (keywords) {
+                const kws = keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+                if (kws.length > 0) queryParts.push('(' + kws.map((k: string) => `"${k}"`).join(' OR ') + ')');
+            }
+            if (orgao) {
+                const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                if (ol.length > 0) queryParts.push('(' + ol.map((o: string) => `"${o}"`).join(' OR ') + ')');
+            }
+            if (orgaosLista) {
+                const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                if (ol.length > 0) queryParts.push('(' + ol.map((o: string) => `"${o}"`).join(' OR ') + ')');
+            }
+            const qStr = queryParts.join(' AND ');
+            if (qStr) {
+                const { PncpHydrationService } = await import('../services/pncp/pncp-hydration.service');
+                await PncpHydrationService.hydrateSearch(qStr, uf);
+            }
+        } catch (err: any) {
+            logger.warn(`[SEARCH-HYBRID] On-demand search-hydration failed: ${err?.message}`);
+        }
+    } else if (dataInicio) {
         try {
             const todayStr = new Date().toISOString().split('T')[0];
             const endLimitStr = dataFim || todayStr;
             const { PncpHydrationService } = await import('../services/pncp/pncp-hydration.service');
             await PncpHydrationService.hydrate(dataInicio, endLimitStr);
         } catch (err: any) {
-            logger.warn(`[SEARCH-HYBRID] On-demand hydration failed: ${err?.message}`);
+            logger.warn(`[SEARCH-HYBRID] On-demand date hydration failed: ${err?.message}`);
         }
     }
 

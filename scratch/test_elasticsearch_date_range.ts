@@ -15,7 +15,14 @@ async function runTest() {
         const url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=10&pagina=1&q=${encodeURIComponent(q)}`;
         console.log(`Testing query: "${q}"`);
         try {
-            const response = await axios.get(url, { headers: { 'Accept': 'application/json' }, httpsAgent: agent, timeout: 15000 });
+            const response = await axios.get(url, { 
+                headers: { 
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }, 
+                httpsAgent: agent, 
+                timeout: 15000 
+            } as any);
             console.log('  Success! Status:', response.status);
             const total = response.data?.total || response.data?.totalRegistros;
             console.log('  Total results:', total);

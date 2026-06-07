@@ -136,7 +136,7 @@ export class PncpHydrationService {
         let hasMore = true;
 
         while (hasMore) {
-            const url = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=${startParam}&dataFinal=${endParam}&codigoModalidadeContratacao=${modality}&pagina=${page}&tamanhoPagina=100`;
+            const url = `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=${startParam}&dataFinal=${endParam}&codigoModalidadeContratacao=${modality}&pagina=${page}&tamanhoPagina=50`;
             
             let data: any = null;
             let attempt = 0;
@@ -186,6 +186,86 @@ export class PncpHydrationService {
             hasMore = page < totalPaginas;
             page++;
         }
+    }
+
+    /**
+     * Sincroniza registros correspondentes a uma query de busca sob demanda a partir da API de busca do Gov.br
+     */
+    static async hydrateSearch(query: string, uf?: string): Promise<number> {
+        if (!query || query.trim() === '') return 0;
+        const startTime = Date.now();
+        
+        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=100&pagina=1&q=${encodeURIComponent(query)}`;
+        if (uf && uf !== 'todas') {
+            url += `&ufs=${uf.replace(/\s/g, '')}`;
+        }
+
+        let totalSaved = 0;
+        try {
+            const resp = await axios.get(url, {
+                headers: { 
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                httpsAgent: agent,
+                timeout: 8000
+            } as any);
+
+            const data = resp.data as any;
+            const items = data?.items || [];
+            
+            if (items.length > 0) {
+                const mapped = items.map((it: any) => this.mapContratacao(it));
+                for (const item of mapped) {
+                    if (!item.cnpjOrgao || !item.anoCompra || !item.sequencialCompra) continue;
+                    try {
+                        await prisma.pncpContratacao.upsert({
+                            where: { numeroControle: item.numeroControle },
+                            update: { ...item, syncedAt: new Date() },
+                            create: item
+                        });
+                        totalSaved++;
+                    } catch {}
+                }
+            }
+
+            // Se houver mais de 100 itens, puxa a página 2 (cobrindo até 200 itens mais recentes do termo)
+            const total = data?.total || 0;
+            if (total > 100) {
+                let urlPage2 = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=100&pagina=2&q=${encodeURIComponent(query)}`;
+                if (uf && uf !== 'todas') urlPage2 += `&ufs=${uf.replace(/\s/g, '')}`;
+                
+                const resp2 = await axios.get(urlPage2, {
+                    headers: { 
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    },
+                    httpsAgent: agent,
+                    timeout: 8000
+                } as any);
+                const data2 = resp2.data as any;
+                const items2 = data2?.items || [];
+                if (items2.length > 0) {
+                    const mapped2 = items2.map((it: any) => this.mapContratacao(it));
+                    for (const item of mapped2) {
+                        if (!item.cnpjOrgao || !item.anoCompra || !item.sequencialCompra) continue;
+                        try {
+                            await prisma.pncpContratacao.upsert({
+                                where: { numeroControle: item.numeroControle },
+                                update: { ...item, syncedAt: new Date() },
+                                create: item
+                            });
+                            totalSaved++;
+                        } catch {}
+                    }
+                }
+            }
+
+            logger.info(`[Hydration Search] Sincronizados ${totalSaved}/${total} registros da busca em ${Date.now() - startTime}ms`);
+        } catch (err: any) {
+            logger.warn(`[Hydration Search] Falha ao hidratar busca para q="${query}": ${err.message}`);
+        }
+        return totalSaved;
     }
 
     /**
