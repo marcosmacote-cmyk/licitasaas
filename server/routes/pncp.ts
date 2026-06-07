@@ -719,9 +719,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                             (orgaosLista && String(orgaosLista).trim() !== '') ||
                             (excludeKeywords && String(excludeKeywords).trim() !== '') ||
                             (valorMin !== undefined && valorMin !== null && String(valorMin) !== '') ||
-                            (valorMax !== undefined && valorMax !== null && String(valorMax) !== '') ||
-                            (dataInicio && String(dataInicio).trim() !== '') ||
-                            (dataFim && String(dataFim).trim() !== '');
+                            (valorMax !== undefined && valorMax !== null && String(valorMax) !== '');
 
     const canUseOfficialApi = statusSupportsApi && !hasComplexFilters;
 

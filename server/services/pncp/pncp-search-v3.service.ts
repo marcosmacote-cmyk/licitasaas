@@ -159,13 +159,13 @@ export class PncpSearchV3 {
             params.push(Number(input.valorMax));
         }
 
-        // ── Date range ──
+        // ── Date range (Prazo Limite / Encerramento ou Abertura) ──
         if (input.dataInicio) {
-            conditions.push(`"dataPublicacao" >= $${paramIdx++}`);
+            conditions.push(`COALESCE("dataEncerramento", "dataAbertura") >= $${paramIdx++}`);
             params.push(new Date(input.dataInicio + 'T00:00:00'));
         }
         if (input.dataFim) {
-            conditions.push(`"dataPublicacao" <= $${paramIdx++}`);
+            conditions.push(`COALESCE("dataEncerramento", "dataAbertura") <= $${paramIdx++}`);
             params.push(new Date(input.dataFim + 'T23:59:59'));
         }
 

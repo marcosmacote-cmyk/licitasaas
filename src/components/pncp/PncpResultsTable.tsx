@@ -574,11 +574,13 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                         : !p.hasSearched ? 'Busque editais no PNCP'
                                         : 'Nenhum edital encontrado'}
                                 </div>
-                                <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>
+                                <div style={{ fontSize: '0.8125rem', marginTop: '4px', maxWidth: '540px', margin: '6px auto 0', lineHeight: 1.4 }}>
                                     {p.activeTab === 'favorites' ? 'Clique na estrela para favoritar resultados.'
                                         : p.activeTab === 'found' ? 'Ative o scanner e aguarde a próxima varredura automática.'
                                         : !p.hasSearched ? 'Digite palavras-chave e clique em "Buscar", ou carregue uma pesquisa salva.'
-                                        : 'Tente ajustar as palavras-chave ou filtros.'}
+                                        : (p.dataInicio && new Date(p.dataInicio + 'T12:00:00').getFullYear() < new Date().getFullYear())
+                                            ? 'Atenção: A API pública do PNCP não suporta filtros de data retroativos para anos anteriores. Para localizar editais passados de outros anos, limpe os campos de "Prazo Limite" e faça a busca por palavra-chave ou órgão.'
+                                            : 'Tente ajustar as palavras-chave ou filtros.'}
                                 </div>
                             </td>
                         </tr>
