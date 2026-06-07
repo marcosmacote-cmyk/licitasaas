@@ -94,8 +94,18 @@ describe('useBiddingPage', () => {
             act(() => {
                 result.current.setFilters((prev: any) => ({ ...prev, searchText: 'pregão 001' }));
             });
+            expect(result.current.filteredItems).toHaveLength(2);
+            expect(result.current.filteredItems.map(i => i.id)).toContain('b1');
+            expect(result.current.filteredItems.map(i => i.id)).toContain('b3');
+        });
+
+        it('deve filtrar por termo específico que retorne apenas um item', () => {
+            const { result } = renderUseBiddingPage();
+            act(() => {
+                result.current.setFilters((prev: any) => ({ ...prev, searchText: 'concurso' }));
+            });
             expect(result.current.filteredItems).toHaveLength(1);
-            expect(result.current.filteredItems[0].id).toBe('b1');
+            expect(result.current.filteredItems[0].id).toBe('b3');
         });
 
         it('deve filtrar por nome da empresa', () => {

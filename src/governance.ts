@@ -403,6 +403,11 @@ export const LEGACY_STATUS_MAP: Record<string, { stage: KanbanStage; substage: s
     'Vencido':                   { stage: 'Ganho',                   substage: 'homologado' },
     'Sem Sucesso':               { stage: 'Perdido',                 substage: 'perdeu_disputa' },
     'Perdido':                   { stage: 'Perdido',                 substage: 'perdeu_disputa' },
+    'Encerrado':                 { stage: 'Arquivado',               substage: 'encerrado' },
+    'Encerrada':                 { stage: 'Arquivado',               substage: 'encerrado' },
+    'Cancelado':                 { stage: 'Arquivado',               substage: 'sem_acao_futura' },
+    'Cancelada':                 { stage: 'Arquivado',               substage: 'sem_acao_futura' },
+    'Suspenso':                  { stage: 'Em Sessão',               substage: 'aguardando_abertura' },
 };
 
 /**

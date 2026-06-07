@@ -557,6 +557,7 @@ function App() {
                 'production-petition':      { tab: 'production', subTab: 'petitions' },
                 'monitoring':               { tab: 'monitoring' },
                 'companies':                { tab: 'companies' },
+                'opportunities':            { tab: 'opportunities' },
               };
               const mapping = subTabMap[module];
               if (mapping) {

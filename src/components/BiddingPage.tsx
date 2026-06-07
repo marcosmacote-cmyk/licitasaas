@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { LayoutGrid, List, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
+import { LayoutGrid, List, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff, Signal } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -314,7 +314,41 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                 </div>
             )}
 
-            {b.viewMode === 'kanban' ? (
+            {b.filteredItems.length === 0 ? (
+                <div className="card" style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: 'var(--space-12) var(--space-8)', textAlign: 'center',
+                    background: 'var(--color-bg-surface)', border: '1px dashed var(--color-border)',
+                    borderRadius: 'var(--radius-xl)', marginTop: 'var(--space-4)',
+                    boxShadow: 'var(--shadow-sm)', animation: 'fadeIn 0.3s ease-out'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(37, 99, 235, 0.05))',
+                        borderRadius: 'var(--radius-full)', padding: 'var(--space-5)',
+                        marginBottom: 'var(--space-4)', color: 'var(--color-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(97, 102, 241, 0.08)'
+                    }}>
+                        <Search size={32} />
+                    </div>
+                    <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginBottom: 'var(--space-2)' }}>
+                        Nenhum processo localizado
+                    </h3>
+                    <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', maxWidth: '480px', lineHeight: 1.5, marginBottom: 'var(--space-6)' }}>
+                        Não encontramos licitações correspondentes aos seus termos de busca livre ou combinação de filtros ativos neste funil.
+                    </p>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {b.hasActiveFilters && (
+                            <button className="btn btn-outline" onClick={() => b.setFilters(EMPTY_FILTERS)}>
+                                <X size={14} /> Limpar Filtros
+                            </button>
+                        )}
+                        <button className="btn btn-primary" onClick={() => onNavigateToModule?.('opportunities')}>
+                            <Signal size={14} /> Buscar Editais no PNCP
+                        </button>
+                    </div>
+                </div>
+            ) : b.viewMode === 'kanban' ? (
                 <KanbanBoard items={b.filteredItems} setItems={setItems} onEditProcess={b.handleEdit} onDeleteProcess={b.handleDeleteProcess}
                     analyses={b.analyses} companies={companies}
                     onViewAnalysis={(_analysis, process) => { if (process) b.setViewingProcessForAnalysis(process); }}

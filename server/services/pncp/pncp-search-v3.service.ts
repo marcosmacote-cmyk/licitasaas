@@ -120,6 +120,9 @@ export class PncpSearchV3 {
                     // The aggregator doesn't re-sync situacao after import,
                     // so records stay "Divulgada" even after dataEncerramento passes.
                     conditions.push(`("dataEncerramento" >= NOW() OR "dataEncerramento" IS NULL)`);
+                } else if (searchStatus === 'encerrada') {
+                    conditions.push(`("situacao" = ANY($${paramIdx++}) OR ("dataEncerramento" < NOW() AND "dataEncerramento" IS NOT NULL))`);
+                    params.push(mapped);
                 } else {
                     conditions.push(`"situacao" = ANY($${paramIdx++})`);
                     params.push(mapped);

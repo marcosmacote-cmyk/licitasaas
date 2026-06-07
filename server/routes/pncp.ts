@@ -713,7 +713,17 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     // The API only reliably filters: status (recebendo_proposta/encerradas), uf, keywords (q).
     // All other filters (modalidade, orgao, valor, excludeKeywords) are enforced locally.
     const statusSupportsApi = !status || status === 'recebendo_proposta' || status === 'encerrada' || status === 'todas';
-    const canUseOfficialApi = statusSupportsApi;
+    const hasComplexFilters = (modalidade && modalidade !== 'todas') ||
+                            (esfera && esfera !== 'todas') ||
+                            (orgao && String(orgao).trim() !== '') ||
+                            (orgaosLista && String(orgaosLista).trim() !== '') ||
+                            (excludeKeywords && String(excludeKeywords).trim() !== '') ||
+                            (valorMin !== undefined && valorMin !== null && String(valorMin) !== '') ||
+                            (valorMax !== undefined && valorMax !== null && String(valorMax) !== '') ||
+                            (dataInicio && String(dataInicio).trim() !== '') ||
+                            (dataFim && String(dataFim).trim() !== '');
+
+    const canUseOfficialApi = statusSupportsApi && !hasComplexFilters;
 
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──

@@ -332,14 +332,32 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
 
             // == REGULAR FILTERS ==
             if (filters.searchText) {
-                const text = filters.searchText.toLowerCase();
-                const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
-                const match = item.title?.toLowerCase().includes(text) ||
-                    item.summary?.toLowerCase().includes(text) ||
-                    item.portal?.toLowerCase().includes(text) ||
-                    item.modality?.toLowerCase().includes(text) ||
-                    companyName.toLowerCase().includes(text);
-                if (!match) return false;
+                const queryWords = filters.searchText
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(Boolean);
+
+                if (queryWords.length > 0) {
+                    const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
+                    const fieldsToSearch = [
+                        item.title || '',
+                        item.summary || '',
+                        item.portal || '',
+                        item.modality || '',
+                        companyName,
+                        item.processNumber || '',
+                        item.uasg || '',
+                    ].map(f => f.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+
+                    // Every query word must match at least one field
+                    const allWordsMatch = queryWords.every(word =>
+                        fieldsToSearch.some(field => field.includes(word))
+                    );
+
+                    if (!allWordsMatch) return false;
+                }
             }
             if (filters.companies.length > 0 && (!item.companyProfileId || !filters.companies.includes(item.companyProfileId))) return false;
             if (filters.modalities.length > 0 && !filters.modalities.includes(normalizeModalityFE(item.modality))) return false;
