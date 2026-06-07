@@ -14,14 +14,23 @@ const LOADING_PHRASES = [
     'Quase lá! Montando os resultados da busca...'
 ];
 
-function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
+function RotatingLoadingMessage({ isFoundTab, isHistoric }: { isFoundTab: boolean; isHistoric?: boolean }) {
     const [index, setIndex] = React.useState(0);
     const [fade, setFade] = React.useState(true);
     
+    const phrases = isHistoric ? [
+        'Carregando dados históricos do PNCP...',
+        'Consultando arquivos passados no portal do governo...',
+        'Importando contratações anteriores sob demanda...',
+        'Estruturando base local para o histórico de licitações...',
+        'Organizando prazos e modalidades...',
+        'Quase lá! Montando os resultados da busca...'
+    ] : LOADING_PHRASES;
+
     React.useEffect(() => {
         if (isFoundTab) return;
         
-        if (index >= LOADING_PHRASES.length - 1) {
+        if (index >= phrases.length - 1) {
             return; // Stop at the last phrase
         }
 
@@ -34,7 +43,7 @@ function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
         }, 2800);
         
         return () => clearTimeout(timer);
-    }, [index, isFoundTab]);
+    }, [index, isFoundTab, phrases.length]);
 
     if (isFoundTab) return <span>Carregando oportunidades...</span>;
     
@@ -44,7 +53,7 @@ function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
             opacity: fade ? 1 : 0,
             display: 'inline-block' 
         }}>
-            {LOADING_PHRASES[index]}
+            {phrases[index]}
         </span>
     );
 }
@@ -558,7 +567,10 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                 <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                 <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
-                                    <RotatingLoadingMessage isFoundTab={p.activeTab === 'found'} />
+                                    <RotatingLoadingMessage 
+                                        isFoundTab={p.activeTab === 'found'} 
+                                        isHistoric={!!p.dataInicio && new Date(p.dataInicio + 'T12:00:00').getFullYear() < new Date().getFullYear()} 
+                                    />
                                 </div>
                             </td>
                         </tr>

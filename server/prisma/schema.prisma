@@ -825,3 +825,13 @@ model EngineeringCompositionItem {
   @@index([compositionId])
   @@index([itemId])
 }
+
+model PncpHydrationLog {
+  id        String   @id @default(uuid())
+  date      String   // Format YYYY-MM-DD
+  modality  String   // Code of modality
+  createdAt DateTime @default(now())
+
+  @@unique([date, modality])
+}
+

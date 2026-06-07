@@ -721,7 +721,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                             (valorMin !== undefined && valorMin !== null && String(valorMin) !== '') ||
                             (valorMax !== undefined && valorMax !== null && String(valorMax) !== '');
 
-    const canUseOfficialApi = statusSupportsApi && !hasComplexFilters;
+    const canUseOfficialApi = statusSupportsApi && !hasComplexFilters && !dataInicio && !dataFim;
 
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
@@ -1039,6 +1039,18 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
         } catch (apiError: any) {
             logger.warn(`[SEARCH-HYBRID] Gov.br API failed, falling back to local: ${apiError?.message}`);
             // Fall through to local V3
+        }
+    }
+
+    // ── ON-DEMAND HYDRATION FOR PAST/DATE-FILTERED SEARCH ──
+    if (dataInicio) {
+        try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const endLimitStr = dataFim || todayStr;
+            const { PncpHydrationService } = await import('../services/pncp/pncp-hydration.service');
+            await PncpHydrationService.hydrate(dataInicio, endLimitStr);
+        } catch (err: any) {
+            logger.warn(`[SEARCH-HYBRID] On-demand hydration failed: ${err?.message}`);
         }
     }
 

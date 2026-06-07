@@ -311,10 +311,30 @@ async function cleanup(): Promise<number> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 60);
 
+    // Get all favorited PNCP IDs
+    const favoritedItems = await prisma.pncpFavoriteItem.findMany({
+        select: { pncpId: true }
+    });
+    const favoritedIds = favoritedItems.map(f => f.pncpId).filter(Boolean);
+
+    // Get all BiddingProcess pncpLinks
+    const biddingProcesses = await prisma.biddingProcess.findMany({
+        where: { pncpLink: { not: null } },
+        select: { pncpLink: true }
+    });
+    const activePncpLinks = biddingProcesses.map(bp => bp.pncpLink).filter(Boolean) as string[];
+
     const result = await prisma.pncpContratacao.deleteMany({
         where: {
             dataEncerramento: { lt: cutoff },
             situacao: { in: ['Encerrada', 'Revogada', 'Anulada', 'Deserta', 'Fracassada'] },
+            numeroControle: { notIn: favoritedIds },
+            NOT: {
+                OR: [
+                    { linkOrigem: { in: activePncpLinks } },
+                    { linkSistema: { in: activePncpLinks } }
+                ]
+            }
         }
     });
 

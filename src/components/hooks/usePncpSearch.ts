@@ -133,6 +133,16 @@ export function usePncpSearch() {
         const targetPage = (overrides?.resetPage || e) ? 1 : page;
         if (overrides?.resetPage || e) setPage(1);
 
+        const inputStart = overrides?.dataInicio ?? dataInicio;
+        if (inputStart) {
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            const startD = new Date(inputStart + 'T00:00:00');
+            if (startD < oneYearAgo) {
+                toast.warning('Atenção: Pesquisar por editais com mais de 1 ano pode resultar em dados incompletos ou limitar a quantidade de resultados retornados.');
+            }
+        }
+
         // Sequence guard: only the latest search can control loading/results
         const seq = ++requestSeqRef.current;
 
