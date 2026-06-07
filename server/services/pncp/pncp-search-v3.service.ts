@@ -69,11 +69,11 @@ const MODALIDADE_EXACT_MAP: Record<string, string[]> = {
 };
 
 const STATUS_TO_SITUACAO: Record<string, string[]> = {
-    'recebendo_proposta': ['Divulgada', 'Aberta'],
-    'encerrada': ['Encerrada'],
-    'suspensa': ['Suspensa'],
-    'anulada': ['Revogada', 'Anulada'],
-    'revogada': ['Revogada', 'Anulada'],
+    'recebendo_proposta': ['Divulgada', 'Aberta', 'Divulgada no PNCP', 'Em andamento', 'Publicada', 'Vigente', 'Ativa'],
+    'encerrada': ['Encerrada', 'Encerrada no PNCP', 'Finalizada', 'Homologada', 'Deserta', 'Fracassada', 'Concluída'],
+    'suspensa': ['Suspensa', 'Suspenso'],
+    'anulada': ['Revogada', 'Anulada', 'Cancelada'],
+    'revogada': ['Revogada', 'Anulada', 'Cancelada'],
 };
 
 // ── Search Engine ──────────────────────────────────────────
