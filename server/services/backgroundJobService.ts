@@ -21,7 +21,7 @@ import { logger } from '../lib/logger';
 // Types
 // ═══════════════════════════════════════════
 
-export type JobType = 'edital_analysis' | 'pncp_analysis' | 'oracle' | 'proposal_populate' | 'petition' | 'declaration' | 'engineering_extraction';
+export type JobType = 'edital_analysis' | 'pncp_analysis' | 'oracle' | 'proposal_populate' | 'petition' | 'declaration' | 'engineering_extraction' | 'pncp_hydration_items';
 export type JobStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface JobSubmission {

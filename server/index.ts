@@ -572,6 +572,91 @@ async function runAutoSetup() {
         } else if (admin.tenantId !== tenant.id) {
             await prisma.user.update({ where: { email: adminEmail }, data: { tenantId: tenant.id } });
         }
+
+        // ── Setup FTS & pg_trgm ──
+        logger.info('🔍 Configurando triggers e índices de busca do PNCP (FTS e Trigramas)...');
+        await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS unaccent;`);
+        await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
+
+        // Configuração de busca no Postgres
+        await prisma.$executeRawUnsafe(`
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'pt_unaccent') THEN
+                CREATE TEXT SEARCH CONFIGURATION pt_unaccent (COPY = portuguese);
+                ALTER TEXT SEARCH CONFIGURATION pt_unaccent
+                  ALTER MAPPING FOR hword, hword_part, word WITH unaccent, portuguese_stem;
+              END IF;
+            END
+            $$;
+        `);
+
+        // Trigger function
+        await prisma.$executeRawUnsafe(`
+            CREATE OR REPLACE FUNCTION pncp_search_vector_trigger() RETURNS trigger AS $$
+            BEGIN
+              NEW."searchVector" :=
+                setweight(to_tsvector('pt_unaccent', coalesce(NEW."objeto", '')), 'A') ||
+                setweight(to_tsvector('pt_unaccent', coalesce(NEW."orgaoNome", '')), 'B') ||
+                setweight(to_tsvector('pt_unaccent', coalesce(NEW."unidadeNome", '')), 'B') ||
+                setweight(to_tsvector('pt_unaccent', coalesce(NEW."modalidade", '')), 'C') ||
+                setweight(to_tsvector('pt_unaccent', coalesce(NEW."municipio", '')), 'C');
+              RETURN NEW;
+            END
+            $$ LANGUAGE plpgsql;
+        `);
+
+        // Dropar e recriar trigger
+        await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS tsvectorupdate ON "PncpContratacao";`);
+        await prisma.$executeRawUnsafe(`
+            CREATE TRIGGER tsvectorupdate
+            BEFORE INSERT OR UPDATE ON "PncpContratacao"
+            FOR EACH ROW EXECUTE FUNCTION pncp_search_vector_trigger();
+        `);
+
+        // Criar índices FTS e trigrama
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PncpContratacao_searchVector_idx" ON "PncpContratacao" USING GIN("searchVector");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PncpContratacao_uf_situacao_idx" ON "PncpContratacao" ("uf", "situacao");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PncpContratacao_dataEncerramento_sort_idx" ON "PncpContratacao" ("dataEncerramento" ASC NULLS LAST);`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PncpContratacao_objeto_trgm_idx" ON "PncpContratacao" USING GIN("objeto" gin_trgm_ops);`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PncpContratacao_orgaoNome_trgm_idx" ON "PncpContratacao" USING GIN("orgaoNome" gin_trgm_ops);`);
+
+        // Backfill de searchVector nulo
+        const countRes = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int as count FROM "PncpContratacao" WHERE "searchVector" IS NULL`) as any[];
+        const missingVectorCount = countRes[0]?.count || 0;
+        if (missingVectorCount > 0) {
+            logger.info(`[FTS] 🔄 Executando backfill do searchVector para ${missingVectorCount} registros...`);
+            await prisma.$executeRawUnsafe(`
+                UPDATE "PncpContratacao" 
+                SET "searchVector" = 
+                  setweight(to_tsvector('pt_unaccent', coalesce("objeto", '')), 'A') ||
+                  setweight(to_tsvector('pt_unaccent', coalesce("orgaoNome", '')), 'B') ||
+                  setweight(to_tsvector('pt_unaccent', coalesce("unidadeNome", '')), 'B') ||
+                  setweight(to_tsvector('pt_unaccent', coalesce("modalidade", '')), 'C') ||
+                  setweight(to_tsvector('pt_unaccent', coalesce("municipio", '')), 'C')
+                WHERE "searchVector" IS NULL;
+            `);
+            logger.info('[FTS] ✅ Backfill FTS concluído!');
+        }
+
+        // Seed de Sinônimos Iniciais
+        const seedSynonyms = [
+            { word: 'merenda', synonyms: 'merenda, alimentacao escolar, generos alimenticios, refeicao, merenda escolar' },
+            { word: 'ti', synonyms: 'ti, tecnologia da informacao, software, informatica, computador, licenciamento de software' },
+            { word: 'obra', synonyms: 'obra, construcao civil, reforma, engenharia civil, pavimentacao' },
+            { word: 'seguranca', synonyms: 'seguranca, vigilancia, monitoramento, seguranca patrimonial, guarda' },
+            { word: 'limpeza', synonyms: 'limpeza, conservacao, higienizacao, asseio, servicos gerais' }
+        ];
+
+        for (const s of seedSynonyms) {
+            await prisma.pncpSynonym.upsert({
+                where: { word: s.word },
+                update: {},
+                create: s
+            });
+        }
+        logger.info('[FTS] ✅ Setup FTS, trigramas e sementes de sinônimos concluídos com sucesso!');
+
     } catch (error) {
         logger.error('❌ Erro no runAutoSetup:', error);
     }
@@ -998,6 +1083,40 @@ app.listen(PORT, async () => {
     });
 
     registerJobHandler('engineering_extraction', engineeringExtractionHandler);
+
+    registerJobHandler('pncp_hydration_items', async (job: any) => {
+        const { orgao_cnpj, ano, numero_sequencial } = job.input;
+        const tenantId = job.tenantId;
+
+        logger.info(`[JobWorker] 🔄 Hidratando itens em background para ${orgao_cnpj}/${ano}/${numero_sequencial}...`);
+
+        try {
+            const { fetchPncpItems } = await import('./routes/pncp');
+            const res = await fetchPncpItems(orgao_cnpj, String(ano), String(numero_sequencial));
+            const itemsArray = res?.items || [];
+            
+            if (itemsArray.length > 0) {
+                const sum = itemsArray.reduce((acc: number, item: any) => {
+                    return acc + (Number(item.totalValue) || 0);
+                }, 0);
+
+                if (sum > 0) {
+                    const numeroControle = `${orgao_cnpj}-${ano}-${numero_sequencial}`;
+                    const prisma = (await import('./lib/prisma')).default;
+                    await prisma.pncpContratacao.updateMany({
+                        where: { numeroControle },
+                        data: { valorEstimado: sum }
+                    });
+                    logger.info(`[JobWorker] ✅ Hidratação de itens concluída para ${numeroControle}. Novo valorEstimado: ${sum}`);
+                    return { success: true, valorEstimado: sum, itemsCount: itemsArray.length };
+                }
+            }
+            return { success: true, message: 'Nenhum item ou valor estimado encontrado.' };
+        } catch (err: any) {
+            logger.warn(`[JobWorker] ❌ Falha na hidratação de itens para ${orgao_cnpj}/${ano}/${numero_sequencial}: ${err.message}`);
+            throw err;
+        }
+    });
 
     startJobWorker();
     logger.info('[BackgroundJob] 🚀 Worker started — async AI operations enabled');

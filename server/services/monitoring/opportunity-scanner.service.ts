@@ -44,6 +44,7 @@ interface PncpSearchResult {
     modalidade_nome: string;
     link_sistema: string;
     esfera_id?: string;
+    status?: string;
 }
 
 /** Resultado do scan por pesquisa — usado para sumário e badges */
@@ -116,7 +117,33 @@ async function searchPncpApiDirect(search: {
     else if (statusStr === 'encerrada') params.set('status', 'encerradas');
 
     if (ufs) params.set('ufs', ufs.replace(/\s/g, ''));
-    if (search.keywords) params.set('q', search.keywords);
+
+    // Map keywords and orgao into the 'q' parameter using Elasticsearch syntax
+    let queryParts: string[] = [];
+    if (search.keywords) {
+        const kws = search.keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+        if (kws.length > 0) queryParts.push('(' + kws.map((k: string) => `"${k}"`).join(' OR ') + ')');
+    }
+    
+    // When keywords are EMPTY, we MUST send orgao to q so the API returns relevant items
+    if (!search.keywords || search.keywords.trim() === '') {
+        let orgaoParts: string[] = [];
+        if (orgao) {
+            const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+            if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+        }
+        if (orgaosLista) {
+            const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+            if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+        }
+        if (orgaoParts.length > 0) {
+            queryParts.push('(' + orgaoParts.join(' OR ') + ')');
+        }
+    }
+
+    if (queryParts.length > 0) {
+        params.set('q', queryParts.join(' AND '));
+    }
 
     const url = `https://pncp.gov.br/api/search/?${params.toString()}`;
     logger.info(`[OpportunityScanner] 🌐 Fallback API: ${url.substring(0, 120)}`);
@@ -152,6 +179,7 @@ async function searchPncpApiDirect(search: {
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (item.linkSistemaOrigem || item.link || ''),
                 esfera_id: String(esferaId),
+                status: item.situacao_nome || item.situacaoCompraNome || item.status || '',
             };
         });
 
@@ -401,6 +429,40 @@ async function markAsNotified(tenantId: string, result: PncpSearchResult, search
                 }
             } catch (err) {
                 // Ignore errors and proceed with 0
+            }
+        }
+
+        // Salvar também em PncpContratacao para que o edital exista no banco local do SaaS
+        if (result.orgao_cnpj && result.ano && result.numero_sequencial) {
+            try {
+                const item = {
+                    numeroControle: result.id,
+                    cnpjOrgao: result.orgao_cnpj,
+                    anoCompra: Number(result.ano),
+                    sequencialCompra: Number(result.numero_sequencial),
+                    orgaoNome: result.orgao_nome || 'Órgão não informado',
+                    unidadeNome: result.municipio || '',
+                    uf: result.uf || '',
+                    municipio: result.municipio || '',
+                    esfera: result.esfera_id || '',
+                    objeto: result.objeto || 'Sem objeto',
+                    modalidade: result.modalidade_nome || '',
+                    situacao: result.status || 'Aberta',
+                    valorEstimado: computedValue || null,
+                    dataPublicacao: result.data_abertura ? new Date(result.data_abertura) : new Date(),
+                    dataAbertura: result.data_abertura ? new Date(result.data_abertura) : null,
+                    dataEncerramento: result.data_encerramento_proposta ? new Date(result.data_encerramento_proposta) : null,
+                    linkSistema: result.link_sistema || '',
+                    syncedAt: new Date()
+                };
+
+                await prisma.pncpContratacao.upsert({
+                    where: { numeroControle: item.numeroControle },
+                    update: { ...item },
+                    create: item
+                });
+            } catch (err: any) {
+                logger.warn(`[OpportunityScanner] Failed to upsert PncpContratacao: ${err.message}`);
             }
         }
 

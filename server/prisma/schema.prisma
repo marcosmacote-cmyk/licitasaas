@@ -255,6 +255,13 @@ model PncpSavedSearch {
   company CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
 }
 
+model PncpSynonym {
+  id        String   @id @default(uuid())
+  word      String   @unique
+  synonyms  String   @db.Text
+  createdAt DateTime @default(now())
+}
+
 model OpportunityScannerLog {
   id         String  @id @default(uuid())
   tenantId   String

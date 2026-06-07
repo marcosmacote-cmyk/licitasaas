@@ -14,8 +14,11 @@ import { logger } from '../lib/logger';
 import { handleApiError } from '../middlewares/errorHandler';
 import axios from 'axios';
 import https from 'https';
+import { SimpleTtlCache } from '../lib/cache';
 
 const router = express.Router();
+const pncpSearchCache = new SimpleTtlCache<string, any>(180); // 3 min cache TTL
+
 
 // ══════════════════════════════════════════
 // ── Saved Searches CRUD ──
@@ -709,6 +712,25 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     const { keywords, status, uf, modalidade, esfera, pagina = 1, tamanhoPagina = 50,
             dataInicio, dataFim, orgao, orgaosLista, excludeKeywords, valorMin, valorMax } = req.body;
 
+    // ── Cache Lookup ──
+    const cacheKey = JSON.stringify(req.body);
+    const cachedResponse = pncpSearchCache.get(cacheKey);
+    if (cachedResponse) {
+        logger.info(`[SEARCH-HYBRID] Cache Hit para key: ${cacheKey.substring(0, 100)}...`);
+        return res.json(cachedResponse);
+    }
+
+    // ── Synonym Expansion ──
+    let finalKeywords = keywords;
+    if (keywords && keywords.trim() !== '') {
+        try {
+            const { PncpSynonymService } = await import('../services/pncp/pncp-synonym.service');
+            finalKeywords = await PncpSynonymService.expandQuery(keywords);
+        } catch (err: any) {
+            logger.warn(`[SEARCH-HYBRID] Synonym expansion failed: ${err.message}`);
+        }
+    }
+
     // Determine if we can use the official API
     // The API only reliably filters: status (recebendo_proposta/encerradas), uf, keywords (q).
     // All other filters (modalidade, orgao, valor, excludeKeywords) are enforced locally.
@@ -748,17 +770,14 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             // Map keywords and orgao into the 'q' parameter using Elasticsearch syntax
             let queryParts: string[] = [];
             
-            if (keywords) {
-                const kws = keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
-                if (kws.length > 0) {
-                    queryParts.push('(' + kws.map((k: string) => `"${k}"`).join(' OR ') + ')');
-                }
+            if (finalKeywords) {
+                queryParts.push(finalKeywords);
             }
             
             // NOTE: excludeKeywords are NOT sent to the API q param.
             // The API's NOT operator is unreliable and interfered with keyword OR queries.
             // Exclusion is enforced 100% locally (see below).
-
+ 
             // Orgao names: Send to API q param ONLY when no keywords are specified.
             // When keywords ARE present, mixing orgao with AND restricts results incorrectly.
             // When keywords are EMPTY, we MUST send orgao to q so the API returns relevant items
@@ -1030,12 +1049,14 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                                     dataInicio || dataFim;
             const effectiveTotal = hasLocalFilters ? finalItems.length : totalRegistros;
 
-            return res.json({
+            const responsePayload = {
                 items: finalItems, total: effectiveTotal,
                 totalLocal: 0, elapsed,
                 source: 'govbr-api',
                 meta: { source: 'govbr-api', elapsedMs: elapsed, localCount: effectiveTotal, errors: [] },
-            });
+            };
+            pncpSearchCache.set(cacheKey, responsePayload);
+            return res.json(responsePayload);
         } catch (apiError: any) {
             logger.warn(`[SEARCH-HYBRID] Gov.br API failed, falling back to local: ${apiError?.message}`);
             // Fall through to local V3
@@ -1047,9 +1068,8 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     if (hasKeywordsOrOrgao) {
         try {
             let queryParts: string[] = [];
-            if (keywords) {
-                const kws = keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
-                if (kws.length > 0) queryParts.push('(' + kws.map((k: string) => `"${k}"`).join(' OR ') + ')');
+            if (finalKeywords) {
+                queryParts.push(finalKeywords);
             }
             if (orgao) {
                 const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
@@ -1081,16 +1101,18 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     // ── FALLBACK / FILTERED SEARCH: Local V3 ──
     try {
         const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
-        const result = await PncpSearchV3.search(req.body);
+        const result = await PncpSearchV3.search({ ...req.body, keywords: finalKeywords });
         const elapsed = Date.now() - start;
         logger.info(`[SEARCH-HYBRID] Local V3: ${result.total} items in ${elapsed}ms | uf=${uf || '*'}`);
 
-        res.json({
+        const responsePayload = {
             items: result.items, total: result.total,
             totalLocal: result.total, elapsed,
             source: result.source,
             meta: { source: result.source, elapsedMs: elapsed, localCount: result.total, errors: [] },
-        });
+        };
+        pncpSearchCache.set(cacheKey, responsePayload);
+        res.json(responsePayload);
     } catch (error: any) {
         handleApiError(res, error, 'pncp-search-hybrid');
     }

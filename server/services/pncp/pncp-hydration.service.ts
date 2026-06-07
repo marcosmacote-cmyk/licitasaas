@@ -225,6 +225,25 @@ export class PncpHydrationService {
                             create: item
                         });
                         totalSaved++;
+
+                        // Disparar hidratação de itens em background se o valor estimado for 0 ou nulo
+                        if (!item.valorEstimado || Number(item.valorEstimado) === 0) {
+                            try {
+                                const { submitJob } = await import('../backgroundJobService');
+                                await submitJob({
+                                    tenantId: '9f7a7155-be67-4470-8952-eb947fd97931',
+                                    userId: 'system',
+                                    type: 'pncp_hydration_items',
+                                    input: {
+                                        orgao_cnpj: item.cnpjOrgao,
+                                        ano: item.anoCompra,
+                                        numero_sequencial: item.sequencialCompra
+                                    },
+                                    targetId: item.numeroControle,
+                                    targetTitle: item.objeto?.substring(0, 100)
+                                });
+                            } catch {}
+                        }
                     } catch {}
                 }
             }
@@ -256,6 +275,25 @@ export class PncpHydrationService {
                                 create: item
                             });
                             totalSaved++;
+
+                            // Disparar hidratação de itens em background se o valor estimado for 0 ou nulo
+                            if (!item.valorEstimado || Number(item.valorEstimado) === 0) {
+                                try {
+                                    const { submitJob } = await import('../backgroundJobService');
+                                    await submitJob({
+                                        tenantId: '9f7a7155-be67-4470-8952-eb947fd97931',
+                                        userId: 'system',
+                                        type: 'pncp_hydration_items',
+                                        input: {
+                                            orgao_cnpj: item.cnpjOrgao,
+                                            ano: item.anoCompra,
+                                            numero_sequencial: item.sequencialCompra
+                                        },
+                                        targetId: item.numeroControle,
+                                        targetTitle: item.objeto?.substring(0, 100)
+                                    });
+                                } catch {}
+                            }
                         } catch {}
                     }
                 }

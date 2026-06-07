@@ -216,18 +216,33 @@ export class PncpSearchV3 {
             }
         }
 
-        // ── Keywords (PostgreSQL GIN-indexed Full-Text Search on searchVector + PncpItem fallback) ──
+        // ── Keywords (PostgreSQL GIN-indexed Full-Text Search on searchVector + pg_trgm + PncpItem fallback) ──
         if (input.keywords && input.keywords.trim()) {
-            // Split by comma to support multiple keywords like "Gêneros, Escola"
-            const kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
+            let kws: string[] = [];
+            
+            // Se a query contiver parênteses/OR de sinônimos, extraímos os termos individuais
+            if (input.keywords.includes('OR') || input.keywords.includes('(')) {
+                const matches = input.keywords.match(/"([^"]+)"/g);
+                if (matches) {
+                    kws = matches.map(m => m.replace(/"/g, ''));
+                } else {
+                    kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
+                }
+            } else {
+                kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
+            }
             
             if (kws.length > 0) {
                 const kwConditions: string[] = [];
                 for (const kw of kws) {
                     const ftsParamStr = `$${paramIdx++}`;
                     const ilikeParamStr = `$${paramIdx++}`;
+                    const trgmParamStr = `$${paramIdx++}`;
+                    
                     kwConditions.push(`(
                         "searchVector" @@ websearch_to_tsquery('pt_unaccent', ${ftsParamStr})
+                        OR ${trgmParamStr} <% "objeto"
+                        OR ${trgmParamStr} <% "orgaoNome"
                         OR EXISTS (
                             SELECT 1 FROM "PncpItem" pi 
                             WHERE pi."contratacaoId" = "PncpContratacao".id 
@@ -236,8 +251,9 @@ export class PncpSearchV3 {
                     )`);
                     params.push(kw);
                     params.push(`%${kw}%`);
+                    params.push(kw);
                 }
-                // Use OR if they separated by comma
+                // Use OR to match any of the expanded search terms (synonyms)
                 conditions.push(`(${kwConditions.join(' OR ')})`);
             }
         }
