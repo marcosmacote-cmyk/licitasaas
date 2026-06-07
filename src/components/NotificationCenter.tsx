@@ -33,6 +33,7 @@ const JOB_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string 
     oracle: { label: 'Oráculo Técnico', icon: Brain, color: 'var(--color-primary)' },
     proposal_populate: { label: 'Proposta IA', icon: FileText, color: 'var(--color-success)' },
     petition: { label: 'Petição IA', icon: Gavel, color: 'var(--color-warning)' },
+    pncp_hydration_items: { label: 'Hidratação de Itens', icon: Loader2, color: 'var(--color-primary)' },
 };
 
 export default function NotificationCenter({ onNavigateToProcess }: NotificationCenterProps) {
@@ -48,20 +49,23 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
     const handleSSEEvent = useCallback((event: JobEvent) => {
         const config = JOB_TYPE_CONFIG[event.jobType] || JOB_TYPE_CONFIG.edital_analysis;
         const title = event.targetTitle || config.label;
+        const isSilentType = event.jobType === 'pncp_hydration_items';
 
         setNotifications(prev => {
             const existing = prev.findIndex(n => n.jobId === event.jobId);
 
             if (event.type === 'job_completed') {
-                // Show toast notification
-                toast.success(`${config.label} concluída: ${title}`);
+                // Show toast notification only for non-silent jobs
+                if (!isSilentType) {
+                    toast.success(`${config.label} concluída: ${title}`);
 
-                // Request browser notification permission
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification(`${config.label} concluída`, {
-                        body: title,
-                        icon: '/favicon.ico',
-                    });
+                    // Request browser notification permission
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification(`${config.label} concluída`, {
+                            body: title,
+                            icon: '/favicon.ico',
+                        });
+                    }
                 }
 
                 if (existing >= 0) {
@@ -71,7 +75,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                         status: 'completed',
                         message: 'Concluído',
                         progress: 100,
-                        read: false,
+                        read: isSilentType, // Auto-read for silent jobs to avoid bubble badge bloat
                     };
                     return updated;
                 }
@@ -86,12 +90,14 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                     targetId: event.targetId,
                     progress: 100,
                     timestamp: event.timestamp,
-                    read: false,
+                    read: isSilentType,
                 }, ...prev].slice(0, 50);
             }
 
             if (event.type === 'job_failed') {
-                toast.error(`${config.label} falhou: ${event.error || 'Erro desconhecido'}`);
+                if (!isSilentType) {
+                    toast.error(`${config.label} falhou: ${event.error || 'Erro desconhecido'}`);
+                }
 
                 if (existing >= 0) {
                     const updated = [...prev];
@@ -99,7 +105,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                         ...updated[existing],
                         status: 'failed',
                         message: event.error || 'Erro',
-                        read: false,
+                        read: isSilentType,
                     };
                     return updated;
                 }
@@ -113,7 +119,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                     message: event.error || 'Erro',
                     targetId: event.targetId,
                     timestamp: event.timestamp,
-                    read: false,
+                    read: isSilentType,
                 }, ...prev].slice(0, 50);
             }
 
@@ -144,7 +150,9 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
             }
 
             if (event.type === 'job_queued') {
-                toast.info(`${config.label} iniciada: ${title}`);
+                if (!isSilentType) {
+                    toast.info(`${config.label} iniciada: ${title}`);
+                }
 
                 return [{
                     id: `notif_${Date.now()}`,

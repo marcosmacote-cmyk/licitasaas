@@ -279,19 +279,21 @@ export class PncpSearchV3 {
             params.push(pageSize, offset);
 
             // Two sequential queries (1 connection at a time, no transaction)
-            const countSql = `SELECT COUNT(*)::int as total FROM "PncpContratacao" ${whereClause}`;
-            const dataSql = `
-                SELECT 
-                    id, "numeroControle", "cnpjOrgao", "anoCompra", "sequencialCompra",
-                    "orgaoNome", "unidadeNome", uf, municipio, esfera,
-                    objeto, modalidade, situacao, "valorEstimado", "valorHomologado",
-                    srp, "dataPublicacao", "dataAbertura", "dataEncerramento",
-                    "linkSistema", "linkOrigem"
-                FROM "PncpContratacao" 
-                ${whereClause}
-                ORDER BY "dataEncerramento" ASC NULLS LAST
-                LIMIT ${limitParam} OFFSET ${offsetParam}
-            `;
+             const countSql = `SELECT COUNT(*)::int as total FROM "PncpContratacao" ${whereClause}`;
+             const dataSql = `
+                 SELECT 
+                     id, "numeroControle", "cnpjOrgao", "anoCompra", "sequencialCompra",
+                     "orgaoNome", "unidadeNome", uf, municipio, esfera,
+                     objeto, modalidade, situacao, 
+                     COALESCE(NULLIF("valorEstimado", 0), (SELECT SUM(pi."valorTotal") FROM "PncpItem" pi WHERE pi."contratacaoId" = "PncpContratacao".id)) as "valorEstimado", 
+                     "valorHomologado",
+                     srp, "dataPublicacao", "dataAbertura", "dataEncerramento",
+                     "linkSistema", "linkOrigem"
+                 FROM "PncpContratacao" 
+                 ${whereClause}
+                 ORDER BY "dataEncerramento" ASC NULLS LAST
+                 LIMIT ${limitParam} OFFSET ${offsetParam}
+             `;
 
             logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
 

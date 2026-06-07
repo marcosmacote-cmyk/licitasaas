@@ -1101,13 +1101,16 @@ app.listen(PORT, async () => {
                 }, 0);
 
                 if (sum > 0) {
-                    const numeroControle = `${orgao_cnpj}-${ano}-${numero_sequencial}`;
                     const prisma = (await import('./lib/prisma')).default;
-                    await prisma.pncpContratacao.updateMany({
-                        where: { numeroControle },
+                    const updated = await prisma.pncpContratacao.updateMany({
+                        where: {
+                            cnpjOrgao: orgao_cnpj,
+                            anoCompra: Number(ano),
+                            sequencialCompra: Number(numero_sequencial)
+                        },
                         data: { valorEstimado: sum }
                     });
-                    logger.info(`[JobWorker] ✅ Hidratação de itens concluída para ${numeroControle}. Novo valorEstimado: ${sum}`);
+                    logger.info(`[JobWorker] ✅ Hidratação de itens concluída para ${orgao_cnpj}/${ano}/${numero_sequencial}. Registros atualizados: ${updated.count}. Novo valorEstimado: ${sum}`);
                     return { success: true, valorEstimado: sum, itemsCount: itemsArray.length };
                 }
             }
