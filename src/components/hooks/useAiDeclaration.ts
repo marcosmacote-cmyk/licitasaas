@@ -134,6 +134,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     // ── State ──
     const [selectedBiddingId, setSelectedBiddingId] = useState(initialBiddingId || '');
+    const [fullBidding, setFullBidding] = useState<BiddingProcess | null>(null);
+    const [isBiddingLoading, setIsBiddingLoading] = useState(false);
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [declarationType, setDeclarationType] = useState('');
     const [issuerType, setIssuerType] = useState<'company' | 'technical'>('company');
@@ -262,6 +264,28 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     // Auto-save layouts
     useEffect(() => { saveLayouts(layouts); }, [layouts]);
 
+    // Fetch full bidding process details asynchronously under selectedBiddingId changes
+    useEffect(() => {
+        if (!selectedBiddingId) {
+            setFullBidding(null);
+            return;
+        }
+        setIsBiddingLoading(true);
+        fetch(`${API_BASE_URL}/api/biddings/${selectedBiddingId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                setFullBidding(data);
+            })
+            .catch(err => {
+                console.error("Error fetching full bidding:", err);
+            })
+            .finally(() => {
+                setIsBiddingLoading(false);
+            });
+    }, [selectedBiddingId]);
+
     // Auto-infer company from selected bidding
     useEffect(() => {
         if (selectedBiddingId && !selectedCompanyId) {
@@ -371,11 +395,18 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     const declarationTypesFromEdital = useMemo(() => {
         if (!selectedBiddingId) return [];
-        const b = biddings.find(b => b.id === selectedBiddingId);
+        const b = fullBidding || biddings.find(b => b.id === selectedBiddingId);
         if (!b?.aiAnalysis) return [];
 
         // 1. Priorizar schemaV2.operational_outputs.declaration_routes (estruturado)
-        const schema = b.aiAnalysis.schemaV2;
+        let schema = b.aiAnalysis.schemaV2;
+        if (typeof schema === 'string') {
+            try {
+                schema = JSON.parse(schema);
+            } catch {
+                schema = null;
+            }
+        }
         if (schema?.operational_outputs?.declaration_routes?.length > 0) {
             return schema.operational_outputs.declaration_routes.map(
                 (d: any) => typeof d === 'string' ? d : (d.name || d.title || JSON.stringify(d))
@@ -387,7 +418,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             return extractDeclarationTypes(b.aiAnalysis.requiredDocuments);
         }
         return [];
-    }, [selectedBiddingId, biddings]);
+    }, [selectedBiddingId, biddings, fullBidding]);
 
     const handleBiddingChange = (biddingId: string) => {
         setSelectedBiddingId(biddingId); // useEffect acima cuida do destinatário
@@ -420,31 +451,52 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             updateLayout({ headerImage: null, footerImage: null });
         }
 
-        const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
+        // Prioritize structured address fields, fall back to qualification parsing
+        const addr = c.address ? [
+            c.address,
+            c.bairro,
+            c.city && c.state ? `${c.city}/${c.state}` : (c.city || c.state || ''),
+            c.cep ? `CEP: ${c.cep}` : ''
+        ].filter(Boolean).join(', ') : (c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '');
         const qual = (c.qualification || '').trim();
 
-        let city = '';
-        const cityMatch = qual.match(/,\s*([^,.(0-9\-]{3,30})\s*[/|-]\s*([A-Z]{2})(?=\s*,|\s+CEP|\s+inscrita|\s*neste|$)/i);
-        if (cityMatch) city = `${cityMatch[1].trim()}/${cityMatch[2].trim()}`;
-        else {
-            const cityFallback = addr.match(/,\s*([^,.(0-9\-]{3,25}(?:\/|-)[A-Z]{2})\s*$/);
-            if (cityFallback) city = cityFallback[1].trim();
-            else { const munMatch = qual.match(/(?:município\s+de|cidade\s+de)\s+([^,.(0-9]{3,30})/i); if (munMatch) city = munMatch[1].trim(); }
+        let city = c.city || '';
+        if (city && c.state) {
+            city = `${city}/${c.state}`;
+        } else if (!city) {
+            const cityMatch = qual.match(/,\s*([^,.(0-9\-]{3,30})\s*[/|-]\s*([A-Z]{2})(?=\s*,|\s+CEP|\s+inscrita|\s*neste|$)/i);
+            if (cityMatch) city = `${cityMatch[1].trim()}/${cityMatch[2].trim()}`;
+            else {
+                const cityFallback = addr.match(/,\s*([^,.(0-9\-]{3,25}(?:\/|-)[A-Z]{2})\s*$/);
+                if (cityFallback) city = cityFallback[1].trim();
+                else { const munMatch = qual.match(/(?:município\s+de|cidade\s+de)\s+([^,.(0-9]{3,30})/i); if (munMatch) city = munMatch[1].trim(); }
+            }
         }
 
-        let cpf = '';
-        const cpfMatch = qual.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-        if (cpfMatch) cpf = `CPF nº: ${cpfMatch[0]}`;
+        let cpf = c.contactCpf || '';
+        if (cpf && !cpf.startsWith('CPF nº:')) {
+            cpf = `CPF nº: ${cpf}`;
+        }
+        if (!cpf) {
+            const cpfMatch = qual.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+            if (cpfMatch) cpf = `CPF nº: ${cpfMatch[0]}`;
+        }
 
-        let fullName = '';
-        const nameMatch = qual.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
-        if (nameMatch?.[1]) fullName = nameMatch[1].trim();
-        if (!fullName) fullName = c.contactName || '';
+        let fullName = c.contactName || '';
+        if (!fullName) {
+            const nameMatch = qual.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
+            if (nameMatch?.[1]) fullName = nameMatch[1].trim();
+        }
 
-        let rtName = '';
-        let rtCpf = '';
-        let rtRegister = '';
-        if (c.technicalQualification) {
+        let rtName = c.techName || '';
+        let rtCpf = c.techCpf || '';
+        if (rtCpf && !rtCpf.startsWith('CPF nº:')) {
+            rtCpf = `CPF nº: ${rtCpf}`;
+        }
+        let rtRegister = c.techRegistration || '';
+        let rtRole = c.techTitle || 'Responsável Técnico';
+        
+        if (!rtName && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
             rtName = techLines[0]?.split(',')[0]?.trim() || '';
             const techCpfMatch = c.technicalQualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
@@ -453,34 +505,35 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             if (regMatch) {
                 rtRegister = regMatch[0].trim().replace(/^(?:CREA|CAU)\s*:\s*(?=(?:CREA|CAU))/i, '');
             }
+            rtRole = 'Responsável Técnico';
         }
 
-        if (issuerType === 'technical' && c.technicalQualification) {
-            const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
-            const techName = techLines[0]?.split(',')[0]?.trim() || fullName;
-            const techCpfMatch = c.technicalQualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-            const techCityMatch = c.technicalQualification.match(/(?:município\s+de|cidade\s+de|em)\s+([^,.]+)/i);
+        if (issuerType === 'technical' && (c.techName || c.technicalQualification)) {
             updateLayout({
-                signatoryName: techName, signatoryRole: 'Responsável Técnico',
-                signatoryCpf: techCpfMatch ? `CPF nº: ${techCpfMatch[0]}` : '',
-                signatureCity: techCityMatch ? techCityMatch[1].trim() : city,
+                signatoryName: rtName || fullName, signatoryRole: rtRole || 'Responsável Técnico',
+                signatoryCpf: rtCpf || cpf,
+                signatureCity: city,
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`,
                 rtName,
                 rtCpf,
-                rtRole: 'Responsável Técnico',
-                rtRegister
+                rtRole,
+                rtRegister,
+                headerImage: c.defaultProposalHeader || null,
+                footerImage: c.defaultProposalFooter || null,
             });
         } else {
             updateLayout({
                 headerText: `${c.razaoSocial}\nCNPJ: ${c.cnpj}`,
                 signatoryCompany: c.razaoSocial, signatoryCnpj: `CNPJ: ${c.cnpj}`,
-                signatoryName: fullName, signatoryCpf: cpf, signatoryRole: 'Representante Legal',
+                signatoryName: fullName, signatoryCpf: cpf, signatoryRole: c.contactCargo || 'Representante Legal',
                 signatureCity: city,
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`,
                 rtName,
                 rtCpf,
-                rtRole: rtName ? 'Responsável Técnico' : '',
-                rtRegister
+                rtRole: rtName ? rtRole : '',
+                rtRegister,
+                headerImage: c.defaultProposalHeader || null,
+                footerImage: c.defaultProposalFooter || null,
             });
         }
     }, [issuerType, selectedCompanyId, companies, updateLayout]);
@@ -544,7 +597,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             toast.warning('Selecione ao menos um modelo de declaração.'); return;
         }
 
-        const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
+        const selectedBidding = fullBidding || biddings.find(b => b.id === selectedBiddingId);
         const selectedCompany = companies.find(c => c.id === selectedCompanyId);
         
         // Atualizar data para o dia da geração
@@ -826,6 +879,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         generationMode, setGenerationMode, selectedTemplateId, setSelectedTemplateId,
         selectedTemplateIds, setSelectedTemplateIds,
         templates, isTemplatesLoading,
+        fullBidding, isBiddingLoading,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
         // Layout actions

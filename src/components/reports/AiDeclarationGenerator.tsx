@@ -190,9 +190,9 @@ function WizardStep1({ d, companies, biddings, setManageTemplatesOpen }: {
     setManageTemplatesOpen: (open: boolean) => void;
 }) {
     return (
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-8)', alignItems: 'start' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 'var(--space-6)', alignItems: 'start' }}>
 
-            {/* LEFT: Config */}
+            {/* COLUMN 1: Config */}
             <div style={{
                 borderRadius: 'var(--radius-xl)',
                 border: 'none',
@@ -352,11 +352,6 @@ function WizardStep1({ d, companies, biddings, setManageTemplatesOpen }: {
                         <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
                     )}
 
-                    {/* Layout Settings Panel */}
-                    <div style={{ marginTop: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-                        <LayoutSettingsPanel d={d} />
-                    </div>
-
                     {/* Generate CTA */}
                     <button
                         className="btn btn-primary"
@@ -378,7 +373,10 @@ function WizardStep1({ d, companies, biddings, setManageTemplatesOpen }: {
                 </div>
             </div>
 
-            {/* RIGHT: Info panel */}
+            {/* COLUMN 2: Layout & Assinatura (expanded by default) */}
+            <LayoutSettingsPanel key="step1-layout" d={d} initiallyCollapsed={false} />
+
+            {/* COLUMN 3: Info / Certame panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                 {d.selectedBiddingId ? (
                     <EditalRequirementsMatchPanel d={d} biddings={biddings} />
@@ -634,8 +632,8 @@ function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, comp
     );
 }
 
-function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
-    const [collapsed, setCollapsed] = useState(true); // Start collapsed
+function LayoutSettingsPanel({ d, initiallyCollapsed = true }: { d: ReturnType<typeof useAiDeclaration>; initiallyCollapsed?: boolean }) {
+    const [collapsed, setCollapsed] = useState(initiallyCollapsed);
 
     return (
         <div style={{
@@ -1563,10 +1561,30 @@ export function extractAllDocuments(rawReq: any): string[] {
 }
 
 function EditalRequirementsMatchPanel({ d, biddings }: { d: ReturnType<typeof useAiDeclaration>; biddings: BiddingProcess[] }) {
-    const bidding = biddings.find(x => x.id === d.selectedBiddingId);
+    const bidding = d.fullBidding || biddings.find(x => x.id === d.selectedBiddingId);
     const analysis = bidding?.aiAnalysis;
     const allDocs = analysis ? extractAllDocuments(analysis.requiredDocuments) : [];
     const [showAllDocs, setShowAllDocs] = useState(false);
+
+    if (d.isBiddingLoading) {
+        return (
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-12) var(--space-6)',
+                background: 'var(--color-bg-surface)',
+                borderRadius: 'var(--radius-xl)',
+                border: 'none',
+                boxShadow: '0 0 0 1px rgba(139,92,246,0.12), 0 4px 16px rgba(139,92,246,0.04)',
+            }}>
+                <Loader2 size={32} className="spin" color="var(--color-ai)" />
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>Carregando exigências do edital...</div>
+            </div>
+        );
+    }
 
     return (
         <div style={{

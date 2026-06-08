@@ -66,12 +66,36 @@ describe('useAiDeclaration', () => {
         createCompany({ id: 'comp-1', razaoSocial: 'TechCorp', cnpj: '12.345.678/0001-99', qualification: 'TechCorp, sediada em São Paulo/SP, representada por João Silva, 123.456.789-00' }),
         createCompany({ id: 'comp-2', razaoSocial: 'BuildCo' }),
     ];
+    const smartFetchMock = (templatesList: any[]) => {
+        return vi.fn().mockImplementation((url: string) => {
+            if (url.includes('/api/biddings/')) {
+                const parts = url.split('/');
+                const id = parts[parts.length - 1];
+                const found = biddings.find(b => b.id === id);
+                return Promise.resolve({
+                    ok: !!found,
+                    json: () => Promise.resolve(found || null)
+                });
+            }
+            if (url.includes('/api/declaration-templates')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve(templatesList)
+                });
+            }
+            return Promise.resolve({
+                ok: false,
+                json: () => Promise.resolve(null)
+            });
+        });
+    };
 
     beforeEach(() => {
         resetMocks();
         localStorage.clear();
         Object.values(toastMock).forEach(fn => fn.mockClear());
         (submitBackgroundJob as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue({ jobId: 'test-job' });
+        global.fetch = smartFetchMock([]);
     });
 
     const renderDeclaration = (overrides = {}) =>
@@ -328,12 +352,9 @@ describe('useAiDeclaration', () => {
     // ═══════════════════════════════════
     describe('Templates e Modos de Geração', () => {
         beforeEach(() => {
-            global.fetch = vi.fn().mockResolvedValue({
-                ok: true,
-                json: async () => [
-                    { id: 'sys-1', tenantId: null, title: 'Modelo 1', content: 'Empresa {empresaRazaoSocial} sob CNPJ {empresaCnpj}' }
-                ]
-            } as any);
+            global.fetch = smartFetchMock([
+                { id: 'sys-1', tenantId: null, title: 'Modelo 1', content: 'Empresa {empresaRazaoSocial} sob CNPJ {empresaCnpj}' }
+            ]);
         });
 
         it('deve inicializar com modo de geração ai', () => {
@@ -395,13 +416,10 @@ describe('useAiDeclaration', () => {
         it('deve realizar preenchimento estático unificado de múltiplos templates', async () => {
             const { result } = renderDeclaration({ initialBiddingId: 'bid-1' });
             
-            global.fetch = vi.fn().mockResolvedValue({
-                ok: true,
-                json: async () => [
-                    { id: 'sys-menor', tenantId: null, title: 'Menor Aprendiz', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, que não emprega menores...' },
-                    { id: 'sys-impedimento', tenantId: null, title: 'Fato Impeditivo', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, a inexistência de fatos supervenientes...' }
-                ]
-            } as any);
+            global.fetch = smartFetchMock([
+                { id: 'sys-menor', tenantId: null, title: 'Menor Aprendiz', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, que não emprega menores...' },
+                { id: 'sys-impedimento', tenantId: null, title: 'Fato Impeditivo', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, a inexistência de fatos supervenientes...' }
+            ]);
 
             await act(async () => {
                 await result.current.fetchTemplates();
