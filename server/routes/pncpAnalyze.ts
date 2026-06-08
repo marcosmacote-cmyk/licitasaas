@@ -1759,24 +1759,25 @@ Responda APENAS com JSON array:
         if (rawObjResumo !== bestObjResumo) {
             logger.info(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
         }
+        const rawLinkOriginal = (v2Result.process_identification.link_sistema || link_sistema || '').trim();
         const legacyProcess = {
-            title: cleanNumEdital
-                ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
-                : bestObjResumo || '',
-            summary: `${bestObjResumo || bestObjCompleto || ''}\n\n` +
-                `Modalidade: ${v2Result.process_identification.modalidade || ''}\n` +
-                `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
-                `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
-                `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
-                `Sessão: ${resolvedSessionDateRaw}\n` +
-                (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
-                (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
-                (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
-                `\n--- RISCOS CRÍTICOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
-                v2Result.legal_risk_review.critical_points.map(cp =>
-                    `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
-                ).join('\n'),
-            modality: normalizeModality(v2Result.process_identification.modalidade),
+            id: uuidv4(),
+            biddingProcessId: '',
+            title: (() => {
+                const mod = v2Result.process_identification.modalidade || '';
+                const numProc = v2Result.process_identification.numero_processo || '';
+                const numEdit = v2Result.process_identification.numero_edital || '';
+                const orgao = (v2Result.process_identification.orgao || '').toUpperCase();
+                const numero = numProc || numEdit;
+                if (mod && numero && orgao) return `${mod} ${numero} - ${orgao}`;
+                if (mod && numero) return `${mod} ${numero}`;
+                if (numero && orgao) return `${numero} - ${orgao}`;
+                return bestObjResumo || numero || 'Sem título';
+            })(),
+            summary: bestObjCompleto || '',
+            agency: v2Result.process_identification.orgao,
+            uf: v2Result.process_identification.municipio_uf ? v2Result.process_identification.municipio_uf.split('/')[1]?.trim() : '',
+            municipio: v2Result.process_identification.municipio_uf ? v2Result.process_identification.municipio_uf.split('/')[0]?.trim() : '',
             portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
             estimatedValue: resolvedEstimatedValue,
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
@@ -1786,7 +1787,7 @@ Responda APENAS com JSON array:
             link_sistema: (() => {
                 // Sanitize: strip generic ComprasNet links that are NOT actual monitoring URLs
                 // Only cnetmobile.estaleiro.serpro.gov.br/...?compra=XXX is a valid monitoring link
-                const rawLink = (v2Result.process_identification.link_sistema || '').trim();
+                const rawLink = rawLinkOriginal;
                 if (!rawLink) return '';
                 const lower = rawLink.toLowerCase();
                 const isGenericComprasNet = (
@@ -1803,21 +1804,15 @@ Responda APENAS com JSON array:
         };
 
         // ── AUTO-ENRICH: Buscar link de monitoramento via API PNCP ──
-        // Se link_sistema está vazio OU é genérico (sem parâmetros funcionais para chat monitor),
-        // buscamos linkSistemaOrigem da API PNCP para TODAS as plataformas monitoráveis.
-        // V4.6.0: Expandido para BLL, BNC, BBMNET, PCP, Licitanet, LMB (antes: só cnetmobile).
         const isAnalysisLinkFunctional = (() => {
             const l = (legacyProcess.link_sistema || '').toLowerCase();
             if (!l) return false;
-            // BLL: functional links need param1= or ProcessView
             if ((l.includes('bllcompras') || l.includes('bll.org')) && !l.includes('param1=') && !l.includes('processview')) return false;
-            // M2A: functional links need /certame/
             if (l.includes('m2atecnologia') && !l.includes('/certame/')) return false;
-            // Generic domain-only links (e.g. "www.bll.org.br", "bllcompras.com") without path
             try {
                 const url = new URL(l.startsWith('http') ? l : `https://${l}`);
                 if (url.pathname === '/' || url.pathname === '' || url.pathname === '/Home/PublicAccess') return false;
-            } catch { /* not a parseable URL, treat as non-functional */ return false; }
+            } catch { return false; }
             return true;
         })();
         const needsAutoEnrich = (!legacyProcess.link_sistema || !isAnalysisLinkFunctional) && orgao_cnpj && ano && numero_sequencial;
@@ -1829,9 +1824,10 @@ Responda APENAS com JSON array:
                 const enrichTimeout = setTimeout(() => controller.abort(), 8000);
                 const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
                 clearTimeout(enrichTimeout);
+                let lso = '';
                 if (enrichRes.ok) {
                     const enrichData = await enrichRes.json();
-                    const lso = (enrichData.linkSistemaOrigem || '').trim();
+                    lso = (enrichData.linkSistemaOrigem || '').trim();
                     if (lso && hasMonitorableDomain(lso)) {
                         legacyProcess.link_sistema = lso;
                         const platform = detectPlatformFromLink(lso) || 'desconhecida';
@@ -1840,12 +1836,7 @@ Responda APENAS com JSON array:
                         logger.info(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
 
                         // ── FALLBACK B: Construir URL ComprasNet a partir dos dados do edital ──
-                        // Quando linkSistemaOrigem é null (ex: CE-SOP), o edital pode conter
-                        // "UASG: 943001" e "Número Comprasnet: (95033/2026)" que são diferentes
-                        // da unidade/número do PNCP (081401/202606994).
-                        // Fórmula: UASG(6) + coModalidade(2) + nuCompra(5) + ano(4) = 17 dígitos
                         try {
-                            // Fontes: (1) campo IA, (2) regex nos campos IA, (3) regex no PDF direto
                             const aiNumComprasnet = ((v2Result.process_identification as any).numero_comprasnet || '').trim();
                             const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
                             
@@ -1860,8 +1851,6 @@ Responda APENAS com JSON array:
                             const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
                             const pncpUasg = enrichData.unidadeOrgao?.codigoUnidade || '';
                             
-                            // ── Resolução de numero_comprasnet ──
-                            // Prioridade: campo IA > regex campos IA > regex PDF direto
                             let nuCompraRaw = aiNumComprasnet;
                             let compraAno = ano;
                             let resolvedUasg = aiUasg;
@@ -1881,8 +1870,6 @@ Responda APENAS com JSON array:
                                 if (uasgMatch) resolvedUasg = uasgMatch[1];
                             }
                             
-                            // ── Fallback C: Extração direta do PDF via pdf-parse ──
-                            // Se a IA e o regex nos campos IA falharam, buscar no texto bruto do PDF
                             if ((!nuCompraRaw || !resolvedUasg) && pdfParts.length > 0) {
                                 try {
                                     const pdfParse = require('pdf-parse');
@@ -1893,7 +1880,6 @@ Responda APENAS com JSON array:
                                     }
                                     if (pdfBuffer) {
                                         const pdfData = await pdfParse(pdfBuffer);
-                                        // Buscar apenas nos primeiros 3000 chars (cabeçalho)
                                         const headerText = (pdfData.text || '').substring(0, 3000);
                                         
                                         if (!nuCompraRaw) {
@@ -1918,10 +1904,8 @@ Responda APENAS com JSON array:
                                 }
                             }
                             
-                            // Fallback final para UASG: usar PNCP API
                             if (!resolvedUasg) resolvedUasg = pncpUasg;
                             
-                            // Mapeamento de modalidade → código ComprasNet (SISG)
                             const MODALIDADE_TO_CODE: Record<string, string> = {
                                 'pregão': '05', 'pregao': '05',
                                 'concorrência': '03', 'concorrencia': '03',
@@ -1952,8 +1936,23 @@ Responda APENAS com JSON array:
                         }
                     }
                 }
+
+                if (!legacyProcess.link_sistema) {
+                    const restoredLink = lso || rawLinkOriginal || link_sistema || '';
+                    if (restoredLink) {
+                        legacyProcess.link_sistema = restoredLink;
+                        logger.info(`[PNCP-V2] 🔄 Restored generic/fallback link: ${restoredLink.substring(0, 80)}`);
+                    }
+                }
             } catch (err: any) {
                 logger.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
+                if (!legacyProcess.link_sistema) {
+                    const restoredLink = rawLinkOriginal || link_sistema || '';
+                    if (restoredLink) {
+                        legacyProcess.link_sistema = restoredLink;
+                        logger.info(`[PNCP-V2] 🔄 Restored generic/fallback link on error: ${restoredLink.substring(0, 80)}`);
+                    }
+                }
             }
         }
 

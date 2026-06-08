@@ -731,6 +731,136 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
         }
     }
 
+    const axios = (await import('axios')).default;
+    const https = (await import('https')).default;
+    const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });
+    const PNCP_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+    };
+
+    // Helper to run hydration on an array of search result items
+    const hydrateItems = async (finalItems: any[]) => {
+        const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
+        if (itemsToHydrate.length === 0) return;
+
+        try {
+            const prisma = (await import('../lib/prisma')).default;
+            const ids = itemsToHydrate.map((it: any) => it.id);
+            
+            // 1. Check local DB first (fastest) - include items sum if valorEstimado is 0
+            const localData = await prisma.pncpContratacao.findMany({
+                where: { numeroControle: { in: ids } },
+                select: { 
+                    numeroControle: true, 
+                    valorEstimado: true,
+                    itens: {
+                        select: {
+                            valorTotal: true
+                        }
+                    }
+                }
+            });
+            
+            const valMap = new Map();
+            localData.forEach((d: any) => {
+                let val = Number(d.valorEstimado) || 0;
+                if (val === 0 && d.itens && d.itens.length > 0) {
+                    val = d.itens.reduce((sum: number, it: any) => sum + (Number(it.valorTotal) || 0), 0);
+                }
+                if (val > 0) {
+                    valMap.set(d.numeroControle, val);
+                }
+            });
+            
+            let stillMissing: any[] = [];
+            itemsToHydrate.forEach((it: any) => {
+                if (valMap.has(it.id)) {
+                    it.valor_estimado = Number(valMap.get(it.id));
+                } else {
+                    stillMissing.push(it);
+                }
+            });
+
+            // 2. Fetch remainder from Gov.br API in chunks of 5 to avoid timeouts & blocks
+            if (stillMissing.length > 0) {
+                const hydrateResults: PromiseSettledResult<any>[] = [];
+                const chunkSize = 5;
+                for (let i = 0; i < stillMissing.length; i += chunkSize) {
+                    const chunk = stillMissing.slice(i, i + chunkSize);
+                    const chunkPromises = chunk.map((it: any) => 
+                        axios.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
+                        { httpsAgent: agent, timeout: 5000, headers: PNCP_HEADERS } as any)
+                    );
+                    const chunkResults = await Promise.allSettled(chunkPromises);
+                    hydrateResults.push(...chunkResults);
+                }
+                
+                const needItemFetch: any[] = [];
+                hydrateResults.forEach((r, idx) => {
+                    if (r.status === 'fulfilled') {
+                        const val = (r.value.data as any)?.valorTotalEstimado ?? (r.value.data as any)?.valorTotalHomologado ?? null;
+                        if (val != null && Number(val) > 0) {
+                            stillMissing[idx].valor_estimado = Number(val);
+                        } else {
+                            needItemFetch.push(stillMissing[idx]);
+                        }
+                    } else {
+                        needItemFetch.push(stillMissing[idx]);
+                    }
+                });
+
+                // 3. Fallback: Fetch items if the global value is still 0 (also in chunks of 3)
+                if (needItemFetch.length > 0) {
+                    const itemFetchResults: PromiseSettledResult<any>[] = [];
+                    const itemChunkSize = 3;
+                    for (let i = 0; i < needItemFetch.length; i += itemChunkSize) {
+                        const chunk = needItemFetch.slice(i, i + itemChunkSize);
+                        const chunkPromises = chunk.map((it: any) => 
+                            fetchPncpItems(it.orgao_cnpj, String(it.ano), String(it.numero_sequencial))
+                        );
+                        const chunkResults = await Promise.allSettled(chunkPromises);
+                        itemFetchResults.push(...chunkResults);
+                    }
+                    
+                    itemFetchResults.forEach((r, idx) => {
+                        if (r.status === 'fulfilled') {
+                            const itemsArray = r.value?.items || [];
+                            needItemFetch[idx].itens_preview = itemsArray;
+
+                            const sum = itemsArray.reduce((acc: number, item: any) => {
+                                return acc + (Number(item.totalValue) || 0);
+                            }, 0);
+
+                            if (sum > 0) {
+                                needItemFetch[idx].valor_estimado = sum;
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Background job to persist hydrated values to local database
+            setImmediate(async () => {
+                try {
+                    const updates = itemsToHydrate.filter((it: any) => it.valor_estimado && it.valor_estimado > 0);
+                    for (const item of updates) {
+                        await prisma.pncpContratacao.updateMany({
+                            where: { numeroControle: item.id },
+                            data: { valorEstimado: item.valor_estimado }
+                        });
+                    }
+                } catch (updateErr: any) {
+                    logger.warn(`[SEARCH-HYBRID] Background DB write for hydrated values failed: ${updateErr.message}`);
+                }
+            });
+
+        } catch (hydrateErr: any) {
+            logger.warn(`[SEARCH-HYBRID] Value hydration failed: ${hydrateErr.message}`);
+        }
+    };
+
     // Determine if we can use the official API
     // The API only reliably filters: status (recebendo_proposta/encerradas), uf, keywords (q).
     // All other filters (modalidade, orgao, valor, excludeKeywords) are enforced locally.
@@ -748,14 +878,6 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
         try {
-            const axios = (await import('axios')).default;
-            const https = (await import('https')).default;
-            const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });
-            const PNCP_HEADERS = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            };
 
             const pageSize = Math.min(Number(tamanhoPagina) || 50, 100);
             const pageNum = Math.max(1, Number(pagina) || 1);
@@ -947,107 +1069,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             // NOTE: Value range filter is applied AFTER hydration (below)
 
             // ── HYDRATION: Fetch missing values ──
-            const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
-            if (itemsToHydrate.length > 0) {
-                try {
-                    const prisma = (await import('../lib/prisma')).default;
-                    const ids = itemsToHydrate.map((it: any) => it.id);
-                    
-                    // 1. Check local DB first (fastest) - include items sum if valorEstimado is 0
-                    const localData = await prisma.pncpContratacao.findMany({
-                        where: { numeroControle: { in: ids } },
-                        select: { 
-                            numeroControle: true, 
-                            valorEstimado: true,
-                            itens: {
-                                select: {
-                                    valorTotal: true
-                                }
-                            }
-                        }
-                    });
-                    
-                    const valMap = new Map();
-                    localData.forEach((d: any) => {
-                        let val = Number(d.valorEstimado) || 0;
-                        if (val === 0 && d.itens && d.itens.length > 0) {
-                            val = d.itens.reduce((sum: number, it: any) => sum + (Number(it.valorTotal) || 0), 0);
-                        }
-                        if (val > 0) {
-                            valMap.set(d.numeroControle, val);
-                        }
-                    });
-                    
-                    let stillMissing: any[] = [];
-                    itemsToHydrate.forEach((it: any) => {
-                        if (valMap.has(it.id)) {
-                            it.valor_estimado = Number(valMap.get(it.id));
-                        } else {
-                            stillMissing.push(it);
-                        }
-                    });
-
-                    // 2. Fetch remainder from Gov.br API in chunks of 5 to avoid timeouts & blocks
-                    if (stillMissing.length > 0) {
-                        const hydrateResults: PromiseSettledResult<any>[] = [];
-                        const chunkSize = 5;
-                        for (let i = 0; i < stillMissing.length; i += chunkSize) {
-                            const chunk = stillMissing.slice(i, i + chunkSize);
-                            const chunkPromises = chunk.map((it: any) => 
-                                axios.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
-                                { httpsAgent: agent, timeout: 5000, headers: PNCP_HEADERS } as any)
-                            );
-                            const chunkResults = await Promise.allSettled(chunkPromises);
-                            hydrateResults.push(...chunkResults);
-                        }
-                        
-                        const needItemFetch: any[] = [];
-                        hydrateResults.forEach((r, idx) => {
-                            if (r.status === 'fulfilled') {
-                                const val = (r.value.data as any)?.valorTotalEstimado ?? (r.value.data as any)?.valorTotalHomologado ?? null;
-                                if (val != null && Number(val) > 0) {
-                                    stillMissing[idx].valor_estimado = Number(val);
-                                } else {
-                                    needItemFetch.push(stillMissing[idx]);
-                                }
-                            } else {
-                                needItemFetch.push(stillMissing[idx]);
-                            }
-                        });
-
-                        // 3. Fallback: Fetch items if the global value is still 0 (also in chunks of 3)
-                        if (needItemFetch.length > 0) {
-                            const itemFetchResults: PromiseSettledResult<any>[] = [];
-                            const itemChunkSize = 3;
-                            for (let i = 0; i < needItemFetch.length; i += itemChunkSize) {
-                                const chunk = needItemFetch.slice(i, i + itemChunkSize);
-                                const chunkPromises = chunk.map((it: any) => 
-                                    fetchPncpItems(it.orgao_cnpj, String(it.ano), String(it.numero_sequencial))
-                                );
-                                const chunkResults = await Promise.allSettled(chunkPromises);
-                                itemFetchResults.push(...chunkResults);
-                            }
-                            
-                            itemFetchResults.forEach((r, idx) => {
-                                if (r.status === 'fulfilled') {
-                                    const itemsArray = r.value?.items || [];
-                                    needItemFetch[idx].itens_preview = itemsArray;
-
-                                    const sum = itemsArray.reduce((acc: number, item: any) => {
-                                        return acc + (Number(item.totalValue) || 0);
-                                    }, 0);
-
-                                    if (sum > 0) {
-                                        needItemFetch[idx].valor_estimado = sum;
-                                    }
-                                }
-                            });
-                        }
-                    }
-                } catch (hydrateErr: any) {
-                    logger.warn(`[SEARCH-HYBRID] Value hydration failed: ${hydrateErr.message}`);
-                }
-            }
+            await hydrateItems(finalItems);
 
             // ── VALUE RANGE: Applied AFTER hydration so real values are available ──
             if (valorMin || valorMax) {
@@ -1141,6 +1163,9 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
         const result = await PncpSearchV3.search({ ...req.body, keywords: finalKeywords });
         const elapsed = Date.now() - start;
         logger.info(`[SEARCH-HYBRID] Local V3: ${result.total} items in ${elapsed}ms | uf=${uf || '*'}`);
+
+        // Hydrate result.items before sending response
+        await hydrateItems(result.items);
 
         const responsePayload = {
             items: result.items, total: result.total,
