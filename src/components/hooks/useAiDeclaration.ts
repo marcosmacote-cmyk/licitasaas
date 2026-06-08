@@ -30,6 +30,15 @@ export interface QualityReportFrontend {
     contaminationDetected: boolean;
 }
 
+export interface DeclarationTemplate {
+    id: string;
+    tenantId: string | null;
+    title: string;
+    content: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
 export interface LayoutConfig {
     id: string;
     name: string;
@@ -131,6 +140,102 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
     const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
     const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
+
+    const [generationMode, setGenerationMode] = useState<'ai' | 'static' | 'mixed'>('ai');
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [templates, setTemplates] = useState<DeclarationTemplate[]>([]);
+    const [isTemplatesLoading, setIsTemplatesLoading] = useState(false);
+
+    const fetchTemplates = useCallback(async () => {
+        setIsTemplatesLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/declaration-templates`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data);
+                if (data.length > 0 && !selectedTemplateId) {
+                    setSelectedTemplateId(data[0].id);
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching templates:", e);
+        } finally {
+            setIsTemplatesLoading(false);
+        }
+    }, [selectedTemplateId]);
+
+    useEffect(() => {
+        fetchTemplates();
+    }, []);
+
+    const handleCreateTemplate = async (title: string, content: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/declaration-templates`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ title, content })
+            });
+            if (res.ok) {
+                toast.success('Modelo criado com sucesso!');
+                fetchTemplates();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Erro ao criar modelo.');
+            }
+        } catch (e) {
+            toast.error('Erro ao criar modelo.');
+        }
+    };
+
+    const handleUpdateTemplate = async (id: string, title: string, content: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/declaration-templates/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ title, content })
+            });
+            if (res.ok) {
+                toast.success('Modelo atualizado com sucesso!');
+                fetchTemplates();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Erro ao atualizar modelo.');
+            }
+        } catch (e) {
+            toast.error('Erro ao atualizar modelo.');
+        }
+    };
+
+    const handleDeleteTemplate = async (id: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/declaration-templates/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            if (res.ok) {
+                toast.success('Modelo excluído com sucesso!');
+                if (selectedTemplateId === id) {
+                    setSelectedTemplateId('');
+                }
+                fetchTemplates();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Erro ao excluir modelo.');
+            }
+        } catch (e) {
+            toast.error('Erro ao excluir modelo.');
+        }
+    };
 
     const layout = useMemo(() =>
         layouts.find(l => l.id === currentLayoutId) || layouts[0] || { ...DEFAULT_LAYOUT, id: 'default', name: 'Layout Principal' }
@@ -393,15 +498,63 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     // ── Generate ──
     const handleGenerate = async () => {
-        if (!selectedBiddingId || !selectedCompanyId || !declarationType) {
-            toast.warning('Selecione licitação, empresa e tipo de declaração.'); return;
+        if (!selectedBiddingId || !selectedCompanyId) {
+            toast.warning('Selecione licitação e empresa.'); return;
+        }
+        if (generationMode === 'ai' && !declarationType) {
+            toast.warning('Selecione ou digite o tipo de declaração.'); return;
+        }
+        if (generationMode !== 'ai' && !selectedTemplateId) {
+            toast.warning('Selecione um modelo de declaração.'); return;
         }
 
         const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
+        const selectedCompany = companies.find(c => c.id === selectedCompanyId);
         
         // Atualizar data para o dia da geração
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         updateLayout({ signatureDate: today });
+
+        const activeTemplate = templates.find(t => t.id === selectedTemplateId);
+        const targetDeclarationType = generationMode === 'ai' ? declarationType : (activeTemplate?.title || 'Declaração');
+
+        if (generationMode === 'static') {
+            setIsGenerating(true);
+            setSaveSuccess(false);
+            setQualityWarning(null);
+            setQualityReport(null);
+            setProgressMsg('Preenchendo modelo...');
+
+            try {
+                // Compile the template content by replacing placeholders
+                const facts = {
+                    empresaRazaoSocial: selectedCompany?.razaoSocial || '',
+                    empresaCnpj: selectedCompany?.cnpj || '',
+                    empresaEndereco: layout.signatoryCompany || selectedCompany?.address || '',
+                    representanteNome: layout.signatoryName || selectedCompany?.contactName || '',
+                    representanteCpf: layout.signatoryCpf || selectedCompany?.contactCpf || '',
+                    representanteCargo: layout.signatoryRole || selectedCompany?.contactCargo || '',
+                    orgaoLicitante: layout.addresseeOrg?.split('\n')?.[0] || selectedBidding?.title?.split(' - ')?.[1] || '',
+                    modalidade: selectedBidding?.modality || '',
+                    editalNumero: selectedBidding?.aiAnalysis?.schemaV2?.process_identification?.numero_edital || '',
+                    processoNumero: selectedBidding?.aiAnalysis?.schemaV2?.process_identification?.numero_processo || '',
+                    objeto: selectedBidding?.aiAnalysis?.schemaV2?.process_identification?.objeto || selectedBidding?.summary || '',
+                    signatureCity: layout.signatureCity || '',
+                    signatureDate: today
+                };
+
+                const compiled = compileTemplate(activeTemplate?.content || '', facts);
+                setGeneratedText(compiled);
+                setDeclarationType(targetDeclarationType.toUpperCase());
+                setIsGenerating(false);
+                setProgressMsg('');
+            } catch (error: any) {
+                toast.error(`Erro ao preencher modelo: ${error.message}`);
+                setIsGenerating(false);
+                setProgressMsg('');
+            }
+            return;
+        }
 
         setIsGenerating(true); setSaveSuccess(false); setQualityWarning(null);
         setProgressMsg('Iniciando...');
@@ -413,12 +566,14 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 input: { 
                     biddingProcessId: selectedBiddingId, 
                     companyId: selectedCompanyId, 
-                    declarationType, 
+                    declarationType: targetDeclarationType, 
                     issuerType, 
                     customPrompt, 
                     style: declarationStyle, 
                     signatureCity: layout.signatureCity, 
-                    signatureDate: today 
+                    signatureDate: today,
+                    mode: generationMode,
+                    templateContent: activeTemplate?.content || ''
                 }
             });
             setActiveJobId(jobId);
@@ -565,6 +720,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         isGenerating, isSaving, generatedText, setGeneratedText, saveSuccess,
         confirmAction, setConfirmAction, layoutSaved,
         layouts, currentLayoutId, layoutName, qualityReport, qualityWarning, progressMsg,
+        generationMode, setGenerationMode, selectedTemplateId, setSelectedTemplateId,
+        templates, isTemplatesLoading,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
         // Layout actions
@@ -573,5 +730,24 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         // Core actions
         handleBiddingChange, handleCompanyChange, handleGenerate,
         handleExportPDF, handleAddToDocuments,
+        // Template Actions
+        handleCreateTemplate, handleUpdateTemplate, handleDeleteTemplate, fetchTemplates
     };
+}
+
+function compileTemplate(content: string, facts: any): string {
+    return content
+        .replace(/{empresaRazaoSocial}/g, facts.empresaRazaoSocial)
+        .replace(/{empresaCnpj}/g, facts.empresaCnpj)
+        .replace(/{empresaEndereco}/g, facts.empresaEndereco)
+        .replace(/{representanteNome}/g, facts.representanteNome)
+        .replace(/{representanteCpf}/g, facts.representanteCpf)
+        .replace(/{representanteCargo}/g, facts.representanteCargo)
+        .replace(/{orgaoLicitante}/g, facts.orgaoLicitante)
+        .replace(/{modalidade}/g, facts.modalidade)
+        .replace(/{editalNumero}/g, facts.editalNumero)
+        .replace(/{processoNumero}/g, facts.processoNumero)
+        .replace(/{objeto}/g, facts.objeto)
+        .replace(/{signatureCity}/g, facts.signatureCity)
+        .replace(/{signatureDate}/g, facts.signatureDate);
 }

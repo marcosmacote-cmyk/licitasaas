@@ -2,7 +2,7 @@ import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Se
 import { useState } from 'react';
 import { ConfirmDialog } from '../ui';
 import { useAiDeclaration } from '../hooks/useAiDeclaration';
-import type { LayoutConfig, QualityReportFrontend } from '../hooks/useAiDeclaration';
+import type { LayoutConfig, QualityReportFrontend, DeclarationTemplate } from '../hooks/useAiDeclaration';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
 
 export function AiDeclarationGenerator({ biddings, companies, onSave, initialBiddingId }: Props) {
     const d = useAiDeclaration({ biddings, companies, onSave, initialBiddingId });
+    const [manageTemplatesOpen, setManageTemplatesOpen] = useState(false);
     const hasResult = !!d.generatedText || d.isGenerating;
 
     return (
@@ -22,7 +23,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
             /* ═══════════════════════════════════════════
                STEP 1: Wizard focado — O que gerar?
                ═══════════════════════════════════════════ */
-            <WizardStep1 d={d} companies={companies} />
+            <WizardStep1 d={d} companies={companies} setManageTemplatesOpen={setManageTemplatesOpen} />
         ) : (
             /* ═══════════════════════════════════════════
                STEP 2: Editor + Refinamento
@@ -153,6 +154,11 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
             onConfirm={() => d.confirmAction?.onConfirm()}
             onCancel={() => d.setConfirmAction(null)}
         />
+        <TemplateManagementModal
+            open={manageTemplatesOpen}
+            onClose={() => setManageTemplatesOpen(false)}
+            d={d}
+        />
         </>
     );
 }
@@ -161,7 +167,11 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
 // STEP 1 — Wizard Focado
 // ═══════════════════════════════════════════════
 
-function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>; companies: CompanyProfile[] }) {
+function WizardStep1({ d, companies, setManageTemplatesOpen }: {
+    d: ReturnType<typeof useAiDeclaration>;
+    companies: CompanyProfile[];
+    setManageTemplatesOpen: (open: boolean) => void;
+}) {
     return (
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-8)', alignItems: 'start' }}>
 
@@ -190,7 +200,7 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                     </div>
                     <div>
                         <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Nova Declaração</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Gere declarações formais a partir do edital com IA</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Gere declarações formais a partir do edital ou modelos</div>
                     </div>
                 </div>
 
@@ -210,57 +220,122 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                         </select>
                     </ConfigField>
 
-                    <ConfigField label="Tipo de Declaração" icon={<FileSignature size={10} />} stepNumber={3}>
-                        {d.declarationTypesFromEdital.length === 0 ? (
-                            d.selectedBiddingId ? (
-                                <input
-                                    className="form-select"
-                                    placeholder="Digite o tipo de declaração desejado..."
-                                    value={d.declarationType}
-                                    onChange={(e) => d.setDeclarationType(e.target.value)}
-                                    style={{ fontSize: 'var(--text-sm)' }}
-                                />
-                            ) : (
-                                <div style={{
-                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                    background: 'var(--color-bg-body)',
-                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
-                                    color: 'var(--color-text-tertiary)',
-                                }}>
-                                    Selecione uma licitação acima.
-                                </div>
-                            )
-                        ) : (
-                            <>
-                                <select className="form-select" value={d.declarationType} onChange={(e) => {
-                                    if (e.target.value === '__custom__') d.setDeclarationType('');
-                                    else d.setDeclarationType(e.target.value);
-                                }}>
-                                    {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
-                                    <option value="__custom__">Outro tipo...</option>
-                                </select>
-                                {!d.declarationTypesFromEdital.includes(d.declarationType) && (
-                                    <input
-                                        className="form-select"
-                                        placeholder="Descreva o tipo de declaração..."
-                                        value={d.declarationType}
-                                        onChange={(e) => d.setDeclarationType(e.target.value)}
-                                        style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)' }}
-                                        autoFocus
-                                    />
-                                )}
-                            </>
-                        )}
+                    <ConfigField label="Modo de Geração" stepNumber={3}>
+                        <div style={{ display: 'flex', gap: 'var(--space-1)', marginBottom: 'var(--space-2)' }}>
+                            {[
+                                { value: 'ai', label: '100% IA', desc: 'IA cria via edital', icon: <Sparkles size={13} /> },
+                                { value: 'static', label: 'Estático', desc: 'Modelo preenchido', icon: <FileText size={13} /> },
+                                { value: 'mixed', label: 'Misto', desc: 'IA adapta modelo', icon: <Zap size={13} /> }
+                            ].map(m => (
+                                <button
+                                    key={m.value}
+                                    type="button"
+                                    onClick={() => d.setGenerationMode(m.value as any)}
+                                    style={{
+                                        flex: 1, padding: '8px 10px',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: 'none',
+                                        boxShadow: d.generationMode === m.value ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)',
+                                        background: d.generationMode === m.value ? 'var(--color-primary-light)' : 'var(--color-bg-body)',
+                                        cursor: 'pointer',
+                                        fontSize: '0.72rem', fontWeight: d.generationMode === m.value ? 700 : 400,
+                                        color: d.generationMode === m.value ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                        transition: 'all 0.15s',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                                        lineHeight: 1.2,
+                                    }}
+                                >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{m.icon} {m.label}</span>
+                                    <span style={{ fontSize: '0.58rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{m.desc}</span>
+                                </button>
+                            ))}
+                        </div>
                     </ConfigField>
 
-                    {/* Style selector */}
-                    <DeclarationStyleSelector
-                        style={d.declarationStyle}
-                        setStyle={d.setDeclarationStyle}
-                    />
+                    {d.generationMode === 'ai' ? (
+                        <ConfigField label="Tipo de Declaração" icon={<FileSignature size={10} />} stepNumber={4}>
+                            {d.declarationTypesFromEdital.length === 0 ? (
+                                d.selectedBiddingId ? (
+                                    <input
+                                        className="form-select"
+                                        placeholder="Digite o tipo de declaração desejado..."
+                                        value={d.declarationType}
+                                        onChange={(e) => d.setDeclarationType(e.target.value)}
+                                        style={{ fontSize: 'var(--text-sm)' }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                        background: 'var(--color-bg-body)',
+                                        border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
+                                        color: 'var(--color-text-tertiary)',
+                                    }}>
+                                        Selecione uma licitação acima.
+                                    </div>
+                                )
+                            ) : (
+                                <>
+                                    <select className="form-select" value={d.declarationType} onChange={(e) => {
+                                        if (e.target.value === '__custom__') d.setDeclarationType('');
+                                        else d.setDeclarationType(e.target.value);
+                                    }}>
+                                        {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
+                                        <option value="__custom__">Outro tipo...</option>
+                                    </select>
+                                    {!d.declarationTypesFromEdital.includes(d.declarationType) && (
+                                        <input
+                                            className="form-select"
+                                            placeholder="Descreva o tipo de declaração..."
+                                            value={d.declarationType}
+                                            onChange={(e) => d.setDeclarationType(e.target.value)}
+                                            style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)' }}
+                                            autoFocus
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </ConfigField>
+                    ) : (
+                        <ConfigField label="Modelo de Declaração" icon={<FileSignature size={10} />} stepNumber={4}>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                <select
+                                    className="form-select"
+                                    value={d.selectedTemplateId}
+                                    onChange={(e) => d.setSelectedTemplateId(e.target.value)}
+                                    style={{ flex: 1 }}
+                                >
+                                    <option value="">— Selecione um modelo —</option>
+                                    {d.templates.map(t => (
+                                        <option key={t.id} value={t.id}>
+                                            {t.title} {t.tenantId === null ? '(Sistema)' : '(Custom)'}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    style={{ fontSize: '0.75rem', padding: '10px 12px', gap: 4, whiteSpace: 'nowrap' }}
+                                    onClick={() => setManageTemplatesOpen(true)}
+                                >
+                                    <Settings2 size={13} />
+                                    Gerenciar
+                                </button>
+                            </div>
+                        </ConfigField>
+                    )}
 
-                    {/* Instruções adicionais — sutil */}
-                    <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
+                    {/* Style selector - hide in static mode */}
+                    {d.generationMode !== 'static' && (
+                        <DeclarationStyleSelector
+                            style={d.declarationStyle}
+                            setStyle={d.setDeclarationStyle}
+                        />
+                    )}
+
+                    {/* Instruções adicionais - hide in static mode */}
+                    {d.generationMode !== 'static' && (
+                        <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
+                    )}
 
                     {/* Generate CTA */}
                     <button
@@ -269,16 +344,16 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                             width: '100%', height: '52px', gap: 'var(--space-2)', marginTop: 'var(--space-2)',
                             background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
                             border: 'none', borderRadius: 'var(--radius-xl)',
-                            boxShadow: d.selectedBiddingId && d.selectedCompanyId && d.declarationType ? '0 6px 24px rgba(139,92,246,0.30)' : undefined,
+                            boxShadow: d.selectedBiddingId && d.selectedCompanyId && (d.generationMode === 'ai' ? d.declarationType : d.selectedTemplateId) ? '0 6px 24px rgba(139,92,246,0.30)' : undefined,
                             fontSize: 'var(--text-md)', fontWeight: 800, letterSpacing: '-0.01em',
-                            opacity: (!d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType) ? 0.5 : 1,
+                            opacity: (!d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : !d.selectedTemplateId)) ? 0.5 : 1,
                             transition: 'all 0.2s',
                         }}
                         onClick={d.handleGenerate}
-                        disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}
+                        disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : !d.selectedTemplateId)}
                     >
-                        {d.isGenerating ? <Loader2 size={20} className="spin" /> : <Sparkles size={20} />}
-                        {d.isGenerating ? 'Gerando declaração...' : 'Gerar Declaração'}
+                        {d.isGenerating ? <Loader2 size={20} className="spin" /> : (d.generationMode === 'static' ? <FileText size={20} /> : <Sparkles size={20} />)}
+                        {d.isGenerating ? (d.generationMode === 'static' ? 'Mesclando dados...' : 'Gerando declaração...') : (d.generationMode === 'static' ? 'Preencher Declaração' : 'Gerar Declaração')}
                     </button>
                 </div>
             </div>
@@ -306,14 +381,14 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                     </div>
 
                     <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.7, maxWidth: 360 }}>
-                        Selecione a <strong>licitação</strong> e o <strong>tipo</strong>, e a IA irá gerar a declaração formal com base nas exigências do edital.
+                        Selecione a <strong>licitação</strong> e o <strong>tipo</strong>, e a IA ou o sistema irá preencher e gerar a declaração formal.
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
                         {[
-                            { icon: 'sparkles', title: 'Inteligência do Edital', desc: 'Texto gerado com base na análise IA do edital' },
+                            { icon: 'sparkles', title: 'Frentes Flexíveis', desc: 'Geração 100% IA, via modelo estático ou modo misto combinado' },
                             { icon: 'scale', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
-                            { icon: 'penline', title: 'Editável', desc: 'Revise e ajuste o texto antes de exportar' },
+                            { icon: 'penline', title: 'Editável', desc: 'Revise e ajuste o texto diretamente no modelo antes de exportar' },
                             { icon: 'filedown', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
                         ].map((f, i) => (
                             <div key={i} style={{
@@ -927,6 +1002,271 @@ function QualityDetailsPanel({ report }: { report: QualityReportFrontend }) {
                 <span>Score: {report.score}/100</span>
                 <span>•</span>
                 <span>Grade: {report.grade}</span>
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════
+   Template Management Modal & Custom Forms
+   ═══════════════════════════════════════════════ */
+
+interface TemplateManagementModalProps {
+    open: boolean;
+    onClose: () => void;
+    d: ReturnType<typeof useAiDeclaration>;
+}
+
+function TemplateManagementModal({ open, onClose, d }: TemplateManagementModalProps) {
+    const [editingTemplate, setEditingTemplate] = useState<DeclarationTemplate | null>(null);
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [isFormOpen, setIsFormOpen] = useState(false);
+
+    if (!open) return null;
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title.trim() || !content.trim()) return;
+
+        if (editingTemplate) {
+            await d.handleUpdateTemplate(editingTemplate.id, title, content);
+        } else {
+            await d.handleCreateTemplate(title, content);
+        }
+        
+        // Reset form
+        setTitle('');
+        setContent('');
+        setEditingTemplate(null);
+        setIsFormOpen(false);
+    };
+
+    const handleEditClick = (template: DeclarationTemplate) => {
+        setEditingTemplate(template);
+        setTitle(template.title);
+        setContent(template.content);
+        setIsFormOpen(true);
+    };
+
+    const handleNewClick = () => {
+        setEditingTemplate(null);
+        setTitle('');
+        setContent('');
+        setIsFormOpen(true);
+    };
+
+    const handleCancel = () => {
+        setEditingTemplate(null);
+        setTitle('');
+        setContent('');
+        setIsFormOpen(false);
+    };
+
+    return (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: 'var(--space-4)'
+        }}>
+            <div style={{
+                background: 'var(--color-bg-surface)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                border: '1px solid var(--color-border)',
+                width: '100%', maxWidth: 720, maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column', overflow: 'hidden'
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: 'var(--space-4) var(--space-5)',
+                    borderBottom: '1px solid var(--color-border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.04) 0%, rgba(37,99,235,0.02) 100%)'
+                }}>
+                    <div>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 800, margin: 0, color: 'var(--color-text-primary)' }}>
+                            Gerenciar Modelos de Declaração
+                        </h3>
+                        <p style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', margin: '2px 0 0 0' }}>
+                            Gerencie os templates de declarações e crie novos modelos para o seu painel.
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="icon-btn" style={{ padding: 6 }}>
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: 'var(--space-5)', overflowY: 'auto', flex: 1 }}>
+                    {isFormOpen ? (
+                        /* Add/Edit Form */
+                        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                            <h4 style={{ fontSize: 'var(--text-md)', fontWeight: 700, margin: 0 }}>
+                                {editingTemplate ? 'Editar Modelo' : 'Novo Modelo'}
+                            </h4>
+                            
+                            <div>
+                                <label className="decl-small-label">Título do Modelo</label>
+                                <input
+                                    className="form-select"
+                                    style={{ fontSize: 'var(--text-sm)' }}
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Ex: Declaração de Regularidade Fiscal"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="decl-small-label">Texto da Declaração (Suporta placeholders)</label>
+                                <textarea
+                                    className="form-select"
+                                    style={{ minHeight: 220, fontSize: 'var(--text-sm)', resize: 'vertical', lineHeight: 1.5 }}
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    placeholder="A empresa {empresaRazaoSocial}, inscrita no CNPJ sob nº {empresaCnpj}... declara..."
+                                    required
+                                />
+                            </div>
+
+                            {/* Reference Placeholders */}
+                            <div style={{
+                                background: 'var(--color-bg-body)',
+                                borderRadius: 'var(--radius-lg)',
+                                padding: 'var(--space-3) var(--space-4)',
+                                border: '1px solid var(--color-border)',
+                            }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+                                    Tags de Placeholders Disponíveis (substituídos na geração):
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '0.62rem', color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
+                                    <span>{'{empresaRazaoSocial}'}</span>
+                                    <span>{'{empresaCnpj}'}</span>
+                                    <span>{'{empresaEndereco}'}</span>
+                                    <span>{'{representanteNome}'}</span>
+                                    <span>{'{representanteCpf}'}</span>
+                                    <span>{'{representanteCargo}'}</span>
+                                    <span>{'{orgaoLicitante}'}</span>
+                                    <span>{'{modalidade}'}</span>
+                                    <span>{'{editalNumero}'}</span>
+                                    <span>{'{processoNumero}'}</span>
+                                    <span>{'{objeto}'}</span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                                <button type="button" className="btn btn-outline" onClick={handleCancel}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn btn-primary" style={{ background: 'linear-gradient(135deg, var(--color-primary), rgba(37,99,235,0.9))', border: 'none' }}>
+                                    Salvar Modelo
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        /* Template List */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                                    Modelos cadastrados ({d.templates.length})
+                                </span>
+                                <button type="button" className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: 4 }} onClick={handleNewClick}>
+                                    <Plus size={13} />
+                                    Novo Modelo
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                                {d.templates.map(t => {
+                                    const isSystem = t.tenantId === null;
+                                    return (
+                                        <div key={t.id} style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: 'var(--space-3) var(--space-4)',
+                                            borderRadius: 'var(--radius-lg)',
+                                            background: 'var(--color-bg-surface)',
+                                            border: '1px solid var(--color-border)',
+                                            gap: 'var(--space-4)'
+                                        }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {t.title}
+                                                    </span>
+                                                    <span style={{
+                                                        padding: '1px 6px', borderRadius: 'var(--radius-full)',
+                                                        fontSize: '0.58rem', fontWeight: 700,
+                                                        background: isSystem ? 'rgba(37,99,235,0.1)' : 'rgba(139,92,246,0.1)',
+                                                        color: isSystem ? 'var(--color-primary)' : 'var(--color-ai)'
+                                                    }}>
+                                                        {isSystem ? 'Sistema' : 'Personalizado'}
+                                                    </span>
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '0.68rem', color: 'var(--color-text-tertiary)',
+                                                    marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap', maxWidth: 450
+                                                }}>
+                                                    {t.content}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center' }}>
+                                                {!isSystem ? (
+                                                    <>
+                                                        <button
+                                                            className="btn btn-outline"
+                                                            style={{ fontSize: '0.68rem', padding: '4px 8px' }}
+                                                            onClick={() => handleEditClick(t)}
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            className="icon-btn"
+                                                            style={{ color: 'var(--color-danger)', padding: 6 }}
+                                                            onClick={() => d.handleDeleteTemplate(t.id)}
+                                                            title="Excluir"
+                                                        >
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        className="btn btn-outline"
+                                                        style={{ fontSize: '0.68rem', padding: '4px 8px', opacity: 0.6 }}
+                                                        onClick={() => {
+                                                            setTitle(t.title + " (Cópia)");
+                                                            setContent(t.content);
+                                                            setIsFormOpen(true);
+                                                        }}
+                                                        title="Duplicar e Customizar"
+                                                    >
+                                                        Customizar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                    padding: 'var(--space-3) var(--space-5)',
+                    borderTop: '1px solid var(--color-border)',
+                    display: 'flex', justifyContent: 'flex-end',
+                    background: 'var(--color-bg-body)'
+                }}>
+                    <button className="btn btn-outline" style={{ fontSize: '0.78rem' }} onClick={onClose}>
+                        Fechar
+                    </button>
+                </div>
             </div>
         </div>
     );

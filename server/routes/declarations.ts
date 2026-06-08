@@ -43,9 +43,9 @@ const genAI = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : nul
 router.post('/generate-declaration', authenticateToken, async (req: any, res) => {
     try {
         // ── Step 1: Receber request ──
-        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle } = req.body;
+        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle, mode, templateContent } = req.body;
         const style: DeclarationStyle = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva') as DeclarationStyle;
-        logger.info(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} BID:${biddingProcessId}`);
+        logger.info(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} mode=${mode || 'ai'} BID:${biddingProcessId}`);
 
         if (!biddingProcessId || !companyId || !declarationType) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -173,7 +173,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             }
         }
 
-        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause);
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause, mode, templateContent);
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
@@ -381,12 +381,30 @@ function buildDeclarationPrompt(
     isTechnical: boolean,
     style: DeclarationStyle = 'objetiva',
     editalClause?: string,
+    mode?: string,
+    templateContent?: string,
 ): string {
     // Buscar mapa semântico que corresponde ao tipo da declaração
     const declLower = facts.declarationType.toLowerCase();
     const semanticMatch = DECLARATION_SEMANTIC_MAP.find(m =>
         m.keywords.some(kw => declLower.includes(kw.toLowerCase()))
     );
+
+    let mixedGuideline = '';
+    if (mode === 'mixed' && templateContent) {
+        mixedGuideline = `
+╔══════════════════════════════════════════════════════════════╗
+║  TEMPLATE BASE (ESTRUTURA E REDAÇÃO OBRIGATÓRIA)              ║
+╠══════════════════════════════════════════════════════════════╣
+${templateContent}
+╚══════════════════════════════════════════════════════════════╝
+
+INSTRUÇÃO MISTA ABSOLUTA:
+Você DEVE utilizar a redação do TEMPLATE BASE acima como ponto de partida compulsório.
+Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc.) pelos Fatos Autoritativos correspondentes.
+Além disso, com base na análise do edital fornecida no "RESUMO AUXILIAR" e no "CONTEXTO ESPECÍFICO", você DEVE adaptar a redação ou adicionar parágrafos extras apenas para atender às exigências específicas do certame (ex: menção a vistorias, equipe técnica especial, etc.), mas SEMPRE mantendo o tom formal e a essência da redação do template base.
+`;
+    }
 
     return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
 Sua tarefa é redigir a declaração abaixo com RIGOR JURÍDICO MÁXIMO e ABSOLUTA FIDELIDADE FACTUAL.
@@ -462,7 +480,8 @@ ${semanticMatch ? `9. ORIENTAÇÃO DE TÍTULO: ${semanticMatch.titleGuidance}
    - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
    - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
 
-13. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
+13. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.
+${mixedGuideline}`;
 }
 
 // ── Step 8-12: Agora modularizados em services/ai/declaration/ ──
@@ -490,5 +509,116 @@ function extractFromQualification(qualification: string, field: 'address' | 'nam
         }
     }
 }
+
+// ── CRUD de Templates de Declaração ──
+
+const SYSTEM_TEMPLATES = [
+  {
+    id: "sys-menor",
+    tenantId: null,
+    title: "Declaração de Não Emprego de Menores (CF, art. 7º, XXXIII)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, para fins do disposto no inciso XXXIII do art. 7º da Constituição Federal de 1988, c/c o inciso V do art. 68 da Lei nº 14.133/2021, que não emprega menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, e não emprega menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 (quatorze) anos.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-impedimento",
+    tenantId: null,
+    title: "Declaração de Inexistência de Fato Impeditivo",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, em especial o art. 63, inciso II, da Lei nº 14.133/2021, a inexistência de fatos supervenientes impeditivos para sua habilitação neste certame licitatório, ciente da obrigatoriedade de declarar ocorrências posteriores.\n\nDECLARA ainda que não foi declarada inidônea e nem se encontra suspensa ou impedida de licitar ou contratar com a Administração Pública.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-me-epp",
+    tenantId: null,
+    title: "Declaração de Enquadramento ME / EPP",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as sanções administrativas e sob as penas da lei, que se enquadra na condição de Microempresa (ME) ou Empresa de Pequeno Porte (EPP), nos termos da Lei Complementar nº 123/2006, cumprindo todos os requisitos legais para fazer jus aos benefícios nela previstos.\n\nDECLARA ainda que não incorre em nenhuma das vedações previstas no § 4º do artigo 3º da referida Lei Complementar.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-nepotismo",
+    tenantId: null,
+    title: "Declaração de Inexistência de Nepotismo",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que nenhum de seus sócios, administradores ou empregados com poder de decisão possui relação de parentesco, consanguínea ou afim, até o terceiro grau, inclusive, com servidores que exerçam cargos de direção, chefia ou assessoramento, ou que desempenhem funções de contratação ou fiscalização no âmbito do(a) {orgaoLicitante}.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-elaboracao",
+    tenantId: null,
+    title: "Declaração de Elaboração Independente de Proposta",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que a proposta de preços apresentada para participação nesta licitação foi elaborada de forma independente, e que o conteúdo da mesma não foi, no todo ou em parte, direta ou indiretamente, informado, discutido ou recebido de qualquer outro participante potencial ou ativo deste certame.\n\nPor ser expressão da verdade, firmamos a presente."
+  }
+];
+
+router.get('/declaration-templates', authenticateToken, async (req: any, res) => {
+    try {
+        const customTemplates = await prisma.declarationTemplate.findMany({
+            where: { tenantId: req.user.tenantId },
+            orderBy: { createdAt: 'desc' }
+        });
+        return res.json([...SYSTEM_TEMPLATES, ...customTemplates]);
+    } catch (error: any) {
+        logger.error("[Templates] GET error:", error);
+        handleApiError(res, error, 'get-declaration-templates');
+    }
+});
+
+router.post('/declaration-templates', authenticateToken, async (req: any, res) => {
+    try {
+        const { title, content } = req.body;
+        if (!title || !content) {
+            return res.status(400).json({ error: 'Título e Conteúdo são obrigatórios.' });
+        }
+        const newTemplate = await prisma.declarationTemplate.create({
+            data: {
+                tenantId: req.user.tenantId,
+                title,
+                content
+            }
+        });
+        return res.status(201).json(newTemplate);
+    } catch (error: any) {
+        logger.error("[Templates] POST error:", error);
+        handleApiError(res, error, 'create-declaration-template');
+    }
+});
+
+router.put('/declaration-templates/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { title, content } = req.body;
+        if (!title || !content) {
+            return res.status(400).json({ error: 'Título e Conteúdo são obrigatórios.' });
+        }
+        const template = await prisma.declarationTemplate.findFirst({
+            where: { id, tenantId: req.user.tenantId }
+        });
+        if (!template) {
+            return res.status(404).json({ error: 'Modelo não encontrado ou permissão negada.' });
+        }
+        const updated = await prisma.declarationTemplate.update({
+            where: { id },
+            data: { title, content }
+        });
+        return res.json(updated);
+    } catch (error: any) {
+        logger.error("[Templates] PUT error:", error);
+        handleApiError(res, error, 'update-declaration-template');
+    }
+});
+
+router.delete('/declaration-templates/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const template = await prisma.declarationTemplate.findFirst({
+            where: { id, tenantId: req.user.tenantId }
+        });
+        if (!template) {
+            return res.status(404).json({ error: 'Modelo não encontrado ou permissão negada.' });
+        }
+        await prisma.declarationTemplate.delete({
+            where: { id }
+        });
+        return res.json({ message: 'Modelo excluído com sucesso.' });
+    } catch (error: any) {
+        logger.error("[Templates] DELETE error:", error);
+        handleApiError(res, error, 'delete-declaration-template');
+    }
+});
 
 export default router;

@@ -32,6 +32,7 @@ model Tenant {
   insightHistories       CompanyInsightHistory[]
   backgroundJobs         BackgroundJob[]
   auditLogs              AuditLog[]
+  declarationTemplates  DeclarationTemplate[]
 }
 
 model User {
@@ -840,5 +841,18 @@ model PncpHydrationLog {
   createdAt DateTime @default(now())
 
   @@unique([date, modality])
+}
+
+model DeclarationTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String?  // null if system/global template, non-null if user custom template
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 

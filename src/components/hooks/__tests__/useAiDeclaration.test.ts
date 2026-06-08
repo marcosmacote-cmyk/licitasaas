@@ -320,4 +320,74 @@ describe('useAiDeclaration', () => {
             expect(typeof result.current.handleExportPDF).toBe('function');
         });
     });
+
+    // ═══════════════════════════════════
+    // TEMPLATES & GENERATION MODES (Sprint 8)
+    // ═══════════════════════════════════
+    describe('Templates e Modos de Geração', () => {
+        beforeEach(() => {
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => [
+                    { id: 'sys-1', tenantId: null, title: 'Modelo 1', content: 'Empresa {empresaRazaoSocial} sob CNPJ {empresaCnpj}' }
+                ]
+            } as any);
+        });
+
+        it('deve inicializar com modo de geração ai', () => {
+            const { result } = renderDeclaration();
+            expect(result.current.generationMode).toBe('ai');
+        });
+
+        it('deve permitir alterar o modo de geração', () => {
+            const { result } = renderDeclaration();
+            act(() => result.current.setGenerationMode('static'));
+            expect(result.current.generationMode).toBe('static');
+        });
+
+        it('deve realizar preenchimento estático localmente sem IA', async () => {
+            const { result } = renderDeclaration({ initialBiddingId: 'bid-1' });
+            
+            // Wait for templates to load
+            await waitFor(() => expect(result.current.templates).toHaveLength(1));
+            
+            act(() => {
+                result.current.setGenerationMode('static');
+                result.current.setSelectedTemplateId('sys-1');
+            });
+
+            await act(async () => {
+                await result.current.handleGenerate();
+            });
+
+            expect(result.current.generatedText).toBe('Empresa TechCorp sob CNPJ 12.345.678/0001-99');
+            expect(result.current.declarationType).toBe('MODELO 1');
+            expect(submitBackgroundJob).not.toHaveBeenCalled();
+        });
+
+        it('deve enviar parâmetros de modo misto para o backend', async () => {
+            const { result } = renderDeclaration({ initialBiddingId: 'bid-1' });
+            
+            // Wait for templates to load
+            await waitFor(() => expect(result.current.templates).toHaveLength(1));
+            
+            act(() => {
+                result.current.setGenerationMode('mixed');
+                result.current.setSelectedTemplateId('sys-1');
+            });
+
+            await act(async () => {
+                await result.current.handleGenerate();
+            });
+
+            expect(submitBackgroundJob).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: expect.objectContaining({
+                        mode: 'mixed',
+                        templateContent: 'Empresa {empresaRazaoSocial} sob CNPJ {empresaCnpj}'
+                    })
+                })
+            );
+        });
+    });
 });
