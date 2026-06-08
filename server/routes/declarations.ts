@@ -137,7 +137,7 @@ router.post('/generate-declaration', authenticateToken, async (req: any, res) =>
             empresaCnpj: company.cnpj,
             empresaEndereco: companyAddress,
             qualificacaoCompleta,
-            representanteName: representanteName,
+            representanteNome: representanteName,
             representanteCpf: representanteCpf,
             representanteCargo: representanteCargo,
             orgaoFromSchema,
