@@ -20,6 +20,12 @@ import { checkTenantLimits } from '../lib/planLimits';
 
 const router = express.Router();
 
+const PNCP_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+};
+
 // ── GET /biddings — List all biddings for tenant ──
 // NOTE: Previously used `include: { aiAnalysis: true }` which returned 7+ MB
 // of JSON (schemaV2 contains huge structured extraction data per process).
@@ -134,7 +140,10 @@ router.post('/', authenticateToken, planGuard, async (req: any, res) => {
                         const controller = new AbortController();
                         const timeout = setTimeout(() => controller.abort(), 10000);
                         try {
-                            const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                            const apiRes = await fetch(enrichUrl, { 
+                                signal: controller.signal,
+                                headers: PNCP_HEADERS
+                            });
                             clearTimeout(timeout);
                             if (apiRes.ok) {
                                 const apiData = await apiRes.json();
@@ -326,7 +335,10 @@ router.put('/:id', authenticateToken, planGuard, async (req: any, res) => {
                         const controller = new AbortController();
                         const timeout = setTimeout(() => controller.abort(), 10000);
                         try {
-                            const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                            const apiRes = await fetch(enrichUrl, { 
+                                signal: controller.signal,
+                                headers: PNCP_HEADERS
+                            });
                             clearTimeout(timeout);
                             if (apiRes.ok) {
                                 const apiData = await apiRes.json();

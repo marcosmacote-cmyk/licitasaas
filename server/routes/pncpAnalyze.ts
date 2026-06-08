@@ -56,6 +56,7 @@ import { prisma } from '../lib/prisma';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
 import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import { uploadDir, initStoragePaths } from '../services/files.service';
@@ -82,6 +83,12 @@ import {
     detectPlatformFromLink, sanitizeBiddingData,
     MONITORABLE_DOMAINS, PLATFORM_DOMAINS
 } from '../lib/biddingHelpers';
+
+const PNCP_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+};
 
 const router = express.Router();
 router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
@@ -1697,7 +1704,7 @@ Responda APENAS com JSON array:
         let pncpApiSessionDate = '';
         try {
             const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
-            const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
+            const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 8000, headers: PNCP_HEADERS } as any);
             const d: any = detailRes.data;
             if (d) {
                 pncpApiValue = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0) || 0;
@@ -1822,7 +1829,7 @@ Responda APENAS com JSON array:
                 logger.info(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
                 const controller = new AbortController();
                 const enrichTimeout = setTimeout(() => controller.abort(), 8000);
-                const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
+                const enrichRes = await fetch(enrichUrl, { signal: controller.signal, headers: PNCP_HEADERS });
                 clearTimeout(enrichTimeout);
                 let lso = '';
                 if (enrichRes.ok) {

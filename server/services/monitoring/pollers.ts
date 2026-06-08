@@ -326,7 +326,13 @@ export async function runComprasNetBackfill(prisma: PrismaClient) {
 
                 const [, cnpj, ano, seq] = match;
                 const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                const res = await fetch(apiUrl);
+                const res = await fetch(apiUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    }
+                });
                 if (!res.ok) continue;
 
                 const data = await res.json();

@@ -740,6 +740,48 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
         'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
     };
 
+    // Staggered queue helper to make concurrent calls with a small start delay between them
+    const runWithStagger = async <T>(
+        itemsList: any[],
+        concurrency: number,
+        staggerMs: number,
+        fn: (item: any) => Promise<T>
+    ): Promise<PromiseSettledResult<T>[]> => {
+        const results: PromiseSettledResult<T>[] = [];
+        const limit = concurrency;
+        let active = 0;
+        let index = 0;
+
+        return new Promise<PromiseSettledResult<T>[]>((resolve) => {
+            const next = async () => {
+                if (index >= itemsList.length && active === 0) {
+                    resolve(results);
+                    return;
+                }
+
+                while (active < limit && index < itemsList.length) {
+                    const currentIdx = index++;
+                    const it = itemsList[currentIdx];
+                    active++;
+
+                    if (staggerMs > 0 && currentIdx > 0) {
+                        await new Promise(r => setTimeout(r, staggerMs));
+                    }
+
+                    fn(it).then(val => {
+                        results[currentIdx] = { status: 'fulfilled', value: val };
+                    }).catch(err => {
+                        results[currentIdx] = { status: 'rejected', reason: err };
+                    }).finally(() => {
+                        active--;
+                        next();
+                    });
+                }
+            };
+            next();
+        });
+    };
+
     // Helper to run hydration on an array of search result items
     const hydrateItems = async (finalItems: any[]) => {
         const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
@@ -783,22 +825,20 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             });
 
-            // 2. Fetch remainder from Gov.br API in chunks of 5 to avoid timeouts & blocks
+            // 2. Fetch remainder from Gov.br API using staggered concurrent queue (max 3 concurrency, 150ms delay)
             if (stillMissing.length > 0) {
-                const hydrateResults: PromiseSettledResult<any>[] = [];
-                const chunkSize = 5;
-                for (let i = 0; i < stillMissing.length; i += chunkSize) {
-                    const chunk = stillMissing.slice(i, i + chunkSize);
-                    const chunkPromises = chunk.map((it: any) => 
-                        axios.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
-                        { httpsAgent: agent, timeout: 5000, headers: PNCP_HEADERS } as any)
-                    );
-                    const chunkResults = await Promise.allSettled(chunkPromises);
-                    hydrateResults.push(...chunkResults);
-                }
+                const results = await runWithStagger(
+                    stillMissing,
+                    3, // Concurrency limit
+                    150, // Stagger delay (ms)
+                    (it) => axios.get(
+                        `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
+                        { httpsAgent: agent, timeout: 8000, headers: PNCP_HEADERS } as any
+                    ) as Promise<any>
+                );
                 
                 const needItemFetch: any[] = [];
-                hydrateResults.forEach((r, idx) => {
+                results.forEach((r, idx) => {
                     if (r.status === 'fulfilled') {
                         const val = (r.value.data as any)?.valorTotalEstimado ?? (r.value.data as any)?.valorTotalHomologado ?? null;
                         if (val != null && Number(val) > 0) {
@@ -811,18 +851,14 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                     }
                 });
 
-                // 3. Fallback: Fetch items if the global value is still 0 (also in chunks of 3)
+                // 3. Fallback: Fetch items if the global value is still 0 (also staggered with 3 concurrency, 150ms delay)
                 if (needItemFetch.length > 0) {
-                    const itemFetchResults: PromiseSettledResult<any>[] = [];
-                    const itemChunkSize = 3;
-                    for (let i = 0; i < needItemFetch.length; i += itemChunkSize) {
-                        const chunk = needItemFetch.slice(i, i + itemChunkSize);
-                        const chunkPromises = chunk.map((it: any) => 
-                            fetchPncpItems(it.orgao_cnpj, String(it.ano), String(it.numero_sequencial))
-                        );
-                        const chunkResults = await Promise.allSettled(chunkPromises);
-                        itemFetchResults.push(...chunkResults);
-                    }
+                    const itemFetchResults = await runWithStagger(
+                        needItemFetch,
+                        3, // Concurrency limit
+                        150, // Stagger delay (ms)
+                        (it) => fetchPncpItems(it.orgao_cnpj, String(it.ano), String(it.numero_sequencial))
+                    );
                     
                     itemFetchResults.forEach((r, idx) => {
                         if (r.status === 'fulfilled') {
