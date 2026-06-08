@@ -154,6 +154,8 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                                     declarationType={d.declarationType}
                                     generatedText={d.generatedText}
                                     setGeneratedText={d.setGeneratedText}
+                                    updateLayout={d.updateLayout}
+                                    setDeclarationType={d.setDeclarationType}
                                 />
                             </div>
                         )}
@@ -827,9 +829,49 @@ function EditorToolbar({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
     );
 }
 
-function DeclarationPreview({ layout, declarationType, generatedText, setGeneratedText }: {
-    layout: LayoutConfig; declarationType: string; generatedText: string; setGeneratedText: (v: string) => void;
+function DeclarationPreview({
+    layout,
+    declarationType,
+    generatedText,
+    setGeneratedText,
+    updateLayout,
+    setDeclarationType,
+}: {
+    layout: LayoutConfig;
+    declarationType: string;
+    generatedText: string;
+    setGeneratedText: (v: string) => void;
+    updateLayout: (patch: Partial<LayoutConfig>) => void;
+    setDeclarationType: (v: string) => void;
 }) {
+    const handleFocus = (e: any) => {
+        e.target.style.borderBottomColor = '#ccc';
+    };
+    const handleBlur = (e: any) => {
+        e.target.style.borderBottomColor = 'transparent';
+    };
+
+    const inputStyle = (bold = false, fontSize = '0.75rem', align = 'center') => ({
+        border: 'none',
+        outline: 'none',
+        background: 'transparent',
+        fontWeight: bold ? 'bold' : ('normal' as any),
+        fontSize,
+        textAlign: align as any,
+        width: '100%',
+        padding: '2px 4px',
+        color: '#333',
+        fontFamily: 'inherit',
+        borderBottom: '1px dashed transparent',
+        transition: 'border-color 0.2s',
+    });
+
+    const inputProps = (bold = false, fontSize = '0.75rem', align = 'center') => ({
+        style: inputStyle(bold, fontSize, align),
+        onFocus: handleFocus,
+        onBlur: handleBlur,
+    });
+
     return (
         <div className="decl-page-mockup">
             {/* Header */}
@@ -838,44 +880,260 @@ function DeclarationPreview({ layout, declarationType, generatedText, setGenerat
                     <img src={layout.headerImage} alt="Logo" style={{ maxWidth: `${layout.headerImageWidth * 2.5}px`, maxHeight: `${layout.headerImageHeight * 2.5}px`, objectFit: 'contain' }} />
                 </div>
             )}
-            {layout.headerText && (
-                <div style={{ textAlign: 'center', borderBottom: '1px solid #ccc', paddingBottom: 8, marginBottom: 16, fontSize: '0.65rem', color: '#666', whiteSpace: 'pre-line', lineHeight: 1.3 }}>
-                    {layout.headerText}
-                </div>
+            {layout.headerText !== undefined && (
+                <textarea
+                    style={{
+                        width: '100%',
+                        textAlign: 'center',
+                        border: 'none',
+                        borderBottom: '1px solid #ccc',
+                        outline: 'none',
+                        paddingBottom: 8,
+                        marginBottom: 16,
+                        fontSize: '0.65rem',
+                        color: '#666',
+                        background: 'transparent',
+                        resize: 'none',
+                        fontFamily: 'inherit',
+                        lineHeight: 1.3
+                    }}
+                    value={layout.headerText}
+                    onChange={(e) => updateLayout({ headerText: e.target.value })}
+                    rows={layout.headerText.split('\n').length || 2}
+                />
             )}
 
             {/* Addressee */}
-            {(layout.addresseeName || layout.addresseeOrg) && (
-                <div style={{ fontSize: '0.75rem', color: '#444', marginBottom: 16, lineHeight: 1.5 }}>
-                    {layout.addresseeName && <div>Ao {layout.addresseeName}</div>}
-                    {layout.addresseeOrg && <div style={{ whiteSpace: 'pre-line' }}>{layout.addresseeOrg}</div>}
+            <div style={{ fontSize: '0.75rem', color: '#444', marginBottom: 16, lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: '#666', fontWeight: 600 }}>Ao</span>
+                    <input
+                        style={{
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            color: '#444',
+                            fontSize: '0.75rem',
+                            fontFamily: 'inherit',
+                            fontWeight: 500,
+                            flex: 1,
+                            padding: '2px 4px',
+                            borderBottom: '1px dashed transparent',
+                            transition: 'border-color 0.2s',
+                        }}
+                        onFocus={handleFocus}
+                        onBlur={handleBlur}
+                        value={layout.addresseeName}
+                        onChange={(e) => updateLayout({ addresseeName: e.target.value })}
+                        placeholder="Nome do Destinatário"
+                    />
                 </div>
-            )}
+                <textarea
+                    style={{
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        color: '#444',
+                        fontSize: '0.75rem',
+                        fontFamily: 'inherit',
+                        width: '100%',
+                        resize: 'none',
+                        padding: '2px 4px',
+                        lineHeight: 1.4,
+                        borderBottom: '1px dashed transparent',
+                        transition: 'border-color 0.2s',
+                    }}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    value={layout.addresseeOrg}
+                    onChange={(e) => updateLayout({ addresseeOrg: e.target.value })}
+                    placeholder="Órgão Licitante (e.g. Prefeitura de...)"
+                    rows={layout.addresseeOrg.split('\n').length || 2}
+                />
+            </div>
 
             {/* Title */}
-            <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: 20, fontSize: '0.95rem', textTransform: 'uppercase', lineHeight: 1.3, wordBreak: 'break-word' }}>
-                {declarationType || 'DECLARAÇÃO'}
-            </div>
+            <textarea
+                style={{
+                    width: '100%',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    marginBottom: 20,
+                    fontSize: '0.95rem',
+                    fontFamily: 'inherit',
+                    textTransform: 'uppercase',
+                    lineHeight: 1.3,
+                    resize: 'none',
+                    padding: '2px 4px',
+                    borderBottom: '1px dashed transparent',
+                    transition: 'border-color 0.2s',
+                }}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                value={declarationType}
+                onChange={(e) => setDeclarationType(e.target.value)}
+                placeholder="TÍTULO DA DECLARAÇÃO"
+                rows={declarationType.split('\n').length || 1}
+            />
 
             {/* Body */}
             <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." style={{ textAlign: 'justify' }} />
 
             {/* Location/Date */}
-            {(layout.signatureCity || layout.signatureDate) && (
-                <div style={{ textAlign: 'right', marginTop: 20, fontSize: '0.8rem', color: '#333' }}>
-                    {layout.signatureCity}{layout.signatureCity && layout.signatureDate ? ', ' : ''}{layout.signatureDate}.
-                </div>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 20, fontSize: '0.8rem', color: '#333' }}>
+                <input
+                    style={{
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        textAlign: 'right',
+                        fontSize: '0.8rem',
+                        fontFamily: 'inherit',
+                        color: '#333',
+                        width: '200px',
+                        padding: '2px 4px',
+                        borderBottom: '1px dashed transparent',
+                        transition: 'border-color 0.2s',
+                    }}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    value={layout.signatureCity}
+                    onChange={(e) => updateLayout({ signatureCity: e.target.value })}
+                    placeholder="Cidade"
+                />
+                <span>,</span>
+                <input
+                    style={{
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        textAlign: 'left',
+                        fontSize: '0.8rem',
+                        fontFamily: 'inherit',
+                        color: '#333',
+                        width: '200px',
+                        padding: '2px 4px',
+                        borderBottom: '1px dashed transparent',
+                        transition: 'border-color 0.2s',
+                    }}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    value={layout.signatureDate}
+                    onChange={(e) => updateLayout({ signatureDate: e.target.value })}
+                    placeholder="Data"
+                />
+            </div>
 
             {/* Signature block */}
-            <div style={{ textAlign: 'center', marginTop: 30 }}>
-                <div style={{ color: '#333', marginBottom: 3, fontSize: '0.8rem' }}>__________________________________________</div>
-                {layout.signatoryName && <div style={{ fontWeight: 'bold', fontSize: '0.78rem' }}>{layout.signatoryName.toUpperCase()}</div>}
-                {layout.signatoryCpf && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCpf}</div>}
-                {layout.signatoryRole && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryRole}</div>}
-                {layout.signatoryCompany && <div style={{ fontWeight: 'bold', fontSize: '0.75rem' }}>{layout.signatoryCompany}</div>}
-                {layout.signatoryCnpj && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCnpj}</div>}
-            </div>
+            {layout.doubleSignature ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: 30, textAlign: 'center' }}>
+                    {/* Left block (Legal representative) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ color: '#333', marginBottom: 3, fontSize: '0.8rem' }}>__________________________________________</div>
+                        <input
+                            {...inputProps(true, '0.78rem')}
+                            value={layout.signatoryName}
+                            onChange={(e) => updateLayout({ signatoryName: e.target.value })}
+                            placeholder="Representante Legal"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.signatoryCpf}
+                            onChange={(e) => updateLayout({ signatoryCpf: e.target.value })}
+                            placeholder="CPF"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.signatoryRole}
+                            onChange={(e) => updateLayout({ signatoryRole: e.target.value })}
+                            placeholder="Cargo"
+                        />
+                        <input
+                            {...inputProps(true, '0.75rem')}
+                            value={layout.signatoryCompany}
+                            onChange={(e) => updateLayout({ signatoryCompany: e.target.value })}
+                            placeholder="Empresa"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.signatoryCnpj}
+                            onChange={(e) => updateLayout({ signatoryCnpj: e.target.value })}
+                            placeholder="CNPJ"
+                        />
+                    </div>
+                    {/* Right block (Technical representative / RT) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ color: '#333', marginBottom: 3, fontSize: '0.8rem' }}>__________________________________________</div>
+                        <input
+                            {...inputProps(true, '0.78rem')}
+                            value={layout.rtName}
+                            onChange={(e) => updateLayout({ rtName: e.target.value })}
+                            placeholder="Responsável Técnico"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.rtCpf}
+                            onChange={(e) => updateLayout({ rtCpf: e.target.value })}
+                            placeholder="CPF do RT"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.rtRole}
+                            onChange={(e) => updateLayout({ rtRole: e.target.value })}
+                            placeholder="Título do RT"
+                        />
+                        <input
+                            {...inputProps(false, '0.7rem')}
+                            value={layout.rtRegister}
+                            onChange={(e) => updateLayout({ rtRegister: e.target.value })}
+                            placeholder="Registro (CREA/CAU)"
+                        />
+                        <input
+                            {...inputProps(true, '0.75rem')}
+                            value={layout.signatoryCompany}
+                            onChange={(e) => updateLayout({ signatoryCompany: e.target.value })}
+                            placeholder="Empresa"
+                        />
+                    </div>
+                </div>
+            ) : (
+                <div style={{ textAlign: 'center', marginTop: 30, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ color: '#333', marginBottom: 3, fontSize: '0.8rem' }}>__________________________________________</div>
+                    <input
+                        {...inputProps(true, '0.78rem')}
+                        value={layout.signatoryName}
+                        onChange={(e) => updateLayout({ signatoryName: e.target.value })}
+                        placeholder="Representante Legal"
+                    />
+                    <input
+                        {...inputProps(false, '0.7rem')}
+                        value={layout.signatoryCpf}
+                        onChange={(e) => updateLayout({ signatoryCpf: e.target.value })}
+                        placeholder="CPF"
+                    />
+                    <input
+                        {...inputProps(false, '0.7rem')}
+                        value={layout.signatoryRole}
+                        onChange={(e) => updateLayout({ signatoryRole: e.target.value })}
+                        placeholder="Cargo"
+                    />
+                    <input
+                        {...inputProps(true, '0.75rem')}
+                        value={layout.signatoryCompany}
+                        onChange={(e) => updateLayout({ signatoryCompany: e.target.value })}
+                        placeholder="Empresa"
+                    />
+                    <input
+                        {...inputProps(false, '0.7rem')}
+                        value={layout.signatoryCnpj}
+                        onChange={(e) => updateLayout({ signatoryCnpj: e.target.value })}
+                        placeholder="CNPJ"
+                    />
+                </div>
+            )}
 
             {/* Footer */}
             <div style={{ marginTop: 'auto', paddingTop: 20 }}>
@@ -884,10 +1142,27 @@ function DeclarationPreview({ layout, declarationType, generatedText, setGenerat
                         <img src={layout.footerImage} alt="Rodapé" style={{ maxWidth: `${layout.footerImageWidth * 2.5}px`, maxHeight: `${layout.footerImageHeight * 2.5}px`, objectFit: 'contain' }} />
                     </div>
                 )}
-                {layout.footerText && (
-                    <div style={{ textAlign: 'center', borderTop: '1px solid #ccc', paddingTop: 6, fontSize: '0.6rem', color: '#999', whiteSpace: 'pre-line' }}>
-                        {layout.footerText}
-                    </div>
+                {layout.footerText !== undefined && (
+                    <textarea
+                        style={{
+                            width: '100%',
+                            textAlign: 'center',
+                            border: 'none',
+                            borderTop: '1px solid #ccc',
+                            outline: 'none',
+                            paddingTop: 6,
+                            fontSize: '0.6rem',
+                            color: '#999',
+                            background: 'transparent',
+                            resize: 'none',
+                            fontFamily: 'inherit',
+                            lineHeight: 1.4
+                        }}
+                        value={layout.footerText}
+                        onChange={(e) => updateLayout({ footerText: e.target.value })}
+                        placeholder="Endereço / Contatos"
+                        rows={layout.footerText.split('\n').length || 2}
+                    />
                 )}
             </div>
         </div>
