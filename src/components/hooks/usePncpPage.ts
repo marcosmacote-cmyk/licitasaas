@@ -381,6 +381,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             pncpLink: item.link_sistema,
             risk: riskTag as any,
             companyProfileId: search.selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
+            uasg: (aiData?.process as any)?.uasg || undefined,
+            modalityCode: (aiData?.process as any)?.modalityCode || undefined,
+            processNumber: (aiData?.process as any)?.processNumber || undefined,
+            processYear: (aiData?.process as any)?.processYear || undefined,
             ...(reminderDate ? { reminderDate, reminderStatus, reminderType } : {}),
             observations: JSON.stringify([{
                 id: crypto.randomUUID?.() || Date.now().toString(),
@@ -468,15 +472,19 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             };
 
             const fakeProcess: BiddingProcess = {
-                id: jobData.targetId || `pncp-${item.id}`, 
+                id: jobData.targetId || ('pncp-' + item.id), 
                 title: processObj.title || item.titulo || 'Licitação Analisada',
                 summary: processObj.summary || item.objeto || '', 
-                portal: 'PNCP',
+                portal: processObj.portal || 'PNCP',
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: toISOSafe(processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || ''),
                 link: [processObj.link_sistema, item.link_sistema, item.link_comprasnet].filter(Boolean).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i).join(', '),
                 pncpLink: item.link_sistema || '', risk: processObj.risk || 'Médio',
+                uasg: processObj.uasg,
+                modalityCode: processObj.modalityCode,
+                processNumber: processObj.processNumber,
+                processYear: processObj.processYear,
                 companyProfileId: search.selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(), observations: '[]'
             } as BiddingProcess;

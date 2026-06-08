@@ -1814,6 +1814,7 @@ Responda APENAS com JSON array:
         const isAnalysisLinkFunctional = (() => {
             const l = (legacyProcess.link_sistema || '').toLowerCase();
             if (!l) return false;
+            if (l.includes('pncp.gov.br')) return false; // Force auto-enrichment for PNCP links
             if ((l.includes('bllcompras') || l.includes('bll.org')) && !l.includes('param1=') && !l.includes('processview')) return false;
             if (l.includes('m2atecnologia') && !l.includes('/certame/')) return false;
             try {
@@ -1823,6 +1824,7 @@ Responda APENAS com JSON array:
             return true;
         })();
         const needsAutoEnrich = (!legacyProcess.link_sistema || !isAnalysisLinkFunctional) && orgao_cnpj && ano && numero_sequencial;
+        let enrichData: any = null;
         if (needsAutoEnrich) {
             try {
                 const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
@@ -1833,7 +1835,7 @@ Responda APENAS com JSON array:
                 clearTimeout(enrichTimeout);
                 let lso = '';
                 if (enrichRes.ok) {
-                    const enrichData = await enrichRes.json();
+                    enrichData = await enrichRes.json();
                     lso = (enrichData.linkSistemaOrigem || '').trim();
                     if (lso && hasMonitorableDomain(lso)) {
                         legacyProcess.link_sistema = lso;
@@ -1933,7 +1935,7 @@ Responda APENAS com JSON array:
                                 const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
                                 
                                 legacyProcess.link_sistema = fallbackUrl;
-                                logger.info(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                logger.info(`[PNCP-V2] 🔧 Fallback B: URL construília do edital → ${fallbackUrl}`);
                                 logger.info(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
                             } else {
                                 logger.info(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
@@ -1962,6 +1964,86 @@ Responda APENAS com JSON array:
                 }
             }
         }
+
+        // Helper to parse Comprasnet monitoring parameters from a URL
+        const parseComprasnetUrl = (urlStr: string) => {
+            try {
+                const urlObj = new URL(urlStr.startsWith('http') ? urlStr : `https://${urlStr}`);
+                const compra = urlObj.searchParams.get('compra') || '';
+                if (compra && /^\d{17}$/.test(compra)) {
+                    return {
+                        uasg: compra.substring(0, 6),
+                        modalityCode: compra.substring(6, 8),
+                        processNumber: parseInt(compra.substring(8, 13), 10).toString(),
+                        processYear: compra.substring(13, 17)
+                    };
+                }
+                const coUasg = urlObj.searchParams.get('coUasg') || '';
+                const numPrp = urlObj.searchParams.get('numPrp') || '';
+                const anoPrp = urlObj.searchParams.get('anoPrp') || '';
+                if (coUasg && numPrp && anoPrp) {
+                    return {
+                        uasg: coUasg,
+                        modalityCode: urlObj.searchParams.get('modPrp') || '05',
+                        processNumber: numPrp,
+                        processYear: anoPrp
+                    };
+                }
+            } catch (e) {
+                // ignore URL parsing issues
+            }
+            return null;
+        };
+
+        // ── RESOLVE COMPRASNET MONITORING FIELDS ──
+        let resolvedUasg = '';
+        let resolvedModalityCode = '';
+        let resolvedProcessNumber = '';
+        let resolvedProcessYear = '';
+
+        const finalLink = legacyProcess.link_sistema || '';
+        if (finalLink.includes('cnetmobile') || finalLink.includes('comprasnet')) {
+            const parsed = parseComprasnetUrl(finalLink);
+            if (parsed) {
+                resolvedUasg = parsed.uasg;
+                resolvedModalityCode = parsed.modalityCode;
+                resolvedProcessNumber = parsed.processNumber;
+                resolvedProcessYear = parsed.processYear;
+                logger.info(`[PNCP-V2] 🌐 Parsed Comprasnet fields from URL: UASG=${resolvedUasg}, ModCode=${resolvedModalityCode}, Num=${resolvedProcessNumber}, Year=${resolvedProcessYear}`);
+            }
+        }
+
+        const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
+        const aiNum = ((v2Result.process_identification as any).numero_comprasnet || '').trim();
+        const aiYear = ano || '';
+
+        if (!resolvedUasg) resolvedUasg = aiUasg || (enrichData?.unidadeOrgao?.codigoUnidade || '').trim();
+        if (!resolvedProcessNumber) resolvedProcessNumber = aiNum;
+        if (!resolvedProcessYear) resolvedProcessYear = aiYear;
+
+        if (!resolvedModalityCode) {
+            const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
+            const MODALIDADE_TO_CODE: Record<string, string> = {
+                'pregão': '05', 'pregao': '05',
+                'concorrência': '03', 'concorrencia': '03',
+                'tomada de preço': '02', 'tomada de preco': '02',
+                'convite': '04', 'concurso': '01',
+                'leilão': '07', 'leilao': '07',
+                'dispensa': '08', 'inexigibilidade': '09',
+            };
+            for (const [key, code] of Object.entries(MODALIDADE_TO_CODE)) {
+                if (aiModalidade.includes(key)) {
+                    resolvedModalityCode = code;
+                    break;
+                }
+            }
+        }
+
+        if (resolvedUasg) (legacyProcess as any).uasg = resolvedUasg;
+        if (resolvedModalityCode) (legacyProcess as any).modalityCode = resolvedModalityCode;
+        if (resolvedProcessNumber) (legacyProcess as any).processNumber = resolvedProcessNumber;
+        if (resolvedProcessYear) (legacyProcess as any).processYear = resolvedProcessYear;
+
 
         // ── Re-normalize portal after Auto-Enrich ──
         // If we enriched link_sistema to a platform URL (BLL, BNC, etc.), the portal

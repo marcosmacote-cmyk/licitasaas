@@ -360,6 +360,10 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                     link: extractedLink && !prev.link?.includes(extractedLink) 
                         ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
                         : prev.link,
+                    uasg: proc.uasg || schema?.process_identification?.uasg_comprasnet || prev.uasg,
+                    modalityCode: proc.modalityCode || prev.modalityCode,
+                    processNumber: proc.processNumber || schema?.process_identification?.numero_comprasnet || prev.processNumber,
+                    processYear: proc.processYear || prev.processYear,
                 }));
                 if (aiData.analysis) {
                     const analysisObj: AiAnalysis = {
@@ -626,6 +630,10 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 link: aiSystemLink && !prev.link?.includes(aiSystemLink) 
                     ? (prev.link ? `${prev.link}, ${aiSystemLink}` : aiSystemLink) 
                     : prev.link,
+                uasg: proc.uasg || schema?.process_identification?.uasg_comprasnet || prev.uasg,
+                modalityCode: proc.modalityCode || prev.modalityCode,
+                processNumber: proc.processNumber || schema?.process_identification?.numero_comprasnet || prev.processNumber,
+                processYear: proc.processYear || prev.processYear,
             }));
 
             // Step 4: Store full analysis
