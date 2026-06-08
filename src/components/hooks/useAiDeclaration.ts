@@ -142,7 +142,13 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
 
     const [generationMode, setGenerationMode] = useState<'ai' | 'static' | 'mixed'>('ai');
-    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+
+    const selectedTemplateId = selectedTemplateIds[0] || '';
+    const setSelectedTemplateId = useCallback((id: string) => {
+        setSelectedTemplateIds(id ? [id] : []);
+    }, []);
+
     const [templates, setTemplates] = useState<DeclarationTemplate[]>([]);
     const [isTemplatesLoading, setIsTemplatesLoading] = useState(false);
 
@@ -155,8 +161,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(data);
-                if (data.length > 0 && !selectedTemplateId) {
-                    setSelectedTemplateId(data[0].id);
+                if (data.length > 0 && selectedTemplateIds.length === 0) {
+                    setSelectedTemplateIds([data[0].id]);
                 }
             }
         } catch (e) {
@@ -164,7 +170,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         } finally {
             setIsTemplatesLoading(false);
         }
-    }, [selectedTemplateId]);
+    }, [selectedTemplateIds]);
 
     useEffect(() => {
         fetchTemplates();
@@ -224,9 +230,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             });
             if (res.ok) {
                 toast.success('Modelo excluído com sucesso!');
-                if (selectedTemplateId === id) {
-                    setSelectedTemplateId('');
-                }
+                setSelectedTemplateIds(prev => prev.filter(x => x !== id));
                 fetchTemplates();
             } else {
                 const err = await res.json();
@@ -504,8 +508,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         if (generationMode === 'ai' && !declarationType) {
             toast.warning('Selecione ou digite o tipo de declaração.'); return;
         }
-        if (generationMode !== 'ai' && !selectedTemplateId) {
-            toast.warning('Selecione um modelo de declaração.'); return;
+        if (generationMode !== 'ai' && selectedTemplateIds.length === 0) {
+            toast.warning('Selecione ao menos um modelo de declaração.'); return;
         }
 
         const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
@@ -515,8 +519,12 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         updateLayout({ signatureDate: today });
 
-        const activeTemplate = templates.find(t => t.id === selectedTemplateId);
-        const targetDeclarationType = generationMode === 'ai' ? declarationType : (activeTemplate?.title || 'Declaração');
+        const activeTemplates = templates.filter(t => selectedTemplateIds.includes(t.id));
+        const targetDeclarationType = generationMode === 'ai' 
+            ? declarationType 
+            : (activeTemplates.length > 1 
+                ? 'DECLARAÇÃO UNIFICADA DE HABILITAÇÃO' 
+                : (activeTemplates[0]?.title || 'Declaração'));
 
         if (generationMode === 'static') {
             setIsGenerating(true);
@@ -543,7 +551,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                     signatureDate: today
                 };
 
-                const compiled = compileTemplate(activeTemplate?.content || '', facts);
+                const compiled = mergeTemplatesStatically(activeTemplates, facts);
                 setGeneratedText(compiled);
                 setDeclarationType(targetDeclarationType.toUpperCase());
                 setIsGenerating(false);
@@ -573,7 +581,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                     signatureCity: layout.signatureCity, 
                     signatureDate: today,
                     mode: generationMode,
-                    templateContent: activeTemplate?.content || ''
+                    templateContent: activeTemplates[0]?.content || '',
+                    selectedTemplates: activeTemplates.map(t => ({ title: t.title, content: t.content }))
                 }
             });
             setActiveJobId(jobId);
@@ -721,6 +730,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         confirmAction, setConfirmAction, layoutSaved,
         layouts, currentLayoutId, layoutName, qualityReport, qualityWarning, progressMsg,
         generationMode, setGenerationMode, selectedTemplateId, setSelectedTemplateId,
+        selectedTemplateIds, setSelectedTemplateIds,
         templates, isTemplatesLoading,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
@@ -733,6 +743,71 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         // Template Actions
         handleCreateTemplate, handleUpdateTemplate, handleDeleteTemplate, fetchTemplates
     };
+}
+
+export function cleanTemplateBody(content: string, templateId?: string): string {
+    const systemCleaned: Record<string, string> = {
+        'sys-menor': 'Não emprega menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, e não emprega menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 (quatorze) anos.',
+        'sys-impedimento': 'Inexistência de fatos supervenientes impeditivos para sua habilitação neste certame licitatório, ciente da obrigatoriedade de declarar ocorrências posteriores. Declara ainda que não foi declarada inidônea e nem se encontra suspensa ou impedida de licitar ou contratar com a Administração Pública.',
+        'sys-me-epp': 'Se enquadra na condição de Microempresa (ME) ou Empresa de Pequeno Porte (EPP), nos termos da Lei Complementar nº 123/2006, cumprindo todos os requisitos legais para fazer jus aos benefícios nela previstos. Declara ainda que não incorre em nenhuma das vedações previstas no § 4º do artigo 3º da referida Lei Complementar.',
+        'sys-nepotismo': 'Nenhum de seus sócios, administradores ou empregados com poder de decisão possui relação de parentesco, consanguínea ou afim, até o terceiro grau, inclusive, com servidores que exerçam cargos de direção, chefia ou assessoramento, ou que desempenhem funções de contratação ou fiscalização no âmbito do(a) {orgaoLicitante}.',
+        'sys-elaboracao': 'A proposta de preços apresentada para participação nesta licitação foi elaborada de forma independente, e que o conteúdo da mesma não foi, no todo ou em parte, direta ou indiretamente, informado, discutido ou recebido de qualquer outro participante potencial ou ativo deste certame.',
+        'sys-plena': 'Cumpre plenamente todos os requisitos de habilitação exigidos no Edital do certame regido pelo(a) {orgaoLicitante}, ciente da obrigatoriedade de informar qualquer alteração posterior.',
+        'sys-vagas': 'Cumpre integralmente as reservas de cargos previstas em lei para pessoa com deficiência ou para reabilitado da Previdência Social, conforme o art. 93 da Lei nº 8.213/1991, bem como a reserva de vagas para menor aprendiz, de acordo com o art. 429 da CLT, conforme exigência do certame promovido pelo(a) {orgaoLicitante}.',
+        'sys-trabalho-escravo': 'Não utiliza mão de obra infantil em qualquer trabalho e que não explora, direta ou indiretamente, o trabalho degradante ou análogo à condição de escravo, em conformidade com as normas legais e regulamentares vigentes e em atendimento às exigências do certame conduzido pelo(a) {orgaoLicitante}.',
+        'sys-nepotismo-servidores': 'Não possui em seu quadro societário, gerencial ou técnico, servidores públicos, empregados ou dirigentes do(a) {orgaoLicitante}, ou cônjuges, companheiros ou parentes em linha reta, colateral ou por afinidade, até o terceiro grau, inclusive, em conformidade com os princípios da moralidade e impessoalidade que regem as contratações públicas.',
+        'sys-compromisso-edital': 'Tomou conhecimento de todas as condições locais, especificações e exigências constantes no Edital de licitação promovido pelo(a) {orgaoLicitante}, Edital nº {editalNumero}, Processo nº {processoNumero}, aceitando-as integralmente e comprometendo-se a executar fielmente o seu objeto caso seja consagrada vencedora.'
+    };
+
+    if (templateId && systemCleaned[templateId]) {
+        return systemCleaned[templateId];
+    }
+
+    let clean = content.trim();
+
+    // Remove footer
+    clean = clean.replace(/Por\s+ser\s+expressão\s+da\s+verdade,?\s+firmamos\s+a\s+presente\.?/gi, '');
+    clean = clean.replace(/Nestes\s+termos,?\s+pede\s+deferimento\.?/gi, '');
+    clean = clean.trim();
+
+    // Fallback regex cleaning
+    const declIndex = clean.search(/\bDECLAR[AO]\b/i);
+    if (declIndex !== -1) {
+        let rest = clean.substring(declIndex + 7).trim();
+        rest = rest.replace(/^[\s,;.-]+/, '');
+        rest = rest.replace(/^(?:sob\s+as\s+(?:penas|sanções)\s+da\s+lei|sob\s+as\s+sanções\s+administrativas\s+e\s+sob\s+as\s+penas\s+da\s+lei)/i, '');
+        rest = rest.replace(/^[\s,;.-]+/, '');
+        rest = rest.replace(/^(?:para\s+fins\s+do\s+disposto\s+no\s+[^,;]+(?:,\s*c\/c\s+[^,;]+)?|em\s+especial\s+para\s+os\s+fins\s+do\s+disposto\s+no\s+[^,;]+|em\s+especial\s+o\s+art\.\s+[^,;]+)/i, '');
+        rest = rest.replace(/^[\s,;.-]+/, '');
+        rest = rest.replace(/^que\s+/i, '');
+        rest = rest.replace(/^[\s,;.-]+/, '');
+        clean = rest;
+    }
+
+    clean = clean.trim();
+    if (clean.length > 0) {
+        clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
+    return clean;
+}
+
+export function mergeTemplatesStatically(selectedTemplates: DeclarationTemplate[], facts: any): string {
+    if (selectedTemplates.length === 0) return '';
+    if (selectedTemplates.length === 1) {
+        return compileTemplate(selectedTemplates[0].content, facts);
+    }
+
+    const header = `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob o nº ${facts.empresaCnpj}, com sede em ${facts.empresaEndereco || '[endereço da sede]'}, por intermédio de seu representante legal, o(a) Sr(a). ${facts.representanteNome || '[nome do representante]'}, portador(a) do CPF nº ${facts.representanteCpf || '[CPF do representante]'}, no cargo de ${facts.representanteCargo || 'Representante Legal'}, DECLARA para fins de participação no certame promovido pelo(a) ${facts.orgaoLicitante || '[órgão licitante]'}, Edital nº ${facts.editalNumero || '[número do edital]'}, Processo nº ${facts.processoNumero || '[número do processo]'}, sob as penas da lei, as seguintes condições:`;
+
+    const items = selectedTemplates.map((t, idx) => {
+        let body = cleanTemplateBody(t.content, t.id);
+        body = compileTemplate(body, facts);
+        return `${idx + 1}. ${body}`;
+    });
+
+    const footer = `Por ser expressão da verdade, firmamos a presente.`;
+
+    return `${header}\n\n${items.join('\n\n')}\n\n${footer}`;
 }
 
 function compileTemplate(content: string, facts: any): string {

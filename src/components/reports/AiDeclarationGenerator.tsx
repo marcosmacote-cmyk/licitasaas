@@ -1,5 +1,5 @@
 import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw, AlertTriangle, Shield, ChevronRight, Scale, PenLine, FileDown, Zap, Ban, Info } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConfirmDialog } from '../ui';
 import { useAiDeclaration } from '../hooks/useAiDeclaration';
 import type { LayoutConfig, QualityReportFrontend, DeclarationTemplate } from '../hooks/useAiDeclaration';
@@ -15,6 +15,22 @@ interface Props {
 export function AiDeclarationGenerator({ biddings, companies, onSave, initialBiddingId }: Props) {
     const d = useAiDeclaration({ biddings, companies, onSave, initialBiddingId });
     const [manageTemplatesOpen, setManageTemplatesOpen] = useState(false);
+    
+    useEffect(() => {
+        if (d.generationMode !== 'ai') {
+            if (d.selectedTemplateIds.length === 1) {
+                const active = d.templates.find(t => t.id === d.selectedTemplateIds[0]);
+                if (active) {
+                    d.setDeclarationType(active.title.toUpperCase());
+                }
+            } else if (d.selectedTemplateIds.length > 1) {
+                d.setDeclarationType('DECLARAÇÃO UNIFICADA DE HABILITAÇÃO');
+            } else {
+                d.setDeclarationType('');
+            }
+        }
+    }, [d.selectedTemplateIds, d.generationMode, d.templates]);
+
     const hasResult = !!d.generatedText || d.isGenerating;
 
     return (
@@ -296,32 +312,30 @@ function WizardStep1({ d, companies, setManageTemplatesOpen }: {
                             )}
                         </ConfigField>
                     ) : (
-                        <ConfigField label="Modelo de Declaração" icon={<FileSignature size={10} />} stepNumber={4}>
-                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                                <select
-                                    className="form-select"
-                                    value={d.selectedTemplateId}
-                                    onChange={(e) => d.setSelectedTemplateId(e.target.value)}
-                                    style={{ flex: 1 }}
-                                >
-                                    <option value="">— Selecione um modelo —</option>
-                                    {d.templates.map(t => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.title} {t.tenantId === null ? '(Sistema)' : '(Custom)'}
-                                        </option>
-                                    ))}
-                                </select>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline"
-                                    style={{ fontSize: '0.75rem', padding: '10px 12px', gap: 4, whiteSpace: 'nowrap' }}
-                                    onClick={() => setManageTemplatesOpen(true)}
-                                >
-                                    <Settings2 size={13} />
-                                    Gerenciar
-                                </button>
-                            </div>
-                        </ConfigField>
+                        <div style={{ marginBottom: 'var(--space-4)' }}>
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.07em',
+                                color: 'var(--color-text-tertiary)',
+                                marginBottom: 'var(--space-1)',
+                            }}>
+                                <span style={{
+                                    width: 16, height: 16, borderRadius: '50%',
+                                    background: 'var(--color-primary)', color: 'white',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '0.58rem', fontWeight: 800, letterSpacing: 0, flexShrink: 0,
+                                    marginRight: 2
+                                }}>4</span>
+                                <FileSignature size={10} style={{ opacity: 0.7 }} />
+                                Selecione os Modelos
+                            </label>
+                            <TemplateChecklist d={d} setManageTemplatesOpen={setManageTemplatesOpen} />
+                        </div>
                     )}
 
                     {/* Style selector - hide in static mode */}
@@ -344,13 +358,13 @@ function WizardStep1({ d, companies, setManageTemplatesOpen }: {
                             width: '100%', height: '52px', gap: 'var(--space-2)', marginTop: 'var(--space-2)',
                             background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
                             border: 'none', borderRadius: 'var(--radius-xl)',
-                            boxShadow: d.selectedBiddingId && d.selectedCompanyId && (d.generationMode === 'ai' ? d.declarationType : d.selectedTemplateId) ? '0 6px 24px rgba(139,92,246,0.30)' : undefined,
+                            boxShadow: d.selectedBiddingId && d.selectedCompanyId && (d.generationMode === 'ai' ? d.declarationType : d.selectedTemplateIds.length > 0) ? '0 6px 24px rgba(139,92,246,0.30)' : undefined,
                             fontSize: 'var(--text-md)', fontWeight: 800, letterSpacing: '-0.01em',
-                            opacity: (!d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : !d.selectedTemplateId)) ? 0.5 : 1,
+                            opacity: (!d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : d.selectedTemplateIds.length === 0)) ? 0.5 : 1,
                             transition: 'all 0.2s',
                         }}
                         onClick={d.handleGenerate}
-                        disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : !d.selectedTemplateId)}
+                        disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || (d.generationMode === 'ai' ? !d.declarationType : d.selectedTemplateIds.length === 0)}
                     >
                         {d.isGenerating ? <Loader2 size={20} className="spin" /> : (d.generationMode === 'static' ? <FileText size={20} /> : <Sparkles size={20} />)}
                         {d.isGenerating ? (d.generationMode === 'static' ? 'Mesclando dados...' : 'Gerando declaração...') : (d.generationMode === 'static' ? 'Preencher Declaração' : 'Gerar Declaração')}
@@ -1267,6 +1281,159 @@ function TemplateManagementModal({ open, onClose, d }: TemplateManagementModalPr
                         Fechar
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function TemplateChecklist({ d, setManageTemplatesOpen }: {
+    d: ReturnType<typeof useAiDeclaration>;
+    setManageTemplatesOpen: (open: boolean) => void;
+}) {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredTemplates = d.templates.filter(t => 
+        t.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleToggle = (id: string) => {
+        d.setSelectedTemplateIds(prev => 
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        d.setSelectedTemplateIds(filteredTemplates.map(t => t.id));
+    };
+
+    const handleClearAll = () => {
+        d.setSelectedTemplateIds([]);
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            {/* Header: Search and Shortcuts */}
+            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <input
+                    type="text"
+                    className="form-select"
+                    placeholder="Filtrar modelos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ fontSize: '0.78rem', flex: 1, height: '36px' }}
+                />
+                <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: '0.72rem', padding: '0 12px', height: '36px', gap: 4, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}
+                    onClick={() => setManageTemplatesOpen(true)}
+                >
+                    <Settings2 size={12} />
+                    Gerenciar
+                </button>
+            </div>
+
+            {/* Selection Shortcuts & Counter */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', padding: '0 2px' }}>
+                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                    {d.selectedTemplateIds.length} selecionado{d.selectedTemplateIds.length !== 1 ? 's' : ''}
+                </span>
+                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                    <button
+                        type="button"
+                        onClick={handleSelectAll}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                    >
+                        Selecionar Todos
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleClearAll}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                    >
+                        Limpar
+                    </button>
+                </div>
+            </div>
+
+            {/* Scrollable Container */}
+            <div style={{
+                maxHeight: '190px',
+                overflowY: 'auto',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'var(--color-bg-body)',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)'
+            }}>
+                {filteredTemplates.length === 0 ? (
+                    <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
+                        Nenhum modelo encontrado.
+                    </div>
+                ) : (
+                    filteredTemplates.map(t => {
+                        const isChecked = d.selectedTemplateIds.includes(t.id);
+                        const isSystem = t.tenantId === null;
+                        return (
+                            <div
+                                key={t.id}
+                                onClick={() => handleToggle(t.id)}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isChecked ? 'rgba(139, 92, 246, 0.06)' : 'rgba(0, 0, 0, 0.02)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isChecked ? 'rgba(139, 92, 246, 0.03)' : 'transparent'; }}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 'var(--space-3)',
+                                    padding: 'var(--space-2) var(--space-3)',
+                                    borderBottom: '1px solid var(--color-border)',
+                                    cursor: 'pointer',
+                                    background: isChecked ? 'rgba(139, 92, 246, 0.03)' : 'transparent',
+                                    transition: 'background-color 0.15s ease',
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {}} // Controlled by container onClick
+                                    style={{
+                                        accentColor: 'var(--color-ai)',
+                                        cursor: 'pointer',
+                                        width: 14,
+                                        height: 14,
+                                        flexShrink: 0
+                                    }}
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{
+                                        fontSize: '0.76rem',
+                                        fontWeight: isChecked ? 600 : 400,
+                                        color: isChecked ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }} title={t.title}>
+                                        {t.title}
+                                    </div>
+                                </div>
+                                <span style={{
+                                    fontSize: '0.55rem',
+                                    fontWeight: 700,
+                                    padding: '2px 6px',
+                                    borderRadius: '10px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.02em',
+                                    flexShrink: 0,
+                                    background: isSystem ? 'rgba(37,99,235,0.06)' : 'rgba(139,92,246,0.06)',
+                                    color: isSystem ? 'var(--color-primary)' : 'var(--color-ai)',
+                                    border: isSystem ? '1px solid rgba(37,99,235,0.12)' : '1px solid rgba(139,92,246,0.12)'
+                                }}>
+                                    {isSystem ? 'Sistema' : 'Personalizado'}
+                                </span>
+                            </div>
+                        );
+                    })
+                )}
             </div>
         </div>
     );

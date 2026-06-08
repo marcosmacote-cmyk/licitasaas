@@ -389,5 +389,36 @@ describe('useAiDeclaration', () => {
                 })
             );
         });
+
+        it('deve realizar preenchimento estático unificado de múltiplos templates', async () => {
+            const { result } = renderDeclaration({ initialBiddingId: 'bid-1' });
+            
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => [
+                    { id: 'sys-menor', tenantId: null, title: 'Menor Aprendiz', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, que não emprega menores...' },
+                    { id: 'sys-impedimento', tenantId: null, title: 'Fato Impeditivo', content: 'A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, a inexistência de fatos supervenientes...' }
+                ]
+            } as any);
+
+            await act(async () => {
+                await result.current.fetchTemplates();
+            });
+
+            await waitFor(() => expect(result.current.templates).toHaveLength(2));
+
+            act(() => {
+                result.current.setGenerationMode('static');
+                result.current.setSelectedTemplateIds(['sys-menor', 'sys-impedimento']);
+            });
+
+            await act(async () => {
+                await result.current.handleGenerate();
+            });
+
+            expect(result.current.generatedText).toContain('1. Não emprega menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, e não emprega menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 (quatorze) anos.');
+            expect(result.current.generatedText).toContain('2. Inexistência de fatos supervenientes impeditivos para sua habilitação neste certame licitatório, ciente da obrigatoriedade de declarar ocorrências posteriores. Declara ainda que não foi declarada inidônea e nem se encontra suspensa ou impedida de licitar ou contratar com a Administração Pública.');
+            expect(result.current.declarationType).toBe('DECLARAÇÃO UNIFICADA DE HABILITAÇÃO');
+        });
     });
 });

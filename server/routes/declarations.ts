@@ -43,7 +43,7 @@ const genAI = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : nul
 router.post('/generate-declaration', authenticateToken, async (req: any, res) => {
     try {
         // ── Step 1: Receber request ──
-        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle, mode, templateContent } = req.body;
+        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle, mode, templateContent, selectedTemplates } = req.body;
         const style: DeclarationStyle = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva') as DeclarationStyle;
         logger.info(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} mode=${mode || 'ai'} BID:${biddingProcessId}`);
 
@@ -173,7 +173,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             }
         }
 
-        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause, mode, templateContent);
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause, mode, templateContent, selectedTemplates);
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
@@ -383,6 +383,7 @@ function buildDeclarationPrompt(
     editalClause?: string,
     mode?: string,
     templateContent?: string,
+    selectedTemplates?: Array<{ title: string; content: string }>,
 ): string {
     // Buscar mapa semântico que corresponde ao tipo da declaração
     const declLower = facts.declarationType.toLowerCase();
@@ -391,8 +392,28 @@ function buildDeclarationPrompt(
     );
 
     let mixedGuideline = '';
-    if (mode === 'mixed' && templateContent) {
-        mixedGuideline = `
+    if (mode === 'mixed') {
+        if (selectedTemplates && selectedTemplates.length > 0) {
+            const joinedContent = selectedTemplates.map((t: any, i: number) => `MODELO ${i+1}: "${t.title}"\n${t.content}`).join('\n\n---\n\n');
+            mixedGuideline = `
+╔══════════════════════════════════════════════════════════════╗
+║  TEMPLATES BASE (ESTRUTURA E REDAÇÃO OBRIGATÓRIA)            ║
+╠══════════════════════════════════════════════════════════════╣
+${joinedContent}
+╚══════════════════════════════════════════════════════════════╝
+
+INSTRUÇÃO MISTA ABSOLUTA (DECLARAÇÃO UNIFICADA/CONJUNTA):
+Você DEVE utilizar a redação e os tópicos de TODOS os TEMPLATES BASE fornecidos acima como ponto de partida compulsório.
+Você DEVE gerar uma única declaração consolidada (Declaração Unificada).
+Regras estritas de unificação:
+1. Qualifique a empresa e seu representante legal uma única vez no parágrafo de abertura.
+2. Apresente os compromissos e declarações de cada um dos modelos acima como itens numerados subsequentes (1, 2, 3, etc.) ou parágrafos integrados de forma fluida.
+3. Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc.) pelos Fatos Autoritativos correspondentes.
+4. Una o fecho formal ("Por ser expressão da verdade, firmamos a presente...") em uma única seção no final (após todos os itens de declaração).
+5. Adapte ou adicione parágrafos extras apenas para atender às exigências específicas do certame levantadas no "RESUMO AUXILIAR" e no "CONTEXTO ESPECÍFICO" (ex: menção a vistorias, equipe técnica especial, etc.), mas SEMPRE mantendo o tom formal e a essência da redação dos templates base.
+`;
+        } else if (templateContent) {
+            mixedGuideline = `
 ╔══════════════════════════════════════════════════════════════╗
 ║  TEMPLATE BASE (ESTRUTURA E REDAÇÃO OBRIGATÓRIA)              ║
 ╠══════════════════════════════════════════════════════════════╣
@@ -404,6 +425,7 @@ Você DEVE utilizar a redação do TEMPLATE BASE acima como ponto de partida com
 Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc.) pelos Fatos Autoritativos correspondentes.
 Além disso, com base na análise do edital fornecida no "RESUMO AUXILIAR" e no "CONTEXTO ESPECÍFICO", você DEVE adaptar a redação ou adicionar parágrafos extras apenas para atender às exigências específicas do certame (ex: menção a vistorias, equipe técnica especial, etc.), mas SEMPRE mantendo o tom formal e a essência da redação do template base.
 `;
+        }
     }
 
     return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
@@ -542,6 +564,36 @@ const SYSTEM_TEMPLATES = [
     tenantId: null,
     title: "Declaração de Elaboração Independente de Proposta",
     content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que a proposta de preços apresentada para participação nesta licitação foi elaborada de forma independente, e que o conteúdo da mesma não foi, no todo ou em parte, direta ou indiretamente, informado, discutido ou recebido de qualquer outro participante potencial ou ativo deste certame.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-plena",
+    tenantId: null,
+    title: "Declaração Plena de Habilitação (Lei 14.133/21, art. 63, I)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, em especial para os fins do disposto no art. 63, inciso I, da Lei nº 14.133/2021, que cumpre plenamente todos os requisitos de habilitação exigidos no Edital do certame regido pelo(a) {orgaoLicitante}, ciente da obrigatoriedade de informar qualquer alteração posterior.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-vagas",
+    tenantId: null,
+    title: "Declaração de Reserva de Vagas (PcD e Menor Aprendiz)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que cumpre integralmente as reservas de cargos previstas em lei para pessoa com deficiência ou para reabilitado da Previdência Social, conforme o art. 93 da Lei nº 8.213/1991, bem como a reserva de vagas para menor aprendiz, de acordo com o art. 429 da CLT, conforme exigência do certame promovido pelo(a) {orgaoLicitante}.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-trabalho-escravo",
+    tenantId: null,
+    title: "Declaração de Não Utilização de Trabalho Escravo",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que não utiliza mão de obra infantil em qualquer trabalho e que não explora, direta ou indiretamente, o trabalho degradante ou análogo à condição de escravo, em conformidade com as normas legais e regulamentares vigentes e em atendimento às exigências do certame conduzido pelo(a) {orgaoLicitante}.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-nepotismo-servidores",
+    tenantId: null,
+    title: "Declaração de Inexistência de Vínculo com Servidores (Nepotismo)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que não possui em seu quadro societário, gerencial ou técnico, servidores públicos, empregados ou dirigentes do(a) {orgaoLicitante}, ou cônjuges, companheiros ou parentes em linha reta, colateral ou por afinidade, até o terceiro grau, inclusive, em conformidade com os princípios da moralidade e impessoalidade que regem as contratações públicas.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-compromisso-edital",
+    tenantId: null,
+    title: "Declaração de Compromisso e Aceitação Integral do Edital",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que tomou conhecimento de todas as condições locais, especificações e exigências constantes no Edital de licitação promovido pelo(a) {orgaoLicitante}, Edital nº {editalNumero}, Processo nº {processoNumero}, aceitando-as integralmente e comprometendo-se a executar fielmente o seu objeto caso seja consagrada vencedora.\n\nPor ser expressão da verdade, firmamos a presente."
   }
 ];
 
