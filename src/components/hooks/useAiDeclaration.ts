@@ -479,7 +479,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`,
                 rtName,
                 rtCpf,
-                rtRole: 'Responsável Técnico',
+                rtRole: rtName ? 'Responsável Técnico' : '',
                 rtRegister
             });
         }
