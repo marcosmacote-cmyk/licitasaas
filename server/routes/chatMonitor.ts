@@ -294,7 +294,7 @@ router.get('/processes', authenticateToken, async (req: any, res) => {
         try {
             const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
                 by: ['biddingProcessId'],
-                where: { tenantId, isRead: false },
+                where: { tenantId, isRead: false, isArchived: false },
                 _count: { id: true },
             });
             unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
@@ -314,15 +314,16 @@ router.get('/processes', authenticateToken, async (req: any, res) => {
             importantSet = new Set(kwLogs.map((k: any) => k.biddingProcessId));
         } catch { /* silent */ }
 
-        // Step 4b: Get archived processes (ALL logs for process are archived)
-        let archivedSet = new Set<string>();
+        // Step 4b: Get active logs to correctly determine archived processes
+        // A process is archived ONLY if it has logs AND all of them are archived, and it is not monitored.
+        let activeLogsSet = new Set<string>();
         try {
-            const archivedLogs: any[] = await prisma.chatMonitorLog.findMany({
-                where: { tenantId, isArchived: true },
+            const activeLogs: any[] = await prisma.chatMonitorLog.findMany({
+                where: { tenantId, isArchived: false },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
-            archivedSet = new Set(archivedLogs.map((k: any) => k.biddingProcessId));
+            activeLogsSet = new Set(activeLogs.map((k: any) => k.biddingProcessId));
         } catch { /* silent */ }
 
         // Step 4c: Detect closure events (encerramento_processo category)
@@ -384,7 +385,7 @@ router.get('/processes', authenticateToken, async (req: any, res) => {
                 // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
                 unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,
                 isImportant: importantSet.has(p.id),
-                isArchived: archivedSet.has(p.id),
+                isArchived: !p.isMonitored && total > 0 && !activeLogsSet.has(p.id),
                 closureDetected: closureMap.get(p.id) || null,
                 lastMessage: lastMsg ? {
                     content: lastMsg.content,
@@ -500,12 +501,16 @@ router.post('/process-close/:processId', authenticateToken, async (req: any, res
 
         // 1. Update bidding process status (if not dismiss/stop-monitoring)
         if (action === 'stop-monitoring') {
-            // Only disable monitoring, don't change status or archive logs
+            // Disable monitoring, don't change status, and archive logs
             await prisma.biddingProcess.update({
                 where: { id: processId, tenantId },
                 data: { isMonitored: false },
             });
-            logger.info(`[ChatMonitor] Process ${processId} monitoring stopped (status unchanged)`);
+            await prisma.chatMonitorLog.updateMany({
+                where: { biddingProcessId: processId, tenantId },
+                data: { isArchived: true },
+            });
+            logger.info(`[ChatMonitor] Process ${processId} monitoring stopped and logs archived (status unchanged)`);
             return res.json({
                 success: true,
                 action,
@@ -643,7 +648,14 @@ router.put('/process-action/:processId', authenticateToken, async (req: any, res
 
         const data: any = {};
         if (isImportant !== undefined) data.isImportant = isImportant;
-        if (isArchived !== undefined) data.isArchived = isArchived;
+        if (isArchived !== undefined) {
+            data.isArchived = isArchived;
+            // Se arquivado, desativa monitoramento. Se desarquivado, reativa.
+            await prisma.biddingProcess.update({
+                where: { id: processId, tenantId: req.user.tenantId },
+                data: { isMonitored: !isArchived }
+            });
+        }
 
         const result = await prisma.chatMonitorLog.updateMany({
             where: { biddingProcessId: processId, tenantId: req.user.tenantId },

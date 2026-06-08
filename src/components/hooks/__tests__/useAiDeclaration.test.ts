@@ -68,6 +68,7 @@ describe('useAiDeclaration', () => {
 
     beforeEach(() => {
         resetMocks();
+        localStorage.clear();
         Object.values(toastMock).forEach(fn => fn.mockClear());
         (submitBackgroundJob as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue({ jobId: 'test-job' });
     });
@@ -419,6 +420,46 @@ describe('useAiDeclaration', () => {
             expect(result.current.generatedText).toContain('1. Não emprega menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, e não emprega menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 (quatorze) anos.');
             expect(result.current.generatedText).toContain('2. Inexistência de fatos supervenientes impeditivos para sua habilitação neste certame licitatório, ciente da obrigatoriedade de declarar ocorrências posteriores. Declara ainda que não foi declarada inidônea e nem se encontra suspensa ou impedida de licitar ou contratar com a Administração Pública.');
             expect(result.current.declarationType).toBe('DECLARAÇÃO UNIFICADA DE HABILITAÇÃO');
+        });
+    });
+
+    // ═══════════════════════════════════
+    // DOUBLE SIGNATURE & RT POPULATION (Sprint 9)
+    // ═══════════════════════════════════
+    describe('Assinatura Dupla e Responsável Técnico', () => {
+        it('deve inicializar com doubleSignature desativado e campos de RT vazios', () => {
+            const { result } = renderDeclaration();
+            expect(result.current.layout.doubleSignature).toBe(false);
+            expect(result.current.layout.rtName).toBe('');
+            expect(result.current.layout.rtRole).toBe('');
+            expect(result.current.layout.rtCpf).toBe('');
+            expect(result.current.layout.rtRegister).toBe('');
+        });
+
+        it('deve auto-popular dados do RT quando empresa com qualificação técnica for selecionada', async () => {
+            const companiesWithRT = [
+                createCompany({
+                    id: 'comp-rt',
+                    razaoSocial: 'Engenharia Ltda',
+                    cnpj: '98.765.432/0001-00',
+                    qualification: 'Engenharia Ltda, representada por Marcos Mendes, CPF nº: 987.654.321-00',
+                    technicalQualification: 'Carlos Alberto Engenheiro, CPF: 111.222.333-44, CREA: CREA/SP 987654321-D\nResponsável técnico com vasta experiência.',
+                })
+            ];
+
+            const { result } = renderDeclaration({ companies: companiesWithRT });
+
+            act(() => {
+                result.current.handleCompanyChange('comp-rt');
+            });
+
+            await waitFor(() => {
+                expect(result.current.selectedCompanyId).toBe('comp-rt');
+                expect(result.current.layout.rtName).toBe('Carlos Alberto Engenheiro');
+                expect(result.current.layout.rtCpf).toBe('CPF nº: 111.222.333-44');
+                expect(result.current.layout.rtRegister).toBe('CREA/SP 987654321-D');
+                expect(result.current.layout.rtRole).toBe('Responsável Técnico');
+            });
         });
     });
 });

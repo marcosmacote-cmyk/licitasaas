@@ -293,6 +293,15 @@ router.put('/:id', authenticateToken, planGuard, async (req: any, res) => {
                 companyProfileId: companyProfileId === '' ? null : companyProfileId
             }
         });
+
+        if (biddingData.isMonitored === true) {
+            await prisma.chatMonitorLog.updateMany({
+                where: { biddingProcessId: id, tenantId },
+                data: { isArchived: false },
+            });
+            logger.info(`[ChatMonitor] Process ${id} re-monitored, all logs unarchived`);
+        }
+
         res.json(bidding);
 
         // ── Step 1: Auto-enrich — fetch platform link from PNCP API asynchronously in background ──

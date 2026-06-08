@@ -594,6 +594,42 @@ const SYSTEM_TEMPLATES = [
     tenantId: null,
     title: "Declaração de Compromisso e Aceitação Integral do Edital",
     content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que tomou conhecimento de todas as condições locais, especificações e exigências constantes no Edital de licitação promovido pelo(a) {orgaoLicitante}, Edital nº {editalNumero}, Processo nº {processoNumero}, aceitando-as integralmente e comprometendo-se a executar fielmente o seu objeto caso seja consagrada vencedora.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-lgpd",
+    tenantId: null,
+    title: "Declaração de Conformidade com a LGPD (Lei 13.709/2018)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que cumpre integralmente as disposições da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD), comprometendo-se a tratar todos os dados pessoais a que tiver acesso em razão do certame promovido pelo(a) {orgaoLicitante} de acordo com as bases legais, princípios e regras estabelecidos na referida lei.\n\nDECLARA ainda que adota medidas de segurança, técnicas e administrativas aptas a proteger os dados pessoais de acessos não autorizados e de situações acidentais ou ilícitas de destruição, perda, alteração ou qualquer forma de tratamento inadequado.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-anticorrupcao",
+    tenantId: null,
+    title: "Declaração Anticorrupção e Ética (Lei 12.846/2013)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que não praticou, não pratica e se compromete a não praticar atos de corrupção, fraudes, conluios, práticas coercitivas ou obstrutivas em nenhuma fase deste certame promovido pelo(a) {orgaoLicitante} ou na execução do contrato dele decorrente, em estrita observância à Lei nº 12.846/2013 (Lei Anticorrupção) e demais normativos éticos e de integridade.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-ceis-cnep",
+    tenantId: null,
+    title: "Declaração de Inexistência de Sanções (CEIS / CNEP)",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que não possui inscrição ativa no Cadastro Nacional de Empresas Inidôneas e Suspensas (CEIS) ou no Cadastro Nacional de Empresas Punidas (CNEP), inexistindo qualquer impedimento legal ou sanção vigente que obste sua participação neste certame licitatório promovido pelo(a) {orgaoLicitante} ou contratação com a Administração Pública.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-declinio-vistoria",
+    tenantId: null,
+    title: "Declaração de Declínio de Vistoria Técnica",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA que opta por não realizar a vistoria técnica nos locais onde serão executados os serviços objeto do certame promovido pelo(a) {orgaoLicitante}, Processo nº {processoNumero}, Edital nº {editalNumero}.\n\nDECLARA, outrossim, que detém pleno conhecimento de todas as condições locais, peculiaridades, características e exigências necessárias ao perfeito cumprimento das obrigações contratuais, assumindo inteira e exclusiva responsabilidade por qualquer omissão, erro ou dificuldade futura decorrente do declínio da vistoria, renunciando a qualquer pleito de reequilíbrio econômico-financeiro ou dilação de prazo sob tal alegação.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-custos-trabalhistas",
+    tenantId: null,
+    title: "Declaração de Integralidade de Custos Trabalhistas",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que a proposta econômica apresentada para o certame promovido pelo(a) {orgaoLicitante} compreende a integralidade de todos os custos necessários para o pleno e fiel atendimento de todos os direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas (CLT), nas convenções coletivas de trabalho vigentes e nos termos de ajustamento de conduta aplicáveis.\n\nPor ser expressão da verdade, firmamos a presente."
+  },
+  {
+    id: "sys-autenticidade-documental",
+    tenantId: null,
+    title: "Declaração de Autenticidade de Documentos Digitais",
+    content: "A empresa {empresaRazaoSocial}, inscrita no CNPJ sob o nº {empresaCnpj}, com sede em {empresaEndereco}, por intermédio de seu representante legal, o(a) Sr(a). {representanteNome}, portador(a) do CPF nº {representanteCpf}, DECLARA, sob as penas da lei, que toda a documentação anexada em formato digital no Sistema de Licitações Eletrônicas para participação neste certame promovido pelo(a) {orgaoLicitante} é autêntica e corresponde fielmente aos documentos originais, estando ciente das sanções administrativas e penais aplicáveis em caso de falsidade documental.\n\nPor ser expressão da verdade, firmamos a presente."
   }
 ];
 

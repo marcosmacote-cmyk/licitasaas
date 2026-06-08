@@ -59,6 +59,11 @@ export interface LayoutConfig {
     signatoryCnpj: string;
     addresseeName: string;
     addresseeOrg: string;
+    doubleSignature: boolean;
+    rtName: string;
+    rtRole: string;
+    rtCpf: string;
+    rtRegister: string;
 }
 
 export const DEFAULT_LAYOUT: Omit<LayoutConfig, 'id' | 'name'> = {
@@ -72,6 +77,11 @@ export const DEFAULT_LAYOUT: Omit<LayoutConfig, 'id' | 'name'> = {
     signatoryCnpj: '',
     addresseeName: 'Agente de Contratação',
     addresseeOrg: '',
+    doubleSignature: false,
+    rtName: '',
+    rtRole: '',
+    rtCpf: '',
+    rtRegister: '',
 };
 
 const STORAGE_KEY = 'declaration_layouts';
@@ -431,6 +441,20 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         if (nameMatch?.[1]) fullName = nameMatch[1].trim();
         if (!fullName) fullName = c.contactName || '';
 
+        let rtName = '';
+        let rtCpf = '';
+        let rtRegister = '';
+        if (c.technicalQualification) {
+            const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
+            rtName = techLines[0]?.split(',')[0]?.trim() || '';
+            const techCpfMatch = c.technicalQualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+            if (techCpfMatch) rtCpf = `CPF nº: ${techCpfMatch[0]}`;
+            const regMatch = c.technicalQualification.match(/(?:CREA|CAU)(?:\/[A-Z]{2})?\s*(?:nº|sob\s+o\s+nº|:)?\s*[0-9a-zA-Z\-/.]+(?:\s+[0-9a-zA-Z\-/.]+)?/i);
+            if (regMatch) {
+                rtRegister = regMatch[0].trim().replace(/^(?:CREA|CAU)\s*:\s*(?=(?:CREA|CAU))/i, '');
+            }
+        }
+
         if (issuerType === 'technical' && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
             const techName = techLines[0]?.split(',')[0]?.trim() || fullName;
@@ -440,7 +464,11 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 signatoryName: techName, signatoryRole: 'Responsável Técnico',
                 signatoryCpf: techCpfMatch ? `CPF nº: ${techCpfMatch[0]}` : '',
                 signatureCity: techCityMatch ? techCityMatch[1].trim() : city,
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`,
+                rtName,
+                rtCpf,
+                rtRole: 'Responsável Técnico',
+                rtRegister
             });
         } else {
             updateLayout({
@@ -448,7 +476,11 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 signatoryCompany: c.razaoSocial, signatoryCnpj: `CNPJ: ${c.cnpj}`,
                 signatoryName: fullName, signatoryCpf: cpf, signatoryRole: 'Representante Legal',
                 signatureCity: city,
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`,
+                rtName,
+                rtCpf,
+                rtRole: 'Responsável Técnico',
+                rtRegister
             });
         }
     }, [issuerType, selectedCompanyId, companies, updateLayout]);
@@ -683,13 +715,75 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         }
 
         // Signature
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-        doc.text('__________________________________________', pw / 2, y, { align: 'center' }); y += 5;
-        if (layout.signatoryName) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(layout.signatoryName.toUpperCase(), pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCpf) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCpf, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryRole) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryRole, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCompany) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(layout.signatoryCompany, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCnpj) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCnpj, pw / 2, y, { align: 'center' }); }
+        if (layout.doubleSignature) {
+            const leftX = pw / 4;
+            const rightX = (pw * 3) / 4;
+
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            
+            doc.text('__________________________________', leftX, y, { align: 'center' });
+            doc.text('__________________________________', rightX, y, { align: 'center' });
+            y += 5;
+
+            let ly = y;
+            if (layout.signatoryName) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                doc.text(layout.signatoryName.toUpperCase(), leftX, ly, { align: 'center' });
+                ly += 4.5;
+            }
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            if (layout.signatoryCpf) {
+                doc.text(layout.signatoryCpf, leftX, ly, { align: 'center' });
+                ly += 4.5;
+            }
+            if (layout.signatoryRole) {
+                doc.text(layout.signatoryRole, leftX, ly, { align: 'center' });
+                ly += 4.5;
+            }
+            if (layout.signatoryCompany) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+                doc.text(layout.signatoryCompany, leftX, ly, { align: 'center' });
+                ly += 4.5;
+            }
+            if (layout.signatoryCnpj) {
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+                doc.text(layout.signatoryCnpj, leftX, ly, { align: 'center' });
+            }
+
+            let ry = y;
+            if (layout.rtName) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+                doc.text(layout.rtName.toUpperCase(), rightX, ry, { align: 'center' });
+                ry += 4.5;
+            }
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            if (layout.rtCpf) {
+                doc.text(layout.rtCpf, rightX, ry, { align: 'center' });
+                ry += 4.5;
+            }
+            if (layout.rtRole) {
+                doc.text(layout.rtRole, rightX, ry, { align: 'center' });
+                ry += 4.5;
+            }
+            if (layout.rtRegister) {
+                doc.text(layout.rtRegister, rightX, ry, { align: 'center' });
+                ry += 4.5;
+            }
+            if (layout.signatoryCompany) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+                doc.text(layout.signatoryCompany, rightX, ry, { align: 'center' });
+            }
+
+            y = Math.max(ly, ry);
+        } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            doc.text('__________________________________________', pw / 2, y, { align: 'center' }); y += 5;
+            if (layout.signatoryName) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(layout.signatoryName.toUpperCase(), pw / 2, y, { align: 'center' }); y += 4.5; }
+            if (layout.signatoryCpf) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCpf, pw / 2, y, { align: 'center' }); y += 4.5; }
+            if (layout.signatoryRole) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryRole, pw / 2, y, { align: 'center' }); y += 4.5; }
+            if (layout.signatoryCompany) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(layout.signatoryCompany, pw / 2, y, { align: 'center' }); y += 4.5; }
+            if (layout.signatoryCnpj) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCnpj, pw / 2, y, { align: 'center' }); }
+        }
 
         drawFooter();
         return doc;
@@ -756,7 +850,13 @@ export function cleanTemplateBody(content: string, templateId?: string): string 
         'sys-vagas': 'Cumpre integralmente as reservas de cargos previstas em lei para pessoa com deficiência ou para reabilitado da Previdência Social, conforme o art. 93 da Lei nº 8.213/1991, bem como a reserva de vagas para menor aprendiz, de acordo com o art. 429 da CLT, conforme exigência do certame promovido pelo(a) {orgaoLicitante}.',
         'sys-trabalho-escravo': 'Não utiliza mão de obra infantil em qualquer trabalho e que não explora, direta ou indiretamente, o trabalho degradante ou análogo à condição de escravo, em conformidade com as normas legais e regulamentares vigentes e em atendimento às exigências do certame conduzido pelo(a) {orgaoLicitante}.',
         'sys-nepotismo-servidores': 'Não possui em seu quadro societário, gerencial ou técnico, servidores públicos, empregados ou dirigentes do(a) {orgaoLicitante}, ou cônjuges, companheiros ou parentes em linha reta, colateral ou por afinidade, até o terceiro grau, inclusive, em conformidade com os princípios da moralidade e impessoalidade que regem as contratações públicas.',
-        'sys-compromisso-edital': 'Tomou conhecimento de todas as condições locais, especificações e exigências constantes no Edital de licitação promovido pelo(a) {orgaoLicitante}, Edital nº {editalNumero}, Processo nº {processoNumero}, aceitando-as integralmente e comprometendo-se a executar fielmente o seu objeto caso seja consagrada vencedora.'
+        'sys-compromisso-edital': 'Tomou conhecimento de todas as condições locais, especificações e exigências constantes no Edital de licitação promovido pelo(a) {orgaoLicitante}, Edital nº {editalNumero}, Processo nº {processoNumero}, aceitando-as integralmente e comprometendo-se a executar fielmente o seu objeto caso seja consagrada vencedora.',
+        'sys-lgpd': 'Cumpre integralmente as disposições da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD), comprometendo-se a tratar todos os dados pessoais a que tiver acesso em razão do certame promovido pelo(a) {orgaoLicitante} de acordo com as bases legais, princípios e regras estabelecidos na referida lei. Declara ainda que adota medidas de segurança, técnicas e administrativas aptas a proteger os dados pessoais de acessos não autorizados e de situações acidentais ou ilícitas de destruição, perda, alteração ou qualquer forma de tratamento inadequado.',
+        'sys-anticorrupcao': 'Não praticou, não pratica e se compromete a não praticar atos de corrupção, fraudes, conluios, práticas coercitivas ou obstrutivas em nenhuma fase deste certame promovido pelo(a) {orgaoLicitante} ou na execução do contrato dele decorrente, em estrita observância à Lei nº 12.846/2013 (Lei Anticorrupção) e demais normativos éticos e de integridade.',
+        'sys-ceis-cnep': 'Não possui inscrição ativa no Cadastro Nacional de Empresas Inidôneas e Suspensas (CEIS) ou no Cadastro Nacional de Empresas Punidas (CNEP), inexistindo qualquer impedimento legal ou sanção vigente que obste sua participação neste certame licitatório promovido pelo(a) {orgaoLicitante} ou contratação com a Administração Pública.',
+        'sys-declinio-vistoria': 'Opta por não realizar a vistoria técnica nos locais onde serão executados os serviços objeto do certame promovido pelo(a) {orgaoLicitante}, Processo nº {processoNumero}, Edital nº {editalNumero}. Declara, outrossim, que detém pleno conhecimento de todas as condições locais, peculiaridades, características e exigências necessárias ao perfeito cumprimento das obrigações contratuais, assumindo inteira e exclusiva responsabilidade por qualquer omissão, erro ou dificuldade futura decorrente do declínio da vistoria, renunciando a qualquer pleito de reequilíbrio econômico-financeiro ou dilação de prazo sob tal alegação.',
+        'sys-custos-trabalhistas': 'A proposta econômica apresentada para o certame promovido pelo(a) {orgaoLicitante} compreende a integralidade de todos os custos necessários para o pleno e fiel atendimento de todos os direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas (CLT), nas convenções coletivas de trabalho vigentes e nos termos de ajustamento de conduta aplicáveis.',
+        'sys-autenticidade-documental': 'Toda a documentação anexada em formato digital no Sistema de Licitações Eletrônicas para participação neste certame promovido pelo(a) {orgaoLicitante} é autêntica e corresponde fielmente aos documentos originais, estando ciente das sanções administrativas e penais aplicáveis em caso de falsidade documental.'
     };
 
     if (templateId && systemCleaned[templateId]) {

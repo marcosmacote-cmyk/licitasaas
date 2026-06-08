@@ -374,86 +374,94 @@ function WizardStep1({ d, companies, setManageTemplatesOpen }: {
 
             {/* RIGHT: Info panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                {/* Feature cards */}
-                <div style={{
-                    display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
-                    padding: 'var(--space-8) var(--space-6)',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                {d.declarationTypesFromEdital.length > 0 ? (
+                    <EditalRequirementsMatchPanel d={d} />
+                ) : (
+                    <>
+                        {/* Feature cards */}
                         <div style={{
-                            width: 48, height: 48, borderRadius: 'var(--radius-xl)',
-                            background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(37,99,235,0.08))',
-                            border: '1px solid rgba(139,92,246,0.2)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+                            padding: 'var(--space-8) var(--space-6)',
                         }}>
-                            <FileText size={22} color="var(--color-ai)" strokeWidth={1.6} />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-ai)', marginBottom: 2 }}>Estúdio Documental</div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Gerador de Declarações</div>
-                        </div>
-                    </div>
-
-                    <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.7, maxWidth: 360 }}>
-                        Selecione a <strong>licitação</strong> e o <strong>tipo</strong>, e a IA ou o sistema irá preencher e gerar a declaração formal.
-                    </p>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-                        {[
-                            { icon: 'sparkles', title: 'Frentes Flexíveis', desc: 'Geração 100% IA, via modelo estático ou modo misto combinado' },
-                            { icon: 'scale', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
-                            { icon: 'penline', title: 'Editável', desc: 'Revise e ajuste o texto diretamente no modelo antes de exportar' },
-                            { icon: 'filedown', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
-                        ].map((f, i) => (
-                            <div key={i} style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)',
-                                padding: 'var(--space-3) var(--space-4)',
-                                borderRadius: 'var(--radius-lg)',
-                                background: 'var(--color-bg-surface)',
-                                border: '1px solid var(--color-border)',
-                            }}>
-                                <span style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 'var(--radius-md)', background: 'rgba(139,92,246,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {f.icon === 'sparkles' && <Sparkles size={14} color="var(--color-ai)" />}
-                                    {f.icon === 'scale' && <Scale size={14} color="var(--color-ai)" />}
-                                    {f.icon === 'penline' && <PenLine size={14} color="var(--color-ai)" />}
-                                    {f.icon === 'filedown' && <FileDown size={14} color="var(--color-ai)" />}
-                                </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                                <div style={{
+                                    width: 48, height: 48, borderRadius: 'var(--radius-xl)',
+                                    background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(37,99,235,0.08))',
+                                    border: '1px solid rgba(139,92,246,0.2)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    <FileText size={22} color="var(--color-ai)" strokeWidth={1.6} />
+                                </div>
                                 <div>
-                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 1 }}>{f.title}</div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>{f.desc}</div>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-ai)', marginBottom: 2 }}>Estúdio Documental</div>
+                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Gerador de Declarações</div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                </div>
 
-                {/* Ghost document outline */}
-                <div style={{ padding: 'var(--space-6)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
-                    <div style={{ opacity: 0.18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
-                            <div style={{ width: 50, height: 14, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                            <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.7, maxWidth: 360 }}>
+                                Selecione a <strong>licitação</strong> e o <strong>tipo</strong>, e a IA ou o sistema irá preencher e gerar a declaração formal.
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                                {[
+                                    { icon: 'sparkles', title: 'Frentes Flexíveis', desc: 'Geração 100% IA, via modelo estático ou modo misto combinado' },
+                                    { icon: 'scale', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
+                                    { icon: 'penline', title: 'Editável', desc: 'Revise e ajuste o texto diretamente no modelo antes de exportar' },
+                                    { icon: 'filedown', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
+                                ].map((f, i) => (
+                                    <div key={i} style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 'var(--space-3)',
+                                        padding: 'var(--space-3) var(--space-4)',
+                                        borderRadius: 'var(--radius-lg)',
+                                        background: 'var(--color-bg-surface)',
+                                        border: '1px solid var(--color-border)',
+                                    }}>
+                                        <span style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 'var(--radius-md)', background: 'rgba(139,92,246,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {f.icon === 'sparkles' && <Sparkles size={14} color="var(--color-ai)" />}
+                                            {f.icon === 'scale' && <Scale size={14} color="var(--color-ai)" />}
+                                            {f.icon === 'penline' && <PenLine size={14} color="var(--color-ai)" />}
+                                            {f.icon === 'filedown' && <FileDown size={14} color="var(--color-ai)" />}
+                                        </span>
+                                        <div>
+                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 1 }}>{f.title}</div>
+                                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>{f.desc}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 6, marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-                            <div style={{ height: 6, width: '65%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                            <div style={{ height: 6, width: '45%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+
+                        {/* Ghost document outline */}
+                        <div style={{ padding: 'var(--space-6)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
+                            <div style={{ opacity: 0.18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
+                                    <div style={{ width: 50, height: 14, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                </div>
+                                <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 6, marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                                    <div style={{ height: 6, width: '65%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                    <div style={{ height: 6, width: '45%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 6 }}>
+                                    <div style={{ height: 6, width: '40%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                    <div style={{ height: 6, width: '55%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                                    <div style={{ height: 8, width: '50%', borderRadius: 3, background: 'var(--color-ai)', opacity: 0.5 }} />
+                                </div>
+                                {[95, 85, 90, 70, 88, 75, 55].map((w, i) => (
+                                    <div key={i} style={{ height: 6, width: `${w}%`, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                ))}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginTop: 18 }}>
+                                    <div style={{ height: 1, width: '45%', background: 'var(--color-text-tertiary)' }} />
+                                    <div style={{ height: 6, width: '35%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                    <div style={{ height: 5, width: '30%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                </div>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 6 }}>
-                            <div style={{ height: 6, width: '40%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                            <div style={{ height: 6, width: '55%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
-                            <div style={{ height: 8, width: '50%', borderRadius: 3, background: 'var(--color-ai)', opacity: 0.5 }} />
-                        </div>
-                        {[95, 85, 90, 70, 88, 75, 55].map((w, i) => (
-                            <div key={i} style={{ height: 6, width: `${w}%`, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        ))}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginTop: 18 }}>
-                            <div style={{ height: 1, width: '45%', background: 'var(--color-text-tertiary)' }} />
-                            <div style={{ height: 6, width: '35%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                            <div style={{ height: 5, width: '30%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        </div>
-                    </div>
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -698,13 +706,40 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
 
                     {/* Signatário */}
                     <LayoutSection label="Bloco de Assinatura">
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8, cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={d.layout.doubleSignature || false}
+                                onChange={(e) => d.updateLayout({ doubleSignature: e.target.checked })}
+                                style={{ accentColor: 'var(--color-primary)' }}
+                            />
+                            Habilitar Assinatura Dupla (RT)
+                        </label>
+
+                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                            {d.layout.doubleSignature ? 'Assinatura 1 (Legal)' : 'Assinatura'}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
                             <div><label className="decl-small-label">Nome</label><input className="decl-small-input" placeholder="NOME COMPLETO" value={d.layout.signatoryName} onChange={(e) => d.updateLayout({ signatoryName: e.target.value })} /></div>
                             <div><label className="decl-small-label">CPF</label><input className="decl-small-input" placeholder="000.000.000-00" value={d.layout.signatoryCpf} onChange={(e) => d.updateLayout({ signatoryCpf: e.target.value })} /></div>
                             <div><label className="decl-small-label">Cargo</label><input className="decl-small-input" placeholder="Sócio Administrador" value={d.layout.signatoryRole} onChange={(e) => d.updateLayout({ signatoryRole: e.target.value })} /></div>
                             <div><label className="decl-small-label">Empresa</label><input className="decl-small-input" value={d.layout.signatoryCompany} onChange={(e) => d.updateLayout({ signatoryCompany: e.target.value })} /></div>
                         </div>
-                        <div><label className="decl-small-label">CNPJ</label><input className="decl-small-input" value={d.layout.signatoryCnpj} onChange={(e) => d.updateLayout({ signatoryCnpj: e.target.value })} /></div>
+                        <div style={{ marginBottom: d.layout.doubleSignature ? 12 : 0 }}><label className="decl-small-label">CNPJ</label><input className="decl-small-input" value={d.layout.signatoryCnpj} onChange={(e) => d.updateLayout({ signatoryCnpj: e.target.value })} /></div>
+
+                        {d.layout.doubleSignature && (
+                            <>
+                                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4, borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                                    Assinatura 2 (Resp. Técnico)
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                    <div><label className="decl-small-label">Nome RT</label><input className="decl-small-input" placeholder="Nome do RT" value={d.layout.rtName} onChange={(e) => d.updateLayout({ rtName: e.target.value })} /></div>
+                                    <div><label className="decl-small-label">CPF RT</label><input className="decl-small-input" placeholder="000.000.000-00" value={d.layout.rtCpf} onChange={(e) => d.updateLayout({ rtCpf: e.target.value })} /></div>
+                                    <div><label className="decl-small-label">Cargo RT</label><input className="decl-small-input" placeholder="Responsável Técnico" value={d.layout.rtRole} onChange={(e) => d.updateLayout({ rtRole: e.target.value })} /></div>
+                                    <div><label className="decl-small-label">Registro (CREA/CAU)</label><input className="decl-small-input" placeholder="CREA/SP 123456" value={d.layout.rtRegister} onChange={(e) => d.updateLayout({ rtRegister: e.target.value })} /></div>
+                                </div>
+                            </>
+                        )}
                     </LayoutSection>
 
                     {/* Images */}
@@ -1434,6 +1469,196 @@ function TemplateChecklist({ d, setManageTemplatesOpen }: {
                         );
                     })
                 )}
+            </div>
+        </div>
+    );
+}
+
+export function findMatchingTemplate(requiredText: string, templates: DeclarationTemplate[]): DeclarationTemplate | null {
+    const lowerText = requiredText.toLowerCase();
+    
+    const matchMap: Record<string, string[]> = {
+        'sys-menor': ['menor', 'infantil', 'xxxiii', 'art. 7', 'criança'],
+        'sys-impedimento': ['impedimento', 'fato impeditivo', 'superveniente', 'idoneidade', 'inidoneidade'],
+        'sys-me-epp': ['me/epp', 'microempresa', 'pequeno porte', 'enquadramento', 'lc 123'],
+        'sys-nepotismo': ['nepotismo', 'parentesco', 'terceiro grau'],
+        'sys-elaboracao': ['elaboração independente', 'independente', 'conluio'],
+        'sys-plena': ['plena', 'plena habilitação', 'art. 63', 'requisitos de habilitação'],
+        'sys-vagas': ['vagas', 'pcd', 'deficiente', 'menor aprendiz', 'reserva de vagas'],
+        'sys-trabalho-escravo': ['escravo', 'trabalho forçado', 'degradante'],
+        'sys-nepotismo-servidores': ['vínculo', 'servidores', 'servidor', 'cargo de direção'],
+        'sys-compromisso-edital': ['compromisso', 'aceitação', 'edital', 'termo de referência'],
+        'sys-lgpd': ['lgpd', 'lei geral de proteção de dados', 'dados pessoais', 'privacidade'],
+        'sys-anticorrupcao': ['anticorrupção', 'ética', 'integridade', 'corrupção', 'fraude'],
+        'sys-ceis-cnep': ['ceis', 'cnep', 'cadastro nacional', 'empresas punidas', 'inidôneas'],
+        'sys-declinio-vistoria': ['declínio de vistoria', 'renúncia de vistoria', 'não realização de vistoria', 'declínio de visita'],
+        'sys-custos-trabalhistas': ['integralidade de custos', 'direitos trabalhistas', 'custos trabalhistas', 'convenções coletivas'],
+        'sys-autenticidade-documental': ['autenticidade', 'documentação digital', 'documentos eletrônicos', 'documentos digitais']
+    };
+
+    let bestMatch: DeclarationTemplate | null = null;
+    let maxScore = 0;
+
+    for (const template of templates) {
+        let score = 0;
+        const lowerTitle = template.title.toLowerCase();
+
+        if (lowerText.includes(lowerTitle) || lowerTitle.includes(lowerText)) {
+            score += 10;
+        }
+
+        const keywords = matchMap[template.id] || [];
+        for (const keyword of keywords) {
+            if (lowerText.includes(keyword)) {
+                score += 5;
+            }
+        }
+
+        const textWords = lowerText.split(/\s+/).filter(w => w.length > 3);
+        const titleWords = lowerTitle.split(/\s+/).filter(w => w.length > 3);
+        const commonWords = textWords.filter(w => titleWords.includes(w));
+        score += commonWords.length;
+
+        if (score > maxScore && score >= 3) {
+            maxScore = score;
+            bestMatch = template;
+        }
+    }
+
+    return bestMatch;
+}
+
+function EditalRequirementsMatchPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
+    return (
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-6) var(--space-6)',
+            background: 'var(--color-bg-surface)',
+            borderRadius: 'var(--radius-xl)',
+            border: 'none',
+            boxShadow: '0 0 0 1px rgba(139,92,246,0.12), 0 4px 16px rgba(139,92,246,0.04)',
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                <div style={{
+                    width: 44, height: 44, borderRadius: 'var(--radius-lg)',
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(139,92,246,0.08))',
+                    border: '1px solid rgba(37,99,235,0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                    <Scale size={20} color="var(--color-primary)" />
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-primary)', marginBottom: 2 }}>Edital Licitatório</div>
+                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Exigências do Certame</div>
+                </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                Declarações identificadas no edital. Clique no correspondente para adicionar à seleção de templates ou gerar com IA:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                {d.declarationTypesFromEdital.map((reqText: string, i: number) => {
+                    const match = findMatchingTemplate(reqText, d.templates);
+                    const isMatchedSelected = match ? d.selectedTemplateIds.includes(match.id) : false;
+                    const isAiSelected = d.generationMode === 'ai' && d.declarationType === reqText;
+
+                    return (
+                        <div
+                            key={i}
+                            style={{
+                                padding: 'var(--space-3) var(--space-4)',
+                                borderRadius: 'var(--radius-lg)',
+                                background: (isMatchedSelected || isAiSelected) ? 'rgba(37,99,235,0.03)' : 'var(--color-bg-body)',
+                                border: (isMatchedSelected || isAiSelected) ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--space-3)',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            {/* Requirement name */}
+                            <div style={{
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                color: 'var(--color-text-primary)',
+                                lineHeight: 1.4,
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 6
+                            }}>
+                                <span style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: 'var(--color-primary)',
+                                    marginTop: 6, flexShrink: 0
+                                }} />
+                                {reqText}
+                            </div>
+
+                            {/* Match result block */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 10,
+                                borderTop: '1px dashed var(--color-border)',
+                                paddingTop: 8,
+                                flexWrap: 'wrap'
+                            }}>
+                                {match ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-success)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                            <CheckCircle2 size={11} /> Modelo Correspondente
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={match.title}>
+                                            {match.title}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                            <Info size={11} /> Modelo não mapeado
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                                            Recomendado: Geração 100% IA
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Action button */}
+                                {match ? (
+                                    <button
+                                        type="button"
+                                        className={`btn ${isMatchedSelected ? 'btn-primary' : 'btn-outline'}`}
+                                        style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
+                                        onClick={() => {
+                                            d.setGenerationMode(d.generationMode === 'ai' ? 'mixed' : d.generationMode);
+                                            d.setSelectedTemplateIds(prev =>
+                                                prev.includes(match.id) ? prev.filter(x => x !== match.id) : [...prev, match.id]
+                                            );
+                                        }}
+                                    >
+                                        {isMatchedSelected ? 'Remover' : 'Usar Modelo'}
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className={`btn ${isAiSelected ? 'btn-primary' : 'btn-outline'}`}
+                                        style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
+                                        onClick={() => {
+                                            d.setGenerationMode('ai');
+                                            d.setDeclarationType(reqText);
+                                        }}
+                                    >
+                                        {isAiSelected ? 'Selecionado' : 'Gerar via IA'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
