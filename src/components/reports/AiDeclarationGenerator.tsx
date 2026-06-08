@@ -39,7 +39,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
             /* ═══════════════════════════════════════════
                STEP 1: Wizard focado — O que gerar?
                ═══════════════════════════════════════════ */
-            <WizardStep1 d={d} companies={companies} setManageTemplatesOpen={setManageTemplatesOpen} />
+            <WizardStep1 d={d} companies={companies} biddings={biddings} setManageTemplatesOpen={setManageTemplatesOpen} />
         ) : (
             /* ═══════════════════════════════════════════
                STEP 2: Editor + Refinamento
@@ -183,9 +183,10 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
 // STEP 1 — Wizard Focado
 // ═══════════════════════════════════════════════
 
-function WizardStep1({ d, companies, setManageTemplatesOpen }: {
+function WizardStep1({ d, companies, biddings, setManageTemplatesOpen }: {
     d: ReturnType<typeof useAiDeclaration>;
     companies: CompanyProfile[];
+    biddings: BiddingProcess[];
     setManageTemplatesOpen: (open: boolean) => void;
 }) {
     return (
@@ -351,6 +352,11 @@ function WizardStep1({ d, companies, setManageTemplatesOpen }: {
                         <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
                     )}
 
+                    {/* Layout Settings Panel */}
+                    <div style={{ marginTop: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                        <LayoutSettingsPanel d={d} />
+                    </div>
+
                     {/* Generate CTA */}
                     <button
                         className="btn btn-primary"
@@ -374,8 +380,8 @@ function WizardStep1({ d, companies, setManageTemplatesOpen }: {
 
             {/* RIGHT: Info panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                {d.declarationTypesFromEdital.length > 0 ? (
-                    <EditalRequirementsMatchPanel d={d} />
+                {d.selectedBiddingId ? (
+                    <EditalRequirementsMatchPanel d={d} biddings={biddings} />
                 ) : (
                     <>
                         {/* Feature cards */}
@@ -1528,7 +1534,40 @@ export function findMatchingTemplate(requiredText: string, templates: Declaratio
     return bestMatch;
 }
 
-function EditalRequirementsMatchPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
+export function extractAllDocuments(rawReq: any): string[] {
+    const docs: string[] = [];
+    try {
+        const parsed = typeof rawReq === 'string' ? JSON.parse(rawReq) : rawReq;
+        let items: any[] = [];
+        if (Array.isArray(parsed)) items = parsed;
+        else if (typeof parsed === 'object' && parsed !== null) {
+            Object.entries(parsed).forEach(([category, categoryItems]: [string, any]) => {
+                if (Array.isArray(categoryItems)) {
+                    categoryItems.forEach((item: any) => {
+                        const desc = typeof item === 'string' ? item : (item.description || item.item || '');
+                        if (desc) {
+                            docs.push(`${category}: ${desc}`);
+                        }
+                    });
+                }
+            });
+        }
+        if (docs.length === 0 && items.length > 0) {
+            items.forEach((item: any) => {
+                const desc = typeof item === 'string' ? item : (item.description || item.item || '');
+                if (desc) docs.push(desc);
+            });
+        }
+    } catch { /* ignore */ }
+    return docs;
+}
+
+function EditalRequirementsMatchPanel({ d, biddings }: { d: ReturnType<typeof useAiDeclaration>; biddings: BiddingProcess[] }) {
+    const bidding = biddings.find(x => x.id === d.selectedBiddingId);
+    const analysis = bidding?.aiAnalysis;
+    const allDocs = analysis ? extractAllDocuments(analysis.requiredDocuments) : [];
+    const [showAllDocs, setShowAllDocs] = useState(false);
+
     return (
         <div style={{
             display: 'flex',
@@ -1555,111 +1594,192 @@ function EditalRequirementsMatchPanel({ d }: { d: ReturnType<typeof useAiDeclara
                 </div>
             </div>
 
-            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                Declarações identificadas no edital. Clique no correspondente para adicionar à seleção de templates ou gerar com IA:
-            </p>
+            {d.declarationTypesFromEdital.length > 0 ? (
+                <>
+                    <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                        Declarações identificadas no edital. Clique no correspondente para adicionar à seleção de templates ou gerar com IA:
+                    </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-                {d.declarationTypesFromEdital.map((reqText: string, i: number) => {
-                    const match = findMatchingTemplate(reqText, d.templates);
-                    const isMatchedSelected = match ? d.selectedTemplateIds.includes(match.id) : false;
-                    const isAiSelected = d.generationMode === 'ai' && d.declarationType === reqText;
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                        {d.declarationTypesFromEdital.map((reqText: string, i: number) => {
+                            const match = findMatchingTemplate(reqText, d.templates);
+                            const isMatchedSelected = match ? d.selectedTemplateIds.includes(match.id) : false;
+                            const isAiSelected = d.generationMode === 'ai' && d.declarationType === reqText;
 
-                    return (
-                        <div
-                            key={i}
-                            style={{
-                                padding: 'var(--space-3) var(--space-4)',
-                                borderRadius: 'var(--radius-lg)',
-                                background: (isMatchedSelected || isAiSelected) ? 'rgba(37,99,235,0.03)' : 'var(--color-bg-body)',
-                                border: (isMatchedSelected || isAiSelected) ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 'var(--space-3)',
-                                transition: 'all 0.2s ease'
-                            }}
-                        >
-                            {/* Requirement name */}
-                            <div style={{
-                                fontSize: '0.78rem',
-                                fontWeight: 600,
-                                color: 'var(--color-text-primary)',
-                                lineHeight: 1.4,
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 6
-                            }}>
-                                <span style={{
-                                    width: 6, height: 6, borderRadius: '50%',
-                                    background: 'var(--color-primary)',
-                                    marginTop: 6, flexShrink: 0
-                                }} />
-                                {reqText}
-                            </div>
-
-                            {/* Match result block */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: 10,
-                                borderTop: '1px dashed var(--color-border)',
-                                paddingTop: 8,
-                                flexWrap: 'wrap'
-                            }}>
-                                {match ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-success)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <CheckCircle2 size={11} /> Modelo Correspondente
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={match.title}>
-                                            {match.title}
-                                        </div>
+                            return (
+                                <div
+                                    key={i}
+                                    style={{
+                                        padding: 'var(--space-3) var(--space-4)',
+                                        borderRadius: 'var(--radius-lg)',
+                                        background: (isMatchedSelected || isAiSelected) ? 'rgba(37,99,235,0.03)' : 'var(--color-bg-body)',
+                                        border: (isMatchedSelected || isAiSelected) ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 'var(--space-3)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    {/* Requirement name */}
+                                    <div style={{
+                                        fontSize: '0.78rem',
+                                        fontWeight: 600,
+                                        color: 'var(--color-text-primary)',
+                                        lineHeight: 1.4,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 6
+                                    }}>
+                                        <span style={{
+                                            width: 6, height: 6, borderRadius: '50%',
+                                            background: 'var(--color-primary)',
+                                            marginTop: 6, flexShrink: 0
+                                        }} />
+                                        {reqText}
                                     </div>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <Info size={11} /> Modelo não mapeado
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
-                                            Recomendado: Geração 100% IA
-                                        </div>
-                                    </div>
-                                )}
 
-                                {/* Action button */}
-                                {match ? (
-                                    <button
-                                        type="button"
-                                        className={`btn ${isMatchedSelected ? 'btn-primary' : 'btn-outline'}`}
-                                        style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
-                                        onClick={() => {
-                                            d.setGenerationMode(d.generationMode === 'ai' ? 'mixed' : d.generationMode);
-                                            d.setSelectedTemplateIds(prev =>
-                                                prev.includes(match.id) ? prev.filter(x => x !== match.id) : [...prev, match.id]
-                                            );
-                                        }}
-                                    >
-                                        {isMatchedSelected ? 'Remover' : 'Usar Modelo'}
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        className={`btn ${isAiSelected ? 'btn-primary' : 'btn-outline'}`}
-                                        style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
-                                        onClick={() => {
-                                            d.setGenerationMode('ai');
-                                            d.setDeclarationType(reqText);
-                                        }}
-                                    >
-                                        {isAiSelected ? 'Selecionado' : 'Gerar via IA'}
-                                    </button>
-                                )}
+                                    {/* Match result block */}
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        borderTop: '1px dashed var(--color-border)',
+                                        paddingTop: 8,
+                                        flexWrap: 'wrap'
+                                    }}>
+                                        {match ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-success)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                    <CheckCircle2 size={11} /> Modelo Correspondente
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={match.title}>
+                                                    {match.title}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                    <Info size={11} /> Modelo não mapeado
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                                                    Recomendado: Geração 100% IA
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Action button */}
+                                        {match ? (
+                                            <button
+                                                type="button"
+                                                className={`btn ${isMatchedSelected ? 'btn-primary' : 'btn-outline'}`}
+                                                style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
+                                                onClick={() => {
+                                                    d.setGenerationMode(d.generationMode === 'ai' ? 'mixed' : d.generationMode);
+                                                    d.setSelectedTemplateIds(prev =>
+                                                        prev.includes(match.id) ? prev.filter(x => x !== match.id) : [...prev, match.id]
+                                                    );
+                                                }}
+                                            >
+                                                {isMatchedSelected ? 'Remover' : 'Usar Modelo'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                className={`btn ${isAiSelected ? 'btn-primary' : 'btn-outline'}`}
+                                                style={{ fontSize: '0.68rem', padding: '6px 12px', height: '28px', whiteSpace: 'nowrap' }}
+                                                onClick={() => {
+                                                    d.setGenerationMode('ai');
+                                                    d.setDeclarationType(reqText);
+                                                }}
+                                            >
+                                                {isAiSelected ? 'Selecionado' : 'Gerar via IA'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
+                    {!analysis ? (
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
+                            <AlertTriangle size={18} color="var(--color-warning)" style={{ flexShrink: 0, marginTop: 2 }} />
+                            <div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 2 }}>Sem Análise de Edital</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                                    Este processo ainda não possui uma análise de edital gerada por IA. Você pode prosseguir gerando livremente por IA ou usando os modelos estáticos ao lado.
+                                </div>
                             </div>
                         </div>
-                    );
-                })}
-            </div>
+                    ) : (
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.03)', border: '1px solid rgba(37,99,235,0.1)' }}>
+                            <Info size={18} color="var(--color-primary)" style={{ flexShrink: 0, marginTop: 2 }} />
+                            <div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 2 }}>Sem Declarações Mapeadas</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                                    A análise do edital não identificou exigências específicas de declarações formais neste processo. Você pode prosseguir gerando livremente por IA ou usando os modelos estáticos ao lado.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Collapsible details for other documents */}
+            {allDocs.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+                    <button
+                        type="button"
+                        style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                            fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-text-secondary)'
+                        }}
+                        onClick={() => setShowAllDocs(v => !v)}
+                    >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <FileText size={13} color="var(--color-primary)" />
+                            Documentos Exigidos no Edital ({allDocs.length})
+                        </span>
+                        {showAllDocs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+
+                    {showAllDocs && (
+                        <div style={{
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                            padding: 'var(--space-3)',
+                            background: 'var(--color-bg-body)',
+                            borderRadius: 'var(--radius-lg)',
+                            border: '1px solid var(--color-border)',
+                            marginTop: 'var(--space-3)'
+                        }}>
+                            {allDocs.map((doc, idx) => {
+                                const parts = doc.split(/:\s*(.+)/);
+                                const hasCategory = parts.length > 1;
+                                return (
+                                    <div key={idx} style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', display: 'flex', gap: 6, alignItems: 'flex-start', lineHeight: 1.4 }}>
+                                        <span style={{ color: 'var(--color-primary)', fontWeight: 700, marginTop: 1 }}>•</span>
+                                        <span>
+                                            {hasCategory ? (
+                                                <>
+                                                    <strong style={{ color: 'var(--color-text-primary)' }}>{parts[0]}:</strong> {parts[1]}
+                                                </>
+                                            ) : doc}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

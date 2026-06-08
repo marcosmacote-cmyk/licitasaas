@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAiDeclaration, extractDeclarationTypes, DEFAULT_LAYOUT } from '../useAiDeclaration';
 import { createBidding, createAnalysis, createCompany, resetMocks } from '../../../test/helpers';
+import { extractAllDocuments } from '../../reports/AiDeclarationGenerator';
 
 // Mock jsPDF
 const mockJsPDFInstance = {
@@ -460,6 +461,38 @@ describe('useAiDeclaration', () => {
                 expect(result.current.layout.rtRegister).toBe('CREA/SP 987654321-D');
                 expect(result.current.layout.rtRole).toBe('Responsável Técnico');
             });
+        });
+    });
+
+    // ═══════════════════════════════════
+    // PURE FUNCTION: extractAllDocuments (Sprint 9)
+    // ═══════════════════════════════════
+    describe('extractAllDocuments', () => {
+        it('deve extrair documentos de formato flat array', () => {
+            const docs = extractAllDocuments(['Contrato Social', 'CND Federal']);
+            expect(docs).toHaveLength(2);
+            expect(docs[0]).toBe('Contrato Social');
+            expect(docs[1]).toBe('CND Federal');
+        });
+
+        it('deve extrair de formato categorizado com prefixo de categoria', () => {
+            const raw = {
+                "Habilitação Jurídica": [
+                    { description: "Contrato Social" }
+                ],
+                "Regularidade Fiscal": [
+                    { description: "CND Federal" }
+                ]
+            };
+            const docs = extractAllDocuments(raw);
+            expect(docs).toHaveLength(2);
+            expect(docs[0]).toBe('Habilitação Jurídica: Contrato Social');
+            expect(docs[1]).toBe('Regularidade Fiscal: CND Federal');
+        });
+
+        it('deve retornar array vazio se formato for inválido', () => {
+            expect(extractAllDocuments(null)).toEqual([]);
+            expect(extractAllDocuments('invalid-json')).toEqual([]);
         });
     });
 });
