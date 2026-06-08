@@ -318,12 +318,12 @@ router.get('/processes', authenticateToken, async (req: any, res) => {
         // A process is archived ONLY if it has logs AND all of them are archived, and it is not monitored.
         let activeLogsSet = new Set<string>();
         try {
-            const activeLogs: any[] = await prisma.chatMonitorLog.findMany({
+            const activeLogs = await prisma.chatMonitorLog.findMany({
                 where: { tenantId, isArchived: false },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
-            activeLogsSet = new Set(activeLogs.map((k: any) => k.biddingProcessId));
+            activeLogsSet = new Set(activeLogs.map(k => k.biddingProcessId));
         } catch { /* silent */ }
 
         // Step 4c: Detect closure events (encerramento_processo category)
