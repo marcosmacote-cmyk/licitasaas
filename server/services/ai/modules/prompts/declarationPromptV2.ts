@@ -53,6 +53,7 @@ Para SIMPLE_COMPLIANCE, a estrutura mínima é:
    - CNPJ
    - Endereço COMPLETO (rua, número, bairro, CEP, cidade/UF)
    - Representante legal: nome COMPLETO, CPF, cargo (Sócio Administrador, etc.)
+   - Responsável Técnico (quando houver assinatura dupla de RT): nome COMPLETO, CPF, cargo/título, conselho profissional e nº de registro (CREA/CAU).
    JAMAIS omita qualquer destes campos, mesmo em declarações simples.
 2. REFERÊNCIA: Órgão, edital, modalidade. APENAS dados dos fatos autoritativos.
 3. DECLARAÇÃO PRINCIPAL: Conteúdo declarado com referências legais pertinentes.
@@ -82,17 +83,26 @@ O conteúdo efetivamente declarado DEVE cobrir TODOS os conceitos pertinentes ao
 Quando o prompt incluir COBERTURA SEMÂNTICA EXIGIDA, assegure que cada conceito listado conste no texto.
 NÃO se limite ao conceito mais óbvio quando a exigência é mais ampla.
 
-═══ ANTI-GENERICISMO ═══
+═══ ESTILO TRADICIONAL DE LICITAÇÕES (MOLDES DE PLATAFORMAS PÚBLICAS) ═══
 
-1. EVITE frases ornamentais que não agregam valor jurídico concreto:
-   ❌ "em conformidade com as exigências editalícias e os princípios da moralidade e impessoalidade"
-   ❌ "em consonância com os ditames legais"
-   ❌ "no bojo do presente certame"
-   ❌ "visando à plena observância"
-2. PREFIRA linguagem seca, assertiva e instrumental:
-   ✅ "DECLARA, sob as penas da lei, que..."
-   ✅ "...em atendimento ao disposto no art. X da Lei Y."
-3. Cada frase DEVE conter informação declaratória efetiva. Se uma frase puder ser removida sem perda de conteúdo, remova-a.
+1. Use o vocabulário e a estrutura solene tradicionais utilizados pelas comissões de licitação brasileiras (ex: ComprasGov/ComprasNet, BBMNet, Portal de Compras Públicas).
+2. A declaração DEVE conter expressões formais típicas de Direito Administrativo que conferem solenidade e validade ao ato de declaração, tais como:
+   - "DECLARA, sob as penas da lei, em especial sob as penalidades previstas no art. 155 da Lei nº 14.133/2021 e demais sanções cabíveis..."
+   - "para os fins de participação no certame licitatório em referência, regido pelo Edital nº ... - Processo nº ..., promovido pelo(a)..."
+   - "em estrita observância às exigências constantes do Edital de Licitação..."
+   - "por ser a expressão da verdade, firmamos a presente declaração para que surta seus regulares efeitos legais."
+3. EVITE linguagem excessivamente seca ou coloquial que descaracterize o tom formal de um documento oficial administrativo.
+
+═══ EXEMPLOS DE REFERÊNCIA DE SUCESSO (FEW-SHOT) ═══
+
+EXEMPLO 1 (NÃO EMPREGO DE MENORES):
+{ "title": "DECLARAÇÃO DE NÃO EMPREGO DE MENORES (CF, ART. 7º, XXXIII)", "text": "A empresa [RAZÃO SOCIAL], inscrita no CNPJ sob o nº [CNPJ], com sede em [ENDEREÇO], neste ato representada por seu representante legal, o(a) Sr(a). [NOME], portador(a) do CPF nº [CPF], DECLARA, sob as penas da lei, para fins do disposto no inciso XXXIII do art. 7º da Constituição Federal de 1988, c/c o inciso V do art. 68 da Lei nº 14.133/2021, que não emprega menores de dezoito anos em trabalho noturno, perigoso ou insalubre, e não emprega menores de dezesseis anos em qualquer trabalho, salvo na condição de aprendiz, a partir de quatorze anos. Por ser a expressão da verdade, firmamos a presente para que produza seus regulares efeitos." }
+
+EXEMPLO 2 (INEXISTÊNCIA DE FATO IMPEDITIVO):
+{ "title": "DECLARAÇÃO DE INEXISTÊNCIA DE FATO IMPEDITIVO", "text": "A empresa [RAZÃO SOCIAL], inscrita no CNPJ sob o nº [CNPJ], com sede em [ENDEREÇO], neste ato representada por seu representante legal, o(a) Sr(a). [NOME], portador(a) do CPF nº [CPF], DECLARA, sob as sanções administrativas e sob as penas da lei, em especial o art. 63, inciso II, da Lei nº 14.133/2021, a inexistência de fatos supervenientes impeditivos para sua habilitação neste certame licitatório, comprometendo-se a declarar ocorrências posteriores. Declara ainda que não pesa contra si declaração de inidoneidade e nem se encontra suspensa ou impedida de licitar ou contratar com a Administração Pública. Por ser expressão da verdade, firmamos a presente." }
+
+EXEMPLO 3 (ASSINATURA DUPLA - EMPRESA + RT):
+{ "title": "DECLARAÇÃO DE DISPONIBILIDADE DE EQUIPE E EQUIPAMENTOS", "text": "A empresa [RAZÃO SOCIAL], inscrita no CNPJ sob o nº [CNPJ], com sede em [ENDEREÇO], neste ato representada por seu representante legal, o(a) Sr(a). [NOME], portador(a) do CPF nº [CPF], e por seu Responsável Técnico, o(a) Sr(a). [NOME DO RT], [Cargo/Profissão], inscrito no CREA/CAU sob o nº [REGISTRO], portador(a) do CPF nº [CPF], DECLARAM, sob as penas da lei, em atenção às exigências do certame promovido pelo(a) [ÓRGÃO LICITANTE] no Edital nº [Nº EDITAL], que possuem plena disponibilidade de equipe técnica capacitada e equipamentos necessários para a execução dos serviços objeto da licitação, obrigando-se a manter tais condições durante todo o período de vigência contratual. Por ser a expressão da verdade, firmamos a presente." }
 
 ═══ FORMATO DE SAÍDA ═══
 

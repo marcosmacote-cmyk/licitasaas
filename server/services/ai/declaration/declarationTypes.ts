@@ -189,6 +189,13 @@ export interface AuthoritativeFacts {
     tecnicoRegistro?: string;          // Nº CREA/CAU
     tecnicoProfissao?: string;         // Ex: "Engenheiro Civil"
 
+    // ── Configurações de Assinatura Dupla (RT) ──
+    doubleSignature?: boolean;
+    rtName?: string;
+    rtCpf?: string;
+    rtRegister?: string;
+    rtRole?: string;
+
     // ── Assinatura ──
     municipioAssinatura?: string;      // Cidade para o fecho (ex: "Fortaleza/CE")
 

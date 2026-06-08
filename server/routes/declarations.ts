@@ -43,7 +43,22 @@ const genAI = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : nul
 router.post('/generate-declaration', authenticateToken, async (req: any, res) => {
     try {
         // ── Step 1: Receber request ──
-        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle, mode, templateContent, selectedTemplates } = req.body;
+        const { 
+            biddingProcessId, 
+            companyId, 
+            declarationType, 
+            issuerType, 
+            customPrompt, 
+            style: requestedStyle, 
+            mode, 
+            templateContent, 
+            selectedTemplates,
+            doubleSignature,
+            rtName,
+            rtCpf,
+            rtRegister,
+            rtRole
+        } = req.body;
         const style: DeclarationStyle = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva') as DeclarationStyle;
         logger.info(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} mode=${mode || 'ai'} BID:${biddingProcessId}`);
 
@@ -99,6 +114,15 @@ router.post('/generate-declaration', authenticateToken, async (req: any, res) =>
         const family = classifyFamily(declarationType);
         logger.info(`[Declaration v5] Step 4: Family → ${family}`);
 
+        // Composição Dinâmica da Qualificação com RT se habilitado
+        let qualificacaoCompleta = qual.trim() || undefined;
+        if (doubleSignature && rtName) {
+            const baseQual = `A empresa ${company.razaoSocial}, inscrita no CNPJ sob o nº ${company.cnpj}${companyAddress ? `, com sede em ${companyAddress}` : ''}`;
+            const repPart = representanteName ? `, neste ato representada por seu ${representanteCargo || 'representante legal'} ${representanteName}${representanteCpf ? `, portador do CPF nº ${representanteCpf}` : ''}` : '';
+            const rtPart = `, e por seu Responsável Técnico ${rtName}${rtRole ? `, ${rtRole}` : ', Responsável Técnico'}${rtRegister ? `, inscrito no CREA/CAU sob o nº ${rtRegister}` : ''}${rtCpf ? `, portador do CPF nº ${rtCpf}` : ''}`;
+            qualificacaoCompleta = `${baseQual}${repPart}${rtPart}`;
+        }
+
         const facts: AuthoritativeFacts = {
             orgaoLicitante: orgaoName,
             modalidade: biddingMod,
@@ -112,14 +136,19 @@ router.post('/generate-declaration', authenticateToken, async (req: any, res) =>
             empresaRazaoSocial: company.razaoSocial,
             empresaCnpj: company.cnpj,
             empresaEndereco: companyAddress,
-            qualificacaoCompleta: qual.trim() || undefined,
-            representanteNome: representanteName,
+            qualificacaoCompleta,
+            representanteName: representanteName,
             representanteCpf: representanteCpf,
             representanteCargo: representanteCargo,
             orgaoFromSchema,
             editalFromSchema,
             processFromSchema,
             hasDivergence,
+            doubleSignature,
+            rtName,
+            rtCpf,
+            rtRegister,
+            rtRole,
         };
 
         logger.info(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
@@ -406,9 +435,9 @@ INSTRUÇÃO MISTA ABSOLUTA (DECLARAÇÃO UNIFICADA/CONJUNTA):
 Você DEVE utilizar a redação e os tópicos de TODOS os TEMPLATES BASE fornecidos acima como ponto de partida compulsório.
 Você DEVE gerar uma única declaração consolidada (Declaração Unificada).
 Regras estritas de unificação:
-1. Qualifique a empresa e seu representante legal uma única vez no parágrafo de abertura.
+1. Qualifique a empresa, seu representante legal ${facts.doubleSignature && facts.rtName ? 'e seu Responsável Técnico (RT)' : ''} uma única vez no parágrafo de abertura.
 2. Apresente os compromissos e declarações de cada um dos modelos acima como itens numerados subsequentes (1, 2, 3, etc.) ou parágrafos integrados de forma fluida.
-3. Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc.) pelos Fatos Autoritativos correspondentes.
+3. Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc. ${facts.doubleSignature && facts.rtName ? ', bem como dados do RT' : ''}) pelos Fatos Autoritativos correspondentes.
 4. Una o fecho formal ("Por ser expressão da verdade, firmamos a presente...") em uma única seção no final (após todos os itens de declaração).
 5. Adapte ou adicione parágrafos extras apenas para atender às exigências específicas do certame levantadas no "RESUMO AUXILIAR" e no "CONTEXTO ESPECÍFICO" (ex: menção a vistorias, equipe técnica especial, etc.), mas SEMPRE mantendo o tom formal e a essência da redação dos templates base.
 `;
@@ -422,7 +451,7 @@ ${templateContent}
 
 INSTRUÇÃO MISTA ABSOLUTA:
 Você DEVE utilizar a redação do TEMPLATE BASE acima como ponto de partida compulsório.
-Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc.) pelos Fatos Autoritativos correspondentes.
+Substitua todos os placeholders delimitados por chaves (como {empresaRazaoSocial}, {empresaCnpj}, {orgaoLicitante}, {editalNumero}, {processoNumero}, {representanteNome}, {representanteCpf}, {representanteCargo}, etc. ${facts.doubleSignature && facts.rtName ? ', bem como dados do RT' : ''}) pelos Fatos Autoritativos correspondentes.
 Além disso, com base na análise do edital fornecida no "RESUMO AUXILIAR" e no "CONTEXTO ESPECÍFICO", você DEVE adaptar a redação ou adicionar parágrafos extras apenas para atender às exigências específicas do certame (ex: menção a vistorias, equipe técnica especial, etc.), mas SEMPRE mantendo o tom formal e a essência da redação do template base.
 `;
         }
@@ -463,7 +492,7 @@ INSTRUÇÕES RÍGIDAS:
 
 2. EXTENSÃO (${(() => { const c = FAMILY_LENGTH_CONSTRAINTS[family]; return `${c.minParagraphs} a ${c.maxParagraphs} parágrafos — ${c.styleHint}`; })()}):
    Estrutura recomendada:
-   a) QUALIFICAÇÃO COMPLETA (REGRA INVIOLÁVEL): Transcreva LITERALMENTE o texto da QUALIFICAÇÃO COMPLETA dos Fatos Autoritativos acima como parágrafo de abertura. NÃO resuma. NÃO omita campos. Inclua TODOS os dados pessoais do representante (nacionalidade, estado civil, profissão, nascimento, CPF, RG, endereço comercial).
+   a) QUALIFICAÇÃO COMPLETA (REGRA INVIOLÁVEL): Transcreva LITERALMENTE o texto da QUALIFICAÇÃO COMPLETA dos Fatos Autoritativos acima como parágrafo de abertura. NÃO resuma. NÃO omita campos.
    b) REFERÊNCIA: "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
    c) DECLARAÇÃO PRINCIPAL: fundamento legal pertinente
    d) CIÊNCIA DAS SANÇÕES + FECHO FORMAL
@@ -474,7 +503,7 @@ INSTRUÇÕES RÍGIDAS:
 4. SEM PLACEHOLDERS: NÃO use [NOME], [CNPJ] etc. Use os dados reais fornecidos acima. Colchetes APENAS para dados opcionais ausentes.
 ${facts.representanteNome ? '' : '\n   EXCEÇÃO: O nome do representante não foi fornecido. Use colchetes: [Nome do Representante Legal]'}
 
-5. EQUIPE TÉCNICA: ${family === 'TECHNICAL_PERSONAL' ? 'Cite NOMINALMENTE os dados do RT fornecidos acima.' : 'N/A para este tipo.'}
+5. EQUIPE TÉCNICA: ${family === 'TECHNICAL_PERSONAL' || (facts.doubleSignature && facts.rtName) ? 'Cite NOMINALMENTE os dados do RT fornecidos acima.' : 'N/A para este tipo.'}
 
 ${customPrompt ? `6. INSTRUÇÃO DO USUÁRIO: ${customPrompt}\n` : ''}
 ${(() => {
@@ -491,7 +520,7 @@ ${editalClause ? `8. CLÁUSULA DO EDITAL (PRIORIDADE MÁXIMA):
    USE este nome LITERALMENTE como título ("title") se for um nome de declaração válido.
    O núcleo declaratório DEVE aderir ao teor exato desta cláusula.\n` : ''}
 ${semanticMatch ? `9. ORIENTAÇÃO DE TÍTULO: ${semanticMatch.titleGuidance}
-
+ 
 10. COBERTURA SEMÂNTICA EXIGIDA (o núcleo declaratório DEVE cobrir TODOS estes conceitos):
     ${semanticMatch.coreConceptsMustCover}\n` : ''}
 11. ANTI-GENERICISMO: EVITE frases ornamentais como: ${ANTI_GENERIC_PHRASES.slice(0, 3).map(p => `"${p}"`).join(', ')}. Prefira linguagem seca e assertiva.
@@ -499,7 +528,7 @@ ${semanticMatch ? `9. ORIENTAÇÃO DE TÍTULO: ${semanticMatch.titleGuidance}
 12. FORMATO JSON PURO:
    { "title": "DECLARAÇÃO DE ...", "text": "A empresa ..." }
    - SEM blocos markdown. SEM negritos. SEM ${'```'}.
-   - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
+   - O "text" começa transcrevendo LITERALMENTE a QUALIFICAÇÃO COMPLETA dos Fatos Autoritativos acima, seguida de "${isTechnical ? 'DECLARO...' : (facts.doubleSignature && facts.rtName ? 'DECLARAM...' : 'DECLARA...')}"
    - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
 
 13. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.

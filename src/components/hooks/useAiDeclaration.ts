@@ -120,6 +120,60 @@ export function extractDeclarationTypes(rawReq: any): string[] {
     return declarations;
 }
 
+export function findMatchingTemplateLocal(requiredText: string, templates: DeclarationTemplate[]): DeclarationTemplate | null {
+    const lowerText = requiredText.toLowerCase();
+    
+    const matchMap: Record<string, string[]> = {
+        'sys-menor': ['menor', 'infantil', 'xxxiii', 'art. 7', 'criança'],
+        'sys-impedimento': ['impedimento', 'fato impeditivo', 'superveniente', 'idoneidade', 'inidoneidade'],
+        'sys-me-epp': ['me/epp', 'microempresa', 'pequeno porte', 'enquadramento', 'lc 123'],
+        'sys-nepotismo': ['nepotismo', 'parentesco', 'terceiro grau'],
+        'sys-elaboracao': ['elaboração independente', 'independente', 'conluio'],
+        'sys-plena': ['plena', 'plena habilitação', 'art. 63', 'requisitos de habilitação'],
+        'sys-vagas': ['vagas', 'pcd', 'deficiente', 'menor aprendiz', 'reserva de vagas'],
+        'sys-trabalho-escravo': ['escravo', 'trabalho forçado', 'degradante'],
+        'sys-nepotismo-servidores': ['vínculo', 'servidores', 'servidor', 'cargo de direção'],
+        'sys-compromisso-edital': ['compromisso', 'aceitação', 'edital', 'termo de referência'],
+        'sys-lgpd': ['lgpd', 'lei geral de proteção de dados', 'dados pessoais', 'privacidade'],
+        'sys-anticorrupcao': ['anticorrupção', 'ética', 'integridade', 'corrupção', 'fraude'],
+        'sys-ceis-cnep': ['ceis', 'cnep', 'cadastro nacional', 'empresas punidas', 'inidôneas'],
+        'sys-declinio-vistoria': ['declínio de vistoria', 'renúncia de vistoria', 'não realização de vistoria', 'declínio de visita'],
+        'sys-custos-trabalhistas': ['integralidade de custos', 'direitos trabalhistas', 'custos trabalhistas', 'convenções coletivas'],
+        'sys-autenticidade-documental': ['autenticidade', 'documentação digital', 'documentos eletrônicos', 'documentos digitais']
+    };
+
+    let bestMatch: DeclarationTemplate | null = null;
+    let maxScore = 0;
+
+    for (const template of templates) {
+        let score = 0;
+        const lowerTitle = template.title.toLowerCase();
+
+        if (lowerText.includes(lowerTitle) || lowerTitle.includes(lowerText)) {
+            score += 10;
+        }
+
+        const keywords = matchMap[template.id] || [];
+        for (const keyword of keywords) {
+            if (lowerText.includes(keyword)) {
+                score += 5;
+            }
+        }
+
+        const textWords = lowerText.split(/\s+/).filter(w => w.length > 3);
+        const titleWords = lowerTitle.split(/\s+/).filter(w => w.length > 3);
+        const commonWords = textWords.filter(w => titleWords.includes(w));
+        score += commonWords.length;
+
+        if (score > maxScore && score >= 3) {
+            maxScore = score;
+            bestMatch = template;
+        }
+    }
+
+    return bestMatch;
+}
+
 // ── Hook ──
 
 interface UseAiDeclarationParams {
@@ -134,6 +188,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     // ── State ──
     const [selectedBiddingId, setSelectedBiddingId] = useState(initialBiddingId || '');
+    const [lastAutoSelectedBiddingId, setLastAutoSelectedBiddingId] = useState('');
     const [fullBidding, setFullBidding] = useState<BiddingProcess | null>(null);
     const [isBiddingLoading, setIsBiddingLoading] = useState(false);
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
@@ -425,10 +480,43 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         setDeclarationType('');
     };
 
-    // Auto-select first declaration type
-    useMemo(() => {
-        if (declarationTypesFromEdital.length > 0 && !declarationType) setDeclarationType(declarationTypesFromEdital[0]);
-    }, [declarationTypesFromEdital]);
+    // Auto-select matched templates when edital requirements are loaded (once per bidding selection)
+    useEffect(() => {
+        if (!selectedBiddingId) return;
+        if (isTemplatesLoading) return;
+        if (selectedBiddingId === lastAutoSelectedBiddingId) return;
+
+        const isBiddingFinishedLoading = !isBiddingLoading;
+        if (declarationTypesFromEdital.length > 0 || isBiddingFinishedLoading) {
+            const matchedIds: string[] = [];
+            if (templates.length > 0) {
+                declarationTypesFromEdital.forEach((reqText: string) => {
+                    const match = findMatchingTemplateLocal(reqText, templates);
+                    if (match) {
+                        matchedIds.push(match.id);
+                    }
+                });
+            }
+
+            if (matchedIds.length > 0) {
+                setSelectedTemplateIds(matchedIds);
+                setGenerationMode('mixed');
+                if (matchedIds.length > 1) {
+                    setDeclarationType('DECLARAÇÃO UNIFICADA DE HABILITAÇÃO');
+                } else {
+                    const matchTpl = templates.find(t => t.id === matchedIds[0]);
+                    setDeclarationType((matchTpl?.title || 'Declaração').toUpperCase());
+                }
+            } else {
+                setSelectedTemplateIds([]);
+                setGenerationMode('ai');
+                if (declarationTypesFromEdital[0]) {
+                    setDeclarationType(declarationTypesFromEdital[0]);
+                }
+            }
+            setLastAutoSelectedBiddingId(selectedBiddingId);
+        }
+    }, [selectedBiddingId, declarationTypesFromEdital, templates, isTemplatesLoading, isBiddingLoading, lastAutoSelectedBiddingId]);
 
     // Auto-populate company data + auto-select matching layout
     useEffect(() => {
@@ -667,7 +755,12 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                     signatureDate: today,
                     mode: generationMode,
                     templateContent: activeTemplates[0]?.content || '',
-                    selectedTemplates: activeTemplates.map(t => ({ title: t.title, content: t.content }))
+                    selectedTemplates: activeTemplates.map(t => ({ title: t.title, content: t.content })),
+                    doubleSignature: layout.doubleSignature,
+                    rtName: layout.rtName,
+                    rtCpf: layout.rtCpf,
+                    rtRegister: layout.rtRegister,
+                    rtRole: layout.rtRole
                 }
             });
             setActiveJobId(jobId);
