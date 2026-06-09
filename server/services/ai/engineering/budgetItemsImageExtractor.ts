@@ -71,8 +71,9 @@ Lembre-se de retornar APENAS o JSON válido no formato de chaves curtas especifi
     const items = normalized.engineeringItems || [];
 
     // Auto-lookup for prices against registered databases
+    // Set allowSemanticFallback: false to avoid slow pg_trgm similarity queries on synchronous requests
     if (items.length > 0) {
-        await enrichWithOfficialPrices(items, engineeringConfig, { tenantId });
+        await enrichWithOfficialPrices(items, engineeringConfig, { tenantId, allowSemanticFallback: false });
     }
 
     return {
