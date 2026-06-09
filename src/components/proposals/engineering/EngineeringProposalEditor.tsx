@@ -1098,8 +1098,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const syncBases = async () => {
         if (items.length === 0) return;
         setIsAuditing(true);
-        const dbCount = Object.keys(dashConfig.dataBases || {}).length;
-        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({dbCount} datas bases, UF: {dashConfig.ufReferencia || 'auto'}, Regime: {dashConfig.regimeOneracao})...</span>);
+        const dbCount = dashConfig.basesConsideradas?.length || 0;
+        setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({dbCount} base(s) de dados, UF: {dashConfig.ufReferencia || 'auto'}, Regime: {dashConfig.regimeOneracao})...</span>);
         try {
             const res = await fetch('/api/engineering/price-audit', {
                 method: 'POST',
@@ -1775,16 +1775,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         {showToolsMenu && (<>
                             <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowToolsMenu(false)} />
                             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 240, overflow: 'hidden' }}>
-                                <button onClick={() => { const idx = items.findIndex(it => !isGrouper(it.type)); if (idx >= 0) setCompositionEditorIndex(idx); setShowToolsMenu(false); }}
-                                    disabled={items.findIndex(it => !isGrouper(it.type)) < 0}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                                    <Layers size={14} color="var(--color-primary)" />
-                                    <div><div>Editar Composições</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Abre o editor de detalhamento</div></div>
-                                </button>
                                 <button onClick={() => { refreshAllAudits(); setShowToolsMenu(false); }} disabled={items.length === 0 || isAuditing}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isAuditing ? 0.6 : 1 }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, opacity: isAuditing ? 0.6 : 1 }}
                                     onMouseEnter={e => { if (!isAuditing) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
@@ -1802,13 +1794,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                     try {
                                         const res = await fetch(`/api/engineering/proposals/${proposalId}/recalculate-prices`, {
                                             method: 'POST',
-                                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+                                            headers: hdrs()
                                         });
                                         const data = await res.json();
                                         if (res.ok && data.totalChanges > 0) {
-                                            // Apply changes to local items state
+                                            // Apply changes to local items state using itemId comparison for high fidelity matching
                                             setItems(prev => prev.map(it => {
-                                                const change = data.changes.find((c: any) => c.code === it.code);
+                                                const change = data.changes.find((c: any) => c.itemId === it.id);
                                                 if (!change) return it;
                                                 const itemBdi = engineeringConfig.bdiDiferenciado && it.bdiCategoria === 'FORNECIMENTO' ? (engineeringConfig.bdiFornecimento || 0) : effectiveBdi;
                                                 const newUp = applyBdi(change.newUnitCost, itemBdi, engineeringConfig.precision);

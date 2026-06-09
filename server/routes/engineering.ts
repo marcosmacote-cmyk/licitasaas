@@ -2744,7 +2744,8 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
         // Batch load compositions matching codes
         const compositions = await prisma.engineeringComposition.findMany({
             where: {
-                code: { in: compositionCodes, mode: 'insensitive' }
+                code: { in: compositionCodes, mode: 'insensitive' },
+                database: buildDatabaseWhere(engConfig, { tenantId, proposalId })
             },
             include: { database: true, items: { include: { item: true } } }
         });
@@ -6167,6 +6168,7 @@ import {
     formatReference,
     buildCandidateScore,
     chooseBestCandidate,
+    buildDatabaseWhere,
     type EngineeringPriceAuditStatus,
 } from '../services/engineering/priceEnricher';
 

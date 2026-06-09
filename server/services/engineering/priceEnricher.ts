@@ -121,7 +121,7 @@ function getTargetDateForSource(config: EngineeringConfig | undefined, sourceNam
 
 export function buildCandidateScore(
     candidate: any,
-    sourceName: string,
+    itemOrSourceName: any,
     config: EngineeringConfig | undefined,
     targetDate: { year: number; month: number } | null
 ): { score: number; warnings: string[] } {
@@ -139,6 +139,7 @@ export function buildCandidateScore(
 
     let score = 0;
     const warnings: string[] = [];
+    const sourceName = typeof itemOrSourceName === 'string' ? itemOrSourceName : (itemOrSourceName?.sourceName || itemOrSourceName?.source || '');
     const itemSource = normalizeSourceName(sourceName);
     const itemIsPropria = itemSource === 'PROPRIA' || itemSource.startsWith('PROPRIA_');
     const dbIsPropria = dbName === 'PROPRIA' || dbName.startsWith('PROPRIA_');
@@ -146,6 +147,11 @@ export function buildCandidateScore(
     // Source match scoring
     if (itemIsPropria && dbIsPropria) {
         score += 40;
+        // Prioritize proposal-specific PROPRIA database over global PROPRIA database
+        const itemProposalId = typeof itemOrSourceName === 'object' ? itemOrSourceName?.proposalId : null;
+        if (itemProposalId && dbName === `PROPRIA_${String(itemProposalId).toUpperCase()}`) {
+            score += 15;
+        }
     } else if (itemSource && !itemIsPropria && dbName === itemSource) {
         score += 40;
     } else if (desiredSources.includes(dbName)) {
@@ -273,7 +279,7 @@ export function chooseBestCandidate(
     const desiredType = String(item.type || '').toUpperCase();
     return pool
         .map(candidate => {
-            const scored = buildCandidateScore(candidate, item.sourceName || item.source || '', config, targetDate);
+            const scored = buildCandidateScore(candidate, item, config, targetDate);
             const matchType = String(candidate.matchType || '').toUpperCase();
             const typeBonus = desiredType === 'COMPOSICAO' && matchType === 'COMPOSICAO'
                 ? 5
@@ -287,7 +293,7 @@ export function chooseBestCandidate(
 
 // ── Main Enrichment Function ──
 
-function buildDatabaseWhere(config?: EngineeringConfig, options?: PriceEnrichmentOptions) {
+export function buildDatabaseWhere(config?: EngineeringConfig, options?: PriceEnrichmentOptions) {
     const or: any[] = [];
     const desiredOfficialBases = Array.isArray(config?.basesConsideradas)
         ? config.basesConsideradas.filter((b: string) => b && b.toUpperCase() !== 'PROPRIA')
@@ -540,7 +546,7 @@ export async function enrichWithOfficialPrices(
                     }
                 }
                 if (bestFuzzy) {
-                    const scored = buildCandidateScore(bestFuzzy.candidate, item.sourceName || item.source || '', engineeringConfig, targetDate);
+                    const scored = buildCandidateScore(bestFuzzy.candidate, item, engineeringConfig, targetDate);
                     best = { candidate: bestFuzzy.candidate, score: scored.score, warnings: scored.warnings };
                     console.log(`[PriceEnricher] ✅ FUZZY CODE "${item.code}" → corrected to "${bestFuzzy.candidate.code}" sim=${bestFuzzy.sim.toFixed(2)}`);
                 }
