@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings, Image, ClipboardList } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings, Image, ClipboardList, HelpCircle } from 'lucide-react';
 import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -9,6 +9,7 @@ import { recalcAllItems, ensureClientIds, buildInsumosItemsHash, resolveEffectiv
 import { CompositionDrawer } from './CompositionDrawer';
 import { CompositionEditor } from './CompositionEditor';
 import { AjusteInteligenteModal } from './AjusteInteligenteModal';
+import { HelpToolsModal } from './HelpToolsModal';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
 import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
@@ -123,6 +124,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
     const [isExtracting, setIsExtracting] = useState(false);
     const [isAuditing, setIsAuditing] = useState(false);
     const [saveMsg, setSaveMsg] = useState<React.ReactNode | null>(null);
+    const [showHelpModal, setShowHelpModal] = useState(false);
+    const [operationProgress, setOperationProgress] = useState<{
+        active: boolean;
+        title: string;
+        percent: number;
+        statusText: string;
+        current: number;
+        total: number;
+    } | null>(null);
     const [extractionMeta, setExtractionMeta] = useState<any>(null);
     const [activeExtractionJobId, setActiveExtractionJobId] = useState<string | null>(null);
     const extractionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1063,23 +1073,59 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         if (items.length === 0) return;
         setIsAuditing(true);
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Reauditando bases oficiais ({dashConfig.basesConsideradas?.join(', ') || 'todas'})...</span>);
+        
+        const totalItems = items.length;
+        setOperationProgress({
+            active: true,
+            title: 'Reauditando Preços',
+            percent: 0,
+            statusText: `Preparando auditoria de ${totalItems} itens...`,
+            current: 0,
+            total: totalItems
+        });
+
         try {
-            const res = await fetch('/api/engineering/price-audit', {
-                method: 'POST',
-                headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig: dashConfig, proposalId }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao reauditar');
-            const data = await res.json();
-            // FIX #1: Update sourceName from enrichment results
-            const auditedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
-                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
-                    return { ...it, sourceName: it.priceAudit.matchedSourceName };
-                }
-                return it;
-            });
+            const chunkSize = 20;
+            let auditedItems: any[] = [];
+            
+            for (let i = 0; i < totalItems; i += chunkSize) {
+                const chunk = items.slice(i, i + chunkSize);
+                const limit = Math.min(i + chunkSize, totalItems);
+                
+                setOperationProgress(prev => prev ? {
+                    ...prev,
+                    percent: Math.round((i / totalItems) * 100),
+                    statusText: `Auditando itens ${i + 1} a ${limit} de ${totalItems}...`
+                } : null);
+
+                const res = await fetch('/api/engineering/price-audit', {
+                    method: 'POST',
+                    headers: hdrs(),
+                    body: JSON.stringify({ items: chunk, engineeringConfig: dashConfig, proposalId }),
+                });
+                
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao reauditar lote');
+                const data = await res.json();
+                
+                const chunkAudited = (Array.isArray(data.items) ? data.items : chunk).map((it: any) => {
+                    if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
+                        return { ...it, sourceName: it.priceAudit.matchedSourceName };
+                    }
+                    return it;
+                });
+                
+                auditedItems = auditedItems.concat(chunkAudited);
+                
+                setOperationProgress(prev => prev ? {
+                    ...prev,
+                    percent: Math.round((auditedItems.length / totalItems) * 100),
+                    statusText: `Processados ${auditedItems.length} de ${totalItems} itens...`
+                } : null);
+            }
+
             setItems(recalcAll(auditedItems, effectiveBdi, dashConfig));
             markUnsaved();
+            
             // FIX AUDIT-01: Show detailed match counts instead of generic success
             const okCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'OK').length;
             const divCount = auditedItems.filter((it: any) => it.priceAudit?.status === 'DIVERGENT').length;
@@ -1091,6 +1137,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
+            setOperationProgress(null);
             setTimeout(() => setSaveMsg(null), 8000);
         }
     };
@@ -1104,28 +1151,62 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
         setIsAuditing(true);
         const dbCount = dashConfig.basesConsideradas?.length || 0;
         setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}><Loader2 size={14} className="spin" /> Buscando preços atualizados ({dbCount} base(s) de dados, UF: {dashConfig.ufReferencia || 'auto'}, Regime: {dashConfig.regimeOneracao})...</span>);
+        
+        const totalItems = items.length;
+        setOperationProgress({
+            active: true,
+            title: 'Puxando Valores do Hub',
+            percent: 0,
+            statusText: `Preparando sincronização de ${totalItems} itens com ${dbCount} base(s)...`,
+            current: 0,
+            total: totalItems
+        });
+
         try {
-            const res = await fetch('/api/engineering/price-audit', {
-                method: 'POST',
-                headers: hdrs(),
-                body: JSON.stringify({ items, engineeringConfig: dashConfig, proposalId }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar preços');
-            const data = await res.json();
+            const chunkSize = 20;
+            let syncedItems: any[] = [];
             
-            // Auto-apply base prices AND fix sourceName from enrichment
-            const syncedItems = (Array.isArray(data.items) ? data.items : items).map((it: any) => {
-                const updated = { ...it };
-                if (it.priceAudit?.matchedUnitCost && it.priceAudit.matchedUnitCost > 0) {
-                    updated.unitCost = it.priceAudit.matchedUnitCost;
-                    updated.priceOrigin = 'BASE' as const;
-                }
-                // FIX #1: Update sourceName from enrichment
-                if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
-                    updated.sourceName = it.priceAudit.matchedSourceName;
-                }
-                return updated;
-            });
+            for (let i = 0; i < totalItems; i += chunkSize) {
+                const chunk = items.slice(i, i + chunkSize);
+                const limit = Math.min(i + chunkSize, totalItems);
+                
+                setOperationProgress(prev => prev ? {
+                    ...prev,
+                    percent: Math.round((i / totalItems) * 100),
+                    statusText: `Sincronizando itens ${i + 1} a ${limit} de ${totalItems}...`
+                } : null);
+
+                const res = await fetch('/api/engineering/price-audit', {
+                    method: 'POST',
+                    headers: hdrs(),
+                    body: JSON.stringify({ items: chunk, engineeringConfig: dashConfig, proposalId }),
+                });
+                
+                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar preços');
+                const data = await res.json();
+                
+                // Auto-apply base prices AND fix sourceName from enrichment
+                const chunkSynced = (Array.isArray(data.items) ? data.items : chunk).map((it: any) => {
+                    const updated = { ...it };
+                    if (it.priceAudit?.matchedUnitCost && it.priceAudit.matchedUnitCost > 0) {
+                        updated.unitCost = it.priceAudit.matchedUnitCost;
+                        updated.priceOrigin = 'BASE' as const;
+                    }
+                    // FIX #1: Update sourceName from enrichment
+                    if (it.priceAudit?.matchedSourceName && it.priceAudit.matchMethod === 'code_exact' && (!it.sourceName || isPropria(it.sourceName))) {
+                        updated.sourceName = it.priceAudit.matchedSourceName;
+                    }
+                    return updated;
+                });
+                
+                syncedItems = syncedItems.concat(chunkSynced);
+                
+                setOperationProgress(prev => prev ? {
+                    ...prev,
+                    percent: Math.round((syncedItems.length / totalItems) * 100),
+                    statusText: `Sincronizados ${syncedItems.length} de ${totalItems} itens...`
+                } : null);
+            }
 
             // FIX DEDUP-01: Deduplicate items by itemNumber + normalized code.
             // Prevents accumulation of duplicates when user clicks "Puxar do HUB" multiple times,
@@ -1160,6 +1241,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
             setSaveMsg(<span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}><XCircle size={14} /> {e.message}</span>);
         } finally {
             setIsAuditing(false);
+            setOperationProgress(null);
             setTimeout(() => setSaveMsg(null), 8000);
         }
     };
@@ -1666,6 +1748,10 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                 .budget-row .discount-input-wrapper.discount-active {
                     display: flex !important;
                 }
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
             `}</style>
 
             {/* Tab Bar — unified navigation */}
@@ -1779,8 +1865,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         {showToolsMenu && (<>
                             <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowToolsMenu(false)} />
                             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 240, overflow: 'hidden' }}>
+                                <button onClick={() => { setShowHelpModal(true); setShowToolsMenu(false); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    <HelpCircle size={14} color="var(--color-primary)" />
+                                    <div><div>Entender as Ferramentas</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Compare as funções de cada ferramenta</div></div>
+                                </button>
                                 <button onClick={() => { refreshAllAudits(); setShowToolsMenu(false); }} disabled={items.length === 0 || isAuditing}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, opacity: isAuditing ? 0.6 : 1 }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isAuditing ? 0.6 : 1 }}
                                     onMouseEnter={e => { if (!isAuditing) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
@@ -1795,11 +1888,47 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 </button>
                                 <button onClick={async () => {
                                     setShowToolsMenu(false);
+                                    setIsAuditing(true);
+                                    setOperationProgress({
+                                        active: true,
+                                        title: 'Reconciliando Preços',
+                                        percent: 15,
+                                        statusText: 'Iniciando reconciliação com o banco de dados...',
+                                        current: 0,
+                                        total: 100
+                                    });
+
+                                    // Simulate steps with timer
+                                    let simPercent = 15;
+                                    const interval = setInterval(() => {
+                                        if (simPercent < 90) {
+                                            simPercent += Math.floor(Math.random() * 15) + 5;
+                                            if (simPercent > 90) simPercent = 90;
+                                            let text = 'Carregando composições de custo...';
+                                            if (simPercent > 40 && simPercent <= 70) text = 'Recalculando custos unitários das CPUs...';
+                                            if (simPercent > 70) text = 'Comparando planilha com composições analíticas...';
+                                            
+                                            setOperationProgress(prev => prev ? {
+                                                ...prev,
+                                                percent: simPercent,
+                                                statusText: text
+                                            } : null);
+                                        }
+                                    }, 400);
+
                                     try {
                                         const res = await fetch(`/api/engineering/proposals/${proposalId}/recalculate-prices`, {
                                             method: 'POST',
                                             headers: hdrs()
                                         });
+                                        clearInterval(interval);
+                                        
+                                        setOperationProgress(prev => prev ? {
+                                            ...prev,
+                                            percent: 100,
+                                            statusText: 'Finalizando reconciliação...'
+                                        } : null);
+
                                         const data = await res.json();
                                         if (res.ok && data.totalChanges > 0) {
                                             // Apply changes to local items state using itemId comparison for high fidelity matching
@@ -1816,12 +1945,18 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                         } else {
                                             alert('Erro: ' + (data.error || 'Falha na reconciliação'));
                                         }
-                                    } catch { alert('Erro de conexão'); }
-                                }} disabled={items.length === 0}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)' }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    } catch {
+                                        clearInterval(interval);
+                                        alert('Erro de conexão');
+                                    } finally {
+                                        setIsAuditing(false);
+                                        setOperationProgress(null);
+                                    }
+                                }} disabled={items.length === 0 || isAuditing}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isAuditing ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, borderTop: '1px solid var(--color-border)', opacity: isAuditing ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isAuditing) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                                    <RefreshCw size={14} color="#059669" />
+                                    {isAuditing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} color="#059669" />}
                                     <div><div>Reconciliar Preços</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Sincroniza preços do orçamento com composições atuais</div></div>
                                 </button>
                             </div>
@@ -3290,6 +3425,63 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                     onClose={() => setShowAjusteModal(false)}
                     onSuccess={handleReloadFromDb}
                 />
+            )}
+            {showHelpModal && (
+                <HelpToolsModal
+                    isOpen={showHelpModal}
+                    onClose={() => setShowHelpModal(false)}
+                />
+            )}
+            {operationProgress && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 24,
+                    right: 24,
+                    width: 340,
+                    background: 'var(--color-bg-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                    padding: '16px 20px',
+                    zIndex: 9999,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyItems: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                            <Loader2 size={16} className="spin" color="var(--color-primary)" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {operationProgress.title}
+                            </span>
+                        </div>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-primary)', flexShrink: 0 }}>
+                            {operationProgress.percent}%
+                        </span>
+                    </div>
+                    
+                    <div style={{
+                        width: '100%',
+                        height: 6,
+                        background: 'var(--color-bg-base)',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}>
+                        <div style={{
+                            width: `${operationProgress.percent}%`,
+                            height: '100%',
+                            background: 'linear-gradient(90deg, var(--color-primary), #60a5fa)',
+                            borderRadius: 3,
+                            transition: 'width 0.3s ease-in-out',
+                        }} />
+                    </div>
+                    
+                    <span style={{ fontSize: '0.74rem', color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>
+                        {operationProgress.statusText}
+                    </span>
+                </div>
             )}
             {globalDragOver && (
                 <div style={{
