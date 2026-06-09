@@ -297,6 +297,9 @@ export function Step1ConfigPanel({
     const setSaveMsg = parentSetSaveMsg || setLocalSaveMsg;
     const setHasUnsavedChanges = parentSetHasUnsavedChanges || (() => {});
     const [showHistory, setShowHistory] = useState(false);
+    const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+    const [showAdvancedBdi, setShowAdvancedBdi] = useState(false);
+    const [showAdvancedEncargos, setShowAdvancedEncargos] = useState(false);
 
     const initialConfigRef = useRef<{
         objeto: string;
@@ -727,10 +730,36 @@ export function Step1ConfigPanel({
                                         {isProcessingConfigImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingConfigImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
                                     </button>
                                     {onExtractConfig && (
-                                        <button style={{ ...btnBlue, cursor: isExtractingConfig ? 'wait' : 'pointer', opacity: isExtractingConfig ? 0.7 : 1 }}
-                                            onClick={onExtractConfig} disabled={isExtractingConfig || isProcessingConfigImage}>
-                                            {isExtractingConfig ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
-                                        </button>
+                                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <button 
+                                                onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
+                                                style={{ ...btnClear, borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)', marginLeft: 8 }}
+                                                title="Opções avançadas de extração"
+                                                type="button"
+                                            >
+                                                <ChevronDown size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Outras Opções
+                                            </button>
+                                            {showAdvancedConfig && (
+                                                <div style={{
+                                                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                    borderRadius: 'var(--radius-md)', padding: 12, zIndex: 10, width: 280,
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <button 
+                                                        onClick={() => { onExtractConfig(); setShowAdvancedConfig(false); }}
+                                                        style={{ ...btnBlue, width: '100%', justifyContent: 'center' }}
+                                                        disabled={isExtractingConfig || isProcessingConfigImage}
+                                                        type="button"
+                                                    >
+                                                        {isExtractingConfig ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair PDF Completo (Instável)
+                                                    </button>
+                                                    <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginTop: 6, lineHeight: 1.3, whiteSpace: 'normal', textAlign: 'left' }}>
+                                                        ⚠️ <strong>Nota:</strong> Esta opção tenta ler o edital inteiro de uma vez. Requer PDF digital com boa estrutura de texto e pode apresentar falhas.
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <ProgressBar progress={configImageProgress} />
@@ -1081,10 +1110,36 @@ export function Step1ConfigPanel({
                                         {isProcessingBdiImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingBdiImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
                                     </button>
                                     {onExtractBdi && (
-                                        <button style={{ ...btnBlue, cursor: isExtractingBdi ? 'wait' : 'pointer', opacity: isExtractingBdi ? 0.7 : 1 }}
-                                            onClick={onExtractBdi} disabled={isExtractingBdi || isProcessingBdiImage}>
-                                            {isExtractingBdi ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
-                                        </button>
+                                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <button 
+                                                onClick={() => setShowAdvancedBdi(!showAdvancedBdi)}
+                                                style={{ ...btnClear, borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)', marginLeft: 8 }}
+                                                title="Opções avançadas de extração"
+                                                type="button"
+                                            >
+                                                <ChevronDown size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Outras Opções
+                                            </button>
+                                            {showAdvancedBdi && (
+                                                <div style={{
+                                                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                    borderRadius: 'var(--radius-md)', padding: 12, zIndex: 10, width: 280,
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <button 
+                                                        onClick={() => { onExtractBdi(); setShowAdvancedBdi(false); }}
+                                                        style={{ ...btnBlue, width: '100%', justifyContent: 'center' }}
+                                                        disabled={isExtractingBdi || isProcessingBdiImage}
+                                                        type="button"
+                                                    >
+                                                        {isExtractingBdi ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair PDF Completo (Instável)
+                                                    </button>
+                                                    <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginTop: 6, lineHeight: 1.3, whiteSpace: 'normal', textAlign: 'left' }}>
+                                                        ⚠️ <strong>Nota:</strong> Esta opção tenta ler o edital inteiro de uma vez. Requer PDF digital com boa estrutura de texto e pode apresentar falhas.
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <ProgressBar progress={bdiImageProgress} />
@@ -1365,10 +1420,36 @@ export function Step1ConfigPanel({
                                         {isProcessingEncargosImage ? <Loader2 size={14} className="spin" /> : <FileImage size={14} />} {isProcessingEncargosImage ? 'Processando...' : 'Extrair de Print (Ctrl+V)'}
                                     </button>
                                     {onExtractEncargos && (
-                                        <button style={{ ...btnBlue, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', cursor: isExtractingEncargos ? 'wait' : 'pointer', opacity: isExtractingEncargos ? 0.7 : 1 }}
-                                            onClick={onExtractEncargos} disabled={isExtractingEncargos || isProcessingEncargosImage}>
-                                            {isExtractingEncargos ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} Extrair via IA
-                                        </button>
+                                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <button 
+                                                onClick={() => setShowAdvancedEncargos(!showAdvancedEncargos)}
+                                                style={{ ...btnClear, borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)', marginLeft: 8 }}
+                                                title="Opções avançadas de extração"
+                                                type="button"
+                                            >
+                                                <ChevronDown size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Outras Opções
+                                            </button>
+                                            {showAdvancedEncargos && (
+                                                <div style={{
+                                                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                    borderRadius: 'var(--radius-md)', padding: 12, zIndex: 10, width: 280,
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <button 
+                                                        onClick={() => { onExtractEncargos(); setShowAdvancedEncargos(false); }}
+                                                        style={{ ...btnBlue, background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 2px 6px rgba(109,40,217,0.2)', width: '100%', justifyContent: 'center' }}
+                                                        disabled={isExtractingEncargos || isProcessingEncargosImage}
+                                                        type="button"
+                                                    >
+                                                        {isExtractingEncargos ? <Loader2 size={12} className="spin" /> : <Wand2 size={12} />} Extrair PDF Completo (Instável)
+                                                    </button>
+                                                    <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', marginTop: 6, lineHeight: 1.3, whiteSpace: 'normal', textAlign: 'left' }}>
+                                                        ⚠️ <strong>Nota:</strong> Esta opção tenta ler o edital inteiro de uma vez. Requer PDF digital com boa estrutura de texto e pode apresentar falhas.
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <ProgressBar progress={encargosImageProgress} color="#6d28d9" />

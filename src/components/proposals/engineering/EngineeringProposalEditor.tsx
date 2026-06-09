@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings, Image } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Upload, Search, X, Loader2, Layers, BarChart3, Calendar, Package, FolderOpen, GitBranch, Wrench, ChevronDown, ChevronRight, Database, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Split, GripVertical, RefreshCw, Wand2, Undo2, Redo2, StickyNote, Settings, Image, ClipboardList } from 'lucide-react';
 import { useUndoRedo } from './useUndoRedo';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -1697,19 +1697,19 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                             <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowAIMenu(false)} />
                             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 240, overflow: 'hidden' }}>
                                 <div style={{ padding: '6px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', background: 'var(--color-bg-base)' }}>Extração por IA</div>
-                                <button onClick={() => { handleExtractAI(); setShowAIMenu(false); }} disabled={isExtracting}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isExtracting ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, opacity: isExtracting ? 0.6 : 1 }}
-                                    onMouseEnter={e => { if (!isExtracting) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                                    {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
-                                    <div><div>Extrair Itens do Edital</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Popula a planilha com itens do edital</div></div>
-                                </button>
                                 <button onClick={() => { setShowImageImportModal(true); setShowAIMenu(false); }}
                                     style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500, textAlign: 'left' as const }}
                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                                     <Image size={14} color="var(--color-primary)" />
-                                    <div><div>Importar de Print / Imagem</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Extrai itens arrastando ou colando imagem (IA)</div></div>
+                                    <div><div>Importar via Print / PDF</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Extrai itens colando print/imagem ou enviando PDF recortado</div></div>
+                                </button>
+                                <button onClick={() => { handleExtractAI(); setShowAIMenu(false); }} disabled={isExtracting}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontSize: '0.84rem', color: 'var(--color-text-primary)', cursor: isExtracting ? 'wait' : 'pointer', fontWeight: 500, textAlign: 'left' as const, opacity: isExtracting ? 0.6 : 1 }}
+                                    onMouseEnter={e => { if (!isExtracting) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                    {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-text-tertiary)" />}
+                                    <div><div>Extrair Edital Completo (Instável)</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Tenta varrer o edital completo em background. Sujeito a falhas.</div></div>
                                 </button>
                             </div>
                         </>)}
@@ -2494,34 +2494,140 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                                 return rows;
                             })}
                             {items.length === 0 && (
-                                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                                    {extractionMeta?.status === 'empty_extraction' ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                                            <div style={{ padding: '12px 16px', background: 'rgba(217,119,6,0.1)', borderRadius: 8, color: '#b45309', maxWidth: 600 }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, marginBottom: 8 }}>
-                                                    <AlertTriangle size={18} />
-                                                    Nenhum item foi extraído
+                                <tr>
+                                    <td colSpan={10} style={{ padding: '60px 40px', background: 'var(--color-bg-surface)' }}>
+                                        <div style={{
+                                            maxWidth: 700, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
+                                        }}>
+                                            {/* Icon & Title */}
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{
+                                                    width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(37,99,235,0.01) 100%)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--color-primary)'
+                                                }}>
+                                                    <ClipboardList size={26} />
                                                 </div>
-                                                <ul style={{ textAlign: 'left', fontSize: '0.8rem', margin: 0, paddingLeft: 20 }}>
-                                                    {(extractionMeta.possibleCauses || []).map((cause: string, i: number) => (
-                                                        <li key={i}>{cause}</li>
-                                                    ))}
-                                                </ul>
+                                                <h3 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
+                                                    Planilha Orçamentária Vazia
+                                                </h3>
+                                                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-tertiary)', maxWidth: 460 }}>
+                                                    Selecione o método de importação para iniciar a montagem da proposta de preços.
+                                                </p>
                                             </div>
-                                            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                                                <button className="btn btn-outline" onClick={() => handleExtractAI({ forceRestart: true })} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <Wand2 size={14} /> Tentar novamente (Forçar)
-                                                </button>
-                                                <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <Upload size={14} /> Fazer upload manual
-                                                </button>
+
+                                            {/* Split Grid for Paths */}
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, width: '100%', marginTop: 8
+                                            }}>
+                                                {/* Path A: Excel/CSV */}
+                                                <div style={{
+                                                    background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 20,
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 12,
+                                                    transition: 'all 0.2s', cursor: 'pointer'
+                                                }}
+                                                onClick={() => fileInputRef.current?.click()}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.borderColor = 'var(--color-primary)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.05)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                                                    e.currentTarget.style.boxShadow = 'none';
+                                                }}
+                                                >
+                                                    <div style={{
+                                                        width: 40, height: 40, borderRadius: '50%', background: 'rgba(16,185,129,0.1)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981'
+                                                    }}>
+                                                        <Upload size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 style={{ margin: '0 0 4px', fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Importar Planilha Oficial</h4>
+                                                        <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
+                                                            Suba arquivos do tipo <strong>.xlsx, .xls, .csv</strong> ou <strong>.ods</strong>. Método 100% exato e determinístico.
+                                                        </p>
+                                                    </div>
+                                                    <button className="btn btn-primary btn-sm" style={{ marginTop: 'auto', pointerEvents: 'none' }}>
+                                                        Selecionar Planilha
+                                                    </button>
+                                                </div>
+
+                                                {/* Path B: Print / PDF (IA) */}
+                                                <div style={{
+                                                    background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 20,
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 12,
+                                                    transition: 'all 0.2s', cursor: 'pointer'
+                                                }}
+                                                onClick={() => setShowImageImportModal(true)}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.borderColor = 'var(--color-primary)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.05)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                                                    e.currentTarget.style.boxShadow = 'none';
+                                                }}
+                                                >
+                                                    <div style={{
+                                                        width: 40, height: 40, borderRadius: '50%', background: 'rgba(139,92,246,0.1)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5cf6'
+                                                    }}>
+                                                        <Image size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 style={{ margin: '0 0 4px', fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Extração via Print / PDF</h4>
+                                                        <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
+                                                            Cole imagens de tabela (Ctrl+V) ou suba PDFs recortados de até 10 páginas. A IA faz a leitura estruturada.
+                                                        </p>
+                                                    </div>
+                                                    <button className="btn btn-outline btn-sm" style={{ marginTop: 'auto', pointerEvents: 'none', color: '#8b5cf6', borderColor: 'rgba(139,92,246,0.4)' }}>
+                                                        Importar via IA
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {/* Diagnostic / Advanced Fallback */}
+                                            {extractionMeta?.status === 'empty_extraction' ? (
+                                                <div style={{
+                                                    padding: '12px 16px', background: 'rgba(217,119,6,0.06)', border: '1px solid rgba(217,119,6,0.15)', borderRadius: 8,
+                                                    color: '#b45309', width: '100%', fontSize: '0.76rem'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 6 }}>
+                                                        <AlertTriangle size={14} />
+                                                        A extração anterior via edital completo não encontrou itens
+                                                    </div>
+                                                    <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.4, color: 'var(--color-text-secondary)' }}>
+                                                        {(extractionMeta.possibleCauses || []).map((cause: string, i: number) => (
+                                                            <li key={i}>{cause}</li>
+                                                        ))}
+                                                    </ul>
+                                                    <div style={{ marginTop: 8, display: 'flex', gap: 10 }}>
+                                                        <button className="btn btn-outline btn-xs" onClick={() => handleExtractAI({ forceRestart: true })} style={{ fontSize: '0.7rem', color: '#b45309', borderColor: 'rgba(217,119,6,0.3)' }}>
+                                                            Tentar PDF Completo Novamente
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                                                    <button 
+                                                        className="btn btn-link btn-xs" 
+                                                        style={{ color: 'var(--color-text-tertiary)', textDecoration: 'underline', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                            if (window.confirm('A extração automática tenta ler o PDF do edital completo e pode demorar alguns minutos ou falhar dependendo da complexidade do documento. Deseja continuar?')) {
+                                                                handleExtractAI();
+                                                            }
+                                                        }}
+                                                        type="button"
+                                                    >
+                                                        Tentar extração automática do PDF completo (Instável)
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <span>Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente</span>
-                                    )}
-                                </td></tr>
+                                    </td>
+                                </tr>
                             )}
+
                             </tbody>
                             </SortableContext>
                         </DndContext>

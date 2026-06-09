@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Loader2, CheckCircle2, AlertTriangle, Image as ImageIcon, Clipboard, ArrowRight } from 'lucide-react';
+import { X, Upload, Loader2, CheckCircle2, AlertTriangle, Image as ImageIcon, Clipboard, ArrowRight, FileText } from 'lucide-react';
 import type { EngItem } from './types';
 import { isGrouper } from './types';
 
@@ -84,8 +84,16 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
     }, []);
 
     const handleSelectFile = (selectedFile: File) => {
-        if (!selectedFile.type.startsWith('image/')) {
-            setError('O arquivo selecionado deve ser uma imagem (PNG, JPG, etc.)');
+        const isImage = selectedFile.type.startsWith('image/');
+        const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf');
+        
+        if (!isImage && !isPdf) {
+            setError('O arquivo selecionado deve ser uma imagem (PNG, JPG) ou um documento PDF.');
+            return;
+        }
+        
+        if (isPdf && selectedFile.size > 10 * 1024 * 1024) {
+            setError('Para melhor desempenho da IA, selecione um arquivo PDF de no máximo 10MB.');
             return;
         }
         
@@ -94,11 +102,15 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
         setError(null);
         setExtractedItems([]);
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            setPreviewUrl(e.target?.result as string);
-        };
-        reader.readAsDataURL(selectedFile);
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPreviewUrl(e.target?.result as string);
+            };
+            reader.readAsDataURL(selectedFile);
+        } else {
+            setPreviewUrl(null);
+        }
 
         // Auto trigger extraction
         extractItems(selectedFile);
@@ -285,11 +297,11 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <ImageIcon size={18} color="var(--color-primary)" />
                             <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                                Extração Contínua via Print / Imagem (IA)
+                                Importação via Print / PDF do Orçamento (IA)
                             </h3>
                         </div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'block' }}>
-                            Arraste ou cole prints de planilha/orçamentos para montar a planilha continuamente.
+                            Cole imagens ou suba PDFs recortados de até 10 páginas com as planilhas de preços.
                         </span>
                     </div>
                     <button onClick={onClose} style={{
@@ -355,7 +367,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                             <input 
                                 ref={fileInputRef}
                                 type="file" 
-                                accept="image/*" 
+                                accept="image/*,application/pdf" 
                                 style={{ display: 'none' }}
                                 onChange={e => {
                                     const selected = e.target.files?.[0];
@@ -371,13 +383,13 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                                 <Upload size={28} />
                             </div>
                             <h4 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                                Arraste ou Cole seu Print
+                                Arraste seu Print / PDF ou Cole a Imagem
                             </h4>
-                            <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', textAlign: 'center', maxWidth: 400, lineHeight: 1.5 }}>
-                                Tire um print da planilha orçamentária e clique aqui para pressionar <kbd style={{ padding: '2px 6px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>Ctrl + V</kbd> ou selecione o arquivo.
+                            <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', textAlign: 'center', maxWidth: 420, lineHeight: 1.5 }}>
+                                Tire um print da planilha orçamentária e use <kbd style={{ padding: '2px 6px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>Ctrl + V</kbd>, ou arraste/selecione um <strong>PDF recortado</strong> com as páginas do orçamento.
                             </p>
                             <button className="btn btn-outline" style={{ fontSize: '0.8rem', padding: '6px 16px' }}>
-                                Selecionar Imagem
+                                Selecionar Arquivo
                             </button>
                             
                             <div style={{
@@ -398,16 +410,43 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                     ) : (
                         /* Image Selected & Processing Layout */
                         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                            {/* Left Side: Image Preview */}
+                            {/* Left Side: Image / PDF Preview */}
                             <div style={{
                                 width: '38%', borderRight: '1px solid var(--color-border)',
                                 display: 'flex', flexDirection: 'column', background: 'var(--color-bg-base)'
                             }}>
                                 <div style={{
-                                    flex: 1, padding: 16, display: 'flex',
-                                    alignItems: 'center', justifyContent: 'center', minHeight: 0
+                                    flex: 1, padding: 16, display: 'flex', flexDirection: 'column',
+                                    alignItems: 'center', justifyContent: 'center', minHeight: 0,
+                                    textAlign: 'center'
                                 }}>
-                                    {previewUrl ? (
+                                    {file && (file.type === 'application/pdf' || file.name.endsWith('.pdf')) ? (
+                                        <div style={{
+                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                                            padding: 20, borderRadius: 12, background: 'var(--color-bg-surface)',
+                                            border: '1px solid var(--color-border)', maxWidth: '90%',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                                        }}>
+                                            <div style={{
+                                                width: 48, height: 48, borderRadius: '50%', background: 'rgba(239,68,68,0.08)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626',
+                                                margin: '0 auto'
+                                            }}>
+                                                <FileText size={24} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--color-text-primary)', wordBreak: 'break-all' }}>
+                                                    {file.name}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                                                    {(file.size / (1024 * 1024)).toFixed(2)} MB · PDF Document
+                                                </div>
+                                            </div>
+                                            <span style={{ fontSize: '0.68rem', color: 'var(--color-text-secondary)', lineHeight: 1.4, display: 'block', borderTop: '1px solid var(--color-border)', paddingTop: 10, marginTop: 4 }}>
+                                                Para melhor assertividade, certifique-se de que este PDF contém <strong>apenas as páginas do orçamento</strong>.
+                                            </span>
+                                        </div>
+                                    ) : previewUrl ? (
                                         <img 
                                             src={previewUrl} 
                                             alt="Preview" 
@@ -419,7 +458,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                                             }}
                                         />
                                     ) : (
-                                        <div style={{ color: 'var(--color-text-tertiary)' }}>Carregando imagem...</div>
+                                        <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8rem' }}>Carregando visualização...</div>
                                     )}
                                 </div>
                                 <div style={{
@@ -431,7 +470,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                                         {file.name}
                                     </span>
                                     <button className="btn btn-outline" onClick={handleClear} style={{ padding: '4px 10px', fontSize: '0.72rem' }}>
-                                        Trocar Imagem
+                                        Trocar Arquivo
                                     </button>
                                 </div>
                             </div>
@@ -614,7 +653,7 @@ export function ImageBudgetImportModal({ onClose, onImport, engineeringConfig, i
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                 }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)' }}>
-                        {!file ? 'Tire um print de parte da planilha e cole aqui com Ctrl+V.' : 'Você pode colar outra imagem ou arrastar outro arquivo para reiniciar.'}
+                        {!file ? 'Tire um print de parte da planilha e cole (Ctrl+V) ou suba um PDF recortado.' : 'Você pode colar outra imagem ou arrastar outro arquivo/PDF para reiniciar.'}
                     </div>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <button onClick={onClose} className="btn btn-outline" style={{ padding: '8px 16px', fontSize: '0.82rem' }}>
