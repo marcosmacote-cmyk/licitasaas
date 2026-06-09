@@ -232,6 +232,55 @@ describe('enrichWithOfficialPrices', () => {
         });
         expect(items[0].priceAudit.warnings.join(' ')).toContain('exige revisão manual');
     });
+
+    it('correctly matches version-based bases (like SEINFRA) even if referenceMonth/Year are set from import timestamp', async () => {
+        mocks.engineeringCompositionFindMany.mockResolvedValueOnce([
+            {
+                id: 'comp-seinfra-imported',
+                code: 'C1937',
+                description: 'PLACAS DE SINALIZACAO',
+                unit: 'M2',
+                totalPrice: 150.0,
+                database: {
+                    id: 'db-seinfra-imp',
+                    type: 'OFICIAL',
+                    tenantId: null,
+                    name: 'SEINFRA',
+                    uf: 'CE',
+                    version: '028.1',
+                    referenceMonth: 6,
+                    referenceYear: 2026,
+                    payrollExemption: true,
+                },
+            },
+        ]);
+
+        const items = [{
+            item: '1.1',
+            type: 'COMPOSICAO',
+            sourceName: 'SEINFRA',
+            code: 'C1937',
+            description: 'PLACAS DE SINALIZACAO',
+            unit: 'M2',
+            quantity: 10,
+            unitCost: 150.0,
+        }];
+
+        const result = await enrichWithOfficialPrices(items, {
+            basesConsideradas: ['SEINFRA'],
+            dataBase: '2026-05',
+            regimeOneracao: 'DESONERADO',
+        }, { tenantId: 'tenant-a' });
+
+        expect(result).toEqual({ matched: 1, total: 1 });
+        expect(items[0].priceAudit).toMatchObject({
+            status: 'OK',
+            matchedCode: 'C1937',
+            matchedDatabaseId: 'db-seinfra-imp',
+            matchMethod: 'code_exact',
+        });
+        expect(items[0].priceAudit.warnings.some(w => String(w).toLowerCase().includes('data-base'))).toBe(false);
+    });
 });
 
 // ── Pure unit tests for calculateMatchConfidence (no DB needed) ──

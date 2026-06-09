@@ -105,6 +105,36 @@ export function isVersionBasedBase(name: string): boolean {
     return VERSION_BASED_BASES.some(vb => name.toUpperCase().includes(vb));
 }
 
+export function cleanBasesConsideradas(bases: any[]): string[] {
+    if (!Array.isArray(bases)) return ['SINAPI'];
+    const validMap: Record<string, string> = {
+        'SINAPI': 'SINAPI',
+        'SEINFRA': 'SEINFRA',
+        'SICOR': 'SICOR',
+        'SICOR-MG': 'SICOR',
+        'SICOR MG': 'SICOR',
+        'DER-MG': 'SICOR',
+        'DER MG': 'SICOR',
+        'ORSE': 'ORSE',
+        'SICRO': 'SICRO',
+        'SINCRO': 'SICRO',
+        'SICRO NOVO': 'SICRO',
+        'SICRO-NOVO': 'SICRO',
+        'DNIT': 'SICRO',
+        'SBC': 'SBC',
+        'PROPRIA': 'PROPRIA',
+        'PRÓPRIA': 'PROPRIA'
+    };
+    const cleaned = bases.map(b => {
+        const key = String(b || '').trim().toUpperCase();
+        return validMap[key] || key;
+    });
+    const allowed = ['SINAPI', 'SEINFRA', 'SICOR', 'ORSE', 'SICRO', 'SBC', 'PROPRIA'];
+    const unique = Array.from(new Set(cleaned))
+        .filter(b => allowed.includes(b));
+    return unique.length > 0 ? unique : ['SINAPI'];
+}
+
 /**
  * STRICT base filter — enforces Step 1 config as absolute rule.
  * Bases are shown ONLY if they match ALL criteria:

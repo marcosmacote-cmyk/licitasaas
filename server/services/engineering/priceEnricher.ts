@@ -79,6 +79,7 @@ export function formatReference(db: any): string {
 function normalizeSourceName(sourceName: string): string {
     const source = String(sourceName || '').trim().toUpperCase();
     if (source === 'SICOR-MG' || source === 'SICOR MG' || source === 'DER-MG' || source === 'DER MG') return 'SICOR';
+    if (source === 'SINCRO' || source === 'SICRO NOVO' || source === 'SICRO-NOVO' || source === 'DNIT') return 'SICRO';
     return source;
 }
 
@@ -176,11 +177,13 @@ export function buildCandidateScore(
         const exactDate = hasRefDate && db.referenceYear === effectiveTargetDate.year && db.referenceMonth === effectiveTargetDate.month;
         const versionDate = String(db.version || '').includes(`${String(effectiveTargetDate.month).padStart(2, '0')}/${effectiveTargetDate.year}`)
             || String(db.version || '').includes(`${effectiveTargetDate.year}-${String(effectiveTargetDate.month).padStart(2, '0')}`);
-        const isVersionBased = !hasRefDate && db.version && /^\d{3}/.test(String(db.version));
-        if (exactDate || versionDate) score += 30;
-        else if (isVersionBased) {
-            // Bases like SEINFRA 028 don't have monthly dates — give partial credit
-            score += 15;
+        const isVersionBased = ['SEINFRA', 'SICRO', 'SBC'].includes(dbName)
+            || (!hasRefDate && db.version && /^\d{3}/.test(String(db.version)));
+        if (isVersionBased) {
+            // Version-based databases don't have monthly cadence — give full credit and bypass mismatch warnings
+            score += 30;
+        } else if (exactDate || versionDate) {
+            score += 30;
         } else if (hasRefDate) {
             // Has ref date but it doesn't match — genuine mismatch
             warnings.push(`data-base incompatível (${formatReference(db)})`);

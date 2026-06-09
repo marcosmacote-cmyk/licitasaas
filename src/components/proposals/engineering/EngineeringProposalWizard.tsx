@@ -26,6 +26,7 @@ import { UnsavedChangesModal } from './UnsavedChangesModal';
 import type { InsumoConsolidado } from './insumoEngine';
 import type { EngItem, EngineeringConfig } from './types';
 import { isGrouper, DEFAULT_ENGINEERING_CONFIG } from './types';
+import { cleanBasesConsideradas } from './proposalEditorHelpers';
 import type { BiddingProcess, CompanyProfile, PriceProposal } from '../../../types';
 
 interface Props { 
@@ -127,6 +128,9 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     if (data.bdiConfig) setBdiConfig(data.bdiConfig);
                     if (data.engineeringConfig) {
                         const { cronogramaData: saved, ...engConfig } = data.engineeringConfig;
+                        if (engConfig.basesConsideradas) {
+                            engConfig.basesConsideradas = cleanBasesConsideradas(engConfig.basesConsideradas);
+                        }
                         setEngineeringConfig(engConfig);
                         if (saved) setCronogramaData(saved);
                     }
@@ -355,7 +359,11 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
     // Config change handlers
     const handleConfigChange = (config: EngineeringConfig) => {
         setHasUnsavedChanges(true);
-        setEngineeringConfig(config);
+        const cleanedConfig = { ...config };
+        if (cleanedConfig.basesConsideradas) {
+            cleanedConfig.basesConsideradas = cleanBasesConsideradas(cleanedConfig.basesConsideradas);
+        }
+        setEngineeringConfig(cleanedConfig);
     };
     const handleBdiChange = (config: BdiConfig) => {
         setHasUnsavedChanges(true);
@@ -376,7 +384,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                 const updates: Partial<EngineeringConfig> = {};
                 if (d.objeto) updates.objeto = d.objeto;
                 if (d.uf) updates.ufReferencia = d.uf;
-                if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = d.bases;
+                if (Array.isArray(d.bases) && d.bases.length > 0) updates.basesConsideradas = cleanBasesConsideradas(d.bases);
                 if (d.dataBase) updates.dataBase = d.dataBase;
                 // Map per-source data bases
                 if (d.dataBasesPorFonte && typeof d.dataBasesPorFonte === 'object') {
@@ -395,7 +403,7 @@ export function EngineeringProposalWizard({ proposalId, biddingId, estimatedValu
                     regimeOneracao: d.regime || undefined,
                     dataBase: d.dataBase || undefined,
                     dataBases: d.dataBasesPorFonte || undefined,
-                    basesConsideradas: Array.isArray(d.bases) ? d.bases : undefined,
+                    basesConsideradas: Array.isArray(d.bases) ? cleanBasesConsideradas(d.bases) : undefined,
                 };
                 setEngineeringConfig(prev => ({ ...prev, ...updates }));
                 setHasUnsavedChanges(true);

@@ -26,6 +26,7 @@ import {
     hasEditalPriceSnapshot, VERSION_BASED_BASES, isVersionBasedBase,
     filterConfigBases, filterConfigBasesWithWarnings, autoSelectBestBase,
     preserveEditalPricing, AUDIT_META, refreshPriceAudit, renderPriceAudit,
+    cleanBasesConsideradas,
 } from './proposalEditorHelpers';
 
 // G9-PREP: Helpers moved to proposalEditorHelpers.tsx
@@ -461,6 +462,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId, wizardConfig,
                         if (!wizardBdiConfig && data.bdiConfig) setBdiConfig(data.bdiConfig);
                         if (data.engineeringConfig) {
                             const { cronogramaData: savedCronograma, ...engConfig } = data.engineeringConfig;
+                            if (engConfig.basesConsideradas) {
+                                engConfig.basesConsideradas = cleanBasesConsideradas(engConfig.basesConsideradas);
+                            }
                             setEngineeringConfig(engConfig);
                             if (savedCronograma) setCronogramaData(savedCronograma);
                         }
