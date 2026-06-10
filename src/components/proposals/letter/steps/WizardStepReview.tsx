@@ -51,7 +51,13 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
             {/* Blocos agrupados por seção */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                 {BLOCK_GROUPS.map(group => {
-                    const groupBlocks = w.letterResult!.blocks.filter(b => b.visible && (group.ids as string[]).includes(b.id));
+                    const groupBlocks = w.letterResult!.blocks.filter(b => {
+                        if (!b.visible) return false;
+                        if (group.label === 'Corpo Principal da Proposta' && b.id.startsWith(`${LetterBlockType.DECLARATION_EXTRA}_`)) {
+                            return true;
+                        }
+                        return (group.ids as string[]).includes(b.id);
+                    });
                     if (groupBlocks.length === 0) return null;
 
                     return (
@@ -65,7 +71,10 @@ export function WizardStepReview({ p, w }: { p: ProposalLetterWizardProps, w: Re
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                 {groupBlocks.map(block => {
-                                    const meta = BLOCK_LABELS[block.id] || { icon: <File size={14} />, color: '#64748B' };
+                                    const isExtraDecl = block.id.startsWith(`${LetterBlockType.DECLARATION_EXTRA}_`);
+                                    const meta = isExtraDecl 
+                                        ? { icon: <Scale size={14} />, color: '#F59E0B' } 
+                                        : BLOCK_LABELS[block.id] || { icon: <File size={14} />, color: '#64748B' };
                                     const isEditing = w.editingBlockId === block.id;
                                     const isCollapsed = w.collapsedBlocks.has(block.id);
                                     const needsAttention = ATTENTION_BLOCKS.has(block.id);

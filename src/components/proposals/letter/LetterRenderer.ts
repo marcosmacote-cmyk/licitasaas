@@ -129,6 +129,11 @@ export class LetterRenderer {
             case LetterBlockType.SIGNATURE:
                 return this.renderSignature(formatted);
 
+            case LetterBlockType.DECLARATION_EXTRA:
+                return `<div class="block block-declaration-extra" style="margin-bottom: 4px; text-align: justify;">
+                    ${this.renderParagraphs(formatted)}
+                </div>`;
+
             default:
                 return `<div class="block" style="margin-bottom: 4px;">
                     <p style="margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
