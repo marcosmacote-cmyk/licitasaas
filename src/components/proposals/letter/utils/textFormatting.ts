@@ -65,6 +65,10 @@ export function toSentenceCasePt(str: string): string {
     return formatted;
 }
 
+function removeAccents(str: string): string {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 export function normalizeDeclarationContent(title: string, content: string): string {
     let baseText = content?.trim() || '';
     
@@ -75,25 +79,74 @@ export function normalizeDeclarationContent(title: string, content: string): str
     
     if (!baseText) return '';
     
-    // 1. Remover redundância do título se o texto base começar com ele
+    // 1. Remover redundância do título se o texto base começar com ele (com comparação tolerante a acentos e casing)
     if (title && title.trim()) {
-        const cleanTitle = title.trim().toLowerCase();
-        const cleanBase = baseText.toLowerCase();
+        const cleanTitle = removeAccents(title.trim().toLowerCase());
+        const cleanBase = removeAccents(baseText.toLowerCase());
+        
+        // Padrões redundantes que podem vir antes do título no texto base
+        const prefixes = [
+            'declaramos que ',
+            'declaramos a ',
+            'declaramos o ',
+            'declaramos ',
+            'declaracao de que ',
+            'declaracao que ',
+            'declaracao de inexistencia de ',
+            'declaracao de atendimento aos ',
+            'declaracao de atendimento dos ',
+            'declaracao de atendimento ao ',
+            'declaracao de atendimento a ',
+            'declaracao de cumprimento do ',
+            'declaracao de cumprimento de ',
+            'declaracao de regularidade de ',
+            'declaracao de ',
+            'declaracao ',
+            'declaro que ',
+            'declaro a ',
+            'declaro o ',
+            'declaro de ',
+            'declaro ',
+        ];
+        
+        let matchLength = 0;
+        
         if (cleanBase.startsWith(cleanTitle)) {
-            // Remove o título e qualquer caractere de pontuação/separador subsequente
-            let remaining = baseText.substring(cleanTitle.length).trim();
-            remaining = remaining.replace(/^[:\-\–\s]+/, '').trim();
+            matchLength = title.trim().length;
+        } else {
+            for (const pref of prefixes) {
+                if (cleanBase.startsWith(pref + cleanTitle)) {
+                    matchLength = pref.length + title.trim().length;
+                    break;
+                }
+            }
+        }
+        
+        if (matchLength > 0) {
+            let remaining = baseText.substring(matchLength).trim();
+            remaining = remaining.replace(/^[:\-\–\s\.]+/, '').trim();
             if (remaining) {
                 baseText = remaining;
             }
         }
     }
+
+    // 2. Se o texto contém dois-pontos (:) nas primeiras 120 posições (cobrindo o título/cabeçalho da declaração),
+    // e o texto após os dois-pontos for suficientemente longo, nós extraímos apenas o corpo que vem depois dos dois-pontos.
+    // Isso é extremamente robusto contra duplicações do tipo "Título: Declaramos que..." ou "Declaramos que Título: declaração..."
+    const colonIdx = baseText.indexOf(':');
+    if (colonIdx !== -1 && colonIdx < 120 && colonIdx < baseText.length * 0.5) {
+        const rightPart = baseText.substring(colonIdx + 1).trim();
+        if (rightPart.length > 15) {
+            baseText = rightPart;
+        }
+    }
     
-    // 2. Garantir Sentence Case se o texto for todo em maiúsculas (ou processar para manter caixa baixa/Sentence Case geral)
+    // 3. Garantir Sentence Case se o texto for todo em maiúsculas (ou processar para manter caixa baixa/Sentence Case geral)
     // Para a coerência de caixa baixa, vamos converter para Sentence Case caso a palavra seja all caps ou para ter harmonização básica
     baseText = toSentenceCasePt(baseText);
     
-    // 3. Normalizar o prefixo para "Declaramos que...", "Declaramos a...", "Declaramos o..." ou "Declaramos..."
+    // 4. Normalizar o prefixo para "Declaramos que...", "Declaramos a...", "Declaramos o..." ou "Declaramos..."
     let trimmed = baseText.trim();
     
     const prefixRegexes: { pattern: RegExp; replacement: string }[] = [
