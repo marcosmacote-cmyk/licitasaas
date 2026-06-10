@@ -8,6 +8,21 @@ import { CATEGORIA_META, type InsumoCategoria } from './insumoEngine';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+function safeParseJson(val: any): any {
+    if (!val) return null;
+    if (typeof val === 'object') return val;
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return null;
+        try {
+            return JSON.parse(trimmed);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
 // Replicate groupByChapter from budgetDocGenerator for consistent data
 
 function applyPrecision(formulaStr: string, engConfig?: EngineeringConfig): string {
@@ -606,7 +621,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
 
   // Grouping metadata
-  const metadata = (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) || {};
+  const metadata = safeParseJson(comp.metadata) || {};
   const customGroupLabels = metadata.customGroupLabels || {};
   const groupOrder = metadata.groupOrder || [];
   const groupNotes = metadata.groupNotes || {};
@@ -988,11 +1003,13 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
 
     // Inject compositionNotes from reportConfig
     const cNotes = engConfig?.reportConfig?.compositionNotes || {};
-    for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+    const comps = report?.principalCompositions || [];
+    const auxComps = report?.auxiliaryCompositions || [];
+    for (const comp of [...comps, ...auxComps]) {
       if (comp.code && cNotes[comp.code]) {
         comp.observacao = cNotes[comp.code];
       } else if (comp.metadata) {
-        const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+        const meta = safeParseJson(comp.metadata);
         if (meta?.observation) {
           comp.observacao = meta.observation;
         }
@@ -1001,7 +1018,7 @@ export async function xlsOrcamentoAnalitico(proposalId: string, items: any[], en
 
     // Group compositions by chapter
     const compMap = new Map<string, any[]>();
-    for (const comp of report.principalCompositions) {
+    for (const comp of comps) {
       const prefix = (comp.itemNumbers?.[0] || '').split('.')[0] || '?';
       if (!compMap.has(prefix)) compMap.set(prefix, []);
       compMap.get(prefix)!.push(comp);
@@ -1047,13 +1064,16 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
 
+    const comps = report?.principalCompositions || [];
+    const auxComps = report?.auxiliaryCompositions || [];
+
     // Inject compositionNotes from reportConfig
     const cNotes = engConfig?.reportConfig?.compositionNotes || {};
-    for (const comp of [...report.principalCompositions, ...(report.auxiliaryCompositions || [])]) {
+    for (const comp of [...comps, ...auxComps]) {
       if (comp.code && cNotes[comp.code]) {
         comp.observacao = cNotes[comp.code];
       } else if (comp.metadata) {
-        const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+        const meta = safeParseJson(comp.metadata);
         if (meta?.observation) {
           comp.observacao = meta.observation;
         }
@@ -1061,11 +1081,11 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
     }
 
     sectionHeaderRow(ws, 'Composições Principais', 8);
-    for (const comp of report.principalCompositions) renderCompXls(ws, comp, false, engConfig, bdi);
+    for (const comp of comps) renderCompXls(ws, comp, false, engConfig, bdi);
 
-    if (report.auxiliaryCompositions?.length > 0) {
+    if (auxComps.length > 0) {
       sectionHeaderRow(ws, 'Composições Auxiliares', 8);
-      for (const comp of report.auxiliaryCompositions) renderCompXls(ws, comp, false, engConfig, bdi);
+      for (const comp of auxComps) renderCompXls(ws, comp, false, engConfig, bdi);
     }
   } catch (e: any) {
     ws.addRow([`Erro: ${e.message}`]);

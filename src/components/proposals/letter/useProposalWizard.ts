@@ -64,6 +64,73 @@ function formatDateBR(dateStr: string): string {
     } catch { return dateStr; }
 }
 
+function toTitleCasePt(str: string): string {
+    if (!str) return '';
+    const trimmed = str.trim();
+    const hasLetters = /[a-zA-Z]/;
+    const isAllCaps = hasLetters.test(trimmed) && trimmed === trimmed.toUpperCase();
+    if (!isAllCaps) {
+        return trimmed;
+    }
+    const minorWords = new Set([
+        'a', 'o', 'as', 'os', 'em', 'de', 'do', 'da', 'dos', 'das', 
+        'com', 'para', 'por', 'sem', 'sob', 'sobre', 'e', 'ou', 'um', 'uma'
+    ]);
+    return trimmed
+        .toLowerCase()
+        .split(/\s+/)
+        .map((word, idx) => {
+            if (idx > 0 && minorWords.has(word)) {
+                return word;
+            }
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
+function toSentenceCasePt(str: string): string {
+    if (!str) return '';
+    const trimmed = str.trim();
+    const hasLetters = /[a-zA-Z]/;
+    const isAllCaps = hasLetters.test(trimmed) && trimmed === trimmed.toUpperCase();
+    if (!isAllCaps) {
+        return trimmed;
+    }
+    const lower = trimmed.toLowerCase();
+    let formatted = lower.replace(/(^\s*|[.!?]\s+)([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+    
+    const replacements: [RegExp, string][] = [
+        [/\bedital\b/g, 'Edital'],
+        [/\bcf\b/g, 'CF'],
+        [/\bclt\b/g, 'CLT'],
+        [/\blgpd\b/g, 'LGPD'],
+        [/\bcnpj\b/g, 'CNPJ'],
+        [/\bcpf\b/g, 'CPF'],
+        [/\bme\b/g, 'ME'],
+        [/\bepp\b/g, 'EPP'],
+        [/\blei\b/g, 'Lei'],
+        [/\bart\b/g, 'Art'],
+        [/\bcrfb\b/g, 'CRFB'],
+        [/\btcu\b/g, 'TCU'],
+        [/\bsinapi\b/g, 'SINAPI'],
+        [/\bseinfra\b/g, 'SEINFRA'],
+        [/\bcaern\b/g, 'CAERN'],
+        [/\bsbc\b/g, 'SBC'],
+        [/\borse\b/g, 'ORSE'],
+        [/\bsicro\b/g, 'SICRO'],
+        [/\bsicor\b/g, 'SICOR'],
+        [/\bbr\b/g, 'BR'],
+        [/\buf\b/g, 'UF'],
+    ];
+    
+    for (const [regex, replacement] of replacements) {
+        formatted = formatted.replace(regex, replacement);
+    }
+    
+    formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    return formatted;
+}
+
 export function useProposalWizard(props: ProposalLetterWizardProps) {
     const [step, setStep] = useState<WizardStep>('config');
     const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -199,13 +266,37 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         }
 
         if (types.length > 0) {
-            const declsFromEdital: ProposalDeclaration[] = types.map((t, i) => ({
-                id: `edital_${i}`,
-                title: t.toUpperCase(),
-                content: '',
-                source: 'edital' as const,
-                enabled: false,  // starts unchecked — user activates
-            }));
+            const declsFromEdital: ProposalDeclaration[] = types.map((t, i) => {
+                const colonIdx = t.indexOf(':');
+                let rawTitle = t;
+                let rawBody = '';
+                if (colonIdx !== -1) {
+                    rawTitle = t.substring(0, colonIdx).trim();
+                    rawBody = t.substring(colonIdx + 1).trim();
+                } else if (t.length > 60) {
+                    const words = t.split(/\s+/);
+                    let titleWords = [];
+                    let titleLen = 0;
+                    for (const word of words) {
+                        if (titleLen + word.length > 40 || titleWords.length >= 6) break;
+                        titleWords.push(word);
+                        titleLen += word.length + 1;
+                    }
+                    rawTitle = titleWords.join(' ');
+                    rawBody = t;
+                }
+
+                const title = toTitleCasePt(rawTitle);
+                const body = toSentenceCasePt(rawBody);
+
+                return {
+                    id: `edital_${i}`,
+                    title,
+                    content: body,
+                    source: 'edital' as const,
+                    enabled: false,  // starts unchecked — user activates
+                };
+            });
             setDeclarations(declsFromEdital);
             hasPrepopulatedDeclRef.current = true;
         }
@@ -328,9 +419,13 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         if (editingBlockId.startsWith(declExtraPrefix)) {
             const declId = editingBlockId.substring(declExtraPrefix.length);
             const blockContent = editBuffer;
-            const lines = blockContent.split('\n\n');
-            const newTitle = lines[0] || '';
-            const newContent = lines.slice(1).join('\n\n') || '';
+            const colonIdx = blockContent.indexOf(':');
+            let newTitle = blockContent;
+            let newContent = '';
+            if (colonIdx !== -1) {
+                newTitle = blockContent.substring(0, colonIdx).trim();
+                newContent = blockContent.substring(colonIdx + 1).trim();
+            }
             setDeclarations(prev => prev.map(d => d.id === declId ? { ...d, title: newTitle, content: newContent } : d));
         }
 
@@ -367,9 +462,8 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
             const blockId = `${LetterBlockType.DECLARATION_EXTRA}_${decl.id}`;
             const existingBlock = updatedBlocks.find(b => b.id === blockId);
             
-            const body = decl.content?.trim() 
-                || `[Conteúdo da declaração "${decl.title}" — edite aqui ou gere via IA no módulo Declarações]`;
-            const content = `${decl.title}\n\n${body}`;
+            const body = decl.content?.trim() || '';
+            const content = body ? `${decl.title}: ${body}` : decl.title;
             
             if (existingBlock) {
                 if (existingBlock.content === content && existingBlock.label === decl.title) {

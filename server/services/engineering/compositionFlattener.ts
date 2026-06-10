@@ -3,6 +3,21 @@ import prisma from '../../lib/prisma';
 import { resolveDisplayBase, deriveGroupKey } from './baseResolver';
 import { classifyInsumoType } from './insumoClassifier';
 
+function safeParseJson(val: any): any {
+  if (!val) return null;
+  if (typeof val === 'object') return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export interface FlattenedItem {
   type: string; // 'MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'COMPOSICAO_AUXILIAR'
   code: string;
@@ -134,13 +149,9 @@ export class CompositionFlattener {
         
         let divValue = 1;
         if (flattened.metadata) {
-          try {
-            const meta = typeof flattened.metadata === 'string' ? JSON.parse(flattened.metadata) : flattened.metadata;
-            if (meta?.referenceDivisor?.value > 0) {
-              divValue = Number(meta.referenceDivisor.value) || 1;
-            }
-          } catch (err) {
-            console.error('[CompositionFlattener] Error parsing metadata for divisor:', err);
+          const meta = safeParseJson(flattened.metadata);
+          if (meta?.referenceDivisor?.value > 0) {
+            divValue = Number(meta.referenceDivisor.value) || 1;
           }
         }
         
@@ -183,11 +194,7 @@ export class CompositionFlattener {
 
     if (!composition) return null;
 
-    const metadataObj = composition.metadata 
-      ? (typeof composition.metadata === 'string' 
-          ? JSON.parse(composition.metadata) 
-          : composition.metadata)
-      : null;
+    const metadataObj = safeParseJson(composition.metadata);
     const officialRef = (metadataObj && typeof metadataObj === 'object') ? metadataObj._officialRef : null;
 
     const dbName = composition.database?.name || sourceName;
@@ -260,11 +267,7 @@ export class CompositionFlattener {
 
         if (auxComp) {
           const auxSourceName = auxComp.database?.name || sourceName;
-          const auxMetadataObj = auxComp.metadata 
-            ? (typeof auxComp.metadata === 'string' 
-                ? JSON.parse(auxComp.metadata) 
-                : auxComp.metadata)
-            : null;
+          const auxMetadataObj = safeParseJson(auxComp.metadata);
           const auxOfficialRef = (auxMetadataObj && typeof auxMetadataObj === 'object') ? auxMetadataObj._officialRef : null;
 
           let displayAuxCode = auxComp.code;

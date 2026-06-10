@@ -30,6 +30,21 @@ const fmt = (v: number) => {
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
+function safeParseJson(val: any): any {
+    if (!val) return null;
+    if (typeof val === 'object') return val;
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return null;
+        try {
+            return JSON.parse(trimmed);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
 function setGlobalPrecision(engineeringConfig?: any) {
     activePrecisionCasas = typeof engineeringConfig?.precision?.casasDecimais === 'number' 
         ? engineeringConfig.precision.casasDecimais 
@@ -730,7 +745,7 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
     const showBanco = rc.showBancoOrigem !== false;
 
     // Grouping metadata
-    const metadata = (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) || {};
+    const metadata = safeParseJson(comp.metadata) || {};
     const customGroupLabels = metadata.customGroupLabels || {};
     const groupOrder = metadata.groupOrder || [];
     const groupNotes = metadata.groupNotes || {};
@@ -930,14 +945,16 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
 
     try {
         const report = await fetchAnalyticalReport(proposalId, items, bdi, engineeringConfig);
+        const comps = report?.principalCompositions || [];
+        const auxComps = report?.auxiliaryCompositions || [];
 
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
-        for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+        for (const comp of [...comps, ...auxComps]) {
             if (comp.code && cNotes[comp.code]) {
                 comp.observacao = cNotes[comp.code];
             } else if (comp.metadata) {
-                const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                const meta = safeParseJson(comp.metadata);
                 if (meta?.observation) {
                     comp.observacao = meta.observation;
                 }
@@ -947,7 +964,7 @@ export async function docOrcamentoAnalitico(proposalId: string, items: EngItem[]
         // FIX B6: Group compositions by etapa/chapter, using itemNumbers[0] for routing
         const chapters = groupByChapter(items);
         const compMap = new Map<string, any[]>();
-        for (const comp of report.principalCompositions) {
+        for (const comp of comps) {
             // Use first linked itemNumber to determine the chapter
             const firstItemNum = (comp.itemNumbers?.[0] || '');
             const prefix = firstItemNum.split('.')[0] || '?';
@@ -994,14 +1011,16 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
 
     try {
         const report = await fetchAnalyticalReport(proposalId, items, bdi, engineeringConfig);
+        const comps = report?.principalCompositions || [];
+        const auxComps = report?.auxiliaryCompositions || [];
 
         // Inject compositionNotes from reportConfig
         const cNotes = engineeringConfig?.reportConfig?.compositionNotes || {};
-        for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+        for (const comp of [...comps, ...auxComps]) {
             if (comp.code && cNotes[comp.code]) {
                 comp.observacao = cNotes[comp.code];
             } else if (comp.metadata) {
-                const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                const meta = safeParseJson(comp.metadata);
                 if (meta?.observation) {
                     comp.observacao = meta.observation;
                 }
@@ -1009,13 +1028,13 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
         }
 
         html += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
-        for (const comp of report.principalCompositions) {
+        for (const comp of comps) {
             html += renderComposition(comp, false, engineeringConfig?.reportConfig);
         }
 
-        if (report.auxiliaryCompositions.length > 0) {
+        if (auxComps.length > 0) {
             html += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
-            for (const comp of report.auxiliaryCompositions) {
+            for (const comp of auxComps) {
                 html += renderComposition(comp, false, engineeringConfig?.reportConfig);
             }
         }
@@ -1185,18 +1204,20 @@ ${renderGlobalTotals(billable, bdi, rc)}
             if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
             const report = await res.json();
             const cNotes = rc.compositionNotes || {};
-            for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+            const comps = report?.principalCompositions || [];
+            const auxComps = report?.auxiliaryCompositions || [];
+            for (const comp of [...comps, ...auxComps]) {
                 if (comp.code && cNotes[comp.code]) {
                     comp.observacao = cNotes[comp.code];
                 } else if (comp.metadata) {
-                    const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                    const meta = safeParseJson(comp.metadata);
                     if (meta?.observation) {
                         comp.observacao = meta.observation;
                     }
                 }
             }
             const compMap = new Map<string, any[]>();
-            for (const comp of report.principalCompositions) {
+            for (const comp of comps) {
                 const prefix = (comp.itemNumbers?.[0] || '').split('.')[0] || '?';
                 if (!compMap.has(prefix)) compMap.set(prefix, []);
                 compMap.get(prefix)!.push(comp);
@@ -1232,21 +1253,23 @@ ${renderGlobalTotals(billable, bdi, rc)}
             if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
             const report = await res.json();
             const cNotes = rc.compositionNotes || {};
-            for (const comp of [...report.principalCompositions, ...report.auxiliaryCompositions]) {
+            const comps = report?.principalCompositions || [];
+            const auxComps = report?.auxiliaryCompositions || [];
+            for (const comp of [...comps, ...auxComps]) {
                 if (comp.code && cNotes[comp.code]) {
                     comp.observacao = cNotes[comp.code];
                 } else if (comp.metadata) {
-                    const meta = typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata;
+                    const meta = safeParseJson(comp.metadata);
                     if (meta?.observation) {
                         comp.observacao = meta.observation;
                     }
                 }
             }
             h += `<div style="text-align:center; margin: 15px 0; font-size:12px; font-weight:bold; color:#1e40af;">Composições Principais</div>`;
-            for (const comp of report.principalCompositions) h += renderComposition(comp, false, rc);
-            if (report.auxiliaryCompositions.length > 0) {
+            for (const comp of comps) h += renderComposition(comp, false, rc);
+            if (auxComps.length > 0) {
                 h += `<div style="text-align:center; margin: 25px 0 15px; font-size:12px; font-weight:bold; color:#7c3aed;">Composições Auxiliares</div>`;
-                for (const comp of report.auxiliaryCompositions) h += renderComposition(comp, false, rc);
+                for (const comp of auxComps) h += renderComposition(comp, false, rc);
             }
         } catch (e: any) {
             h += `<div style="color:#dc2626; font-size:10px;">Erro ao gerar Caderno de Composições: ${e.message}</div>`;

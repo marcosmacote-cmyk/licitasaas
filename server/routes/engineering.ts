@@ -26,6 +26,21 @@ const router = Router();
 const compositionCache = new SimpleTtlCache<string, any>(1800);
 const engineeringSearchCache = new SimpleTtlCache<string, any>(300); // 5 min TTL for searches
 
+function safeParseJson(val: any): any {
+    if (!val) return null;
+    if (typeof val === 'object') return val;
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return null;
+        try {
+            return JSON.parse(trimmed);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
 
 function refreshSubmittedPriceAudit(item: any) {
     const audit = item?.priceAudit;
@@ -3306,7 +3321,7 @@ router.get('/proposals/:id/health-check', async (req: any, res: any) => {
             const compDbName = composition.database?.name || '';
             const isCompPropriaDb = compDbName === 'PROPRIA' || compDbName.startsWith('PROPRIA_');
             
-            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const meta = safeParseJson(composition.metadata) || {};
             const divisor = Number(meta?.referenceDivisor?.value) || 1;
             const effectiveQty = itemQty / divisor;
 
@@ -3531,7 +3546,7 @@ router.post('/insumos-hub-resolve', async (req: any, res: any) => {
             const baseName = resolveDisplayBase(composition.database?.name, clientItem.sourceName, composition.code);
 
             // Check if main composition has reference divisor
-            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const meta = safeParseJson(composition.metadata) || {};
             const divisor = Number(meta?.referenceDivisor?.value) || 1;
             const effectiveServiceQty = serviceQty / divisor;
 
@@ -4103,7 +4118,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
             if (!composition) return;
 
             // Check reference divisor
-            const meta = composition.metadata ? (typeof composition.metadata === 'string' ? JSON.parse(composition.metadata) : composition.metadata) as any : {};
+            const meta = safeParseJson(composition.metadata) || {};
             const divisor = Number(meta?.referenceDivisor?.value) || 1;
             const effectiveParentQty = parentQty / divisor;
 
@@ -4176,7 +4191,7 @@ router.post('/proposals/:proposalId/ajuste-inteligente', async (req: any, res: a
             });
             if (!comp) return;
 
-            const meta = comp.metadata ? (typeof comp.metadata === 'string' ? JSON.parse(comp.metadata) : comp.metadata) as any : {};
+            const meta = safeParseJson(comp.metadata) || {};
             const divisor = Number(meta?.referenceDivisor?.value) || 1;
             const effectiveParentQty = parentQty / divisor;
 

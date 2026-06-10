@@ -251,12 +251,12 @@ export class ProposalLetterBuilder {
     private buildDeclarationBlocks(): LetterBlock[] {
         if (this.extraDeclarations.length === 0) return [];
         return this.extraDeclarations.map((decl, i) => {
-            const body = decl.content?.trim()
-                || `[Conteúdo da declaração "${decl.title}" — edite aqui ou gere via IA no módulo Declarações]`;
+            const body = decl.content?.trim() || '';
+            const content = body ? `${decl.title}: ${body}` : decl.title;
             return this.createBlock(
                 LetterBlockType.DECLARATION_EXTRA,
                 decl.title || `Declaração Extra ${i + 1}`,
-                `${decl.title}\n\n${body}`,
+                content,
                 { required: false, editable: true },
                 `${LetterBlockType.DECLARATION_EXTRA}_${decl.id}`,
             );
