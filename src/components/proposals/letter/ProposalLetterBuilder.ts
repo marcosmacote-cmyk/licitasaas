@@ -7,6 +7,7 @@
  */
 
 import { numberToWords, currencyToWords } from './utils/numberToWords';
+import { normalizeDeclarationContent } from './utils/textFormatting';
 import type {
     ProposalLetterData, LetterBlock, ProposalLetterResult, ProposalDeclaration,
 } from './types';
@@ -251,8 +252,7 @@ export class ProposalLetterBuilder {
     private buildDeclarationBlocks(): LetterBlock[] {
         if (this.extraDeclarations.length === 0) return [];
         return this.extraDeclarations.map((decl, i) => {
-            const body = decl.content?.trim() || '';
-            const content = body ? `${decl.title}: ${body}` : decl.title;
+            const content = normalizeDeclarationContent(decl.title, decl.content || '');
             return this.createBlock(
                 LetterBlockType.DECLARATION_EXTRA,
                 decl.title || `Declaração Extra ${i + 1}`,

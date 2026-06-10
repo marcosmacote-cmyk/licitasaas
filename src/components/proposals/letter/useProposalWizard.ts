@@ -12,6 +12,7 @@ import { LetterPdfExporter } from './LetterPdfExporter';
 import { exportCompositionPdf, buildCompositionInlineHtml } from '../composition/compositionPdfExporter';
 import type { AiLetterBlocksResponse } from './types';
 import { API_BASE_URL } from '../../../config';
+import { toTitleCasePt, toSentenceCasePt, normalizeDeclarationContent } from './utils/textFormatting';
 
 export type WizardStep = 'config' | 'validation' | 'generation' | 'review' | 'export';
 
@@ -64,72 +65,6 @@ function formatDateBR(dateStr: string): string {
     } catch { return dateStr; }
 }
 
-function toTitleCasePt(str: string): string {
-    if (!str) return '';
-    const trimmed = str.trim();
-    const hasLetters = /[a-zA-Z]/;
-    const isAllCaps = hasLetters.test(trimmed) && trimmed === trimmed.toUpperCase();
-    if (!isAllCaps) {
-        return trimmed;
-    }
-    const minorWords = new Set([
-        'a', 'o', 'as', 'os', 'em', 'de', 'do', 'da', 'dos', 'das', 
-        'com', 'para', 'por', 'sem', 'sob', 'sobre', 'e', 'ou', 'um', 'uma'
-    ]);
-    return trimmed
-        .toLowerCase()
-        .split(/\s+/)
-        .map((word, idx) => {
-            if (idx > 0 && minorWords.has(word)) {
-                return word;
-            }
-            return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join(' ');
-}
-
-function toSentenceCasePt(str: string): string {
-    if (!str) return '';
-    const trimmed = str.trim();
-    const hasLetters = /[a-zA-Z]/;
-    const isAllCaps = hasLetters.test(trimmed) && trimmed === trimmed.toUpperCase();
-    if (!isAllCaps) {
-        return trimmed;
-    }
-    const lower = trimmed.toLowerCase();
-    let formatted = lower.replace(/(^\s*|[.!?]\s+)([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase());
-    
-    const replacements: [RegExp, string][] = [
-        [/\bedital\b/g, 'Edital'],
-        [/\bcf\b/g, 'CF'],
-        [/\bclt\b/g, 'CLT'],
-        [/\blgpd\b/g, 'LGPD'],
-        [/\bcnpj\b/g, 'CNPJ'],
-        [/\bcpf\b/g, 'CPF'],
-        [/\bme\b/g, 'ME'],
-        [/\bepp\b/g, 'EPP'],
-        [/\blei\b/g, 'Lei'],
-        [/\bart\b/g, 'Art'],
-        [/\bcrfb\b/g, 'CRFB'],
-        [/\btcu\b/g, 'TCU'],
-        [/\bsinapi\b/g, 'SINAPI'],
-        [/\bseinfra\b/g, 'SEINFRA'],
-        [/\bcaern\b/g, 'CAERN'],
-        [/\bsbc\b/g, 'SBC'],
-        [/\borse\b/g, 'ORSE'],
-        [/\bsicro\b/g, 'SICRO'],
-        [/\bsicor\b/g, 'SICOR'],
-        [/\bbr\b/g, 'BR'],
-        [/\buf\b/g, 'UF'],
-    ];
-    
-    for (const [regex, replacement] of replacements) {
-        formatted = formatted.replace(regex, replacement);
-    }
-    
-    formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
-    return formatted;
-}
 
 export function useProposalWizard(props: ProposalLetterWizardProps) {
     const [step, setStep] = useState<WizardStep>('config');
@@ -287,7 +222,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
                 }
 
                 const title = toTitleCasePt(rawTitle);
-                const body = toSentenceCasePt(rawBody);
+                const body = normalizeDeclarationContent(title, rawBody);
 
                 return {
                     id: `edital_${i}`,
@@ -419,14 +354,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         if (editingBlockId.startsWith(declExtraPrefix)) {
             const declId = editingBlockId.substring(declExtraPrefix.length);
             const blockContent = editBuffer;
-            const colonIdx = blockContent.indexOf(':');
-            let newTitle = blockContent;
-            let newContent = '';
-            if (colonIdx !== -1) {
-                newTitle = blockContent.substring(0, colonIdx).trim();
-                newContent = blockContent.substring(colonIdx + 1).trim();
-            }
-            setDeclarations(prev => prev.map(d => d.id === declId ? { ...d, title: newTitle, content: newContent } : d));
+            setDeclarations(prev => prev.map(d => d.id === declId ? { ...d, content: blockContent } : d));
         }
 
         setLetterResult({ ...letterResult, blocks: updatedBlocks, plainText });
@@ -462,8 +390,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
             const blockId = `${LetterBlockType.DECLARATION_EXTRA}_${decl.id}`;
             const existingBlock = updatedBlocks.find(b => b.id === blockId);
             
-            const body = decl.content?.trim() || '';
-            const content = body ? `${decl.title}: ${body}` : decl.title;
+            const content = normalizeDeclarationContent(decl.title, decl.content || '');
             
             if (existingBlock) {
                 if (existingBlock.content === content && existingBlock.label === decl.title) {
