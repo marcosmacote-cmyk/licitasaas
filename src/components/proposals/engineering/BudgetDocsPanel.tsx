@@ -189,10 +189,35 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             }
 
             let envelope;
-            try {
-                envelope = JSON.parse(data.letterContent);
-            } catch {
-                throw new Error('Falha ao decodificar dados da carta salva.');
+            const contentTrimmed = (data.letterContent || '').trim();
+            if (contentTrimmed.startsWith('{')) {
+                try {
+                    envelope = JSON.parse(contentTrimmed);
+                } catch (e) {
+                    console.error('Falha ao decodificar dados da carta como JSON:', e);
+                }
+            }
+
+            if (!envelope || !Array.isArray(envelope.blocks)) {
+                // Fallback para conteúdo em texto plano legado
+                envelope = {
+                    v: 4,
+                    blocks: [
+                        {
+                            id: 'legacy_content',
+                            type: 'commercialDeclarationBlock',
+                            label: 'Conteúdo da Proposta',
+                            required: true,
+                            editable: true,
+                            aiGenerated: false,
+                            content: data.letterContent || '',
+                            order: 1,
+                            visible: true,
+                            validationStatus: 'valid',
+                        }
+                    ],
+                    plainText: data.letterContent || '',
+                };
             }
 
             const { LetterDataNormalizer } = await import('../letter/LetterDataNormalizer');
@@ -258,7 +283,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     case 'analitico': await xlsOrcamentoAnalitico(proposalId, items, engConfigWithLogo, effectiveBdi); break;
                     case 'cpu': await xlsCpuBatch(proposalId, items, engConfigWithLogo, effectiveBdi); break;
                     case 'abc_servicos': xlsCurvaAbcServicos(items, engConfigWithLogo, effectiveBdi); break;
-                    case 'abc_insumos': xlsCurvaAbcInsumos(localInsumos, engConfigWithLogo); break;
+                    case 'abc_insumos': xlsCurvaAbcInsumos(localInsumos || [], engConfigWithLogo); break;
                     case 'cronograma':
                         if (localCronogramaResult) xlsCronograma(localCronogramaResult, engConfigWithLogo);
                         else alert('Configure o cronograma primeiro.');
@@ -273,7 +298,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     case 'analitico': await docOrcamentoAnalitico(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
                     case 'cpu': await docCpuBatch(proposalId, items, effectiveBdi, engConfigWithLogo, mode); break;
                     case 'abc_servicos': docCurvaAbcServicos(items, engConfigWithLogo, mode); break;
-                    case 'abc_insumos': docCurvaAbcInsumos(localInsumos, engConfigWithLogo, mode); break;
+                    case 'abc_insumos': docCurvaAbcInsumos(localInsumos || [], engConfigWithLogo, mode); break;
                     case 'cronograma':
                         if (localCronogramaResult) docCronograma({ ...localCronogramaResult, engineeringConfig: engConfigWithLogo } as any, mode);
                         else { alert('Configure o cronograma na aba "Cronograma" primeiro.'); break; }
@@ -294,6 +319,7 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             const JSZip = (await import('jszip')).default;
             const zip = new JSZip();
             const ec = engConfigWithLogo;
+            const safeInsumos = localInsumos || [];
 
             // ── Excel files ──
             const excelFiles: { name: string; gen: () => Promise<ArrayBuffer | void> }[] = [
@@ -305,8 +331,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'bdi-encargos.xlsx',          gen: () => xlsBdiEncargos(ec, effectiveBdi, bdiConfig, true) },
                 { name: 'memoria-calculo.xlsx',       gen: () => xlsMemoriaCalculo(items, ec, true) },
             ];
-            if (localInsumos.length > 0) {
-                excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(localInsumos, ec, true) });
+            if (safeInsumos.length > 0) {
+                excelFiles.push({ name: 'abc-insumos.xlsx', gen: () => xlsCurvaAbcInsumos(safeInsumos, ec, true) });
             }
             if (localCronogramaResult) {
                 excelFiles.push({ name: 'cronograma.xlsx', gen: () => xlsCronograma(localCronogramaResult, ec, true) });
@@ -329,8 +355,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                 { name: 'bdi-encargos.pdf',          gen: () => docBdiEncargos(bdiConfig, effectiveBdi, ec, 'blob') as any },
                 { name: 'memoria-calculo.pdf',        gen: () => docMemoriaCalculo(items, ec, 'blob') as any },
             ];
-            if (localInsumos.length > 0) {
-                pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(localInsumos, ec, 'blob') as any });
+            if (safeInsumos.length > 0) {
+                pdfFiles.push({ name: 'abc-insumos.pdf', gen: () => docCurvaAbcInsumos(safeInsumos, ec, 'blob') as any });
             }
             if (localCronogramaResult) {
                 pdfFiles.push({ name: 'cronograma.pdf', gen: () => docCronograma({ ...localCronogramaResult, engineeringConfig: ec } as any, 'blob') as any });
@@ -372,7 +398,33 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                     if (res.ok) {
                         const data = await res.json();
                         if (data.letterContent) {
-                            const envelope = JSON.parse(data.letterContent);
+                            let envelope;
+                            const contentTrimmed = data.letterContent.trim();
+                            if (contentTrimmed.startsWith('{')) {
+                                try {
+                                    envelope = JSON.parse(contentTrimmed);
+                                } catch {}
+                            }
+                            if (!envelope || !Array.isArray(envelope.blocks)) {
+                                envelope = {
+                                    v: 4,
+                                    blocks: [
+                                        {
+                                            id: 'legacy_content',
+                                            type: 'commercialDeclarationBlock',
+                                            label: 'Conteúdo da Proposta',
+                                            required: true,
+                                            editable: true,
+                                            aiGenerated: false,
+                                            content: data.letterContent,
+                                            order: 1,
+                                            visible: true,
+                                            validationStatus: 'valid',
+                                        }
+                                    ],
+                                    plainText: data.letterContent,
+                                };
+                            }
                             const { LetterRenderer } = await import('../letter/LetterRenderer');
                             const renderer = new LetterRenderer();
                             const letterBodyHtml = renderer.renderToHtml({
@@ -388,7 +440,9 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                             </div>`;
                         }
                     }
-                } catch { /* Carta not available — skip silently */ }
+                } catch (e) {
+                    console.error('Erro ao processar Carta Proposta para Proposta Completa:', e);
+                }
             }
             await docPropostaCompleta({
                 sections: propostaSections,

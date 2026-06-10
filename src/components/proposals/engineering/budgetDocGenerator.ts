@@ -8,7 +8,7 @@
  * 4. CPU                  8. BDI e Encargos Sociais
  */
 import type { BdiConfig, BdiTcuParams } from './bdiEngine';
-import type { InsumoConsolidado } from './insumoEngine';
+import type { InsumoConsolidado, InsumoCategoria } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
 import type { EngItem, EngineeringConfig, EncargosSociaisConfig, ColorPalette } from './types';
@@ -358,7 +358,7 @@ function renderGlobalTotals(billable: EngItem[], bdi: number, reportConfig?: any
 function groupByChapter(items: EngItem[]) {
     const map = new Map<string, { items: EngItem[]; total: number; title: string }>();
     for (const it of items) {
-        const prefix = it.itemNumber.split('.')[0] || '1';
+        const prefix = (it.itemNumber || '1').split('.')[0] || '1';
         if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
         const g = map.get(prefix)!;
         
@@ -470,20 +470,25 @@ ${renderConfigTable(engineeringConfig)}
 // ═══════════════════════════════════════════════════════════
 export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConfig?: any, mode: DocMode = 'download') {
     setGlobalPrecision(engineeringConfig);
-    const total = insumos.reduce((s, i) => s + i.custoTotal, 0);
-    const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
+    const safeInsumos = insumos || [];
+    const total = safeInsumos.reduce((s, i) => s + (Number(i.custoTotal) || 0), 0);
+    const sorted = [...safeInsumos].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
     let accum = 0;
     let rows = '';
     sorted.forEach((ins, idx) => {
-        accum += ins.custoTotal;
-        const pct = total > 0 ? (ins.custoTotal / total * 100) : 0;
+        const custoTotal = Number(ins.custoTotal) || 0;
+        accum += custoTotal;
+        const pct = total > 0 ? (custoTotal / total * 100) : 0;
         const pctAccum = total > 0 ? (accum / total * 100) : 0;
         const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
-        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        const catLabel = (ins.categoria && CATEGORIA_META[ins.categoria as InsumoCategoria])
+            ? CATEGORIA_META[ins.categoria as InsumoCategoria].label
+            : (ins.categoria || '—');
+        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Insumos', `
 <h1>CURVA ABC DE INSUMOS</h1>
-<div class="meta">${insumos.length} insumos · Total: ${fmt(total)}</div>
+<div class="meta">${safeInsumos.length} insumos · Total: ${fmt(total)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>
@@ -1065,7 +1070,8 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
         let rows = '';
         for (const [prefix, ch] of chapters) {
             const pct = total > 0 ? (ch.total / total * 100) : 0;
-            rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
+            const billableCount = ch.items.filter(i => !isGrouper(i.type as any)).length;
+            rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${billableCount}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
         }
         parts.push(`<div data-orientation="${getOrientation('resumido', rc, false) ? 'landscape' : 'portrait'}">
 <h1>ORÇAMENTO RESUMIDO</h1><div class="meta">BDI: ${fmtPct(bdi)} · ${billable.length} itens</div>${renderConfigTable(engineeringConfig)}
@@ -1084,7 +1090,14 @@ ${renderGlobalTotals(billable, bdi, rc)}
 <table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
             const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
             for (const it of ch.items) {
-                h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                if (it.type === 'SUBETAPA') {
+                    h += `<tr style="background:#f8fafc; font-weight:700;">
+                        <td class="bold">${it.itemNumber}</td>
+                        <td colspan="${colSpan - 1}" class="bold" style="color:#6d28d9; padding-left:8px;">${it.description}</td>
+                    </tr>`;
+                } else {
+                    h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                }
             }
             h += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
         }
@@ -1267,21 +1280,26 @@ ${renderConfigTable(engineeringConfig)}
     }
 
     // ── Curva ABC de Insumos ──
-    if (sections.includes('abc_insumos') && insumos.length > 0) {
-        const insTotal = insumos.reduce((s, i) => s + i.custoTotal, 0);
-        const sorted = [...insumos].sort((a, b) => b.custoTotal - a.custoTotal);
+    const safeInsumos = insumos || [];
+    if (sections.includes('abc_insumos') && safeInsumos.length > 0) {
+        const insTotal = safeInsumos.reduce((s, i) => s + (Number(i.custoTotal) || 0), 0);
+        const sorted = [...safeInsumos].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
         let accum = 0;
         let rows = '';
         sorted.forEach((ins, idx) => {
-            accum += ins.custoTotal;
-            const pct = insTotal > 0 ? (ins.custoTotal / insTotal * 100) : 0;
+            const custoTotal = Number(ins.custoTotal) || 0;
+            accum += custoTotal;
+            const pct = insTotal > 0 ? (custoTotal / insTotal * 100) : 0;
             const pctAccum = insTotal > 0 ? (accum / insTotal * 100) : 0;
             const cls = ins.abcClass === 'A' ? 'abc-a' : ins.abcClass === 'B' ? 'abc-b' : 'abc-c';
-            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${CATEGORIA_META[ins.categoria]?.label||ins.categoria}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(ins.custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            const catLabel = (ins.categoria && CATEGORIA_META[ins.categoria as InsumoCategoria])
+                ? CATEGORIA_META[ins.categoria as InsumoCategoria].label
+                : (ins.categoria || '—');
+            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<div data-orientation="${getOrientation('abc_insumos', rc, false) ? 'landscape' : 'portrait'}">
 <h1>CURVA ABC DE INSUMOS</h1>
-<div class="meta">${insumos.length} insumos · Total: ${fmt(insTotal)}</div>
+<div class="meta">${safeInsumos.length} insumos · Total: ${fmt(insTotal)}</div>
 ${renderConfigTable(engineeringConfig)}
 <table><thead><tr><th>ABC</th><th>#</th><th>Código</th><th>Descrição</th><th>Base</th><th>Cat.</th><th>Un.</th><th class="r">Preço</th><th class="r">Custo Total</th><th class="r">%</th><th class="r">% Acum.</th></tr></thead>
 <tbody>${rows}</tbody>

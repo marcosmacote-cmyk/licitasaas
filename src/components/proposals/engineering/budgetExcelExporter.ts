@@ -4,6 +4,7 @@ import { isGrouper, DEFAULT_COLOR_PALETTE, displaySourceName } from './types';
 import type { BdiConfig } from './bdiEngine';
 import { applyPrecision as applyPrecisionNum } from './precisionEngine';
 import { getOrientation } from './budgetDocGenerator';
+import { CATEGORIA_META, type InsumoCategoria } from './insumoEngine';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -1600,14 +1601,15 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ABC Insumos');
   setupPrint(ws, getOrientation('abc_insumos', engConfig?.reportConfig, false), engConfig?.reportConfig);
-  ws.columns = [{ width: 6 }, { width: 10 }, { width: 12 }, { width: 42 }, { width: 10 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
+  ws.columns = [{ width: 6 }, { width: 10 }, { width: 15 }, { width: 42 }, { width: 10 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 10 }];
   logoRow(wb, ws, 9, engConfig?.reportConfig);
 
   titleRow(ws, 'CURVA ABC DE INSUMOS', 9);
   metaRows(ws, engConfig, insumos, 9);
   headRow(ws, ['Nº', 'CÓDIGO', 'CATEGORIA', 'DESCRIÇÃO', 'BASE', 'UN.', 'CUSTO TOTAL', '% ITEM', '% ACUM.']);
 
-  const list = [...(insumos || [])].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
+  const safeInsumos = insumos || [];
+  const list = [...safeInsumos].sort((a, b) => (Number(b.custoTotal) || 0) - (Number(a.custoTotal) || 0));
   const total = list.reduce((s, i) => s + (Number(i.custoTotal) || 0), 0);
   const firstData = ws.rowCount + 1;
   const gRn = firstData + list.length;
@@ -1632,7 +1634,11 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
       }
     }
 
-    const r = dataRow(ws, [idx + 1, item.codigo || '', item.categoria || '', item.descricao || '', item.base || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
+    const catLabel = (item.categoria && CATEGORIA_META[item.categoria as InsumoCategoria])
+      ? CATEGORIA_META[item.categoria as InsumoCategoria].label
+      : (item.categoria || '—');
+
+    const r = dataRow(ws, [idx + 1, item.codigo || '', catLabel, item.descricao || '', item.base || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '0.00%';
     r.getCell(9).numFmt = '0.00%';
