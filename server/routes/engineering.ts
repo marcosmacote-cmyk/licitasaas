@@ -2788,8 +2788,14 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
                 } catch {}
             }
 
+            const isOfficial = comp.database?.type === 'OFICIAL';
+
             // Calculate real sum from composition items
             const realTotal = Array.isArray(comp.items) ? comp.items.reduce((sum: number, ci: any) => {
+                if (!isOfficial) {
+                    // For custom/PROPRIA compositions, use the saved subtotal directly to preserve user edits and avoid math drift
+                    return sum + (ci.price || 0);
+                }
                 if (ci.item) return sum + (ci.item.price * ci.coefficient);
                 return sum + (ci.price || 0);
             }, 0) : 0;
@@ -2801,8 +2807,6 @@ router.post('/proposals/:proposalId/recalculate-prices', async (req: any, res: a
                 const itemBdi = bdiDiferenciado && (item as any).bdiCategoria === 'FORNECIMENTO' ? bdiFornecimento : bdiGlobal;
                 const unitPrice = applyBdi(newUnitCost, itemBdi);
                 const totalPrice = applyPrecision(item.quantity * unitPrice, precisionConfig);
-
-                const isOfficial = comp.database?.type === 'OFICIAL';
 
                 await prisma.engineeringProposalItem.update({
                     where: { id: item.id },

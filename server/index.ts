@@ -459,22 +459,6 @@ import governanceRoutes from './routes/governance';
 app.use('/api', declarationRoutes);  // declarations
 app.use('/api', governanceRoutes);   // ai governance + company + strategy
 
-app.get('/api/debug-reconcile-public', async (req: any, res: any) => {
-    try {
-        const items = await prisma.engineeringProposalItem.findMany({
-            where: { description: { contains: 'EDITH', mode: 'insensitive' } }
-        });
-        const codes = items.map((i: any) => i.code).filter(Boolean);
-        const comps = await prisma.engineeringComposition.findMany({
-            where: { code: { in: codes } },
-            include: { database: true, items: { include: { item: true } } }
-        });
-        res.json({ items, comps });
-    } catch (e: any) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 // ── Stub endpoints to prevent 404s that hold browser HTTP connections ──
 // These endpoints are called by Dashboard, BiddingPage, and SSE hooks on mount.
 // Without stubs, they return 404 and keep TCP connections in pending/closing state,
