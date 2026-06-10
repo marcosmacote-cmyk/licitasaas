@@ -322,6 +322,18 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
             b.id === editingBlockId ? { ...b, content: editBuffer, aiGenerated: false } : b
         );
         const plainText = updatedBlocks.filter(b => b.visible).map(b => b.content).join('\n\n');
+
+        // Se for uma declaração extra, atualizar o estado 'declarations' também
+        const declExtraPrefix = `${LetterBlockType.DECLARATION_EXTRA}_`;
+        if (editingBlockId.startsWith(declExtraPrefix)) {
+            const declId = editingBlockId.substring(declExtraPrefix.length);
+            const blockContent = editBuffer;
+            const lines = blockContent.split('\n\n');
+            const newTitle = lines[0] || '';
+            const newContent = lines.slice(1).join('\n\n') || '';
+            setDeclarations(prev => prev.map(d => d.id === declId ? { ...d, title: newTitle, content: newContent } : d));
+        }
+
         setLetterResult({ ...letterResult, blocks: updatedBlocks, plainText });
         props.setLetterContent(plainText);
         setEditingBlockId(null);
@@ -331,6 +343,115 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         setEditingBlockId(null);
         setEditBuffer('');
     };
+
+    // ── Sincronização reativa de declarações com os blocos da carta ──
+    useEffect(() => {
+        if (!letterResult) return;
+
+        const blocks = [...letterResult.blocks];
+        const declExtraPrefix = `${LetterBlockType.DECLARATION_EXTRA}_`;
+        
+        // 1. Filtrar blocos de declaração que foram desabilitados ou removidos
+        let updatedBlocks = blocks.filter(b => {
+            if (!b.id.startsWith(declExtraPrefix)) return true;
+            const declId = b.id.substring(declExtraPrefix.length);
+            const decl = declarations.find(d => d.id === declId);
+            return decl && decl.enabled;
+        });
+
+        // 2. Mapear/atualizar ou adicionar as declarações habilitadas
+        const enabledDecls = declarations.filter(d => d.enabled);
+        const commercialIdx = updatedBlocks.findIndex(b => b.id === LetterBlockType.COMMERCIAL);
+        
+        const newDeclBlocks = enabledDecls.map(decl => {
+            const blockId = `${LetterBlockType.DECLARATION_EXTRA}_${decl.id}`;
+            const existingBlock = updatedBlocks.find(b => b.id === blockId);
+            
+            const body = decl.content?.trim() 
+                || `[Conteúdo da declaração "${decl.title}" — edite aqui ou gere via IA no módulo Declarações]`;
+            const content = `${decl.title}\n\n${body}`;
+            
+            if (existingBlock) {
+                if (existingBlock.content === content && existingBlock.label === decl.title) {
+                    return existingBlock;
+                }
+                return {
+                    ...existingBlock,
+                    label: decl.title || 'Declaração Extra',
+                    content,
+                };
+            } else {
+                return {
+                    id: blockId,
+                    type: LetterBlockType.DECLARATION_EXTRA,
+                    label: decl.title || 'Declaração Extra',
+                    required: false,
+                    editable: true,
+                    aiGenerated: false,
+                    content,
+                    order: 0,
+                    visible: true,
+                    validationStatus: 'valid' as const,
+                };
+            }
+        });
+
+        // 3. Verificar se houve alteração real para evitar loops
+        const currentDeclBlocks = updatedBlocks.filter(b => b.id.startsWith(declExtraPrefix));
+        const hasChanged = newDeclBlocks.length !== currentDeclBlocks.length ||
+            newDeclBlocks.some((nb, i) => {
+                const cb = currentDeclBlocks[i];
+                return !cb || cb.id !== nb.id || cb.content !== nb.content || cb.label !== nb.label;
+            });
+
+        if (hasChanged) {
+            // Remover antigas declarações
+            updatedBlocks = updatedBlocks.filter(b => !b.id.startsWith(declExtraPrefix));
+            // Inserir novas declarações logo após o bloco comercial
+            const insertIdx = commercialIdx !== -1 ? commercialIdx + 1 : 0;
+            updatedBlocks.splice(insertIdx, 0, ...newDeclBlocks);
+            
+            // Reordenar os blocos
+            updatedBlocks.forEach((b, idx) => {
+                b.order = idx;
+            });
+
+            const plainText = updatedBlocks.filter(b => b.visible).map(b => b.content).join('\n\n');
+            
+            setLetterResult(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    blocks: updatedBlocks,
+                    plainText,
+                };
+            });
+            
+            // Sincronizar o envelope salvo no componente pai se for JSON
+            try {
+                const isJson = props.letterContent && props.letterContent.trim().startsWith('{');
+                if (isJson) {
+                    const envelope = {
+                        v: 4,
+                        blocks: updatedBlocks,
+                        plainText,
+                        cockpit,
+                        declarations,
+                        sigLegal: props.sigLegal,
+                        sigTech: props.sigTech,
+                        sigCompany: props.sigCompany,
+                        bankData: props.bankData,
+                    };
+                    props.setLetterContent(JSON.stringify(envelope));
+                } else {
+                    props.setLetterContent(plainText);
+                }
+            } catch {
+                props.setLetterContent(plainText);
+            }
+        }
+    }, [declarations, letterResult, cockpit, props.sigLegal, props.sigTech, props.sigCompany, props.bankData, props.letterContent, props.setLetterContent]);
+
 
     // ── Restauração de carta salva (suporte v2, v3, v4) ──
     const hasRestoredRef = useRef(false);
