@@ -362,20 +362,17 @@ function groupByChapter(items: EngItem[]) {
         if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
         const g = map.get(prefix)!;
         
-        // FIX B1: Use isGrouper() to identify structural nodes (ETAPA/SUBETAPA)
-        // and capture their real description as the chapter title.
-        // Matches: "1" | "1.0" | "1.00" | "01" — any top-level grouper for this prefix.
-        if (isGrouper(it.type as any)) {
-            const depth = (it.itemNumber.match(/\./g) || []).length;
-            // Only use top-level ETAPAs (depth 0 or 1) as chapter titles
-            if (depth <= 1 && it.description) {
+        if (it.type === 'ETAPA') {
+            if (it.description) {
                 g.title = `${prefix} — ${it.description}`;
             }
-            continue; // Skip groupers from the items list
+            continue; // Skip main stages (ETAPA) from the items list since they are chapter headers
         }
 
         g.items.push(it);
-        g.total += it.totalPrice;
+        if (it.type !== 'SUBETAPA') {
+            g.total += it.totalPrice;
+        }
     }
     return map;
 }
@@ -392,7 +389,8 @@ export function docOrcamentoResumido(items: EngItem[], bdi: number, engineeringC
     let rows = '';
     for (const [prefix, ch] of chapters) {
         const pct = total > 0 ? (ch.total / total * 100) : 0;
-        rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${ch.items.length}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
+        const billableCount = ch.items.filter(i => !isGrouper(i.type as any)).length;
+        rows += `<tr><td class="bold">${prefix}</td><td class="bold">${ch.title}</td><td class="r">${billableCount}</td><td class="r">${fmt(ch.total)}</td><td class="r">${fmtPct(pct)}</td></tr>`;
     }
     return openDoc('Orçamento Resumido', `
 <h1>ORÇAMENTO RESUMIDO</h1>
@@ -423,7 +421,14 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
 <table><thead><tr><th>Item</th><th>Código</th><th>Base</th><th>Descrição</th><th>Un.</th><th class="r">Qtd.</th>${showCU ? '<th class="r">Custo Unit.</th>' : ''}${showPU ? '<th class="r">Preço Unit.</th>' : ''}<th class="r">Total</th></tr></thead><tbody>`;
         const colSpan = 6 + (showCU ? 1 : 0) + (showPU ? 1 : 0);
         for (const it of ch.items) {
-            html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            if (it.type === 'SUBETAPA') {
+                html += `<tr style="background:#f8fafc; font-weight:700;">
+                    <td class="bold">${it.itemNumber}</td>
+                    <td colspan="${colSpan - 1}" class="bold" style="color:#6d28d9; padding-left:8px;">${it.description}</td>
+                </tr>`;
+            } else {
+                html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+            }
         }
         html += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
     }

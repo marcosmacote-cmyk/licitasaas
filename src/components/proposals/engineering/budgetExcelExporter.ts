@@ -39,13 +39,16 @@ function groupByChapter(items: any[]) {
     const prefix = (it.itemNumber || '1').split('.')[0] || '1';
     if (!map.has(prefix)) map.set(prefix, { items: [], total: 0, title: `Etapa ${prefix}` });
     const g = map.get(prefix)!;
-    if (isGrouper(it.type)) {
-      const depth = ((it.itemNumber || '').match(/\./g) || []).length;
-      if (depth <= 1 && it.description) g.title = `${prefix} — ${it.description}`;
+    if (it.type === 'ETAPA') {
+      if (it.description) {
+        g.title = `${prefix} — ${it.description}`;
+      }
       continue;
     }
     g.items.push(it);
-    g.total += Number(it.totalPrice) || 0;
+    if (it.type !== 'SUBETAPA') {
+      g.total += Number(it.totalPrice) || 0;
+    }
   }
   return map;
 }
@@ -395,7 +398,8 @@ export async function xlsOrcamentoResumido(items: any[], engConfig: EngineeringC
   const firstDataRow = ws.rowCount + 1;
   const gRn = firstDataRow + chapters.size;
   for (const [prefix, ch] of chapters) {
-    const r = dataRow(ws, [prefix, ch.title, ch.items.length, ch.total, 0], idx++, [3, 4, 5]);
+    const billableCount = ch.items.filter((i: any) => !isGrouper(i.type)).length;
+    const r = dataRow(ws, [prefix, ch.title, billableCount, ch.total, 0], idx++, [3, 4, 5]);
     r.getCell(2).font = { bold: true, size: 9, color: { argb: C.TEXT_DARK } };
     r.getCell(4).numFmt = '#,##0.00';
     const rn = ws.rowCount;
@@ -479,6 +483,21 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
     const firstDataRow = ws.rowCount + 1;
     let idx = 0;
     for (const it of ch.items) {
+      if (it.type === 'SUBETAPA') {
+        const rn = ws.rowCount + 1;
+        const r = ws.addRow([it.itemNumber || '', it.description || '', ...Array(Math.max(0, colCount - 2)).fill('')]);
+        if (colCount > 2) ws.mergeCells(rn, 2, rn, colCount);
+        r.height = 16;
+        for (let i = 1; i <= colCount; i++) {
+          const c = r.getCell(i);
+          c.fill = fill(pc.GRAY_SUB);
+          c.border = border();
+          c.font = { bold: true, size: 9, color: { argb: pc.BLUE_MED } };
+          c.alignment = { vertical: 'middle', horizontal: 'left', indent: i === 2 ? 1 : 0 };
+        }
+        continue;
+      }
+
       const qty = Number(it.quantity) || 0;
       const uc  = Number(it.unitCost) || 0;
       const up  = Number(it.unitPrice) || 0;
