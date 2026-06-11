@@ -43,9 +43,20 @@ function restoreFromBlocks(blocks: LetterBlock[], nd: any): ProposalLetterResult
     const builder = new ProposalLetterBuilder(nd);
     const freshResult = builder.build();
     const freshPricing = freshResult.blocks.find((b: LetterBlock) => b.id === LetterBlockType.PRICING_SUMMARY);
-    const restoredBlocks = blocks.map((b: LetterBlock) =>
-        b.id === LetterBlockType.PRICING_SUMMARY && freshPricing ? { ...b, content: freshPricing.content } : b
-    );
+    const restoredBlocks = blocks.map((b: LetterBlock) => {
+        let content = b.content;
+        if (b.id === LetterBlockType.COMMERCIAL) {
+            // Padronização e normalização de declarações antigas salvas em banco
+            if (content.startsWith('Que na elaboração')) {
+                content = content.replace(/^Que na elaboração/, 'Declaramos que, na elaboração');
+            } else if (content.startsWith('Que, na elaboração')) {
+                content = content.replace(/^Que, na elaboração/, 'Declaramos que, na elaboração');
+            }
+        }
+        return b.id === LetterBlockType.PRICING_SUMMARY && freshPricing 
+            ? { ...b, content: freshPricing.content } 
+            : { ...b, content };
+    });
     return {
         blocks: restoredBlocks,
         plainText: restoredBlocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
