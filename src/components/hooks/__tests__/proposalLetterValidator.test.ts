@@ -36,8 +36,10 @@ function makeValidData(): Partial<ProposalLetterData> {
             totalValueExtended: 'cinquenta mil reais',
             bdiPercentage: 25,
             discountPercentage: 0,
-            items: [],
-            itemCount: 10,
+            items: [
+                { itemNumber: '1', description: 'Item 1', unit: 'UN', quantity: 1, multiplier: 1, unitPrice: 50000, totalPrice: 50000 }
+            ],
+            itemCount: 1,
         },
         object: {
             fullDescription: 'Aquisição de materiais de escritório',

@@ -232,11 +232,11 @@ export class ProposalLetterBuilder {
             'concordando integralmente com os termos estabelecidos.'
         );
 
-        // Declaração 3 — Trabalho de menores (Lei 14.133/2021)
+        // Declaração 3 — Trabalho de menores
         declarations.push(
-            'Declaramos que não empregamos menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, ' +
-            'nem menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de ' +
-            '14 (quatorze) anos, conforme art. 68, inciso VI, da Lei nº 14.133/2021.'
+            'Declaramos que não empregamos menores de 18 anos em trabalho noturno, perigoso ou insalubre, ' +
+            'nem menores de 16 anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 anos, ' +
+            'nos termos do art. 7º, XXXIII, da Constituição Federal.'
         );
 
         const content = this.resolve(LetterBlockType.COMMERCIAL, declarations.join('\n\n'));
@@ -273,7 +273,7 @@ export class ProposalLetterBuilder {
      */
     private buildProposalConditionsBlock(): LetterBlock {
         const e = this.data.execution;
-        const isUseful = (v?: string) => v && !/^(não informado|n\/a|—|-|\.{3})$/i.test(v.trim());
+        const isUseful = (v?: string) => v && !/^(não informado|não especificado|n\/a|—|-|\.{3})$/i.test(v.trim().replace(/\.$/, ''));
 
         const lines: string[] = [];
 
@@ -282,7 +282,12 @@ export class ProposalLetterBuilder {
             const duration = e.contractDuration!.replace(/\s*\[.*\]\s*$/, '').trim();
             lines.push(
                 `O prazo de vigência da contratação é de ${duration}, ` +
-                `contados da assinatura do presente instrumento, na forma do art. 105 da Lei nº 14.133, de 2021.`
+                `contados da assinatura do presente instrumento, na forma do art. 105 da Lei nº 14.133/2021.`
+            );
+        } else {
+            lines.push(
+                `O prazo de vigência da contratação será conforme estabelecido no Edital e seus anexos, ` +
+                `contados da assinatura do presente instrumento, na forma do art. 105 da Lei nº 14.133/2021.`
             );
         }
 
@@ -290,6 +295,8 @@ export class ProposalLetterBuilder {
         if (isUseful(e.executionDeadline)) {
             const deadline = e.executionDeadline!.replace(/\s*\[.*\]\s*$/, '').trim();
             lines.push(`Prazo de execução/fornecimento: ${deadline}.`);
+        } else {
+            lines.push(`Prazo de execução/fornecimento: Conforme estabelecido no Edital e seus anexos.`);
         }
 
         // c) Dinâmica de iníno da execução
@@ -324,28 +331,23 @@ export class ProposalLetterBuilder {
 
     private buildPricingSummaryBlock(): LetterBlock {
         const p = this.data.pricing;
-        const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmt = (v: number) => {
+            return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
 
         const lines: string[] = [];
 
         // Valor Global por extenso
         const extenso = p.totalValueExtended || currencyToWords(p.totalValue);
-        lines.push(`Valor Global: ${fmt(p.totalValue)} (${extenso}).`);
+        lines.push(`Valor Global: ${fmt(p.totalValue)} (${extenso})`);
 
-        // BDI — só mostra se > 0
-        if (p.bdiPercentage > 0) {
-            lines.push(`BDI aplicado: ${p.bdiPercentage.toFixed(2)}%.`);
-        }
+        // BDI aplicado
+        const bdiVal = p.bdiPercentage > 0 ? p.bdiPercentage.toFixed(2).replace('.', ',') : '0,00';
+        lines.push(`BDI aplicado: ${bdiVal}%`);
 
-        // Desconto total — usa o desconto real efetivo (referência vs. atual)
-        const totalDisc = p.totalDiscountPercentage || 0;
-        if (totalDisc > 0) {
-            lines.push(`Desconto total aplicado: ${totalDisc.toFixed(2)}%.`);
-        }
-
-        // Referência à planilha com pluralização correta
+        // Referência à planilha
         const itemLabel = p.itemCount === 1 ? '1 item' : `${p.itemCount} itens`;
-        lines.push(`Conforme Planilha de Formação de Preços em anexo, contendo ${itemLabel}.`);
+        lines.push(`Planilha de formação de preços: anexa, contendo ${itemLabel}.`);
 
         return this.createBlock(LetterBlockType.PRICING_SUMMARY, 'Resumo de Preços',
             lines.join('\n'), { required: true, editable: true });
@@ -366,7 +368,7 @@ export class ProposalLetterBuilder {
 
     private buildExecutionBlock(): LetterBlock {
         const e = this.data.execution;
-        const isUseful = (v?: string) => v && !/^(não informado|n\/a|—|-|\.{3})$/i.test(v.trim());
+        const isUseful = (v?: string) => v && !/^(não informado|não especificado|n\/a|—|-|\.{3})$/i.test(v.trim().replace(/\.$/, ''));
         const aiContent = this.aiBlocks.get(LetterBlockType.EXECUTION);
 
         // Se IA gerou conteúdo para o bloco, filtrar pela blacklist

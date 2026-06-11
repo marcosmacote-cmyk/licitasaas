@@ -167,6 +167,25 @@ export class ProposalLetterValidator {
                 'Preencha manualmente no bloco "Condições da Proposta" antes de exportar.'));
         }
 
+        // ── Consistência de Valores da Planilha vs. Global ──
+        if (data.pricing?.items && data.pricing?.totalValue) {
+            const sumOfItems = data.pricing.items.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
+            if (Math.abs(sumOfItems - data.pricing.totalValue) > 0.05) {
+                errors.push(this.error('pricingSummaryBlock', 'pricing.totalValue',
+                    `Divergência de valores: O valor global da carta (${data.pricing.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) difere do somatório dos itens da planilha (${sumOfItems.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`,
+                    'Verifique e alinhe os valores da planilha orçamentária com o valor global da proposta.'));
+            }
+        }
+
+        // ── Alinhamento de Assinaturas (duas colunas no modo BOTH) ──
+        if (data.signature?.mode === 'BOTH') {
+            if (!data.company?.technicalResponsible?.trim() || !data.company?.contactName?.trim()) {
+                warnings.push(this.warning('signatureBlock', 'signature.mode',
+                    'Modo de assinatura em duas colunas (BOTH) ativo, mas faltam dados do representante legal ou responsável técnico.',
+                    'Preencha ambos para garantir a formatação correta em duas colunas.'));
+            }
+        }
+
         return {
             isValid: errors.length === 0,
             errors,
@@ -188,21 +207,88 @@ export class ProposalLetterValidator {
             if (!block.visible || !block.content?.trim()) continue;
             const content = block.content;
 
-            // ── Detectar marcadores de truncamento / revisão ──
+            // ── 1. Detectar marcadores de truncamento / revisão ──
             if (/\[texto incompleto/.test(content) || /\[dado incompleto/.test(content)) {
                 errors.push(this.error(block.id, 'content',
                     `O bloco "${block.label}" contém texto incompleto que precisa ser revisado.`,
                     'Edite o bloco para completar a informação ou remova o trecho truncado.'));
             }
 
-            // ── Detectar marcadores de verificação ──
+            // ── 2. Detectar marcadores de verificação ──
             if (/\[verificar/.test(content)) {
                 warnings.push(this.warning(block.id, 'content',
                     `O bloco "${block.label}" contém marcador de verificação.`,
                     'Revise o conteúdo e remova o marcador antes de protocolar.'));
             }
 
-            // ── Detectar cláusulas proibidas que passaram ──
+            // ── 3. Ausência de campos vazios ou não preenchidos (brackets ou underscores) ──
+            if (/\[(?!texto incompleto|dado incompleto|verificar)[^\]]*\]/.test(content)) {
+                errors.push(this.error(block.id, 'content',
+                    `O bloco "${block.label}" contém lacunas ou campos entre colchetes não preenchidos.`,
+                    'Preencha todos os campos variáveis do edital ou remova-os.'));
+            }
+            if (/_{3,}/.test(content)) {
+                errors.push(this.error(block.id, 'content',
+                    `O bloco "${block.label}" contém linhas de preenchimento manual vazias (___).`,
+                    'Preencha ou remova as linhas em branco.'));
+            }
+
+            // ── 4. Concordância básica (desvios de gênero/preposição) ──
+            if (/\bda\s+o\b/i.test(content) || /\bdo\s+a\b/i.test(content)) {
+                warnings.push(this.warning(block.id, 'content',
+                    `Possível desvio de concordância nominal no bloco "${block.label}" ("da o" ou "do a").`,
+                    'Revise a redação para ajustar o gênero dos termos.'));
+            }
+            if (/\ba\s+processo\b/i.test(content) || /\bo\s+proposta\b/i.test(content)) {
+                warnings.push(this.warning(block.id, 'content',
+                    `Possível desvio de gênero no bloco "${block.label}" ("a processo" ou "o proposta").`,
+                    'Revise e corrija para "o processo" ou "a proposta".'));
+            }
+
+            // ── 5. Grafia de "ciência" ──
+            if (/\bciencia\b/i.test(content)) {
+                warnings.push(this.warning(block.id, 'content',
+                    `A palavra "ciência" está escrita sem acento no bloco "${block.label}".`,
+                    'Substitua por "ciência" com o acento correto.'));
+            }
+
+            // ── 6. Padronização de "Lei nº 14.133/2021" ──
+            const lawRegex = /\bLei\s*(?:nº|n°|n\.?|num\.?)?\s*14\.?133(?:\/\d{2,4})?\b/gi;
+            let lawMatch;
+            while ((lawMatch = lawRegex.exec(content)) !== null) {
+                const matchText = lawMatch[0];
+                if (matchText !== 'Lei nº 14.133/2021') {
+                    warnings.push(this.warning(block.id, 'content',
+                        `Menção à Lei Geral de Licitações fora do padrão no bloco "${block.label}": "${matchText}".`,
+                        'Substitua pela grafia padrão: "Lei nº 14.133/2021".'));
+                }
+            }
+
+            // ── 7. Uso correto de "contados da assinatura" ──
+            const signatureDaysRegex = /\bcontado[s]?\s+(?:a\s+partir\s+)?da\s+(?:data\s+)?(?:de|da)\s+assinatura\b/gi;
+            let sigDaysMatch;
+            while ((sigDaysMatch = signatureDaysRegex.exec(content)) !== null) {
+                const matchText = sigDaysMatch[0];
+                if (matchText !== 'contados da assinatura') {
+                    warnings.push(this.warning(block.id, 'content',
+                        `Termo para contagem de prazo fora do padrão no bloco "${block.label}": "${matchText}".`,
+                        'Substitua pelo termo padrão: "contados da assinatura".'));
+                }
+            }
+
+            // ── 9. Formatação uniforme dos títulos (caixa alta nos títulos/declarações) ──
+            if (block.type === 'titleBlock' && content && content !== content.toUpperCase()) {
+                warnings.push(this.warning(block.id, 'content',
+                    `O título principal da proposta não está totalmente em caixa alta (UPPERCASE).`,
+                    'Altere o título para letras maiúsculas para manter a padronização.'));
+            }
+            if (block.type === 'declarationExtraBlock' && block.label && block.label !== block.label.toUpperCase()) {
+                warnings.push(this.warning(block.id, 'label',
+                    `O título da declaração extra "${block.label}" não está em caixa alta (UPPERCASE).`,
+                    'Renomeie o título para letras maiúsculas para manter a conformidade visual.'));
+            }
+
+            // ── 8. Detectar cláusulas proibidas que passaram ──
             for (const pattern of EXPORT_PROHIBITED_PATTERNS) {
                 if (pattern.test(content)) {
                     warnings.push(this.warning(block.id, 'content',

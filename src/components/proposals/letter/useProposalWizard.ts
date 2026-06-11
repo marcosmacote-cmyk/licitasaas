@@ -27,13 +27,15 @@ export interface CockpitData {
 }
 
 const COCKPIT_DEFAULTS: CockpitData = {
-    proposalTitle: 'PROPOSTA DE PREÇOS',
+    proposalTitle: 'PROPOSTA DE PREÇOS INICIAL',
     executionDeadline: '',
     contractDuration: '',
     executionLocation: '',
     proposalDate: '',
     proposalType: 'INITIAL',
 };
+
+const _dummy = 0; // spacer
 
 // ── Helper: restaura blocos salvos com pricing atualizado ──
 function restoreFromBlocks(blocks: LetterBlock[], nd: any): ProposalLetterResult | null {
@@ -93,7 +95,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
                 if (patch.proposalType === 'READJUSTED') {
                     next.proposalTitle = 'PROPOSTA DE PREÇOS READEQUADA';
                 } else {
-                    next.proposalTitle = 'PROPOSTA DE PREÇOS';
+                    next.proposalTitle = 'PROPOSTA DE PREÇOS INICIAL';
                 }
             }
             return next;

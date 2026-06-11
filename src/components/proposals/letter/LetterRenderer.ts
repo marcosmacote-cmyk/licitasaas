@@ -61,7 +61,7 @@ export class LetterRenderer {
 
         const sectionTitle = SECTION_TITLES[block.type];
         const titleHtml = sectionTitle
-            ? `<p style="margin: 0 0 2px 0; font-weight: bold; font-size: 10.5px; letter-spacing: 0.3px;">${sectionTitle}</p>\n`
+            ? `<p style="margin: 8px 0 4px 0; font-weight: bold; font-size: 10.5px; letter-spacing: 0.3px;">${sectionTitle}</p>\n`
             : '';
 
         switch (block.type) {
@@ -72,7 +72,7 @@ export class LetterRenderer {
 
             case LetterBlockType.RECIPIENT:
                 return `<div class="block block-recipient" style="margin-bottom: 6px;">
-                    <p style="font-weight: bold; margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    <p style="font-weight: bold; margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.REFERENCE:
@@ -82,12 +82,12 @@ export class LetterRenderer {
 
             case LetterBlockType.QUALIFICATION:
                 return `<div class="block block-qualification" style="margin-bottom: 4px; text-align: justify;">
-                    <p style="margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    <p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.OBJECT:
                 return `<div class="block block-object" style="margin-bottom: 4px; text-align: justify;">
-                    ${titleHtml}<p style="margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.COMMERCIAL:
@@ -96,13 +96,13 @@ export class LetterRenderer {
                 </div>`;
 
             case LetterBlockType.PRICING_SUMMARY:
-                return `<div class="block block-pricing" style="margin-bottom: 4px;">
-                    ${titleHtml}${this.renderParagraphs(formatted)}
+                return `${titleHtml}<div class="block block-pricing highlight-box" style="margin: 6px 0 10px 0; padding: 10px 14px; background-color: #fafafa; border-left: 3px solid #222; border-top: 1px solid #e5e5e5; border-right: 1px solid #e5e5e5; border-bottom: 1px solid #e5e5e5; border-radius: 4px;">
+                    ${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.VALIDITY:
                 return `<div class="block block-validity" style="margin-bottom: 4px; text-align: justify;">
-                    ${titleHtml}<p style="margin: 0; line-height: 1.25;">${formatted}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted}</p>
                 </div>`;
 
             case LetterBlockType.PROPOSAL_CONDITIONS:
@@ -117,7 +117,7 @@ export class LetterRenderer {
 
             case LetterBlockType.BANKING:
                 return `<div class="block block-banking" style="margin-bottom: 4px;">
-                    ${titleHtml}<p style="margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.CLOSING:
@@ -136,7 +136,7 @@ export class LetterRenderer {
 
             default:
                 return `<div class="block" style="margin-bottom: 4px;">
-                    <p style="margin: 0; line-height: 1.25;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    <p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
         }
     }
@@ -177,7 +177,7 @@ export class LetterRenderer {
 
         const sigHtml = sections.map(s => renderSigItem(s, '45%')).join('');
 
-        return `<div class="block block-signature signature-block" style="margin-top: 24px; text-align: center; page-break-inside: avoid;">
+        return `<div class="block block-signature signature-block" style="margin-top: 24px; text-align: center; page-break-inside: avoid; display: flex; justify-content: space-around; gap: 10px;">
             ${sigHtml}
         </div>`;
     }
@@ -189,7 +189,7 @@ export class LetterRenderer {
     private renderParagraphs(text: string): string {
         return text.split(/\n\n+/)
             .filter(p => p.trim())
-            .map(p => `<p style="margin: 0 0 3px 0; text-align: justify; line-height: 1.25;">${p.replace(/\n/g, '<br/>')}</p>`)
+            .map(p => `<p style="margin: 0 0 4px 0; text-align: justify; line-height: 1.4;">${p.replace(/\n/g, '<br/>')}</p>`)
             .join('\n');
     }
 
