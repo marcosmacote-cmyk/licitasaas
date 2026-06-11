@@ -9,6 +9,7 @@ import { usePncpPage, STATUS_OPTIONS, UFS, MODALIDADES, ESFERAS } from './hooks/
 import { PncpHeader } from './pncp/PncpHeader';
 import { PncpSavedSearches } from './pncp/PncpSavedSearches';
 import { PncpSearchFilters } from './pncp/PncpSearchFilters';
+import { PncpFavoritesFilters } from './pncp/PncpFavoritesFilters';
 import { PncpTabsRow } from './pncp/PncpTabsRow';
 import { PncpResultsTable } from './pncp/PncpResultsTable';
 
@@ -51,7 +52,8 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
         <div className="page-container" style={{ paddingBottom: '32px' }}>
             <PncpHeader p={p} companies={companies} items={items} />
             <PncpSavedSearches p={p} companies={companies} items={items} />
-            <PncpSearchFilters p={p} companies={companies} items={items} />
+            {p.activeTab === 'search' && <PncpSearchFilters p={p} companies={companies} items={items} />}
+            {p.activeTab === 'favorites' && <PncpFavoritesFilters p={p} companies={companies} items={items} />}
             <PncpTabsRow p={p} companies={companies} items={items} />
             <PncpResultsTable p={p} companies={companies} items={items} />
 

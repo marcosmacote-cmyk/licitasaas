@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../../config';
 import type { PncpBiddingItem } from '../../types';
 import { useToast } from '../ui';
 import { v4 as uuidv4 } from 'uuid';
+import { normalizeModality } from '../../utils/normalizeModality';
 
 const DEFAULT_FAV_LIST = 'Favoritos Gerais';
 
@@ -38,6 +39,29 @@ export function usePncpFavorites() {
     const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
     const [listPickerOpen, setListPickerOpen] = useState(false);
     const [listPickerItem, setListPickerItem] = useState<PncpBiddingItem | null>(null);
+
+    // Filter and Sort states for Favorites Scheduling
+    const [favSearch, setFavSearch] = useState('');
+    const [favDateFilter, setFavDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'this_month' | 'custom'>('all');
+    const [favDateStart, setFavDateStart] = useState('');
+    const [favDateEnd, setFavDateEnd] = useState('');
+    const [favModality, setFavModality] = useState('todas');
+    const [favUf, setFavUf] = useState('');
+    const [favValMin, setFavValMin] = useState('');
+    const [favValMax, setFavValMax] = useState('');
+    const [favSortBy, setFavSortBy] = useState<'date_asc' | 'date_desc' | 'val_desc' | 'val_asc' | 'orgao_asc'>('date_asc');
+    const [showFavFilters, setShowFavFilters] = useState(false);
+
+    // PDF Columns configuration state
+    const [pdfColumns, setPdfColumns] = useState({
+        orgao: true,
+        modalidade: true,
+        objeto: true,
+        prazo: true,
+        valor: true,
+        localidade: true,
+        link: true,
+    });
 
     // Fetch favorites from DB
     const fetchFavorites = async () => {
@@ -124,17 +148,161 @@ export function usePncpFavorites() {
     // Computed
     const favoritos = favStore.items as PncpBiddingItem[];
 
+    const availableModalities = useMemo(() => {
+        const modalitiesSet = new Set<string>();
+        favStore.items.forEach(item => {
+            if (item.modalidade_nome) {
+                modalitiesSet.add(normalizeModality(item.modalidade_nome));
+            }
+        });
+        return Array.from(modalitiesSet).sort();
+    }, [favStore.items]);
+
+    const availableUfs = useMemo(() => {
+        const ufsSet = new Set<string>();
+        favStore.items.forEach(item => {
+            if (item.uf) {
+                ufsSet.add(item.uf.toUpperCase());
+            }
+        });
+        return Array.from(ufsSet).sort();
+    }, [favStore.items]);
+
+    const clearFavFilters = () => {
+        setFavSearch('');
+        setFavDateFilter('all');
+        setFavDateStart('');
+        setFavDateEnd('');
+        setFavModality('todas');
+        setFavUf('');
+        setFavValMin('');
+        setFavValMax('');
+        setFavSortBy('date_asc');
+    };
+
     const filteredFavoritos = useMemo(() => {
         const defaultListId = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST)?.id;
-        const items = (!activeFavListId || activeFavListId === defaultListId)
+        let items = (!activeFavListId || activeFavListId === defaultListId)
             ? favStore.items
             : favStore.items.filter(f => f._listId === activeFavListId);
+
+        // 1. Text Search (organ, object, number, municipality)
+        if (favSearch.trim()) {
+            const query = favSearch.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            items = items.filter(item => {
+                const targetText = [
+                    item.orgao_nome || '',
+                    item.objeto || '',
+                    item.titulo || '',
+                    item.numero_sequencial || '',
+                    item.municipio || ''
+                ].join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return targetText.includes(query);
+            });
+        }
+
+        // 2. Modality
+        if (favModality !== 'todas') {
+            items = items.filter(item => normalizeModality(item.modalidade_nome) === favModality);
+        }
+
+        // 3. UF
+        if (favUf) {
+            items = items.filter(item => item.uf?.toUpperCase() === favUf.toUpperCase());
+        }
+
+        // 4. Value Range
+        if (favValMin) {
+            const min = parseFloat(favValMin);
+            if (!isNaN(min)) {
+                items = items.filter(item => (item.valor_estimado || 0) >= min);
+            }
+        }
+        if (favValMax) {
+            const max = parseFloat(favValMax);
+            if (!isNaN(max)) {
+                items = items.filter(item => (item.valor_estimado || 0) <= max);
+            }
+        }
+
+        // 5. Date Filter (Prazo Limite / data_encerramento_proposta ou data_abertura)
+        if (favDateFilter !== 'all') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            items = items.filter(item => {
+                const itemDateStr = item.data_encerramento_proposta || item.data_abertura;
+                if (!itemDateStr) return false;
+                const d = new Date(itemDateStr);
+                
+                if (favDateFilter === 'today') {
+                    return d.getDate() === today.getDate() &&
+                           d.getMonth() === today.getMonth() &&
+                           d.getFullYear() === today.getFullYear();
+                }
+                if (favDateFilter === 'tomorrow') {
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(today.getDate() + 1);
+                    return d.getDate() === tomorrow.getDate() &&
+                           d.getMonth() === tomorrow.getMonth() &&
+                           d.getFullYear() === tomorrow.getFullYear();
+                }
+                if (favDateFilter === 'this_week') {
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay());
+                    startOfWeek.setHours(0, 0, 0, 0);
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 6);
+                    endOfWeek.setHours(23, 59, 59, 999);
+                    return d >= startOfWeek && d <= endOfWeek;
+                }
+                if (favDateFilter === 'next_week') {
+                    const startOfNextWeek = new Date(today);
+                    startOfNextWeek.setDate(today.getDate() - today.getDay() + 7);
+                    startOfNextWeek.setHours(0, 0, 0, 0);
+                    const endOfNextWeek = new Date(startOfNextWeek);
+                    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+                    endOfNextWeek.setHours(23, 59, 59, 999);
+                    return d >= startOfNextWeek && d <= endOfNextWeek;
+                }
+                if (favDateFilter === 'this_month') {
+                    return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+                }
+                if (favDateFilter === 'custom') {
+                    if (favDateStart) {
+                        const start = new Date(favDateStart + 'T00:00:00');
+                        if (d < start) return false;
+                    }
+                    if (favDateEnd) {
+                        const end = new Date(favDateEnd + 'T23:59:59');
+                        if (d > end) return false;
+                    }
+                    return true;
+                }
+                return true;
+            });
+        }
+
+        // Sorting
         return [...items].sort((a, b) => {
-            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-            return dateA.getTime() - dateB.getTime();
+            if (favSortBy === 'date_asc' || favSortBy === 'date_desc') {
+                const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
+                const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
+                return favSortBy === 'date_asc'
+                    ? dateA.getTime() - dateB.getTime()
+                    : dateB.getTime() - dateA.getTime();
+            }
+            if (favSortBy === 'val_desc' || favSortBy === 'val_asc') {
+                const valA = a.valor_estimado || 0;
+                const valB = b.valor_estimado || 0;
+                return favSortBy === 'val_desc' ? valB - valA : valA - valB;
+            }
+            if (favSortBy === 'orgao_asc') {
+                return (a.orgao_nome || '').localeCompare(b.orgao_nome || '');
+            }
+            return 0;
         });
-    }, [favStore, activeFavListId]);
+    }, [favStore, activeFavListId, favSearch, favModality, favUf, favValMin, favValMax, favDateFilter, favDateStart, favDateEnd, favSortBy]);
 
     const favLists = useMemo(() => {
         const defList = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST);
@@ -248,7 +416,7 @@ export function usePncpFavorites() {
 
     const exportFavoritesToPdf = () => {
         const itemsToExport = filteredFavoritos;
-        if (itemsToExport.length === 0) { toast.warning('Não há licitações favoritadas.'); return; }
+        if (itemsToExport.length === 0) { toast.warning('Não há licitações favoritadas correspondentes aos filtros.'); return; }
         const listName = activeFavListId
             ? favLists.find(l => l.id === activeFavListId)?.name || 'Favoritos'
             : 'Favoritos (Todas as Listas)';
@@ -256,29 +424,42 @@ export function usePncpFavorites() {
         doc.setFontSize(16); doc.text(`Relatório: ${listName}`, 14, 20);
         doc.setFontSize(10); doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
 
-        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Prazo Limite", "Val. Est. (R$)", "Município", "Link PNCP"];
-        const tableRows = itemsToExport.map(item => [
-            item.orgao_nome,
-            `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
-            item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
-            item.data_encerramento_proposta
+        // Dynamically build columns and widths based on pdfColumns
+        const columnsConfig = [
+            { key: 'orgao', label: 'Órgão', cell: (item: PncpBiddingItem) => item.orgao_nome },
+            { key: 'modalidade', label: 'Mod. / N°', cell: (item: PncpBiddingItem) => `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}` },
+            { key: 'objeto', label: 'Objeto', cell: (item: PncpBiddingItem) => item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto },
+            { key: 'prazo', label: 'Prazo Limite', cell: (item: PncpBiddingItem) => item.data_encerramento_proposta
                 ? `${new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')} às ${new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                : '-',
-            item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-',
-            item.municipio ? `${item.municipio}-${item.uf}` : item.uf,
-            ''
-        ]);
+                : '-' },
+            { key: 'valor', label: 'Val. Est. (R$)', cell: (item: PncpBiddingItem) => item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-' },
+            { key: 'localidade', label: 'Município', cell: (item: PncpBiddingItem) => item.municipio ? `${item.municipio}-${item.uf}` : item.uf },
+            { key: 'link', label: 'Link PNCP', cell: (item: PncpBiddingItem) => '' }
+        ];
+
+        const activeCols = columnsConfig.filter(c => pdfColumns[c.key as keyof typeof pdfColumns] !== false);
+        const tableColumn = activeCols.map(c => c.label);
+        const tableRows = itemsToExport.map(item => activeCols.map(c => c.cell(item)));
+
+        const columnStyles: Record<number, { cellWidth?: number }> = {};
+        activeCols.forEach((col, index) => {
+            if (col.key === 'objeto') columnStyles[index] = { cellWidth: 70 };
+            if (col.key === 'link') columnStyles[index] = { cellWidth: 35 };
+        });
 
         autoTable(doc, {
             head: [tableColumn], body: tableRows, startY: 35,
             styles: { fontSize: 8 }, headStyles: { fillColor: [37, 99, 235] },
-            columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
+            columnStyles,
             didDrawCell: (data) => {
-                if (data.section === 'body' && data.column.index === 6) {
-                    const item = itemsToExport[data.row.index];
-                    if (item?.link_sistema) {
-                        doc.setTextColor(37, 99, 235);
-                        doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
+                if (data.section === 'body') {
+                    const linkColIndex = activeCols.findIndex(c => c.key === 'link');
+                    if (linkColIndex !== -1 && data.column.index === linkColIndex) {
+                        const item = itemsToExport[data.row.index];
+                        if (item?.link_sistema) {
+                            doc.setTextColor(37, 99, 235);
+                            doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
+                        }
                     }
                 }
             }
@@ -292,5 +473,18 @@ export function usePncpFavorites() {
         listPickerOpen, setListPickerOpen, listPickerItem, setListPickerItem,
         createFavList, renameFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
         toggleFavorito, exportFavoritesToPdf, filteredFavoritos,
+        // Filter states & helpers
+        favSearch, setFavSearch,
+        favDateFilter, setFavDateFilter,
+        favDateStart, setFavDateStart,
+        favDateEnd, setFavDateEnd,
+        favModality, setFavModality,
+        favUf, setFavUf,
+        favValMin, setFavValMin,
+        favValMax, setFavValMax,
+        favSortBy, setFavSortBy,
+        showFavFilters, setShowFavFilters,
+        pdfColumns, setPdfColumns,
+        availableModalities, availableUfs, clearFavFilters
     };
 }

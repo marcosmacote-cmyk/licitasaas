@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Filter } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
 import { API_BASE_URL } from '../../config';
@@ -577,23 +577,45 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                     ) : (p.activeTab !== 'found' && p.displayItems.length === 0) || (p.activeTab === 'found' && (!p.dateSummary || p.dateSummary.length === 0)) ? (
                         <tr>
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
-                                {p.activeTab === 'favorites' ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                    : p.activeTab === 'found' ? <Bell size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                    : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
-                                <div style={{ fontSize: '1rem', fontWeight: 500 }}>
-                                    {p.activeTab === 'favorites' ? 'Nenhum edital nos favoritos'
-                                        : p.activeTab === 'found' ? 'Nenhuma oportunidade encontrada pelo scanner'
-                                        : !p.hasSearched ? 'Busque editais no PNCP'
-                                        : 'Nenhum edital encontrado'}
-                                </div>
-                                <div style={{ fontSize: '0.8125rem', marginTop: '4px', maxWidth: '540px', margin: '6px auto 0', lineHeight: 1.4 }}>
-                                    {p.activeTab === 'favorites' ? 'Clique na estrela para favoritar resultados.'
-                                        : p.activeTab === 'found' ? 'Ative o scanner e aguarde a próxima varredura automática.'
-                                        : !p.hasSearched ? 'Digite palavras-chave e clique em "Buscar", ou carregue uma pesquisa salva.'
-                                        : (p.dataInicio && new Date(p.dataInicio + 'T12:00:00').getFullYear() < new Date().getFullYear())
-                                            ? 'Atenção: A API pública do PNCP não suporta filtros de data retroativos para anos anteriores. Para localizar editais passados de outros anos, limpe os campos de "Prazo Limite" e faça a busca por palavra-chave ou órgão.'
-                                            : 'Tente ajustar as palavras-chave ou filtros.'}
-                                </div>
+                                {p.activeTab === 'favorites' ? (
+                                    p.favoritos.length > 0 ? (
+                                        <>
+                                            <Filter size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhuma licitação encontrada com os filtros ativos</div>
+                                            <div style={{ fontSize: '0.8125rem', marginTop: '4px', maxWidth: '540px', margin: '6px auto 0', lineHeight: 1.4 }}>
+                                                Tente ajustar os filtros ou clique no botão abaixo para restaurar sua lista.
+                                            </div>
+                                            <button className="btn btn-outline" onClick={p.clearFavFilters} style={{ marginTop: '16px', fontSize: '0.8125rem' }}>
+                                                Limpar Filtros
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhum edital nos favoritos</div>
+                                            <div style={{ fontSize: '0.8125rem', marginTop: '4px', maxWidth: '540px', margin: '6px auto 0', lineHeight: 1.4 }}>
+                                                Clique na estrela para favoritar resultados.
+                                            </div>
+                                        </>
+                                    )
+                                ) : (
+                                    <>
+                                        {p.activeTab === 'found' ? <Bell size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                                            : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
+                                        <div style={{ fontSize: '1rem', fontWeight: 500 }}>
+                                            {p.activeTab === 'found' ? 'Nenhuma oportunidade encontrada pelo scanner'
+                                                : !p.hasSearched ? 'Busque editais no PNCP'
+                                                : 'Nenhum edital encontrado'}
+                                        </div>
+                                        <div style={{ fontSize: '0.8125rem', marginTop: '4px', maxWidth: '540px', margin: '6px auto 0', lineHeight: 1.4 }}>
+                                            {p.activeTab === 'found' ? 'Ative o scanner e aguarde a próxima varredura automática.'
+                                                : !p.hasSearched ? 'Digite palavras-chave e clique em "Buscar", ou carregue uma pesquisa salva.'
+                                                : (p.dataInicio && new Date(p.dataInicio + 'T12:00:00').getFullYear() < new Date().getFullYear())
+                                                    ? 'Atenção: A API pública do PNCP não suporta filtros de data retroativos para anos anteriores. Para localizar editais passados de outros anos, limpe os campos de "Prazo Limite" e faça a busca por palavra-chave ou órgão.'
+                                                    : 'Tente ajustar as palavras-chave ou filtros.'}
+                                        </div>
+                                    </>
+                                )}
                             </td>
                         </tr>
                     ) : p.activeTab === 'found' && p.dateSummary && p.dateSummary.length > 0 ? (
