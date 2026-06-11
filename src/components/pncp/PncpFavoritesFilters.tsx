@@ -13,7 +13,8 @@ export function PncpFavoritesFilters({ p }: PncpChildProps) {
                        p.favUf || 
                        p.favValMin || 
                        p.favValMax || 
-                       p.favSortBy !== 'date_asc';
+                       p.favSortBy !== 'date_asc' ||
+                       p.favValidity !== 'all';
 
     return (
         <div className="card" style={{ 
@@ -66,6 +67,20 @@ export function PncpFavoritesFilters({ p }: PncpChildProps) {
                             <option value="next_week">Próxima Semana</option>
                             <option value="this_month">Este Mês</option>
                             <option value="custom">Período Personalizado...</option>
+                        </select>
+                    </div>
+
+                    <div style={{ minWidth: '160px' }}>
+                        <label className="form-label">Status do Prazo</label>
+                        <select 
+                            value={p.favValidity} 
+                            onChange={(e: any) => p.setFavValidity(e.target.value)} 
+                            className="form-select" 
+                            style={{ height: '48px', borderRadius: 'var(--radius-lg)' }}
+                        >
+                            <option value="all">Válidos e Vencidos</option>
+                            <option value="valid">Apenas Válidas (Futuras)</option>
+                            <option value="expired">Apenas Vencidas (Passadas)</option>
                         </select>
                     </div>
 

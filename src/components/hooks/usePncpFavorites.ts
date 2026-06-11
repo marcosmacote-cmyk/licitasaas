@@ -50,6 +50,7 @@ export function usePncpFavorites() {
     const [favValMin, setFavValMin] = useState('');
     const [favValMax, setFavValMax] = useState('');
     const [favSortBy, setFavSortBy] = useState<'date_asc' | 'date_desc' | 'val_desc' | 'val_asc' | 'orgao_asc'>('date_asc');
+    const [favValidity, setFavValidity] = useState<'all' | 'valid' | 'expired'>('all');
     const [showFavFilters, setShowFavFilters] = useState(false);
 
     // PDF Columns configuration state
@@ -178,6 +179,7 @@ export function usePncpFavorites() {
         setFavValMin('');
         setFavValMax('');
         setFavSortBy('date_asc');
+        setFavValidity('all');
     };
 
     const filteredFavoritos = useMemo(() => {
@@ -283,6 +285,18 @@ export function usePncpFavorites() {
             });
         }
 
+        // 6. Validity Filter (Vencido vs Válido/Futuro)
+        if (favValidity !== 'all') {
+            const nowTime = Date.now();
+            items = items.filter(item => {
+                const itemDateStr = item.data_encerramento_proposta || item.data_abertura;
+                if (!itemDateStr) return favValidity === 'expired';
+                const d = new Date(itemDateStr);
+                const isExpired = d.getTime() < nowTime;
+                return favValidity === 'valid' ? !isExpired : isExpired;
+            });
+        }
+
         // Sorting
         return [...items].sort((a, b) => {
             if (favSortBy === 'date_asc' || favSortBy === 'date_desc') {
@@ -302,7 +316,7 @@ export function usePncpFavorites() {
             }
             return 0;
         });
-    }, [favStore, activeFavListId, favSearch, favModality, favUf, favValMin, favValMax, favDateFilter, favDateStart, favDateEnd, favSortBy]);
+    }, [favStore, activeFavListId, favSearch, favModality, favUf, favValMin, favValMax, favDateFilter, favDateStart, favDateEnd, favSortBy, favValidity]);
 
     const favLists = useMemo(() => {
         const defList = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST);
@@ -483,6 +497,7 @@ export function usePncpFavorites() {
         favValMin, setFavValMin,
         favValMax, setFavValMax,
         favSortBy, setFavSortBy,
+        favValidity, setFavValidity,
         showFavFilters, setShowFavFilters,
         pdfColumns, setPdfColumns,
         availableModalities, availableUfs, clearFavFilters
