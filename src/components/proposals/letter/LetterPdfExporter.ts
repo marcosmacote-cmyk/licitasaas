@@ -116,7 +116,7 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 24px; }
         .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
@@ -151,9 +151,12 @@ export class LetterPdfExporter {
             font-size: 10px !important;
         }
         body.landscape-mode .block-closing,
-        body.landscape-mode .signature-block,
         body.landscape-mode .closing-signature-wrapper {
             margin-top: 8px !important;
+            break-inside: avoid !important;
+        }
+        body.landscape-mode .signature-block {
+            margin-top: 35px !important;
             break-inside: avoid !important;
         }
         body.landscape-mode .sig-item {

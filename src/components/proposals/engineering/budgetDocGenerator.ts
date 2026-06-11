@@ -132,7 +132,7 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
 .letter .block { margin-bottom: 4px; }
 .letter .block p { margin-bottom: 3px; line-height: 1.25; }
 .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
-.signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
+.signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 24px; }
 .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
 
 /* Adaptação de layout para Carta Proposta em modo paisagem (margem a margem - compactado) */
@@ -157,9 +157,12 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
     font-size: 10px !important;
 }
 [data-orientation="landscape"] .block-closing,
-[data-orientation="landscape"] .signature-block,
 [data-orientation="landscape"] .closing-signature-wrapper {
     margin-top: 8px !important;
+    break-inside: avoid !important;
+}
+[data-orientation="landscape"] .signature-block {
+    margin-top: 35px !important;
     break-inside: avoid !important;
 }
 [data-orientation="landscape"] .sig-item {

@@ -170,14 +170,14 @@ export class LetterRenderer {
         };
 
         if (sections.length === 1) {
-            return `<div class="block block-signature signature-block" style="margin-top: 6px; text-align: center; page-break-inside: avoid;">
+            return `<div class="block block-signature signature-block" style="margin-top: 24px; text-align: center; page-break-inside: avoid;">
                 ${renderSigItem(sections[0], 'auto')}
             </div>`;
         }
 
         const sigHtml = sections.map(s => renderSigItem(s, '45%')).join('');
 
-        return `<div class="block block-signature signature-block" style="margin-top: 6px; text-align: center; page-break-inside: avoid;">
+        return `<div class="block block-signature signature-block" style="margin-top: 24px; text-align: center; page-break-inside: avoid;">
             ${sigHtml}
         </div>`;
     }
