@@ -135,33 +135,41 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
 .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
 
-/* Adaptação de layout para Carta Proposta em modo paisagem (margem a margem) */
+/* Adaptação de layout para Carta Proposta em modo paisagem (margem a margem - compactado) */
 [data-orientation="landscape"] .letter {
-    font-size: 9.5px !important;
-    line-height: 1.25 !important;
+    font-size: 8px !important;
+    line-height: 1.15 !important;
     margin-bottom: 0 !important;
 }
 [data-orientation="landscape"] .letter .block {
-    margin-bottom: 6px !important;
+    margin-bottom: 3px !important;
 }
 [data-orientation="landscape"] .letter .block p {
-    margin-bottom: 3px !important;
-    line-height: 1.25 !important;
-    font-size: 9.5px !important;
+    margin-bottom: 1px !important;
+    line-height: 1.15 !important;
+    font-size: 8px !important;
+}
+[data-orientation="landscape"] .letter .block > p:first-child[style*="font-weight: bold"] {
+    font-size: 8.5px !important;
+    margin-bottom: 1px !important;
 }
 [data-orientation="landscape"] .block-title p {
-    font-size: 12px !important;
+    font-size: 10px !important;
 }
 [data-orientation="landscape"] .block-closing,
 [data-orientation="landscape"] .signature-block,
 [data-orientation="landscape"] .closing-signature-wrapper {
-    margin-top: 15px !important;
+    margin-top: 8px !important;
     break-inside: avoid !important;
 }
 [data-orientation="landscape"] .sig-item {
-    font-size: 9px !important;
+    font-size: 7.5px !important;
+    line-height: 1.3 !important;
 }
-[data-orientation="landscape"] .sig-item div:first-child { margin-bottom: 4px !important; }
+[data-orientation="landscape"] .sig-item div[style*="border-top"] {
+    margin: 6px auto 2px !important;
+}
+[data-orientation="landscape"] .sig-item div:first-child { margin-bottom: 2px !important; }
 `;
 }
 

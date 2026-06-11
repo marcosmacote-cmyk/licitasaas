@@ -128,34 +128,42 @@ export class LetterPdfExporter {
         .letter .block p { margin-bottom: 3px; line-height: 1.25; }
         .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
 
-        /* Modo Paisagem com layout de margem a margem */
-        body.landscape-mode { font-size: 9.5px !important; line-height: 1.25 !important; }
+        /* Modo Paisagem com layout de margem a margem (compactado para caber em 1 página) */
+        body.landscape-mode { font-size: 8px !important; line-height: 1.15 !important; }
         body.landscape-mode .letter {
-            font-size: 9.5px !important;
-            line-height: 1.25 !important;
+            font-size: 8px !important;
+            line-height: 1.15 !important;
             margin-bottom: 0 !important;
         }
         body.landscape-mode .letter .block {
-            margin-bottom: 6px !important;
+            margin-bottom: 3px !important;
         }
         body.landscape-mode .letter .block p {
-            margin-bottom: 3px !important;
-            line-height: 1.25 !important;
-            font-size: 9.5px !important;
+            margin-bottom: 1px !important;
+            line-height: 1.15 !important;
+            font-size: 8px !important;
+        }
+        body.landscape-mode .letter .block > p:first-child[style*="font-weight: bold"] {
+            font-size: 8.5px !important;
+            margin-bottom: 1px !important;
         }
         body.landscape-mode .block-title p {
-            font-size: 12px !important;
+            font-size: 10px !important;
         }
         body.landscape-mode .block-closing,
         body.landscape-mode .signature-block,
         body.landscape-mode .closing-signature-wrapper {
-            margin-top: 15px !important;
+            margin-top: 8px !important;
             break-inside: avoid !important;
         }
         body.landscape-mode .sig-item {
-            font-size: 9px !important;
+            font-size: 7.5px !important;
+            line-height: 1.3 !important;
         }
-        body.landscape-mode .sig-item div:first-child { margin-bottom: 4px !important; }
+        body.landscape-mode .sig-item div[style*="border-top"] {
+            margin: 6px auto 2px !important;
+        }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 2px !important; }
         body.landscape-mode .content-wrapper { padding: 0 15px !important; }
 
 
