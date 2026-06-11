@@ -27,7 +27,7 @@ export class LetterRenderer {
                 closingBuffer = this.renderBlock(b);
             } else if (b.type === LetterBlockType.SIGNATURE && closingBuffer) {
                 // Wrap closing + signature together to prevent page break between them
-                parts.push(`<div style="page-break-inside: avoid;">${closingBuffer}\n${this.renderBlock(b)}</div>`);
+                parts.push(`<div class="closing-signature-wrapper" style="page-break-inside: avoid;">${closingBuffer}\n${this.renderBlock(b)}</div>`);
                 closingBuffer = '';
             } else {
                 if (closingBuffer) { parts.push(closingBuffer); closingBuffer = ''; }

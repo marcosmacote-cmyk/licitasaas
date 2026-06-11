@@ -68,7 +68,8 @@ export class LetterPdfExporter {
         const showSummaryTable = mode === 'LETTER_WITH_SUMMARY';
         const showAnalyticalTable = mode === 'LETTER_ANALYTICAL';
 
-        const isTooLong = result.plainText && result.plainText.length > 2000;
+        const letterText = result.plainText || (result.blocks || []).filter(b => b.visible).map(b => b.content).join('\n\n');
+        const isTooLong = letterText && letterText.length > 1300;
         const effectiveLandscape = printLandscape || isTooLong;
 
         const topMargin = headerImage 
@@ -157,7 +158,8 @@ export class LetterPdfExporter {
             font-size: 11px !important;
         }
         body.landscape-mode .block-closing,
-        body.landscape-mode .signature-block {
+        body.landscape-mode .signature-block,
+        body.landscape-mode .closing-signature-wrapper {
             column-span: all !important;
             margin-top: 10px !important;
             break-inside: avoid !important;

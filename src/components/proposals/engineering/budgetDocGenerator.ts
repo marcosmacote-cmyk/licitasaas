@@ -167,8 +167,10 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
     font-size: 11px !important;
 }
 [data-orientation="landscape"] .block-closing,
-[data-orientation="landscape"] .signature-block {
+[data-orientation="landscape"] .signature-block,
+[data-orientation="landscape"] .closing-signature-wrapper {
     column-span: all !important;
+    -webkit-column-span: all !important;
     margin-top: 10px !important;
     break-inside: avoid !important;
 }
@@ -202,7 +204,6 @@ export function getOrientation(docId: string, reportConfig?: any, defaultVal: bo
 
 /** Build a complete standalone HTML document string with embedded CSS */
 function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = false, reportConfig?: any): string {
-    const pageCss = landscape ? CSS_LANDSCAPE : CSS_PORTRAIT;
     const palette = resolvePalette(reportConfig);
     const css = buildCSS(palette);
     const rc = reportConfig || {};
@@ -280,9 +281,20 @@ function buildFullHtmlDoc(title: string, bodyHtml: string, landscape: boolean = 
         ? `<div style="margin-top:14px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:8px;color:#475569;"><strong>Observação:</strong> ${rc.observacaoGeral}</div>`
         : '';
 
+    const marginT = Math.max(topMargin + 5, 15);
+    const marginB = Math.max(bottomMargin + 5, 15);
+    const pageCss = `
+        @media print {
+            @page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: ${marginT}px 12mm ${marginB}px 12mm; }
+            @page portrait-layout { size: A4 portrait; margin: ${marginT}px 12mm ${marginB}px 12mm; }
+            @page landscape-layout { size: A4 landscape; margin: ${marginT}px 12mm ${marginB}px 12mm; }
+            [data-orientation="portrait"] { page: portrait-layout; break-before: page; }
+            [data-orientation="landscape"] { page: landscape-layout; break-before: page; }
+        }
+    `;
+
     // ── Assemble full HTML with table-trick for repeating header/footer ──
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${css}${pageCss}
-@media print { @page { margin:${Math.max(topMargin + 5, 15)}px 12mm ${Math.max(bottomMargin + 5, 15)}px 12mm; } }</style></head><body>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${css}${pageCss}</style></head><body>
 ${fixedHeaderHtml}
 ${fixedFooterHtml}
 <table class="print-wrapper">
@@ -1131,7 +1143,7 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
 
     // ── Carta Proposta (optional, pre-built HTML) ──
     if (params.cartaHtml) {
-        const isCartaLandscape = params.cartaHtml.includes('landscape-mode') || params.cartaHtml.length > 2500;
+        const isCartaLandscape = params.cartaHtml.includes('landscape-mode') || params.cartaHtml.length > 1600;
         parts.push(`<div data-orientation="${isCartaLandscape ? 'landscape' : 'portrait'}">${params.cartaHtml}</div>`);
     }
 

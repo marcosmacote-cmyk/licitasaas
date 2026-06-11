@@ -239,10 +239,11 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
             });
 
             const exporter = new LetterPdfExporter();
+            const calculatedPlainText = envelope.plainText || (envelope.blocks || []).filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n');
             exporter.export({
                 result: { 
                     blocks: envelope.blocks || [], 
-                    plainText: envelope.plainText || '', 
+                    plainText: calculatedPlainText, 
                     htmlContent: '', 
                     validation: { isValid: true, errors: [], warnings: [] }, 
                     meta: { generatedAt: new Date().toISOString(), builderVersion: '1', aiBlockIds: [], dataHash: '' } 
@@ -434,7 +435,8 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                 validation: { isValid: true, errors: [], warnings: [] },
                                 meta: { generatedAt: new Date().toISOString(), builderVersion: '1', aiBlockIds: [], dataHash: '' },
                             });
-                            const isTooLong = envelope.plainText && envelope.plainText.length > 2000;
+                            const calculatedPlainText = envelope.plainText || (envelope.blocks || []).filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n');
+                            const isTooLong = calculatedPlainText && calculatedPlainText.length > 1300;
                             cartaHtml = `<div class="letter${isTooLong ? ' landscape-mode' : ''}" style="font-family:Arial,sans-serif;font-size:10.5px;line-height:1.3;">
                                 <h1 style="font-size:14px;text-align:center;margin-bottom:12px;column-span:all;-webkit-column-span:all;">CARTA PROPOSTA</h1>
                                 ${letterBodyHtml}
