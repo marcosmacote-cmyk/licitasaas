@@ -216,7 +216,7 @@ export class ProposalLetterBuilder {
 
         // Declaração 1 — Inclusão de custos (versão reforçada, padrão licitatorial)
         declarations.push(
-            'Que na elaboração da presente Proposta de Preços consideramos o seguinte: ' +
+            'Declaramos que, na elaboração da presente Proposta de Preços, consideramos o seguinte: ' +
             'nos preços unitários propostos para cada item estão inclusos todos os custos diretos e indiretos, ' +
             'tais como: materiais, custo horário da utilização de equipamentos, mão de obra, encargos sociais, ' +
             'trabalhistas, previdenciários e outros, impostos, tributos, emolumentos, taxas, alvarás, licenças ' +

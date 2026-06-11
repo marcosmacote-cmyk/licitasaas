@@ -100,13 +100,13 @@ export class LetterPdfExporter {
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
         /* ── REGRA: Todo o conteúdo da carta deve caber em UMA ÚNICA PÁGINA ── */
-        body { font-family: 'Arial', 'Calibri', sans-serif; color: #111; line-height: 1.4; font-size: 10px; margin: 0; padding: 0; }
+        body { font-family: 'Arial', 'Calibri', sans-serif; color: #111; line-height: 1.3; font-size: 9.6px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .content-wrapper { padding: 2px 15px; }
-        .letter { margin-bottom: 2px; text-align: justify; font-size: 10px; line-height: 1.4; width: 100%; }
+        .letter { margin-bottom: 2px; text-align: justify; font-size: 9.6px; line-height: 1.3; width: 100%; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 9.5px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 9.5px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 9.5px; word-wrap: break-word; overflow: visible; }
@@ -116,17 +116,17 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 10px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 24px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 15px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 9.6px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
 
         /* Espaçamento compacto harmonioso para caber em 1 página */
-        .letter .block { margin-bottom: 4px; }
-        .letter .block p { margin-bottom: 3px; line-height: 1.4; }
-        .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
+        .letter .block { margin-bottom: 3px; }
+        .letter .block p { margin-bottom: 3px; line-height: 1.3; }
+        .letter .block-closing { margin-top: 4px; margin-bottom: 2px; }
 
         /* Modo Paisagem com layout de margem a margem (compactado para caber em 1 página) */
         body.landscape-mode { font-size: 8px !important; line-height: 1.15 !important; }
@@ -171,12 +171,12 @@ export class LetterPdfExporter {
 
 
         @media print {
-            body { font-size: 10px; }
+            body { font-size: 9.6px; }
             body.landscape-mode { font-size: 9px; }
             .content-wrapper { padding: 0; }
             @page {
                 size: ${effectiveLandscape ? 'landscape' : 'portrait'};
-                margin: ${effectiveLandscape ? '1cm 2cm' : '1.5cm 2cm'};
+                margin: ${effectiveLandscape ? '1cm 2cm' : '1.2cm 2cm'};
                 @bottom-right { content: counter(page) "/" counter(pages); font-size: 8px; color: #aaa; }
             }
         }
