@@ -78,6 +78,7 @@ import companiesRoutes from '../routes/companies';
 import documentsRoutes from '../routes/documents';
 import biddingsRoutes from '../routes/biddings';
 import pncpRoutes from '../routes/pncp';
+import {
     normalizeModality, normalizePortal, hasMonitorableDomain,
     detectPlatformFromLink, sanitizeBiddingData,
     MONITORABLE_DOMAINS, PLATFORM_DOMAINS, parseBrazilianDate
