@@ -123,6 +123,77 @@ export function PncpFavoritesFilters({ p }: PncpChildProps) {
                     </div>
                 </div>
 
+                {/* Quick Monthly Shortcuts Row */}
+                <div style={{ 
+                    display: 'flex', 
+                    gap: 'var(--space-2)', 
+                    marginTop: 'var(--space-3)', 
+                    flexWrap: 'wrap', 
+                    alignItems: 'center' 
+                }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 600, marginRight: 'var(--space-1)' }}>Atalhos do Mês:</span>
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            p.setFavDateFilter('this_month');
+                            p.setFavValidity('all');
+                        }}
+                        style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'var(--transition-fast)',
+                            border: (p.favDateFilter === 'this_month' && p.favValidity === 'all') ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                            background: (p.favDateFilter === 'this_month' && p.favValidity === 'all') ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                            color: (p.favDateFilter === 'this_month' && p.favValidity === 'all') ? 'var(--color-primary)' : 'var(--color-text-secondary)'
+                        }}
+                    >
+                        Este Mês (Ambas)
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            p.setFavDateFilter('this_month');
+                            p.setFavValidity('valid');
+                        }}
+                        style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'var(--transition-fast)',
+                            border: (p.favDateFilter === 'this_month' && p.favValidity === 'valid') ? '1px solid var(--color-success)' : '1px solid var(--color-border)',
+                            background: (p.favDateFilter === 'this_month' && p.favValidity === 'valid') ? 'rgba(34, 197, 94, 0.08)' : 'transparent',
+                            color: (p.favDateFilter === 'this_month' && p.favValidity === 'valid') ? 'var(--color-success)' : 'var(--color-text-secondary)'
+                        }}
+                    >
+                        Este Mês (Válidas)
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            p.setFavDateFilter('this_month');
+                            p.setFavValidity('expired');
+                        }}
+                        style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'var(--transition-fast)',
+                            border: (p.favDateFilter === 'this_month' && p.favValidity === 'expired') ? '1px solid var(--color-danger)' : '1px solid var(--color-border)',
+                            background: (p.favDateFilter === 'this_month' && p.favValidity === 'expired') ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                            color: (p.favDateFilter === 'this_month' && p.favValidity === 'expired') ? 'var(--color-danger)' : 'var(--color-text-secondary)'
+                        }}
+                    >
+                        Este Mês (Vencidas)
+                    </button>
+                </div>
+
                 {/* Conditional Custom Date Inputs */}
                 {p.favDateFilter === 'custom' && (
                     <div style={{
