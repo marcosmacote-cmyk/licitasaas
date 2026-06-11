@@ -751,8 +751,8 @@ async function runAutoSetup() {
             });
         }
         
-        // Executar a migração de fuso horário de biddings antigas de forma assíncrona
-        runTimezoneFixMigration().catch(err => logger.error('❌ Erro na migração de fusos:', err));
+        // [DISABLED] Timezone migration is disabled to prevent reverting manual user date edits on server restart.
+        // runTimezoneFixMigration().catch(err => logger.error('❌ Erro na migração de fusos:', err));
 
         logger.info('[FTS] ✅ Setup FTS, trigramas e sementes de sinônimos concluídos com sucesso!');
 
