@@ -568,24 +568,28 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             let formattedSessionDate = formData.sessionDate;
             const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
             if (rawDate) {
-                // Convert PT-BR "27/05/2025 09:00" to datetime-local format "2025-05-27T09:00"
-                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s*)?(\d{2}):(\d{2})/);
-                if (ptBrMatch) {
-                    formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
-                } else {
-                    // Already ISO-like: "2025-05-27T09:00:00" or "2025-05-27T09:00:00Z"
-                    const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-                    if (isoMatch) {
-                        formattedSessionDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
-                    } else {
-                        // Try as generic date
-                        const d = new Date(rawDate);
-                        if (!isNaN(d.getTime())) {
-                            const pad = (n: number) => String(n).padStart(2, '0');
-                            formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                const parseToLocalDatetimeLocal = (dateStr: string): string => {
+                    const trimmed = dateStr.trim();
+                    const ptBrMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/i);
+                    if (ptBrMatch) {
+                        const [, day, month, year, hour = '00', minute = '00'] = ptBrMatch;
+                        return `${year}-${month}-${day}T${hour}:${minute}`;
+                    }
+                    const hasTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(trimmed);
+                    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed) && !hasTimezone) {
+                        const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+                        if (isoMatch) {
+                            return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
                         }
                     }
-                }
+                    const d = new Date(trimmed);
+                    if (!isNaN(d.getTime())) {
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    }
+                    return '';
+                };
+                formattedSessionDate = parseToLocalDatetimeLocal(rawDate) || formattedSessionDate;
             }
 
             // Auto-calculate risk from critical points (severity is in PT: critica, alta, media, baixa)
@@ -679,11 +683,15 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             return;
         }
 
-        // Convert datetime-local format to ISO string safely
+        // Convert datetime-local format to ISO string safely assuming BRT timezone offset when offset is omitted
         const toISO = (dtLocal: string): string => {
+            if (!dtLocal) return new Date().toISOString();
+            const trimmed = dtLocal.trim();
             // datetime-local produces "YYYY-MM-DDTHH:MM", adding sec for parse safety
-            const withSec = dtLocal.includes(':') && dtLocal.split(':').length === 2 ? `${dtLocal}:00` : dtLocal;
-            const parsed = new Date(withSec);
+            const withSec = trimmed.includes(':') && trimmed.split(':').length === 2 ? `${trimmed}:00` : trimmed;
+            const hasTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(withSec);
+            const targetStr = hasTimezone ? withSec : `${withSec}-03:00`;
+            const parsed = new Date(targetStr);
             return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
         };
 

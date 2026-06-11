@@ -157,6 +157,14 @@ describe('sanitizeBiddingData', () => {
         expect(new Date(invalid.sessionDate).getTime()).not.toBeNaN();
     });
 
+    it('should interpret sessionDate under local Brazilian timezone (UTC-3) if no offset is specified', () => {
+        const result = sanitizeBiddingData({ sessionDate: '2025-01-15T10:00:00' });
+        expect(result.sessionDate).toBe('2025-01-15T13:00:00.000Z');
+
+        const resultPtBr = sanitizeBiddingData({ sessionDate: '15/01/2025 às 10:00' });
+        expect(resultPtBr.sessionDate).toBe('2025-01-15T13:00:00.000Z');
+    });
+
     it('should handle reminderDate null', () => {
         expect(sanitizeBiddingData({ reminderDate: null }).reminderDate).toBeNull();
         expect(sanitizeBiddingData({ reminderDate: '' }).reminderDate).toBeNull();

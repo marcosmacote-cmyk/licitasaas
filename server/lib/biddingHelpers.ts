@@ -182,6 +182,54 @@ const BIDDING_ALLOWED_FIELDS = new Set([
     'reminderType', 'reminderDays',
 ]);
 
+/**
+ * Parses a PT-BR or ISO date string under the Brazilian timezone offset (-03:00) if no offset is present.
+ */
+export function parseBrazilianDate(dateStr: string | undefined | null): Date | null {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+
+    // 1. Check if it's already an ISO-like string (starts with YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+        // Check if it already has a timezone indicator (Z or +/-offset)
+        const hasTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(trimmed);
+        if (hasTimezone) {
+            const parsed = new Date(trimmed);
+            return isNaN(parsed.getTime()) ? null : parsed;
+        }
+        // No timezone indicator. Check if it has time component
+        let isoWithOffset = trimmed;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            // Only YYYY-MM-DD
+            isoWithOffset = `${trimmed}T00:00:00-03:00`;
+        } else {
+            // Has time component, replace space with T if needed, and append -03:00
+            isoWithOffset = trimmed.replace(' ', 'T') + '-03:00';
+        }
+        const parsed = new Date(isoWithOffset);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    // 2. Parse PT-BR formats:
+    // "DD/MM/AAAA às HH:MM" or "DD/MM/AAAA HH:MM:SS" or "DD/MM/AAAA HH:MM" or "DD/MM/AAAA"
+    const ptBrMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2})(?::(\d{2}))?)?/i);
+    if (ptBrMatch) {
+        const [, day, month, year, hour = '00', minute = '00', second = '00'] = ptBrMatch;
+        const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`;
+        const parsed = new Date(isoString);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    // 3. Fallback: try direct JavaScript Date parsing
+    const fallbackParsed = new Date(trimmed);
+    if (!isNaN(fallbackParsed.getTime())) {
+        return fallbackParsed;
+    }
+
+    return null;
+}
+
 export function sanitizeBiddingData(raw: Record<string, any>): Record<string, any> {
     const clean: Record<string, any> = {};
     for (const key of Object.keys(raw)) {
@@ -191,8 +239,8 @@ export function sanitizeBiddingData(raw: Record<string, any>): Record<string, an
     }
     // Ensure sessionDate is a valid ISO string
     if (clean.sessionDate && typeof clean.sessionDate === 'string') {
-        const parsed = new Date(clean.sessionDate);
-        if (isNaN(parsed.getTime())) {
+        const parsed = parseBrazilianDate(clean.sessionDate);
+        if (!parsed) {
             logger.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
             clean.sessionDate = new Date().toISOString();
         } else {
@@ -204,8 +252,8 @@ export function sanitizeBiddingData(raw: Record<string, any>): Record<string, an
         if (clean.reminderDate === null || clean.reminderDate === '' || clean.reminderDate === 'null') {
             clean.reminderDate = null;
         } else if (typeof clean.reminderDate === 'string') {
-            const parsed = new Date(clean.reminderDate);
-            if (isNaN(parsed.getTime())) {
+            const parsed = parseBrazilianDate(clean.reminderDate);
+            if (!parsed) {
                 logger.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
                 clean.reminderDate = null;
             } else {

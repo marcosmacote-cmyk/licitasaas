@@ -464,11 +464,30 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
 
             const toISOSafe = (d: string): string => {
                 if (!d) return new Date().toISOString();
-                const parsed = new Date(d);
-                if (!isNaN(parsed.getTime())) return parsed.toISOString();
-                const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
-                if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`).toISOString();
-                return new Date().toISOString();
+                const trimmed = d.trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                    const hasTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(trimmed);
+                    if (hasTimezone) {
+                        const parsed = new Date(trimmed);
+                        return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                    }
+                    let isoWithOffset = trimmed;
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                        isoWithOffset = `${trimmed}T00:00:00-03:00`;
+                    } else {
+                        isoWithOffset = trimmed.replace(' ', 'T') + '-03:00';
+                    }
+                    const parsed = new Date(isoWithOffset);
+                    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                }
+                const ptBrMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2})(?::(\d{2}))?)?/i);
+                if (ptBrMatch) {
+                    const [, day, month, year, hour = '00', minute = '00', second = '00'] = ptBrMatch;
+                    const parsed = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`);
+                    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                }
+                const fallbackParsed = new Date(trimmed);
+                return isNaN(fallbackParsed.getTime()) ? new Date().toISOString() : fallbackParsed.toISOString();
             };
 
             const fakeProcess: BiddingProcess = {
@@ -519,11 +538,30 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             
             const toISOSafe = (d: string): string => {
                 if (!d) return new Date().toISOString();
-                const parsed = new Date(d);
-                if (!isNaN(parsed.getTime())) return parsed.toISOString();
-                const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
-                if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`).toISOString();
-                return new Date().toISOString();
+                const trimmed = d.trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                    const hasTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(trimmed);
+                    if (hasTimezone) {
+                        const parsed = new Date(trimmed);
+                        return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                    }
+                    let isoWithOffset = trimmed;
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                        isoWithOffset = `${trimmed}T00:00:00-03:00`;
+                    } else {
+                        isoWithOffset = trimmed.replace(' ', 'T') + '-03:00';
+                    }
+                    const parsed = new Date(isoWithOffset);
+                    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                }
+                const ptBrMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2})(?::(\d{2}))?)?/i);
+                if (ptBrMatch) {
+                    const [, day, month, year, hour = '00', minute = '00', second = '00'] = ptBrMatch;
+                    const parsed = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`);
+                    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+                }
+                const fallbackParsed = new Date(trimmed);
+                return isNaN(fallbackParsed.getTime()) ? new Date().toISOString() : fallbackParsed.toISOString();
             };
 
             const fakeItem: any = {

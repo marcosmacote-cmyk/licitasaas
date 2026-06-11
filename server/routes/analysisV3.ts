@@ -31,7 +31,7 @@ import { evaluateAnalysisQuality, validateAnalysisCompleteness } from '../servic
 import { V2_EXTRACTION_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_RISK_REVIEW_PROMPT, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from '../services/ai/prompt.service';
 import { uploadDir } from '../services/files.service';
 import { indexDocumentChunks } from '../services/ai/rag.service';
-import { normalizeModality } from '../lib/biddingHelpers';
+import { normalizeModality, parseBrazilianDate } from '../lib/biddingHelpers';
 import { extractMarkdownFromMultiplePdfs, isZeroxAvailable, getZeroxCacheStats } from '../services/ai/zeroxExtractor';
 
 const router = express.Router();
@@ -345,10 +345,8 @@ router.post('/v3', authenticateToken, aiLimiter, async (req: any, res) => {
 
         // Legacy compat
         const parsePtBrDate = (d: string): string => {
-            if (!d) return '';
-            if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d;
-            const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s+)?(\d{2}:\d{2})?/);
-            return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}:00` : d;
+            const parsed = parseBrazilianDate(d);
+            return parsed ? parsed.toISOString() : d || '';
         };
 
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);

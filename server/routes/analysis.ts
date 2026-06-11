@@ -14,7 +14,7 @@ const router = express.Router();
 
 import fs from 'fs';
 import { createExtractorFromData } from 'node-unrar-js';
-import { normalizeModality } from '../lib/biddingHelpers';
+import { normalizeModality, parseBrazilianDate } from '../lib/biddingHelpers';
 import path from 'path';
 import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import { robustJsonParse, robustJsonParseDetailed } from '../services/ai/parser.service';
@@ -1043,16 +1043,8 @@ router.post('/v2', authenticateToken, aiLimiter, async (req: any, res) => {
 
         // ── Helper: Parse date in PT-BR or ISO format ──
         const parsePtBrDate = (dateStr: string): string => {
-            if (!dateStr) return '';
-            // Already ISO
-            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
-            // PT-BR: "27/05/2025 às 09:00" (SchemaEnforcer normalized format)
-            const mAux = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+às\s+(\d{2}):(\d{2})/);
-            if (mAux) return `${mAux[3]}-${mAux[2]}-${mAux[1]}T${mAux[4]}:${mAux[5]}:00`;
-            // PT-BR: "27/05/2025 09:00" or "27/05/2025"
-            const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
-            if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}:00`;
-            return dateStr;
+            const parsed = parseBrazilianDate(dateStr);
+            return parsed ? parsed.toISOString() : dateStr || '';
         };
 
         // ── Helper: Calculate estimated value from itens or schema ──

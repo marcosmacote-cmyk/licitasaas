@@ -78,10 +78,9 @@ import companiesRoutes from '../routes/companies';
 import documentsRoutes from '../routes/documents';
 import biddingsRoutes from '../routes/biddings';
 import pncpRoutes from '../routes/pncp';
-import {
     normalizeModality, normalizePortal, hasMonitorableDomain,
     detectPlatformFromLink, sanitizeBiddingData,
-    MONITORABLE_DOMAINS, PLATFORM_DOMAINS
+    MONITORABLE_DOMAINS, PLATFORM_DOMAINS, parseBrazilianDate
 } from '../lib/biddingHelpers';
 
 const PNCP_HEADERS = {
@@ -1727,16 +1726,8 @@ Responda APENAS com JSON array:
 
         // Convert Brazilian "DD/MM/AAAA às HH:MM" to ISO for frontend Date() compatibility
         const parseBrazilianDateToISO = (dateStr: string): string => {
-            if (!dateStr) return '';
-            // Already ISO? Return as-is
-            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
-            // Parse "DD/MM/AAAA às HH:MM" or "DD/MM/AAAA HH:MM"
-            const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
-            if (match) {
-                const [, day, month, year, hour = '00', minute = '00'] = match;
-                return `${year}-${month}-${day}T${hour}:${minute}:00-03:00`;
-            }
-            return dateStr; // Can't parse, return as-is
+            const parsed = parseBrazilianDate(dateStr);
+            return parsed ? parsed.toISOString() : dateStr || '';
         };
         const resolvedSessionDateISO = parseBrazilianDateToISO(resolvedSessionDateRaw);
 
