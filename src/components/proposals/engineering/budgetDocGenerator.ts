@@ -135,47 +135,31 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
 .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
 
-/* Adaptação de layout para Carta Proposta em modo paisagem */
+/* Adaptação de layout para Carta Proposta em modo paisagem (margem a margem) */
 [data-orientation="landscape"] .letter {
-    column-count: 2 !important;
-    column-gap: 30px !important;
-    column-fill: auto !important;
-    font-size: 8.5px !important;
-    line-height: 1.15 !important;
+    font-size: 9.5px !important;
+    line-height: 1.25 !important;
     margin-bottom: 0 !important;
 }
-[data-orientation="landscape"] .letter h1 {
-    column-span: all !important;
-}
 [data-orientation="landscape"] .letter .block {
-    break-inside: avoid !important;
-    margin-bottom: 4px !important;
-}
-[data-orientation="landscape"] .letter .block p {
-    margin-bottom: 1px !important;
-    line-height: 1.15 !important;
-    font-size: 8.5px !important;
-}
-[data-orientation="landscape"] .block-title,
-[data-orientation="landscape"] .block-recipient,
-[data-orientation="landscape"] .block-reference,
-[data-orientation="landscape"] .block-qualification {
-    column-span: all !important;
     margin-bottom: 6px !important;
 }
+[data-orientation="landscape"] .letter .block p {
+    margin-bottom: 3px !important;
+    line-height: 1.25 !important;
+    font-size: 9.5px !important;
+}
 [data-orientation="landscape"] .block-title p {
-    font-size: 11px !important;
+    font-size: 12px !important;
 }
 [data-orientation="landscape"] .block-closing,
 [data-orientation="landscape"] .signature-block,
 [data-orientation="landscape"] .closing-signature-wrapper {
-    column-span: all !important;
-    -webkit-column-span: all !important;
-    margin-top: 10px !important;
+    margin-top: 15px !important;
     break-inside: avoid !important;
 }
 [data-orientation="landscape"] .sig-item {
-    font-size: 8px !important;
+    font-size: 9px !important;
 }
 [data-orientation="landscape"] .sig-item div:first-child { margin-bottom: 4px !important; }
 `;
