@@ -1242,7 +1242,7 @@ router.post('/ai-letter', authenticateToken, async (req: any, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 router.post('/ai-letter-blocks', authenticateToken, async (req: any, res) => {
     try {
-        const { biddingProcessId, requestedBlocks } = req.body;
+        const { biddingProcessId, requestedBlocks, declarations, companyId } = req.body;
 
         if (!biddingProcessId) {
             return res.status(400).json({ error: 'biddingProcessId is required' });
@@ -1263,6 +1263,14 @@ router.post('/ai-letter-blocks', authenticateToken, async (req: any, res) => {
         });
 
         if (!bidding) return res.status(404).json({ error: 'Bidding process not found' });
+
+        const effectiveCompanyId = companyId || bidding.companyProfileId;
+        let company: any = null;
+        if (effectiveCompanyId) {
+            company = await prisma.companyProfile.findFirst({
+                where: { id: effectiveCompanyId, tenantId: req.user.tenantId }
+            });
+        }
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
@@ -1408,15 +1416,77 @@ REGRAS CRÍTICAS:
             }
         }
 
+        // ── Correct declarations if provided ──
+        let correctedDeclarations: any[] = [];
+        if (declarations && Array.isArray(declarations) && declarations.length > 0) {
+            const tStartDecl = Date.now();
+            try {
+                const companyName = company?.razaoSocial || 'a proponente';
+                const companyCnpj = company?.cnpj || '';
+                const declPrompt = `Você é um redator jurídico especialista em licitações públicas brasileiras de engenharia.
+Sua tarefa é revisar, corrigir gramaticamente e formatar as declarações abaixo para que componham uma proposta comercial de engenharia (documento oficial).
+
+DADOS DO EMITENTE (Proponente):
+Empresa: ${companyName}
+CNPJ: ${companyCnpj}
+
+REGRAS DE REDAÇÃO E GRAMÁTICA:
+1. As declarações devem ser escritas na PRIMEIRA PESSOA DO PLURAL (Nós / A empresa proponente). Portanto, use "Declaramos que", "estamos cientes", "atendemos", "não possuímos", "concordamos", "cumprimos", "não empregamos", etc.
+2. Corrija erros gramaticais de concordância verbal/nominal e de ortografia.
+3. Mantenha o teor jurídico e a fundamentação legal (leis, decretos, artigos) descritos em cada declaração original.
+4. Mantenha as declarações concisas e formais, adequadas para um documento oficial direcionado ao órgão licitante (${bidding.title}).
+5. Retorne as declarações formatadas em JSON, mantendo o mesmo "id" recebido.
+
+DECLARAÇÕES A REVISAR:
+${JSON.stringify(declarations, null, 2)}
+
+FORMATO DE RETORNO (JSON):
+[
+  {
+    "id": "id_da_declaracao",
+    "title": "TÍTULO EM CAIXA ALTA",
+    "content": "Texto da declaração corrigido..."
+  }
+]
+Retorne APENAS o JSON válido, sem comentários, markdown ou explicações.`;
+
+                const declResult = await callGeminiWithRetry(ai.models, {
+                    model: GEMINI_PROFILES.LIGHTWEIGHT,
+                    contents: declPrompt,
+                    config: { 
+                        temperature: 0.1, 
+                        maxOutputTokens: 8192,
+                        responseMimeType: 'application/json'
+                    },
+                }, 3, { tenantId: req.user.tenantId, operation: 'proposal_declarations_correction' });
+
+                const declText = declResult.text?.trim() || '';
+                try {
+                    const parsedDecls = JSON.parse(declText);
+                    correctedDeclarations = Array.isArray(parsedDecls) ? parsedDecls : [];
+                } catch {
+                    const jsonMatch = declText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) {
+                        correctedDeclarations = JSON.parse(jsonMatch[0]);
+                    }
+                }
+                timings['correctedDeclarations'] = Date.now() - tStartDecl;
+            } catch (err: any) {
+                logger.warn(`[AI Letter Blocks] Failed to correct declarations: ${err.message}`);
+                errors.push('Failed to correct declarations: ' + err.message);
+            }
+        }
+
         const totalMs = Date.now() - t0;
         logger.info(`[AI Letter Blocks] Completed in ${totalMs}ms — blocks: ${Object.keys(blocks).join(', ')} | timings: ${JSON.stringify(timings)}`);
 
         if (errors.length > 0) {
-            logger.warn(`[AI Letter Blocks] ${errors.length} block(s) failed:`, errors);
+            logger.warn(`[AI Letter Blocks] ${errors.length} block(s)/declaration(s) failed:`, errors);
         }
 
         res.json({
             blocks,
+            correctedDeclarations: correctedDeclarations.length > 0 ? correctedDeclarations : undefined,
             timings,
             errors: errors.length > 0 ? errors : undefined,
             totalMs,

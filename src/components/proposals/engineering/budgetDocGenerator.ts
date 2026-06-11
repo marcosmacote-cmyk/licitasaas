@@ -126,6 +126,56 @@ table.print-wrapper > tbody > tr > td { border:none; padding:0; vertical-align:t
     padding: 5px 8px;
     font-size: 9.5px;
 }
+
+/* Estilos para a Carta Proposta no Caderno */
+.letter { margin-bottom: 2px; text-align: justify; font-size: 10.5px; line-height: 1.25; width: 100%; }
+.letter .block { margin-bottom: 4px; }
+.letter .block p { margin-bottom: 3px; line-height: 1.25; }
+.letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
+.signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
+.sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
+
+/* Adaptação de layout para Carta Proposta em modo paisagem */
+[data-orientation="landscape"] .letter {
+    column-count: 2 !important;
+    column-gap: 30px !important;
+    column-fill: auto !important;
+    font-size: 8.5px !important;
+    line-height: 1.15 !important;
+    margin-bottom: 0 !important;
+}
+[data-orientation="landscape"] .letter h1 {
+    column-span: all !important;
+}
+[data-orientation="landscape"] .letter .block {
+    break-inside: avoid !important;
+    margin-bottom: 4px !important;
+}
+[data-orientation="landscape"] .letter .block p {
+    margin-bottom: 1px !important;
+    line-height: 1.15 !important;
+    font-size: 8.5px !important;
+}
+[data-orientation="landscape"] .block-title,
+[data-orientation="landscape"] .block-recipient,
+[data-orientation="landscape"] .block-reference,
+[data-orientation="landscape"] .block-qualification {
+    column-span: all !important;
+    margin-bottom: 6px !important;
+}
+[data-orientation="landscape"] .block-title p {
+    font-size: 11px !important;
+}
+[data-orientation="landscape"] .block-closing,
+[data-orientation="landscape"] .signature-block {
+    column-span: all !important;
+    margin-top: 10px !important;
+    break-inside: avoid !important;
+}
+[data-orientation="landscape"] .sig-item {
+    font-size: 8px !important;
+}
+[data-orientation="landscape"] .sig-item div:first-child { margin-bottom: 4px !important; }
 `;
 }
 
@@ -1081,7 +1131,8 @@ export async function docPropostaCompleta(params: PropostaCompletaParams) {
 
     // ── Carta Proposta (optional, pre-built HTML) ──
     if (params.cartaHtml) {
-        parts.push(`<div data-orientation="portrait">${params.cartaHtml}</div>`);
+        const isCartaLandscape = params.cartaHtml.includes('landscape-mode') || params.cartaHtml.length > 2500;
+        parts.push(`<div data-orientation="${isCartaLandscape ? 'landscape' : 'portrait'}">${params.cartaHtml}</div>`);
     }
 
     // ── Orçamento Resumido ──

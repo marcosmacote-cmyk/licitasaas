@@ -434,8 +434,9 @@ export function BudgetDocsPanel({ items, bdiConfig, effectiveBdi, insumos, crono
                                 validation: { isValid: true, errors: [], warnings: [] },
                                 meta: { generatedAt: new Date().toISOString(), builderVersion: '1', aiBlockIds: [], dataHash: '' },
                             });
-                            cartaHtml = `<div style="font-family:Arial,sans-serif;font-size:10.5px;line-height:1.3;">
-                                <h1 style="font-size:14px;text-align:center;margin-bottom:12px;">CARTA PROPOSTA</h1>
+                            const isTooLong = envelope.plainText && envelope.plainText.length > 2000;
+                            cartaHtml = `<div class="letter${isTooLong ? ' landscape-mode' : ''}" style="font-family:Arial,sans-serif;font-size:10.5px;line-height:1.3;">
+                                <h1 style="font-size:14px;text-align:center;margin-bottom:12px;column-span:all;-webkit-column-span:all;">CARTA PROPOSTA</h1>
                                 ${letterBodyHtml}
                             </div>`;
                         }

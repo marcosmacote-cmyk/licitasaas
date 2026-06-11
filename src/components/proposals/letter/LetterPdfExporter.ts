@@ -68,8 +68,15 @@ export class LetterPdfExporter {
         const showSummaryTable = mode === 'LETTER_WITH_SUMMARY';
         const showAnalyticalTable = mode === 'LETTER_ANALYTICAL';
 
-        const topMargin = headerImage ? (headerImageHeight + 20) : 100;
-        const bottomMargin = footerImage ? (footerImageHeight + 30) : 80;
+        const isTooLong = result.plainText && result.plainText.length > 2000;
+        const effectiveLandscape = printLandscape || isTooLong;
+
+        const topMargin = headerImage 
+            ? (effectiveLandscape ? Math.min(headerImageHeight, 50) + 12 : headerImageHeight + 20) 
+            : 100;
+        const bottomMargin = footerImage 
+            ? (effectiveLandscape ? Math.min(footerImageHeight, 40) + 15 : footerImageHeight + 30) 
+            : 80;
 
         // ── Letter HTML ──
         const letterHtml = showLetter ? this.renderer.renderToHtml(result) : '';
@@ -98,7 +105,7 @@ export class LetterPdfExporter {
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .content-wrapper { padding: 2px 15px; }
-        .letter { margin-bottom: 2px; text-align: justify; font-size: 10.5px; line-height: 1.25; }
+        .letter { margin-bottom: 2px; text-align: justify; font-size: 10.5px; line-height: 1.25; width: 100%; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -120,20 +127,44 @@ export class LetterPdfExporter {
         .letter .block p { margin-bottom: 3px; line-height: 1.25; }
         .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
 
-        /* Modo Paisagem — !important necessário para sobrepor estilos inline do Renderer */
-        body.landscape-mode { font-size: 9px !important; line-height: 1.1 !important; }
-        body.landscape-mode .letter { font-size: 8.5px !important; line-height: 1.1 !important; margin-bottom: 0 !important; }
-        body.landscape-mode .letter .block { margin-bottom: 1px !important; }
-        body.landscape-mode .letter .block p { margin-bottom: 0 !important; line-height: 1.1 !important; font-size: 8.5px !important; }
-        body.landscape-mode .letter .block-title { margin-bottom: 3px !important; }
-        body.landscape-mode .letter .block-title p { font-size: 11px !important; }
-        body.landscape-mode .letter .block-recipient { margin-bottom: 2px !important; }
-        body.landscape-mode .letter .block-recipient p { font-size: 9px !important; }
-        body.landscape-mode .letter .block-reference { margin-bottom: 2px !important; }
-        body.landscape-mode .letter .block-reference p { font-size: 9px !important; }
-        body.landscape-mode .letter .block-closing { margin-top: 2px !important; margin-bottom: 0 !important; }
-        body.landscape-mode .signature-block { margin-top: 2px !important; }
-        body.landscape-mode .sig-item { font-size: 8px !important; }
+        /* Modo Paisagem com layout premium em 2 colunas */
+        body.landscape-mode { font-size: 9px !important; line-height: 1.15 !important; }
+        body.landscape-mode .letter {
+            column-count: 2 !important;
+            column-gap: 30px !important;
+            column-fill: auto !important;
+            font-size: 8.5px !important;
+            line-height: 1.15 !important;
+            margin-bottom: 0 !important;
+        }
+        body.landscape-mode .letter .block {
+            break-inside: avoid !important;
+            margin-bottom: 4px !important;
+        }
+        body.landscape-mode .letter .block p {
+            margin-bottom: 1px !important;
+            line-height: 1.15 !important;
+            font-size: 8.5px !important;
+        }
+        body.landscape-mode .block-title,
+        body.landscape-mode .block-recipient,
+        body.landscape-mode .block-reference,
+        body.landscape-mode .block-qualification {
+            column-span: all !important;
+            margin-bottom: 6px !important;
+        }
+        body.landscape-mode .block-title p {
+            font-size: 11px !important;
+        }
+        body.landscape-mode .block-closing,
+        body.landscape-mode .signature-block {
+            column-span: all !important;
+            margin-top: 10px !important;
+            break-inside: avoid !important;
+        }
+        body.landscape-mode .sig-item {
+            font-size: 8px !important;
+        }
         body.landscape-mode .sig-item div:first-child { margin-bottom: 4px !important; }
         body.landscape-mode .content-wrapper { padding: 0 8px !important; }
 
@@ -143,14 +174,14 @@ export class LetterPdfExporter {
             body.landscape-mode { font-size: 9px; }
             .content-wrapper { padding: 0; }
             @page {
-                size: ${printLandscape ? 'landscape' : 'portrait'};
-                margin: ${printLandscape ? '0.3cm 0.5cm' : '0.5cm 0.8cm'};
+                size: ${effectiveLandscape ? 'landscape' : 'portrait'};
+                margin: ${effectiveLandscape ? '0.3cm 0.5cm' : '0.5cm 0.8cm'};
                 @bottom-right { content: counter(page) "/" counter(pages); font-size: 8px; color: #aaa; }
             }
         }
     </style>
 </head>
-<body${printLandscape ? ' class="landscape-mode"' : ''}>
+<body${effectiveLandscape ? ' class="landscape-mode"' : ''}>
     <script>
     window.onload = function() {
         ${(opts.printDelay ?? 500) >= 0 ? `setTimeout(function() { window.print(); }, ${opts.printDelay ?? 500});` : '// preview mode — no auto-print'}
@@ -159,7 +190,7 @@ export class LetterPdfExporter {
 
     <div class="fixed-header">
         ${headerImage
-            ? `<img src="${headerImage}" alt="Cabeçalho" style="max-height: ${headerImageHeight}px;" />`
+            ? `<img src="${headerImage}" alt="Cabeçalho" style="max-height: ${effectiveLandscape ? Math.min(headerImageHeight, 50) : headerImageHeight}px;" />`
             : `<div style="border-bottom: 2px solid #222; padding: 20px 0; margin: 0 40px;">
                 <h1 style="margin: 0; font-size: 20px;">${this.esc(data.company.razaoSocial)}</h1>
                 <p style="margin: 5px 0; font-weight: bold;">CNPJ: ${data.company.cnpj}</p>
@@ -169,7 +200,7 @@ export class LetterPdfExporter {
 
     <div class="fixed-footer">
         ${footerImage
-            ? `<img src="${footerImage}" alt="Rodapé" style="max-height: ${footerImageHeight}px;" />`
+            ? `<img src="${footerImage}" alt="Rodapé" style="max-height: ${effectiveLandscape ? Math.min(footerImageHeight, 40) : footerImageHeight}px;" />`
             : `<div style="border-top: 1px solid #ddd; padding: 10px 0; font-size: 10px; color: #444; margin: 0 40px;">
                 ${data.company.address || data.company.razaoSocial}<br/>
                 ${data.company.email || ''}${data.company.phone ? ' | Tel: ' + data.company.phone : ''}

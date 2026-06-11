@@ -277,25 +277,41 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         setStep('generation');
 
         try {
-            setGenerationProgress(prev => [...prev, '[IA] Solicitando redação IA para blocos variáveis...']);
+            setGenerationProgress(prev => [...prev, '[IA] Solicitando redação IA para blocos variáveis e declarações...']);
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
             let aiBlocks: Record<string, string> = {};
+            let latestDeclarations = [...declarations];
             try {
                 const aiRes = await fetch(`${API_BASE_URL}/api/proposals/ai-letter-blocks`, {
                     method: 'POST', headers,
                     body: JSON.stringify({
                         biddingProcessId: props.bidding.id,
+                        companyId: props.company.id,
                         requestedBlocks: ['objectBlock', 'executionBlock', 'commercialExtras'],
+                        declarations: declarations.filter(d => d.enabled).map(d => ({ id: d.id, title: d.title, content: d.content })),
                     }),
                 });
                 if (aiRes.ok) {
-                    const aiData: AiLetterBlocksResponse & { timings?: Record<string, number>; totalMs?: number } = await aiRes.json();
+                    const aiData: AiLetterBlocksResponse & { correctedDeclarations?: any[]; timings?: Record<string, number>; totalMs?: number } = await aiRes.json();
                     aiBlocks = aiData.blocks || {};
+                    if (aiData.correctedDeclarations && Array.isArray(aiData.correctedDeclarations)) {
+                        latestDeclarations = declarations.map(d => {
+                            const corrected = aiData.correctedDeclarations!.find((c: any) => c.id === d.id);
+                            if (corrected) {
+                                return { ...d, title: corrected.title, content: corrected.content };
+                            }
+                            return d;
+                        });
+                        setDeclarations(latestDeclarations);
+                        setGenerationProgress(prev => [...prev, `[OK] ${aiData.correctedDeclarations!.length} declaração(ões) corrigida(s) gramaticalmente por IA`]);
+                    }
                     const timings = aiData.timings || {};
                     Object.entries(timings).forEach(([k, ms]) => {
-                        setGenerationProgress(prev => [...prev, `[OK] ${k} redigido (${(ms / 1000).toFixed(1)}s)`]);
+                        if (k !== 'correctedDeclarations') {
+                            setGenerationProgress(prev => [...prev, `[OK] ${k} redigido (${(ms / 1000).toFixed(1)}s)`]);
+                        }
                     });
                 } else {
                     setGenerationProgress(prev => [...prev, '[!] IA indisponível — usando dados estruturais']);
@@ -311,7 +327,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
             if (aiBlocks.commercialExtras) builder.setAiContent('commercialExtras', aiBlocks.commercialExtras);
 
             // Injetar declarações habilitadas
-            const enabledDecls = declarations.filter(d => d.enabled);
+            const enabledDecls = latestDeclarations.filter(d => d.enabled);
             if (enabledDecls.length > 0) {
                 builder.setDeclarations(enabledDecls);
                 setGenerationProgress(prev => [...prev, `[OK] ${enabledDecls.length} declaração(ões) adicionada(s)`]);
@@ -335,7 +351,7 @@ export function useProposalWizard(props: ProposalLetterWizardProps) {
         } finally {
             setIsGenerating(false);
         }
-    }, [effectiveData, props]);
+    }, [effectiveData, props, declarations]);
 
     const handleStartEdit = (block: LetterBlock) => {
         setEditingBlockId(block.id);
