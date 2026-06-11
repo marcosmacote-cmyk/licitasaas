@@ -554,6 +554,101 @@ async function runWatchdogCheck() {
     }
 }
 
+async function runTimezoneFixMigration() {
+    try {
+        logger.info('🕰️ Iniciando migração de fuso horário para licitações existentes...');
+        const biddings = await prisma.biddingProcess.findMany({
+            include: { aiAnalysis: true }
+        });
+        
+        let fixedCount = 0;
+        for (const bidding of biddings) {
+            let correctDate: Date | null = null;
+            
+            // A. Tentar buscar pelo PncpLink na tabela local PncpContratacao
+            if (bidding.pncpLink && bidding.pncpLink.includes('pncp.gov.br/app/editais')) {
+                const match = bidding.pncpLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (match) {
+                    const [, cnpj, ano, seq] = match;
+                    const cached = await prisma.pncpContratacao.findFirst({
+                        where: {
+                            cnpjOrgao: cnpj,
+                            anoCompra: parseInt(ano),
+                            sequencialCompra: parseInt(seq)
+                        }
+                    });
+                    if (cached) {
+                        const rawDate = cached.dataAbertura || cached.dataEncerramento || '';
+                        if (rawDate) {
+                            const { parseBrazilianDate } = require('./lib/biddingHelpers');
+                            correctDate = parseBrazilianDate(rawDate instanceof Date ? rawDate.toISOString() : String(rawDate));
+                        }
+                    }
+                    
+                    // Fallback para API do PNCP se não achou localmente
+                    if (!correctDate) {
+                        const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                        try {
+                            const res = await fetch(detailUrl, {
+                                headers: {
+                                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                                }
+                            });
+                            if (res.ok) {
+                                const data = await res.json() as any;
+                                const rawDate = data.dataInicioDisputa || data.dataAberturaEdital || data.dataEncerramentoProposta || '';
+                                if (rawDate) {
+                                    const { parseBrazilianDate } = require('./lib/biddingHelpers');
+                                    correctDate = parseBrazilianDate(rawDate);
+                                }
+                            }
+                        } catch (err: any) {
+                            logger.warn(`[Timezone Migration] Falha ao consultar PNCP API para ${bidding.id}: ${err.message}`);
+                        }
+                    }
+                }
+            }
+            
+            // B. Tentar buscar pela análise da IA
+            if (!correctDate && bidding.aiAnalysis) {
+                const schema = bidding.aiAnalysis.schemaV2 as any;
+                const rawDate = schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
+                if (rawDate) {
+                    const { parseBrazilianDate } = require('./lib/biddingHelpers');
+                    correctDate = parseBrazilianDate(rawDate);
+                }
+            }
+            
+            // C. Corrigir se houver diferença
+            if (correctDate) {
+                const oldTime = bidding.sessionDate.getTime();
+                const newTime = correctDate.getTime();
+                if (Math.abs(oldTime - newTime) > 60 * 1000) {
+                    logger.info(`[Timezone Migration] Corrigindo ${bidding.title} (${bidding.id}): ${bidding.sessionDate.toISOString()} -> ${correctDate.toISOString()}`);
+                    
+                    let updatedReminderDate = bidding.reminderDate;
+                    if (bidding.reminderDate) {
+                        const delta = newTime - oldTime;
+                        updatedReminderDate = new Date(bidding.reminderDate.getTime() + delta);
+                    }
+                    
+                    await prisma.biddingProcess.update({
+                        where: { id: bidding.id },
+                        data: {
+                            sessionDate: correctDate,
+                            reminderDate: updatedReminderDate
+                        }
+                    });
+                    fixedCount++;
+                }
+            }
+        }
+        logger.info(`[Timezone Migration] Migração de fuso concluída. Corrigidos ${fixedCount} processos.`);
+    } catch (error: any) {
+        logger.error('❌ Erro no runTimezoneFixMigration:', error);
+    }
+}
+
 async function runAutoSetup() {
     try {
         logger.info('🔍 Verificando integridade dos dados e tenants...');
@@ -655,6 +750,10 @@ async function runAutoSetup() {
                 create: s
             });
         }
+        
+        // Executar a migração de fuso horário de biddings antigas de forma assíncrona
+        runTimezoneFixMigration().catch(err => logger.error('❌ Erro na migração de fusos:', err));
+
         logger.info('[FTS] ✅ Setup FTS, trigramas e sementes de sinônimos concluídos com sucesso!');
 
     } catch (error) {
