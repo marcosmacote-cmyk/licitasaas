@@ -908,6 +908,7 @@ router.post('/internal/heartbeat', authenticateWorker, async (req: any, res) => 
                 status: status || 'online',
                 metadata: metadata || {},
                 lastHeartbeatAt: new Date(),
+                lastSuccessfulReadAt: metadata?.last_successful_read_at ? new Date(metadata.last_successful_read_at) : null,
             });
         }
         res.json({ success: true, timestamp: new Date() });
