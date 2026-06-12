@@ -8,6 +8,17 @@ import { CATEGORIA_META, type InsumoCategoria } from './insumoEngine';
 
 function fmtQty(v: number) { return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+const cleanCodeForDisplay = (code: string) => {
+    return (code || '').replace(/\/(?:ORSE|SINAPI|SEINFRA|SICRO)$/i, '').trim();
+};
+
+const cleanUnitForDisplay = (unit: string) => {
+    const u = (unit || '').trim().toUpperCase();
+    if (u === 'M2' || u === 'M²') return 'M²';
+    if (u === 'M3' || u === 'M³') return 'M³';
+    return unit;
+};
+
 function safeParseJson(val: any): any {
     if (!val) return null;
     if (typeof val === 'object') return val;
@@ -518,7 +529,7 @@ export async function xlsOrcamentoSintetico(items: any[], engConfig: Engineering
       const uc  = Number(it.unitCost) || 0;
       const up  = Number(it.unitPrice) || 0;
       const tp  = Number(it.totalPrice) || 0;
-      const vals: any[] = [it.itemNumber || '', it.code || '', displaySourceName(it.sourceName) || '—', it.description || '', it.unit || '', qty];
+      const vals: any[] = [it.itemNumber || '', cleanCodeForDisplay(it.code || ''), displaySourceName(it.sourceName) || '—', it.description || '', cleanUnitForDisplay(it.unit || ''), qty];
       if (showCU) vals.push(uc);
       if (showPU) vals.push(up);
       let totalVal: any = tp;
@@ -608,7 +619,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
-  const hdr = ws.addRow([`${badge}${comp.code || 'N/A'} — ${comp.description}`, '', '', '', '', '', `Banco: ${displaySourceName(comp.sourceName) || ''}`, `Unidade: ${comp.unit || ''}`]);
+  const hdr = ws.addRow([`${badge}${cleanCodeForDisplay(comp.code || 'N/A')} — ${comp.description}`, '', '', '', '', '', `Banco: ${displaySourceName(comp.sourceName) || ''}`, `Unidade: ${cleanUnitForDisplay(comp.unit || '')}`]);
   ws.mergeCells(rn, 1, rn, 6);
   hdr.height = 18;
   for (let i = 1; i <= 8; i++) {
@@ -724,7 +735,7 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
         totalVal = { formula: applyPrecision(`F${nextRn}*G${nextRn}`, engConfig) };
       }
 
-      const r = dataRow(ws, [tipo, ci.code || '', displaySourceName(ci.sourceName) || '', ci.description || '', ci.unit || '', coefVal, up, totalVal], idx, [6, 7, 8]);
+      const r = dataRow(ws, [tipo, cleanCodeForDisplay(ci.code || ''), displaySourceName(ci.sourceName) || '', ci.description || '', cleanUnitForDisplay(ci.unit || ''), coefVal, up, totalVal], idx, [6, 7, 8]);
       if (!ci.coefficientExpression || engConfig?.reportConfig?.exportExcelWithFormulas) {
         r.getCell(6).numFmt = '#,##0.0000';
       }
@@ -1167,7 +1178,7 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
       }
     }
 
-    const vals: any[] = [idx + 1, item.code || '', displaySourceName(item.sourceName) || '', item.description || '', item.unit || '', qty];
+    const vals: any[] = [idx + 1, cleanCodeForDisplay(item.code || ''), displaySourceName(item.sourceName) || '', item.description || '', cleanUnitForDisplay(item.unit || ''), qty];
     if (showCU) vals.push(uc);
     if (showPU) vals.push(up);
     vals.push(totalVal, pctVal, acumVal);
@@ -1658,7 +1669,7 @@ export async function xlsCurvaAbcInsumos(insumos: any[], engConfig: EngineeringC
       ? CATEGORIA_META[item.categoria as InsumoCategoria].label
       : (item.categoria || '—');
 
-    const r = dataRow(ws, [idx + 1, item.codigo || '', catLabel, item.descricao || '', item.base || '', item.unidade || '', v, pctVal, acumVal], idx, [7, 8, 9]);
+    const r = dataRow(ws, [idx + 1, cleanCodeForDisplay(item.codigo || ''), catLabel, item.descricao || '', item.base || '', cleanUnitForDisplay(item.unidade || ''), v, pctVal, acumVal], idx, [7, 8, 9]);
     r.getCell(7).numFmt = '#,##0.00';
     r.getCell(8).numFmt = '0.00%';
     r.getCell(9).numFmt = '0.00%';
@@ -1743,7 +1754,7 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
       const r = ws.addRow([
         it.itemNumber,
         it.description,
-        it.unit || '—',
+        cleanUnitForDisplay(it.unit || '—'),
         'Quantidade direta (sem memória cadastrada)',
         1,
         '—',
@@ -1768,7 +1779,7 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
       const r = ws.addRow([
         it.itemNumber,
         it.description,
-        it.unit || '—',
+        cleanUnitForDisplay(it.unit || '—'),
         `Fórmula: ${calcObj.formula}`,
         1,
         '—',
@@ -1798,7 +1809,7 @@ export async function xlsMemoriaCalculo(items: any[], engConfig: EngineeringConf
         const r = ws.addRow([
           rIdx === 0 ? it.itemNumber : '',
           rIdx === 0 ? it.description : '',
-          rIdx === 0 ? it.unit || '—' : '',
+          rIdx === 0 ? cleanUnitForDisplay(it.unit || '—') : '',
           row.description || `Linha ${rIdx + 1}`,
           Number(row.multiplier) || 0,
           row.length ? Number(row.length) : '—',

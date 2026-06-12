@@ -282,7 +282,7 @@ export async function htmlToPdf(options: HtmlToPdfOptions): Promise<Blob | void>
 
             const bodyImgTotalMm = (sectionCanvas.height / sectionCanvas.width) * secContentWidthMm;
             const pxPerMm = sectionCanvas.height / bodyImgTotalMm;
-            const safeBodyHeightMm = secBodyHeightMm - 2;
+            const safeBodyHeightMm = secBodyHeightMm - 8;
             const maxSlicePx = Math.floor(safeBodyHeightMm * pxPerMm);
 
             // ── Row-boundary scanner ──

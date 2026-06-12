@@ -68,7 +68,8 @@ export class TextSanitizer {
      * Remove linhas que contêm apenas placeholders sem valor útil.
      */
     private removeOrphanPlaceholders(text: string): string {
-        return text
+        let cleaned = text.replace(/\b(?:Prazo de execução|Vigência|Prazo de entrega|Prazo de vigência|Validade da proposta|Validade):\s*(?:Não informado|N\/A|—|-)\.?\s*/gi, '');
+        return cleaned
             .split('\n')
             .filter(line => {
                 const trimmed = line.trim();

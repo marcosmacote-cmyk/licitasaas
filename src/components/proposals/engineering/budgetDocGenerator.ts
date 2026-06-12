@@ -30,6 +30,17 @@ const fmt = (v: number) => {
 const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
+const cleanCodeForDisplay = (code: string) => {
+    return (code || '').replace(/\/(?:ORSE|SINAPI|SEINFRA|SICRO)$/i, '').trim();
+};
+
+const cleanUnitForDisplay = (unit: string) => {
+    const u = (unit || '').trim().toUpperCase();
+    if (u === 'M2' || u === 'M²') return 'M²';
+    if (u === 'M3' || u === 'M³') return 'M³';
+    return unit;
+};
+
 function safeParseJson(val: any): any {
     if (!val) return null;
     if (typeof val === 'object') return val;
@@ -65,7 +76,7 @@ function buildCSS(palette: ColorPalette): string {
 * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
 body { font-family:'Segoe UI',Arial,sans-serif; font-size:10px; color:#1a1a2e; margin:0; padding:0; }
 h1 { font-size:14px; margin-bottom:2px; color:#1e293b; text-transform:uppercase; letter-spacing:0.04em; }
-h2 { font-size:11px; color:${palette.accent}; margin:14px 0 6px; border-bottom:2px solid ${palette.accent}; padding-bottom:3px; }
+h2 { font-size:11px; color:${palette.accent}; margin:14px 0 6px; border-bottom:2px solid ${palette.accent}; padding-bottom:3px; page-break-after:avoid; break-after:avoid; }
 .meta { font-size:9px; color:#64748b; margin-bottom:14px; }
 table { width:100%; border-collapse:collapse; margin-bottom:10px; page-break-inside:auto; }
 tr { page-break-inside:avoid; }
@@ -499,7 +510,7 @@ export function docOrcamentoSintetico(items: EngItem[], bdi: number, engineering
                     <td colspan="${colSpan - 1}" class="bold" style="color:#6d28d9; padding-left:8px;">${it.description}</td>
                 </tr>`;
             } else {
-                html += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                html += `<tr><td>${it.itemNumber}</td><td class="mono">${cleanCodeForDisplay(it.code)}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${cleanUnitForDisplay(it.unit)}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
             }
         }
         html += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
@@ -526,7 +537,7 @@ export function docCurvaAbcServicos(items: EngItem[], engineeringConfig?: any, m
         const pctAccum = total > 0 ? (accum / total * 100) : 0;
         const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
         const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${cleanCodeForDisplay(it.code)}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Serviços', `
 <h1>CURVA ABC DE SERVIÇOS</h1>
@@ -556,7 +567,7 @@ export function docCurvaAbcInsumos(insumos: InsumoConsolidado[], engineeringConf
         const catLabel = (ins.categoria && CATEGORIA_META[ins.categoria as InsumoCategoria])
             ? CATEGORIA_META[ins.categoria as InsumoCategoria].label
             : (ins.categoria || '—');
-        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+        rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${cleanCodeForDisplay(ins.codigo)}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${cleanUnitForDisplay(ins.unidade)}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
     });
     return openDoc('Curva ABC de Insumos', `
 <h1>CURVA ABC DE INSUMOS</h1>
@@ -856,8 +867,8 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
     let ch = `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
         <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
             ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
-            <span style="color:#2563eb;">${comp.code || 'N/A'}</span> — ${comp.description} <br>
-            <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${comp.unit}</span>
+            <span style="color:#2563eb;">${cleanCodeForDisplay(comp.code || 'N/A')}</span> — ${comp.description} <br>
+            <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${cleanUnitForDisplay(comp.unit)}</span>
         </div>`;
 
     // FIX BUG-5: Detect CASCA (composition without analytical detail)
@@ -896,10 +907,10 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
 
             ch += `<tr>
                 <td>${tipo}</td>
-                <td class="mono">${ci.code || ''}</td>
+                <td class="mono">${cleanCodeForDisplay(ci.code || '')}</td>
                 ${showBanco ? `<td>${displaySourceName(ci.sourceName) || ''}</td>` : ''}
                 <td>${ci.description || '—'}</td>
-                <td class="c">${ci.type === 'OBSERVACAO' ? '—' : (ci.unit || '')}</td>
+                <td class="c">${ci.type === 'OBSERVACAO' ? '—' : cleanUnitForDisplay(ci.unit || '')}</td>
                 ${showCoef ? `<td class="r mono">${ci.type === 'OBSERVACAO' ? '—' : (ci.coefficientExpression ? `<span style="color:#64748b;font-size:8px">${ci.coefficientExpression.replace(/\*/g, '×')} = </span>${displayCoef.toFixed(7)}` : displayCoef.toFixed(7))}</td>` : ''}
                 <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(ci.unitPrice || 0)}</td>
                 <td class="r">${ci.type === 'OBSERVACAO' ? '—' : fmt(displayRowTotal)}</td>
@@ -1173,7 +1184,7 @@ ${renderGlobalTotals(billable, bdi, rc)}
                         <td colspan="${colSpan - 1}" class="bold" style="color:#6d28d9; padding-left:8px;">${it.description}</td>
                     </tr>`;
                 } else {
-                    h += `<tr><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${it.unit}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
+                    h += `<tr><td>${it.itemNumber}</td><td class="mono">${cleanCodeForDisplay(it.code)}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="c">${cleanUnitForDisplay(it.unit)}</td><td class="r mono">${fmtQty(it.quantity)}</td>${showCU ? `<td class="r">${fmt(it.unitCost)}</td>` : ''}${showPU ? `<td class="r">${fmt(it.unitPrice)}</td>` : ''}<td class="r bold">${fmt(it.totalPrice)}</td></tr>`;
                 }
             }
             h += `<tr class="total"><td colspan="${colSpan}" class="r">Subtotal ${ch.title}</td><td class="r">${fmt(ch.total)}</td></tr></tbody></table>`;
@@ -1205,7 +1216,7 @@ ${renderGlobalTotals(billable, bdi, rc)}
                 rowsHtml += `<tr>
                     <td>${it.itemNumber}</td>
                     <td>${it.description}</td>
-                    <td class="c">${it.unit || '—'}</td>
+                    <td class="c">${cleanUnitForDisplay(it.unit || '—')}</td>
                     <td>Quantidade direta (sem memória cadastrada)</td>
                     <td class="r">1,00</td>
                     <td class="r">—</td>
@@ -1217,7 +1228,7 @@ ${renderGlobalTotals(billable, bdi, rc)}
                 rowsHtml += `<tr>
                     <td>${it.itemNumber}</td>
                     <td>${it.description}</td>
-                    <td class="c">${it.unit || '—'}</td>
+                    <td class="c">${cleanUnitForDisplay(it.unit || '—')}</td>
                     <td>Fórmula: <code class="mono">${calcObj.formula}</code></td>
                     <td class="r">1,00</td>
                     <td class="r">—</td>
@@ -1231,7 +1242,7 @@ ${renderGlobalTotals(billable, bdi, rc)}
                     rowsHtml += `<tr>
                         <td>${rIdx === 0 ? it.itemNumber : ''}</td>
                         <td>${rIdx === 0 ? it.description : ''}</td>
-                        <td class="c">${rIdx === 0 ? (it.unit || '—') : ''}</td>
+                        <td class="c">${rIdx === 0 ? cleanUnitForDisplay(it.unit || '—') : ''}</td>
                         <td>${row.description || `Linha ${rIdx + 1}`}</td>
                         <td class="r">${fmtQty(Number(row.multiplier) || 0)}</td>
                         <td class="r">${row.length ? fmtQty(Number(row.length)) : '—'}</td>
@@ -1348,7 +1359,7 @@ ${renderGlobalTotals(billable, bdi, rc)}
             const pctAccum = svTotal > 0 ? (accum / svTotal * 100) : 0;
             const cls = pctAccum <= 80 ? 'abc-a' : pctAccum <= 95 ? 'abc-b' : 'abc-c';
             const abc = pctAccum <= 80 ? 'A' : pctAccum <= 95 ? 'B' : 'C';
-            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${it.code}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${abc}</td><td>${idx+1}</td><td>${it.itemNumber}</td><td class="mono">${cleanCodeForDisplay(it.code)}</td><td>${displaySourceName(it.sourceName) || '—'}</td><td>${it.description}</td><td class="r">${fmt(it.totalPrice)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<div data-orientation="${getOrientation('abc_servicos', rc, false) ? 'landscape' : 'portrait'}">
 <h1>CURVA ABC DE SERVIÇOS</h1>
@@ -1376,7 +1387,7 @@ ${renderConfigTable(engineeringConfig)}
             const catLabel = (ins.categoria && CATEGORIA_META[ins.categoria as InsumoCategoria])
                 ? CATEGORIA_META[ins.categoria as InsumoCategoria].label
                 : (ins.categoria || '—');
-            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${ins.codigo}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${ins.unidade}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
+            rows += `<tr><td class="${cls}">${ins.abcClass||'—'}</td><td>${idx+1}</td><td class="mono">${cleanCodeForDisplay(ins.codigo)}</td><td>${ins.descricao}</td><td style="font-size:8px;font-weight:600">${displaySourceName(ins.base) || '—'}</td><td>${catLabel}</td><td class="c">${cleanUnitForDisplay(ins.unidade)}</td><td class="r">${fmt(ins.precoFinal)}</td><td class="r">${fmt(custoTotal)}</td><td class="r">${fmtPct(pct)}</td><td class="r bold">${fmtPct(pctAccum)}</td></tr>`;
         });
         parts.push(`<div data-orientation="${getOrientation('abc_insumos', rc, false) ? 'landscape' : 'portrait'}">
 <h1>CURVA ABC DE INSUMOS</h1>
@@ -1485,7 +1496,7 @@ export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mod
             rowsHtml += `<tr>
                 <td style="width: 80px;">${it.itemNumber}</td>
                 <td style="width: 250px;">${it.description}</td>
-                <td class="c" style="width: 40px;">${it.unit || '—'}</td>
+                <td class="c" style="width: 40px;">${cleanUnitForDisplay(it.unit || '—')}</td>
                 <td>Quantidade direta (sem memória cadastrada)</td>
                 <td class="r" style="width: 70px;">1,00</td>
                 <td class="r" style="width: 70px;">—</td>
@@ -1497,7 +1508,7 @@ export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mod
             rowsHtml += `<tr>
                 <td>${it.itemNumber}</td>
                 <td>${it.description}</td>
-                <td class="c">${it.unit || '—'}</td>
+                <td class="c">${cleanUnitForDisplay(it.unit || '—')}</td>
                 <td>Fórmula: <code class="mono">${calcObj.formula}</code></td>
                 <td class="r">1,00</td>
                 <td class="r">—</td>
@@ -1511,7 +1522,7 @@ export function docMemoriaCalculo(items: EngItem[], engineeringConfig?: any, mod
                 rowsHtml += `<tr>
                     <td>${rIdx === 0 ? it.itemNumber : ''}</td>
                     <td>${rIdx === 0 ? it.description : ''}</td>
-                    <td class="c">${rIdx === 0 ? (it.unit || '—') : ''}</td>
+                    <td class="c">${rIdx === 0 ? cleanUnitForDisplay(it.unit || '—') : ''}</td>
                     <td>${row.description || `Linha ${rIdx + 1}`}</td>
                     <td class="r">${fmtQty(Number(row.multiplier) || 0)}</td>
                     <td class="r">${row.length ? fmtQty(Number(row.length)) : '—'}</td>

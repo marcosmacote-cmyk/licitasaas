@@ -155,7 +155,21 @@ export class CompositionFlattener {
           }
         }
         
-        flattened.proposalTotal = agg.quantity * (flattened.valorComBdi / divValue);
+        // Sum total prices of matching proposal items to avoid float and rounding divergences
+        const matchingItems = proposalItems.filter((p: any) => p.code?.toUpperCase() === agg.code.toUpperCase());
+        const totalP = matchingItems.reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
+        flattened.proposalTotal = totalP;
+
+        // Align the composition's displayed header prices with the first matching budget item
+        if (matchingItems.length > 0) {
+          const matchedItem = matchingItems[0];
+          if (matchedItem.unitPrice !== undefined && matchedItem.unitPrice !== null) {
+            flattened.valorComBdi = matchedItem.unitPrice;
+            flattened.valorBdi = matchedItem.unitPrice - (matchedItem.unitCost || 0);
+            flattened.totalPrice = matchedItem.unitCost || 0;
+          }
+        }
+        
         flattened.itemNumbers = agg.itemNumbers;
         principalCompositions.push(flattened);
       }
