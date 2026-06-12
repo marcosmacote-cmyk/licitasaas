@@ -8,6 +8,7 @@
  * 4. CPU                  8. BDI e Encargos Sociais
  */
 import type { BdiConfig, BdiTcuParams } from './bdiEngine';
+import { calculateBdiTCU, DEFAULT_TCU_FORNECIMENTO_PARAMS } from './bdiEngine';
 import type { InsumoConsolidado, InsumoCategoria } from './insumoEngine';
 import { CATEGORIA_META } from './insumoEngine';
 import type { CronogramaResult } from './cronogramaEngine';
@@ -710,6 +711,28 @@ function buildEncargosSociais(es: EncargosSociaisConfig, regime: string) {
     };
 }
 
+/** Gera o HTML formatado para uma planilha de encargos sociais */
+function buildEncargosSociaisHtml(esConfig: any, label: string, regime: string): string {
+    const esData = buildEncargosSociais(esConfig, regime);
+    let esHtml = `<h2>Encargos Sociais sobre Mão de Obra (${label})</h2>`;
+    esHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Regime: <strong>${regime}</strong> | Horista: <strong>${(esData.horista || 0).toFixed(2)}%</strong> · Mensalista: <strong>${(esData.mensalista || 0).toFixed(2)}%</strong></p>`;
+
+    let totalH = 0, totalM = 0;
+    for (const g of esData.groups) {
+        const subH = g.items.reduce((s, i) => s + (i.h || 0), 0);
+        const subM = g.items.reduce((s, i) => s + (i.m || 0), 0);
+        totalH += subH; totalM += subM;
+        esHtml += `<h2 style="font-size:9px;color:#475569">${g.label}</h2>
+<table><thead><tr><th>Cód</th><th>Descrição</th><th class="r">Horista %</th><th class="r">Mensalista %</th></tr></thead><tbody>`;
+        for (const i of g.items) {
+            esHtml += `<tr><td class="mono bold">${i.cod}</td><td>${i.item}</td><td class="r">${fmtPct(i.h || 0)}</td><td class="r">${fmtPct(i.m || 0)}</td></tr>`;
+        }
+        esHtml += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split(' — ')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
+    }
+    esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
+    return esHtml;
+}
+
 /** Shared BDI HTML builder — TCU formula, tax breakdown, numeric demo */
 function buildBdiHtml(tcu: any, isTcu: boolean, bdiEfetivo: number): string {
     let h = `<h2>Composição do BDI</h2>`;
@@ -782,26 +805,30 @@ export function docBdiEncargos(config: BdiConfig, bdiEfetivo: number, engConfig?
     const esConfig = engConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
 
     // ── BDI ──
-    let bdiHtml = buildBdiHtml(tcu, isTcu, bdiEfetivo);
+    let bdiHtml = '';
+    if (engConfig?.bdiDiferenciado) {
+        bdiHtml += `<div style="margin-top: 10px; border-bottom: 2px solid #cbd5e1; padding-bottom: 3px; font-weight: bold; font-size: 10px; color: #1e40af; text-transform: uppercase;">BDI - Tipo Obra (Serviços)</div>`;
+        bdiHtml += buildBdiHtml(tcu, isTcu, bdiEfetivo);
+        
+        bdiHtml += `<div style="page-break-before:always;"></div>`;
+        bdiHtml += `<div style="margin-top: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 3px; font-weight: bold; font-size: 10px; color: #7c3aed; text-transform: uppercase;">BDI - Tipo Fornecimento (Materiais/Equipamentos)</div>`;
+        const tcuFornec = config.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS;
+        const bdiFornecVal = config.mode === 'TCU' ? calculateBdiTCU(tcuFornec, engConfig?.precision) : (engConfig?.bdiFornecimento || 0);
+        bdiHtml += buildBdiHtml(tcuFornec, isTcu, bdiFornecVal);
+    } else {
+        bdiHtml = buildBdiHtml(tcu, isTcu, bdiEfetivo);
+    }
 
     // ── Encargos Sociais — valores reais configurados ──
-    const esData = buildEncargosSociais(esConfig, regime);
-    let esHtml = `<h2>Encargos Sociais sobre Mão de Obra</h2>`;
-    esHtml += `<p style="font-size:8px;color:#64748b;margin-bottom:6px">Regime: <strong>${regime}</strong> | Horista: <strong>${esData.horista.toFixed(2)}%</strong> · Mensalista: <strong>${esData.mensalista.toFixed(2)}%</strong></p>`;
+    const principalLabel = esConfig.basePrincipal || 'Principal';
+    let esHtml = `<div style="page-break-before:always;"></div>` + buildEncargosSociaisHtml(esConfig, principalLabel, regime);
 
-    let totalH = 0, totalM = 0;
-    for (const g of esData.groups) {
-        const subH = g.items.reduce((s,i) => s + (i.h||0), 0);
-        const subM = g.items.reduce((s,i) => s + (i.m||0), 0);
-        totalH += subH; totalM += subM;
-        esHtml += `<h2 style="font-size:9px;color:#475569">${g.label}</h2>
-<table><thead><tr><th>Cód</th><th>Descrição</th><th class="r">Horista %</th><th class="r">Mensalista %</th></tr></thead><tbody>`;
-        for (const i of g.items) {
-            esHtml += `<tr><td class="mono bold">${i.cod}</td><td>${i.item}</td><td class="r">${fmtPct(i.h||0)}</td><td class="r">${fmtPct(i.m||0)}</td></tr>`;
+    if (Array.isArray(esConfig.encargosAdicionais) && esConfig.encargosAdicionais.length > 0) {
+        for (const sheet of esConfig.encargosAdicionais) {
+            esHtml += `<div style="page-break-before:always;"></div>`;
+            esHtml += buildEncargosSociaisHtml(sheet, sheet.label || 'Adicional', regime);
         }
-        esHtml += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split(' — ')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
     }
-    esHtml += `<table><tfoot><tr class="grand"><td colspan="2">A + B + C + D =</td><td class="r">${fmtPct(totalH)}</td><td class="r">${fmtPct(totalM)}</td></tr></tfoot></table>`;
 
     return openDoc('BDI e Encargos Sociais', `<h1>BDI E ENCARGOS SOCIAIS</h1><div class="meta">Modo: ${config.mode} | Regime: ${regime}</div>${renderConfigTable(engConfig)}${bdiHtml}${esHtml}`, getOrientation('bdi', engConfig?.reportConfig, false), engConfig?.reportConfig, mode);
 }
@@ -814,6 +841,32 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
 
     // Grouping metadata
     const metadata = safeParseJson(comp.metadata) || {};
+    const isDirectInsumo = metadata?._isDirectInsumo === true;
+
+    if (isDirectInsumo) {
+        return `<div style="margin-bottom:15px; border:1px solid #e2e8f0; page-break-inside:avoid;">
+            <div style="background:#f1f5f9; padding:6px; font-weight:bold; font-size:9px;">
+                ${comp.itemNumbers?.length ? `<span style="background:#2563eb; color:white; padding:2px 7px; border-radius:3px; font-size:8px; margin-right:6px; font-weight:700;">${comp.itemNumbers.join(', ')}</span>` : ''}
+                <span style="color:#2563eb;">${cleanCodeForDisplay(comp.code || 'N/A')}</span> — ${comp.description} <br>
+                <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${cleanUnitForDisplay(comp.unit)}</span>
+            </div>
+            <div style="background:#1e40af; color:white; padding:7px 10px; font-size:9.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+                <span>VALOR UNITÁRIO</span>
+                <span style="font-size:11px;">${fmt(comp.totalPrice || 0)}</span>
+            </div>
+            <div style="background:#f1f5f9; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0; border-top:none;">
+                <span style="color:#475569;">Valor do BDI => <b>${fmt(comp.valorBdi || 0)}</b></span>
+                <span style="color:#1e40af; font-weight:700; font-size:8.5px;">Preço Unitário (com BDI) => ${fmt(comp.valorComBdi || 0)}</span>
+            </div>
+            ${showQuantities && comp.proposalQuantity ? `
+            <div style="background:#eff6ff; padding:5px 10px; font-size:8.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center; color:#1e40af; border:1px solid #bfdbfe; border-top:none;">
+                <span>Quantidade: ${fmtQty(comp.proposalQuantity)}</span>
+                <span style="font-size:9px;">PREÇO TOTAL => ${fmt(comp.proposalTotal || 0)}</span>
+            </div>` : ''}
+            ${comp.observacao ? `<div style="padding:5px 10px; font-size:7.5px; color:#475569; background:#fefce8; border:1px solid #fde68a; border-top:none;"><strong>Obs:</strong> ${comp.observacao}</div>` : ''}
+        </div>`;
+    }
+
     const customGroupLabels = metadata.customGroupLabels || {};
     const groupOrder = metadata.groupOrder || [];
     const groupNotes = metadata.groupNotes || {};
@@ -1079,7 +1132,7 @@ export async function docCpuBatch(proposalId: string, items: EngItem[], bdi: num
 
     try {
         const report = await fetchAnalyticalReport(proposalId, items, bdi, engineeringConfig);
-        const comps = report?.principalCompositions || [];
+        const comps = (report?.principalCompositions || []).filter((c: any) => !safeParseJson(c.metadata)?._isDirectInsumo);
         const auxComps = report?.auxiliaryCompositions || [];
 
         // Inject compositionNotes from reportConfig
@@ -1319,10 +1372,9 @@ ${renderGlobalTotals(billable, bdi, rc)}
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ items, bdi, engineeringConfig })
             });
-            if (!res.ok) throw new Error('Falha ao carregar relatório analítico');
             const report = await res.json();
             const cNotes = rc.compositionNotes || {};
-            const comps = report?.principalCompositions || [];
+            const comps = (report?.principalCompositions || []).filter((c: any) => !safeParseJson(c.metadata)?._isDirectInsumo);
             const auxComps = report?.auxiliaryCompositions || [];
             for (const comp of [...comps, ...auxComps]) {
                 if (comp.code && cNotes[comp.code]) {
@@ -1442,17 +1494,30 @@ ${renderConfigTable(engineeringConfig)}
         const regime = engineeringConfig?.regimeOneracao || 'DESONERADO';
         const esConfig = engineeringConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
         let h = `<h1>BDI E ENCARGOS SOCIAIS</h1>`;
-        h += buildBdiHtml(tcu, isTcu, bdi);
+        
+        if (engineeringConfig?.bdiDiferenciado) {
+            h += `<div style="margin-top: 10px; border-bottom: 2px solid #cbd5e1; padding-bottom: 3px; font-weight: bold; font-size: 10px; color: #1e40af; text-transform: uppercase;">BDI - Tipo Obra (Serviços)</div>`;
+            h += buildBdiHtml(tcu, isTcu, bdi);
+            
+            h += `<div style="page-break-before:always;"></div>`;
+            h += `<div style="margin-top: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 3px; font-weight: bold; font-size: 10px; color: #7c3aed; text-transform: uppercase;">BDI - Tipo Fornecimento (Materiais/Equipamentos)</div>`;
+            const tcuFornec = bdiConfig.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS;
+            const bdiFornecVal = bdiConfig.mode === 'TCU' ? calculateBdiTCU(tcuFornec, engineeringConfig?.precision) : (engineeringConfig?.bdiFornecimento || 0);
+            h += buildBdiHtml(tcuFornec, isTcu, bdiFornecVal);
+        } else {
+            h += buildBdiHtml(tcu, isTcu, bdi);
+        }
+
         // Encargos Sociais
         if (rc.showEncargosSociais !== false) {
-            const es = buildEncargosSociais(esConfig, regime);
-            h += `<h2>Encargos Sociais (${regime})</h2>
-<div class="meta">Horista: ${fmtPct(es.horista ?? 0)} · Mensalista: ${fmtPct(es.mensalista ?? 0)}</div>`;
-            for (const g of es.groups) {
-                h += `<h2 style="font-size:10px;">${g.label}</h2><table><thead><tr><th>Cód</th><th>Descrição</th><th class="r">Horista (%)</th><th class="r">Mensalista (%)</th></tr></thead><tbody>`;
-                let subH = 0, subM = 0;
-                for (const item of g.items) { subH += item.h; subM += item.m; h += `<tr><td>${item.cod}</td><td>${item.item}</td><td class="r">${fmtPct(item.h)}</td><td class="r">${fmtPct(item.m)}</td></tr>`; }
-                h += `<tr class="total"><td colspan="2" class="r">Subtotal ${g.label.split('—')[0]}</td><td class="r">${fmtPct(subH)}</td><td class="r">${fmtPct(subM)}</td></tr></tbody></table>`;
+            const principalLabel = esConfig.basePrincipal || 'Principal';
+            h += `<div style="page-break-before:always;"></div>` + buildEncargosSociaisHtml(esConfig, principalLabel, regime);
+
+            if (Array.isArray(esConfig.encargosAdicionais) && esConfig.encargosAdicionais.length > 0) {
+                for (const sheet of esConfig.encargosAdicionais) {
+                    h += `<div style="page-break-before:always;"></div>`;
+                    h += buildEncargosSociaisHtml(sheet, sheet.label || 'Adicional', regime);
+                }
             }
         }
         parts.push(`<div data-orientation="${getOrientation('bdi', rc, false) ? 'landscape' : 'portrait'}">${h}</div>`);

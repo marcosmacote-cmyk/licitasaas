@@ -141,7 +141,37 @@ export class CompositionFlattener {
 
     for (const agg of aggregatedItems.values()) {
       const composition = compByCode.get(agg.code.toUpperCase());
-      if (!composition) continue;
+      const matchingItems = proposalItems.filter((p: any) => p.code?.toUpperCase() === agg.code.toUpperCase());
+      const isExplicitInsumo = matchingItems.some((p: any) => p.type === 'INSUMO');
+
+      if (!composition || isExplicitInsumo) {
+        if (matchingItems.length > 0) {
+          const matchedItem = matchingItems[0];
+          const totalP = matchingItems.reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
+          principalCompositions.push({
+            id: matchedItem.id,
+            code: agg.code,
+            sourceName: agg.sourceName,
+            description: matchedItem.description || '',
+            unit: matchedItem.unit || 'UN',
+            totalPrice: matchedItem.unitCost || 0,
+            items: [],
+            isAuxiliary: false,
+            itemNumbers: agg.itemNumbers,
+            metadata: { _isDirectInsumo: true },
+            totalMoSemLs: 0,
+            totalLs: 0,
+            totalMoComLs: 0,
+            totalMaterial: 0,
+            totalEquipamento: 0,
+            valorBdi: (matchedItem.unitPrice || 0) - (matchedItem.unitCost || 0),
+            valorComBdi: matchedItem.unitPrice || 0,
+            proposalQuantity: agg.quantity,
+            proposalTotal: totalP,
+          });
+        }
+        continue;
+      }
 
       const flattened = await this.resolveComposition(composition.id, false, composition.database?.name || agg.sourceName);
       if (flattened) {
@@ -156,7 +186,6 @@ export class CompositionFlattener {
         }
         
         // Sum total prices of matching proposal items to avoid float and rounding divergences
-        const matchingItems = proposalItems.filter((p: any) => p.code?.toUpperCase() === agg.code.toUpperCase());
         const totalP = matchingItems.reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
         flattened.proposalTotal = totalP;
 

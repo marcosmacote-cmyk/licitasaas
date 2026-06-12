@@ -1,7 +1,8 @@
 import ExcelJS from 'exceljs';
-import type { EngineeringConfig, ColorPalette } from './types';
+import type { EngineeringConfig, ColorPalette, EncargosSociaisConfig } from './types';
 import { isGrouper, DEFAULT_COLOR_PALETTE, displaySourceName } from './types';
 import type { BdiConfig } from './bdiEngine';
+import { calculateBdiTCU, DEFAULT_TCU_FORNECIMENTO_PARAMS } from './bdiEngine';
 import { applyPrecision as applyPrecisionNum } from './precisionEngine';
 import { getOrientation } from './budgetDocGenerator';
 import { CATEGORIA_META, type InsumoCategoria } from './insumoEngine';
@@ -616,6 +617,10 @@ async function fetchAnalyticalReport(proposalId: string, items: any[], bdi: numb
 
 // Helper: render one composition as Excel rows
 function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engConfig?: EngineeringConfig, bdi?: number) {
+  // Grouping metadata
+  const metadata = safeParseJson(comp.metadata) || {};
+  const isDirectInsumo = metadata?._isDirectInsumo === true;
+
   // Header row for the composition
   const rn = ws.rowCount + 1;
   const badge = comp.itemNumbers?.length ? `[${comp.itemNumbers.join(', ')}] ` : '';
@@ -628,11 +633,92 @@ function renderCompXls(ws: ExcelJS.Worksheet, comp: any, showQty: boolean, engCo
     hdr.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_MED } };
   }
 
+  if (isDirectInsumo) {
+    const bdiRate = typeof bdi === 'number' ? (bdi > 1 ? bdi / 100 : bdi) : 0.25;
+    const costRn = ws.rowCount + 1;
+    const costRow = ws.addRow(['VALOR UNITÁRIO (sem BDI)', '', '', '', '', '', '', Number(comp.totalPrice) || 0]);
+    ws.mergeCells(costRn, 1, costRn, 7);
+    costRow.getCell(8).numFmt = '#,##0.00';
+    costRow.height = 18;
+    for (let i = 1; i <= 8; i++) {
+      costRow.getCell(i).fill = fill(C.BLUE_MED);
+      costRow.getCell(i).border = border(C.BLUE_MED);
+      costRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.WHITE } };
+      costRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    const bdiValRn = ws.rowCount + 1;
+    const bdiValRow = ws.addRow([
+      `Valor do BDI (${(bdiRate * 100).toFixed(2)}%)`, 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${costRn}*${bdiRate}, 2)` }
+    ]);
+    ws.mergeCells(bdiValRn, 1, bdiValRn, 7);
+    bdiValRow.getCell(8).numFmt = '#,##0.00';
+    bdiValRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      bdiValRow.getCell(i).fill = fill(C.GRAY_SUB);
+      bdiValRow.getCell(i).border = border();
+      bdiValRow.getCell(i).font = { size: 8, color: { argb: C.TEXT_MID }, bold: true };
+      bdiValRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    const bdiPriceRn = ws.rowCount + 1;
+    const bdiPriceRow = ws.addRow([
+      'Preço Unitário (com BDI)', 
+      '', '', '', '', '', '', 
+      { formula: `ROUND(H${costRn}+H${bdiValRn}, 2)` }
+    ]);
+    ws.mergeCells(bdiPriceRn, 1, bdiPriceRn, 7);
+    bdiPriceRow.getCell(8).numFmt = '#,##0.00';
+    bdiPriceRow.height = 14;
+    for (let i = 1; i <= 8; i++) {
+      bdiPriceRow.getCell(i).fill = fill(C.GRAY_SUB);
+      bdiPriceRow.getCell(i).border = border();
+      bdiPriceRow.getCell(i).font = { size: 8.5, color: { argb: C.BLUE_DARK }, bold: true };
+      bdiPriceRow.getCell(i).alignment = { horizontal: i === 8 ? 'right' : 'left', vertical: 'middle' };
+    }
+
+    if (showQty && comp.proposalQuantity) {
+      const qRn = ws.rowCount + 1;
+      const proposalQty = Number(comp.proposalQuantity) || 0;
+      const qRow = ws.addRow([
+        'Quantidade de Serviço:', 
+        '', '', '', '', 
+        proposalQty, 
+        'PREÇO TOTAL =>', 
+        { formula: `ROUND(F${qRn}*H${bdiPriceRn}, 2)` }
+      ]);
+      ws.mergeCells(qRn, 1, qRn, 5);
+      qRow.getCell(6).numFmt = '#,##0.00##';
+      qRow.getCell(8).numFmt = '#,##0.00';
+      qRow.height = 18;
+      for (let i = 1; i <= 8; i++) {
+        qRow.getCell(i).fill = fill(C.BLUE_LIGHT);
+        qRow.getCell(i).border = border(C.BLUE_MED);
+        qRow.getCell(i).font = { bold: true, size: 9, color: { argb: C.BLUE_DARK } };
+        qRow.getCell(i).alignment = { horizontal: i === 6 || i === 8 ? 'right' : 'left', vertical: 'middle' };
+      }
+    }
+
+    if (comp.observacao) {
+      const obsRn = ws.rowCount + 1;
+      const obsRow = ws.addRow([`Obs: ${comp.observacao}`]);
+      ws.mergeCells(obsRn, 1, obsRn, 8);
+      obsRow.height = 14;
+      obsRow.getCell(1).fill = fill('FEFCE8');
+      obsRow.getCell(1).border = border('FDE68A');
+      obsRow.getCell(1).font = { italic: true, size: 8, color: { argb: '92400E' } };
+    }
+
+    ws.addRow([]); // spacing
+    return;
+  }
+
   // Insumos header
   headRow(ws, ['Tipo', 'Código', 'Banco', 'Descrição', 'Und', 'Coef.', 'Custo Unit.', 'Total']);
 
-  // Grouping metadata
-  const metadata = safeParseJson(comp.metadata) || {};
+  // Grouping metadata already parsed at function start
   const customGroupLabels = metadata.customGroupLabels || {};
   const groupOrder = metadata.groupOrder || [];
   const groupNotes = metadata.groupNotes || {};
@@ -1075,7 +1161,7 @@ export async function xlsCpuBatch(proposalId: string, items: any[], engConfig: E
   try {
     const report = await fetchAnalyticalReport(proposalId, items, bdi, engConfig);
 
-    const comps = report?.principalCompositions || [];
+    const comps = (report?.principalCompositions || []).filter((c: any) => !safeParseJson(c.metadata)?._isDirectInsumo);
     const auxComps = report?.auxiliaryCompositions || [];
 
     // Inject compositionNotes from reportConfig
@@ -1218,32 +1304,10 @@ export async function xlsCurvaAbcServicos(items: any[], engConfig: EngineeringCo
   return saveWb(wb, 'abc-servicos.xlsx', returnBuffer);
 }
 
-// ── 4. BDI E ENCARGOS SOCIAIS ────────────────────────────────────────────────
-export async function xlsBdiEncargos(
-  engConfig: EngineeringConfig | undefined,
-  bdi: number,
-  bdiConfig?: BdiConfig,
-  returnBuffer?: boolean
-) {
-  setGlobalPrecision(engConfig);
-  const wb = new ExcelJS.Workbook();
-
-  // ═══════════════════════════════════════════════════════════
-  // PLANILHA 1: COMPOSIÇÃO DE BDI
-  // ═══════════════════════════════════════════════════════════
-  const wsBdi = wb.addWorksheet('Composição de BDI');
-  setupPrint(wsBdi, getOrientation('bdi', engConfig?.reportConfig, false), engConfig?.reportConfig);
-  wsBdi.columns = [{ width: 48 }, { width: 12 }, { width: 16 }];
-  logoRow(wb, wsBdi, 3, engConfig?.reportConfig);
-
-  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
-  const isTcu = bdiConfig?.mode === 'TCU' && bdiConfig?.tcu;
-
-  titleRow(wsBdi, isTcu ? 'COMPOSIÇÃO DO BDI ( TCU )' : 'COMPOSIÇÃO DO BDI', 3);
-  metaRows(wsBdi, engConfig, [], 3);
-
-  if (isTcu && bdiConfig?.tcu) {
-    const tcu = bdiConfig.tcu;
+function renderBdiXlsBlock(wsBdi: ExcelJS.Worksheet, tcu: any, isTcu: boolean, bdiRate: number, title: string) {
+  titleRow(wsBdi, title, 3);
+  
+  if (isTcu && tcu) {
     headRow(wsBdi, ['COMPONENTE', 'SIGLA', 'TAXA (%)']);
 
     const compRows = [
@@ -1341,10 +1405,9 @@ export async function xlsBdiEncargos(
     }
 
   } else {
-    // STANDARD / SIMPLIFICADO BDI
     headRow(wsBdi, ['TIPO DE BDI', '', 'TAXA (%)']);
     const rnRow = wsBdi.rowCount + 1;
-    const bRow = wsBdi.addRow(['BDI Simplificado do Orçamento', '', bdiRate]);
+    const bRow = wsBdi.addRow(['BDI Simplificado', '', bdiRate]);
     wsBdi.mergeCells(rnRow, 1, rnRow, 2);
     bRow.getCell(3).numFmt = '0.00%';
     bRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
@@ -1355,19 +1418,16 @@ export async function xlsBdiEncargos(
       bRow.getCell(i).font = { bold: true, size: 10, color: { argb: C.WHITE } };
     }
   }
+}
 
-  // ═══════════════════════════════════════════════════════════
-  // PLANILHA 2: ENCARGOS SOCIAIS
-  // ═══════════════════════════════════════════════════════════
-  const wsEs = wb.addWorksheet('Encargos Sociais');
+function populateEncargosXlsSheet(wb: ExcelJS.Workbook, wsEs: ExcelJS.Worksheet, es: any, label: string, engConfig: EngineeringConfig | undefined) {
   setupPrint(wsEs, getOrientation('bdi', engConfig?.reportConfig, false), engConfig?.reportConfig);
   wsEs.columns = [{ width: 8 }, { width: 45 }, { width: 14 }, { width: 14 }];
   logoRow(wb, wsEs, 4, engConfig?.reportConfig);
 
-  titleRow(wsEs, 'ENCARGOS SOCIAIS SOBRE MÃO DE OBRA', 4);
+  titleRow(wsEs, `ENCARGOS SOCIAIS SOBRE MÃO DE OBRA (${label})`, 4);
 
   const isDesonerado = (engConfig?.regimeOneracao || 'DESONERADO') === 'DESONERADO';
-  const es = engConfig?.encargosSociais || {} as any;
   const def: Record<string, number> = {
     a1_h: isDesonerado ? 0 : 20, a1_m: isDesonerado ? 0 : 20,
     a2_h:1.5,a2_m:1.5,a3_h:1,a3_m:1,a4_h:0.2,a4_m:0.2,a5_h:0.6,a5_m:0.6,
@@ -1460,6 +1520,57 @@ export async function xlsBdiEncargos(
     c.border = border(C.BLUE_DARK);
     c.font = { bold: true, size: 10, color: { argb: C.WHITE } };
     c.alignment = { horizontal: 'right', vertical: 'middle' };
+  }
+}
+
+export async function xlsBdiEncargos(
+  engConfig: EngineeringConfig | undefined,
+  bdi: number,
+  bdiConfig?: BdiConfig,
+  returnBuffer?: boolean
+) {
+  setGlobalPrecision(engConfig);
+  const wb = new ExcelJS.Workbook();
+
+  // ═══════════════════════════════════════════════════════════
+  // PLANILHA 1: COMPOSIÇÃO DE BDI
+  // ═══════════════════════════════════════════════════════════
+  const wsBdi = wb.addWorksheet('Composição de BDI');
+  setupPrint(wsBdi, getOrientation('bdi', engConfig?.reportConfig, false), engConfig?.reportConfig);
+  wsBdi.columns = [{ width: 48 }, { width: 12 }, { width: 16 }];
+  logoRow(wb, wsBdi, 3, engConfig?.reportConfig);
+
+  const bdiRate = bdi > 1 ? bdi / 100 : bdi;
+  const isTcu = !!(bdiConfig?.mode === 'TCU' && bdiConfig?.tcu);
+
+  if (engConfig?.bdiDiferenciado) {
+    renderBdiXlsBlock(wsBdi, bdiConfig?.tcu, isTcu, bdiRate, 'BDI - TIPO OBRA (SERVIÇOS)');
+    wsBdi.addRow([]);
+    wsBdi.addRow([]);
+    const tcuFornec = bdiConfig?.tcuFornecimento || DEFAULT_TCU_FORNECIMENTO_PARAMS;
+    const bdiFornecVal = bdiConfig?.mode === 'TCU' ? calculateBdiTCU(tcuFornec, engConfig?.precision) : (engConfig?.bdiFornecimento || 0);
+    const bdiFornecRate = bdiFornecVal > 1 ? bdiFornecVal / 100 : bdiFornecVal;
+    renderBdiXlsBlock(wsBdi, tcuFornec, isTcu, bdiFornecRate, 'BDI - TIPO FORNECIMENTO (MATERIAIS/EQUIPAMENTOS)');
+  } else {
+    renderBdiXlsBlock(wsBdi, bdiConfig?.tcu, isTcu, bdiRate, isTcu ? 'COMPOSIÇÃO DO BDI ( TCU )' : 'COMPOSIÇÃO DO BDI');
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PLANILHA 2: ENCARGOS SOCIAIS
+  // ═══════════════════════════════════════════════════════════
+  const esConfig = engConfig?.encargosSociais || { horista: 83.85, mensalista: 47.76 } as EncargosSociaisConfig;
+  const principalLabel = esConfig.basePrincipal || 'Principal';
+  
+  const wsEs = wb.addWorksheet('Encargos Sociais');
+  populateEncargosXlsSheet(wb, wsEs, esConfig, principalLabel, engConfig);
+
+  if (Array.isArray(esConfig.encargosAdicionais) && esConfig.encargosAdicionais.length > 0) {
+    for (const sheet of esConfig.encargosAdicionais) {
+      const sheetName = `Encargos - ${sheet.label || 'Adicional'}`;
+      const cleanSheetName = sheetName.replace(/[:\\/?*\[\]]/g, '').substring(0, 31);
+      const wsEsAdic = wb.addWorksheet(cleanSheetName);
+      populateEncargosXlsSheet(wb, wsEsAdic, sheet, sheet.label || 'Adicional', engConfig);
+    }
   }
 
   return saveWb(wb, 'bdi-encargos.xlsx', returnBuffer);
