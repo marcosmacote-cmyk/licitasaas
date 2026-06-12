@@ -148,6 +148,17 @@ export class CompositionFlattener {
         if (matchingItems.length > 0) {
           const matchedItem = matchingItems[0];
           const totalP = matchingItems.reduce((s: number, it: any) => s + (it.totalPrice || 0), 0);
+          
+          const insumoClassification = classifyInsumoType(matchedItem.description || '', matchedItem.unit || 'UN');
+          const isMaoDeObra = insumoClassification.type === 'MAO_DE_OBRA';
+          
+          const totalMoComLs = isMaoDeObra ? (matchedItem.unitCost || 0) : 0;
+          const totalMoSemLs = isMaoDeObra ? (totalMoComLs / (1 + this.lsPercentage)) : 0;
+          const totalLs = totalMoComLs - totalMoSemLs;
+          
+          const totalMaterial = insumoClassification.type === 'MATERIAL' ? (matchedItem.unitCost || 0) : 0;
+          const totalEquipamento = insumoClassification.type === 'EQUIPAMENTO' ? (matchedItem.unitCost || 0) : 0;
+
           principalCompositions.push({
             id: matchedItem.id,
             code: agg.code,
@@ -159,11 +170,11 @@ export class CompositionFlattener {
             isAuxiliary: false,
             itemNumbers: agg.itemNumbers,
             metadata: { _isDirectInsumo: true },
-            totalMoSemLs: 0,
-            totalLs: 0,
-            totalMoComLs: 0,
-            totalMaterial: 0,
-            totalEquipamento: 0,
+            totalMoSemLs,
+            totalLs,
+            totalMoComLs,
+            totalMaterial,
+            totalEquipamento,
             valorBdi: (matchedItem.unitPrice || 0) - (matchedItem.unitCost || 0),
             valorComBdi: matchedItem.unitPrice || 0,
             proposalQuantity: agg.quantity,

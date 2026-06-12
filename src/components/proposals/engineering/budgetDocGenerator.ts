@@ -850,8 +850,17 @@ function renderComposition(comp: any, showQuantities: boolean = false, reportCon
                 <span style="color:#2563eb;">${cleanCodeForDisplay(comp.code || 'N/A')}</span> — ${comp.description} <br>
                 <span style="font-size:7.5px; font-weight:normal; color:#64748b;">Banco: ${displaySourceName(comp.sourceName)} · Unidade: ${cleanUnitForDisplay(comp.unit)}</span>
             </div>
+            <div style="padding:6px; background:#f8fafc; font-size:8px; border-top:1px solid #e2e8f0; line-height: 1.4;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                    <div style="color:#475569;">
+                        MO sem LS => <b>${fmt(comp.totalMoSemLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                        LS => <b>${fmt(comp.totalLs || 0)}</b> &nbsp;&nbsp;&nbsp;&nbsp; 
+                        MO com LS => <b>${fmt(comp.totalMoComLs || 0)}</b>
+                    </div>
+                </div>
+            </div>
             <div style="background:#1e40af; color:white; padding:7px 10px; font-size:9.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center;">
-                <span>VALOR UNITÁRIO</span>
+                <span>CUSTO UNITÁRIO TOTAL</span>
                 <span style="font-size:11px;">${fmt(comp.totalPrice || 0)}</span>
             </div>
             <div style="background:#f1f5f9; padding:5px 10px; font-size:8px; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0; border-top:none;">
