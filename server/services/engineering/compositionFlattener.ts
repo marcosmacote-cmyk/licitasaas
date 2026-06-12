@@ -380,8 +380,25 @@ export class CompositionFlattener {
     const effectiveTotal = flattenedItems.length > 0 ? calculatedTotal : storedTotal;
 
     // Leis Sociais already included in totalMoComLs. Extract backward.
-    const totalMoSemLs = totalMoComLs / (1 + this.lsPercentage);
-    const totalLs = totalMoComLs - totalMoSemLs;
+    let finalTotalMoComLs = totalMoComLs;
+    let finalTotalMaterial = totalMaterial;
+    let finalTotalEquipamento = totalEquipamento;
+    let updatedMetadata = safeParseJson(composition.metadata) || {};
+
+    if (flattenedItems.length === 0) {
+      updatedMetadata = { ...updatedMetadata, _isDirectInsumo: true };
+      const insumoClassification = classifyInsumoType(composition.description || '', composition.unit || 'UN');
+      if (insumoClassification.type === 'MAO_DE_OBRA') {
+        finalTotalMoComLs = effectiveTotal;
+      } else if (insumoClassification.type === 'MATERIAL') {
+        finalTotalMaterial = effectiveTotal;
+      } else if (insumoClassification.type === 'EQUIPAMENTO') {
+        finalTotalEquipamento = effectiveTotal;
+      }
+    }
+
+    const finalTotalMoSemLs = finalTotalMoComLs / (1 + this.lsPercentage);
+    const finalTotalLs = finalTotalMoComLs - finalTotalMoSemLs;
     
     const valorBdi = effectiveTotal * this.bdi;
     const valorComBdi = effectiveTotal + valorBdi;
@@ -396,12 +413,12 @@ export class CompositionFlattener {
       items: flattenedItems,
       isAuxiliary,
       itemNumbers: [], // populated by flattenProposal for principals
-      metadata: composition.metadata,
-      totalMoSemLs,
-      totalLs,
-      totalMoComLs,
-      totalMaterial,
-      totalEquipamento,
+      metadata: updatedMetadata,
+      totalMoSemLs: finalTotalMoSemLs,
+      totalLs: finalTotalLs,
+      totalMoComLs: finalTotalMoComLs,
+      totalMaterial: finalTotalMaterial,
+      totalEquipamento: finalTotalEquipamento,
       valorBdi,
       valorComBdi,
       proposalQuantity: 0,
