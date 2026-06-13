@@ -118,5 +118,8 @@ describe('generatePetitionService', () => {
         expect(callArgs.contents[0].parts[0].text).toContain('Fatos e argumentos do usuário');
         expect(callArgs.config.systemInstruction).toContain('[INICIO_ASSINATURA]');
         expect(callArgs.config.systemInstruction).toContain('[FIM_ASSINATURA]');
+        expect(callArgs.config.systemInstruction).toContain('PREENCHIMENTO E FORMATO');
+        expect(callArgs.config.systemInstruction).toContain('PROIBIÇÃO DE SAUDAÇÕES/PREÂMBULO CONVERSACIONAL');
+        expect(callArgs.config.systemInstruction).toContain('REMOÇÃO DE INFORMAÇÕES DE ANÁLISE INTERNA');
     });
 });
