@@ -20,9 +20,9 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
 
     return (
         <>
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 200px)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 200px)', width: '100%', minWidth: 0 }}>
             {/* Left: Configuration */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 20px rgba(0,0,0,0.03)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 20px rgba(0,0,0,0.03)', minWidth: 0 }}>
                 {/* Header */}
                 <PetitionSidebarHeader onNew={p.handleNew} onClear={p.handleClear} />
 
@@ -47,7 +47,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                     {/* Process Selection */}
                     <div className="form-group">
                         <label className="form-label form-label--sm">Processo</label>
-                        <select className="form-control" value={p.selectedBiddingId} onChange={(e) => p.setSelectedBiddingId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}>
+                        <select className="form-control" value={p.selectedBiddingId} onChange={(e) => p.setSelectedBiddingId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)' }}>
                             <option value="">-- Selecione um processo --</option>
                             {p.eligibleBiddings.map(b => (<option key={b.id} value={b.id}>{b.title} ({b.portal})</option>))}
                         </select>
@@ -56,7 +56,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                     {/* Company Selection */}
                     <div className="form-group">
                         <label className="form-label form-label--sm">Empresa Litigante</label>
-                        <select className="form-control" value={p.selectedCompanyId} onChange={(e) => p.setSelectedCompanyId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}>
+                        <select className="form-control" value={p.selectedCompanyId} onChange={(e) => p.setSelectedCompanyId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)' }}>
                             <option value="">-- Selecione a empresa --</option>
                             {companies.map(c => (<option key={c.id} value={c.id}>{c.razaoSocial}</option>))}
                         </select>
@@ -112,7 +112,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
             </div>
 
             {/* Right: Draft Preview */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', minWidth: 0 }}>
                 <EditorHeader p={p} />
                 {p.generatedDraft && <AiDisclaimerBanner variant="petition" compact style={{ margin: '12px 16px 0' }} />}
 
@@ -148,7 +148,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
 
                 <div style={{
                     flex: 1,
-                    padding: 'var(--space-10)',
+                    padding: 'var(--space-6) var(--space-4)',
                     overflowY: 'auto',
                     background: 'var(--color-bg-base)',
                     display: 'flex',

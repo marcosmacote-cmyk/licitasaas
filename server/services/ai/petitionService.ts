@@ -73,8 +73,8 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
     }
 
     const currentDateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-    const repName = company.contactName || '[Nome do Representante]';
-    const repCpf = company.contactCpf || '[CPF]';
+    const repName = company.contactName || '______________________________________';
+    const repCpf = company.contactCpf || '___.___.___-__';
     const cleanCity = (company.city || '[Cidade]').split('/')[0].trim();
     const companyState = (company.state || '[UF]').toUpperCase().trim();
     const fullBiddingObject = bidding.summary || bidding.title;
@@ -102,7 +102,7 @@ CNPJ: {companyCnpj}
 [FIM_ASSINATURA]
 
 3. PROIBIÇÃO ABSOLUTA: É terminantemente proibido inserir qualquer citação de Advogado, OAB ou assinaturas jurídicas. A peça administrativa deve ser assinada apenas pelo representante da empresa conforme estrutura acima.
-4. PREENCHIMENTO E FORMATO: É obrigatório que o texto final retornado no bloco [INICIO_ASSINATURA]...[FIM_ASSINATURA] contenha exatamente as informações e variáveis substituídas, sem alucinar ou trocar o CPF pelo nome do representante (o campo 'CPF nº:' deve conter exclusivamente os dígitos do CPF '{legalRepresentativeCpf}', e não o nome do representante).
+4. PREENCHIMENTO E FORMATO: O bloco de assinatura final deve conter apenas o nome do representante legal e seu respectivo CPF (e não o nome repetido no campo de CPF). Caso o CPF do representante seja enviado como '___.___.___-__' ou '[CPF]', a IA deve tentar localizar o CPF correto (formado por 11 dígitos, ex: 915.094.833-49) nos dados da empresa ou no texto de fatos fornecido pelo usuário e preenchê-lo ali. Se não encontrar de forma alguma, deve deixar o campo como 'CPF nº: ___.___.___-__' (nunca preencha com o nome do representante).
 5. PROIBIÇÃO DE SAUDAÇÕES/PREÂMBULO CONVERSACIONAL: Não inicie a peça com comentários como 'Com certeza', 'Segue a elaboração da peça', 'Aqui está o documento solicitado', etc. A primeira linha da resposta deve ser diretamente o Endereçamento oficial da peça jurídica (ex: 'AO ILUSTRÍSSIMO...').
 6. REMOÇÃO DE INFORMAÇÕES DE ANÁLISE INTERNA E OBSERVAÇÕES DO CORPO DA PEÇA: Não inclua a classificação da força da tese (ex: 'FORÇA DA TESE: FORTE') ou a listagem/tabela de 'RISCOS CRÍTICOS' ou 'DIRETRIZES' dentro do corpo formal da petição. Quaisquer observações, recomendações, avisos, orientações de preenchimento ou dicas práticas para o usuário devem vir obrigatoriamente após a peça jurídica (depois do bloco [FIM_ASSINATURA]), e devem ser envolvidas estritamente pelas tags [INICIO_OBSERVACOES] e [FIM_OBSERVACOES]. Nenhuma dica ou observação deve estar dentro do corpo da petição ou fora destas tags.`
         .replace(/{currentDate}/g, currentDateStr)
