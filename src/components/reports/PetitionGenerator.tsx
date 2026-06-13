@@ -146,13 +146,52 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                     </div>
                 )}
 
-                <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: 'var(--color-bg-base)', display: 'flex', justifyContent: 'center' }}>
+                <div style={{
+                    flex: 1,
+                    padding: 'var(--space-10)',
+                    overflowY: 'auto',
+                    background: 'var(--color-bg-base)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: !p.generatedDraft && !p.isGenerating ? 'center' : 'flex-start',
+                    gap: 'var(--space-6)'
+                }}>
                     {!p.generatedDraft && !p.isGenerating ? (
                         <EmptyState />
                     ) : p.isGenerating ? (
                         <LoadingSkeleton />
                     ) : (
-                        <div id="petition-preview" style={{ width: '100%', maxWidth: '800px', background: 'white', padding: '60px', borderRadius: '4px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', height: 'fit-content', minHeight: '100%', position: 'relative' }}>
+                        <>
+                            {p.observations && (
+                                <div style={{
+                                    width: '100%',
+                                    maxWidth: '800px',
+                                    padding: 'var(--space-5)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(217,119,6,0.04))',
+                                    border: '1.5px dashed rgba(245,158,11,0.3)',
+                                    color: 'var(--color-text-secondary)',
+                                    fontSize: '0.85rem',
+                                    boxShadow: '0 4px 20px rgba(245,158,11,0.05)',
+                                    animation: 'fadeIn 0.3s ease-out',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#d97706', fontWeight: 800 }}>
+                                        <Sparkles size={16} /> RECOMENDAÇÕES DA IA (ORIENTAÇÕES AO USUÁRIO)
+                                    </div>
+                                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '0.85rem' }}>
+                                        {p.observations}
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', borderTop: '1px solid rgba(245,158,11,0.15)', paddingTop: '6px', marginTop: '4px' }}>
+                                        * Este painel serve apenas como guia do sistema e <strong>não</strong> será incluído na cópia ou na exportação do PDF formal da petição.
+                                    </div>
+                                </div>
+                            )}
+
+                            <div id="petition-preview" style={{ width: '100%', maxWidth: '800px', background: 'white', padding: '60px', borderRadius: '4px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', height: 'fit-content', minHeight: '100%', position: 'relative' }}>
                             {p.headerImage && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${p.headerImageHeight}px`, overflow: 'hidden' }}>
                                 <img src={p.headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto' }} />
                                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'rgba(0,0,0,0.05)' }}></div>
@@ -187,6 +226,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                                 <img src={p.footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto' }} />
                             </div>}
                         </div>
+                        </>
                     )}
                 </div>
             </div>

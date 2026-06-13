@@ -32,6 +32,7 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedDraft, setGeneratedDraft] = useState('');
     const [isCopied, setIsCopied] = useState(false);
+    const [observations, setObservations] = useState('');
 
     // Image states
     const [headerImage, setHeaderImage] = useState('');
@@ -147,6 +148,7 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
 
     const handleClear = useCallback(() => {
         setFactsSummary(''); setAttachments([]); setGeneratedDraft('');
+        setObservations('');
         setSelectedBiddingId(''); setSelectedImg(null);
         lastAiResult.current = ''; setEditorKey(prev => prev + 1);
         if (editorRef.current) editorRef.current.innerHTML = '';
@@ -189,7 +191,33 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
                 setProgressMsg(event.progressMsg || `Gerando (${event.progress}%)`);
             } else if (event.type === 'job_completed') {
                 fetchJobResult(event.jobId).then(data => {
-                    const displayHtml = data.text
+                    let rawText = data.text || '';
+                    let extractedObs = '';
+
+                    // Parse and strip the observations block
+                    const obsRegex = /\[INICIO_OBSERVACOES\]([\s\S]*?)\[FIM_OBSERVACOES\]/i;
+                    const match = rawText.match(obsRegex);
+                    if (match) {
+                        extractedObs = match[1].trim();
+                        rawText = rawText.replace(obsRegex, '').trim();
+                    } else {
+                        // Fallback: search for [INICIO_OBSERVACOES] to end of text
+                        const idx = rawText.indexOf('[INICIO_OBSERVACOES]');
+                        if (idx !== -1) {
+                            extractedObs = rawText.substring(idx + '[INICIO_OBSERVACOES]'.length).replace(/\[FIM_OBSERVACOES\]/gi, '').trim();
+                            rawText = rawText.substring(0, idx).trim();
+                        }
+                    }
+
+                    // Clean up any stray tags
+                    rawText = rawText
+                        .replace(/\[INICIO_OBSERVACOES\]/gi, '')
+                        .replace(/\[FIM_OBSERVACOES\]/gi, '')
+                        .trim();
+
+                    setObservations(extractedObs);
+
+                    const displayHtml = rawText
                         .replace(/\[INICIO_ASSINATURA\]/g, '<span class="tech-tag" data-tag="start">[INICIO_ASSINATURA]</span>')
                         .replace(/\[FIM_ASSINATURA\]/g, '<span class="tech-tag" data-tag="end">[FIM_ASSINATURA]</span>');
 
@@ -368,6 +396,7 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
         petitionTypeId, setPetitionTypeId, factsSummary, setFactsSummary,
         attachments, setAttachments, isGenerating, generatedDraft, setGeneratedDraft,
         isCopied, confirmAction, setConfirmAction,
+        observations, setObservations,
         headerImage, setHeaderImage, footerImage, setFooterImage,
         headerImageHeight, setHeaderImageHeight, footerImageHeight, setFooterImageHeight,
         isSavingTemplate, showStyles, setShowStyles, selectedImg,
