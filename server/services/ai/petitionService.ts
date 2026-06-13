@@ -101,7 +101,10 @@ Representante Legal
 CNPJ: {companyCnpj}
 [FIM_ASSINATURA]
 
-3. PROIBIÇÃO ABSOLUTA: É terminantemente proibido inserir qualquer citação de Advogado, OAB ou assinaturas jurídicas. A peça administrativa deve ser assinada apenas pelo representante da empresa conforme estrutura acima.`
+3. PROIBIÇÃO ABSOLUTA: É terminantemente proibido inserir qualquer citação de Advogado, OAB ou assinaturas jurídicas. A peça administrativa deve ser assinada apenas pelo representante da empresa conforme estrutura acima.
+4. PREENCHIMENTO E FORMATO: É obrigatório que o texto final retornado no bloco [INICIO_ASSINATURA]...[FIM_ASSINATURA] contenha exatamente as informações e variáveis substituídas, sem alucinar ou trocar o CPF pelo nome do representante (o campo 'CPF nº:' deve conter exclusivamente os dígitos do CPF '{legalRepresentativeCpf}', e não o nome do representante).
+5. PROIBIÇÃO DE SAUDAÇÕES/PREÂMBULO CONVERSACIONAL: Não inicie a peça com comentários como 'Com certeza', 'Segue a elaboração da peça', 'Aqui está o documento solicitado', etc. A primeira linha da resposta deve ser diretamente o Endereçamento oficial da peça jurídica (ex: 'AO ILUSTRÍSSIMO...').
+6. REMOÇÃO DE INFORMAÇÕES DE ANÁLISE INTERNA: Não inclua a classificação da força da tese (ex: 'FORÇA DA TESE: FORTE') ou a listagem/tabela de 'RISCOS CRÍTICOS' ou 'DIRETRIZES' dentro do corpo formal da petição. A peça deve conter apenas as seções jurídicas (Fatos, Tempestividade, Fundamentos, Pedidos, Assinatura) e eventuais Observações (ex: 'VII. OBSERVAÇÕES PARA O USUÁRIO') que devem vir após o bloco de assinatura.`
         .replace(/{currentDate}/g, currentDateStr)
         .replace(/{legalRepresentativeName}/g, repName)
         .replace(/{legalRepresentativeCpf}/g, repCpf)
@@ -126,7 +129,7 @@ DADOS DA EMPRESA RECORRENTE:
 - Sede: ${cleanCity}/${companyState}
 - Representante Legal: ${repName} (CPF: ${repCpf})
 
-CONTEXTO DA ANÁLISE DO EDITAL (DADOS DO SISTEMA):
+CONTEXTO DA ANÁLISE DO EDITAL (DADOS DO SISTEMA - USE APENAS COMO BASE DE INFORMAÇÕES, NÃO COPIE OU IMPRIMA ESTE BLOCO DIRETAMENTE NA PEÇA):
 ${biddingAnalysisText}
 
 FATOS E ARGUMENTOS (FORNECIDO PELO USUÁRIO):
