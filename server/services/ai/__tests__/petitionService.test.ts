@@ -121,5 +121,7 @@ describe('generatePetitionService', () => {
         expect(callArgs.config.systemInstruction).toContain('PREENCHIMENTO E FORMATO');
         expect(callArgs.config.systemInstruction).toContain('PROIBIÇÃO DE SAUDAÇÕES/PREÂMBULO CONVERSACIONAL');
         expect(callArgs.config.systemInstruction).toContain('REMOÇÃO DE INFORMAÇÕES DE ANÁLISE INTERNA');
+        expect(callArgs.config.systemInstruction).toContain('[INICIO_OBSERVACOES]');
+        expect(callArgs.config.systemInstruction).toContain('[FIM_OBSERVACOES]');
     });
 });
