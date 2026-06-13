@@ -18,9 +18,10 @@ interface Props {
     onUpdate: () => void;
     onImport?: () => void;
     onBackToHub?: () => void;
+    onNavigateToModule?: (module: string, processId?: string) => void;
 }
 
-export function AiReportModal({ analysis: initialAnalysis, process, onClose, onUpdate, onImport, onBackToHub }: Props) {
+export function AiReportModal({ analysis: initialAnalysis, process, onClose, onUpdate, onImport, onBackToHub, onNavigateToModule }: Props) {
     const [activeTab, setActiveTab] = useState<'report' | 'chat'>('report');
     const [analysis, setAnalysis] = useState<AiAnalysis>(initialAnalysis);
     const [loadingFull, setLoadingFull] = useState(!initialAnalysis.schemaV2);
@@ -215,7 +216,7 @@ export function AiReportModal({ analysis: initialAnalysis, process, onClose, onU
                         </div>
                     ) : null}
                     {activeTab === 'report' ? 
-                        <AiReportTabAnalytics report={report} process={process} analysis={analysis} /> 
+                        <AiReportTabAnalytics report={report} process={process} analysis={analysis} onNavigateToModule={onNavigateToModule} /> 
                         : 
                         <AiReportTabChat chat={chat} />
                     }

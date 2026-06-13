@@ -19,9 +19,33 @@ router.put('/companies/:id/proposal-template', authenticateToken, planGuard, asy
             contactName, contactCpf,
         } = req.body;
 
+        const { getUploadDir } = require('../storage');
+        const fs = require('fs');
+        const path = require('path');
+
+        const processImage = async (imgData: any, type: 'header' | 'footer') => {
+            if (!imgData) return null;
+            if (imgData.startsWith('/uploads/')) return imgData;
+            if (imgData.startsWith('data:image/')) {
+                const matches = imgData.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                    const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    const fileName = `company_${id}_${type}_${Date.now()}.${ext}`;
+                    const filePath = path.join(getUploadDir(), fileName);
+                    await fs.promises.writeFile(filePath, buffer);
+                    return `/uploads/${fileName}`;
+                }
+            }
+            return imgData;
+        };
+
+        const finalHeader = await processImage(headerImage, 'header');
+        const finalFooter = await processImage(footerImage, 'footer');
+
         const updateData: any = {
-            defaultProposalHeader: headerImage,
-            defaultProposalFooter: footerImage,
+            defaultProposalHeader: finalHeader,
+            defaultProposalFooter: finalFooter,
             defaultProposalHeaderHeight: headerHeight,
             defaultProposalFooterHeight: footerHeight,
             defaultLetterContent: defaultLetterContent,

@@ -43,6 +43,7 @@ import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "./services/ai/telemetry/analysisTelemetry";
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "./services/monitoring/alertTaxonomy";
 import { NotificationService } from "./services/monitoring/notification.service";
+import { generatePetitionService } from "./services/ai/petitionService";
 import { startOpportunityScanner } from "./services/monitoring/opportunity-scanner.service";
 import { startAllPollers } from "./services/monitoring/pollers";
 import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "./services/backgroundJobService";
@@ -1103,38 +1104,20 @@ app.listen(PORT, async () => {
         const tenantId = job.tenantId;
         await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Preparando contexto da petição...' });
 
-        const internalUrl = `http://localhost:${PORT}/api/petitions/generate`;
-        const jwt = require('jsonwebtoken');
-        const internalToken = jwt.sign(
-            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
-            JWT_SECRET,
-            { expiresIn: '10m' }
-        );
-
-        let progressPercent = 10;
         const progressTimer = setInterval(async () => {
-            progressPercent = Math.min(progressPercent + 20, 95);
-            await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: 'Redigindo fundamentação e documentos...' }).catch(() => {});
-        }, 6000);
+            try {
+                await updateJobProgress(job.id, tenantId, { progress: 50, progressMsg: 'Redigindo fundamentação e documentos...' });
+            } catch { /* ignore */ }
+        }, 5000);
 
         try {
-            const response = await fetch(internalUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${internalToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(job.input),
+            const result = await generatePetitionService({
+                ...job.input,
+                tenantId
             });
-            clearInterval(progressTimer);
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || `Geração de petição retornou ${response.status}`);
-            }
 
             await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
-            return await response.json();
+            return result;
         } finally {
             clearInterval(progressTimer);
         }

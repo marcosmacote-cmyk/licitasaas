@@ -18,7 +18,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
         );
     });
 }export const GEMINI_PROFILES = {
-    HIGH_INTELLIGENCE: process.env.GEMINI_MODEL_HIGH_INTELLIGENCE || 'gemini-3.1-flash-lite',
+    HIGH_INTELLIGENCE: process.env.GEMINI_MODEL_HIGH_INTELLIGENCE || 'gemini-2.5-pro',
     MULTIMODAL_OCR: process.env.GEMINI_MODEL_MULTIMODAL_OCR || 'gemini-2.5-flash',
     LIGHTWEIGHT: process.env.GEMINI_MODEL_LIGHTWEIGHT || 'gemini-2.5-flash-lite',
 };

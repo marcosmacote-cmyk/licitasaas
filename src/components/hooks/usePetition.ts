@@ -58,6 +58,24 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
     }), [biddings]);
 
     // ── Effects ──
+    // Load from URL search params on mount (Deep Linking support)
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const urlBiddingId = params.get('processId');
+            const urlCompanyId = params.get('companyId');
+            const urlType = params.get('petitionType');
+            const urlFacts = params.get('facts');
+
+            if (urlBiddingId) setSelectedBiddingId(urlBiddingId);
+            if (urlCompanyId) setSelectedCompanyId(urlCompanyId);
+            if (urlType) setPetitionTypeId(urlType);
+            if (urlFacts) setFactsSummary(urlFacts);
+        } catch (e) {
+            console.error('Failed to parse URL query params', e);
+        }
+    }, [biddings]);
+
     // Load company defaults when company changes
     useEffect(() => {
         if (selectedCompany) {

@@ -31,6 +31,7 @@ import { uploadDir } from '../services/files.service';
 import { indexDocumentChunks, searchSimilarChunks } from '../services/ai/rag.service';
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from '../services/ai/prompt.service';
 import { MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION } from '../services/ai/prompt.service';
+import { generatePetitionService } from '../services/ai/petitionService';
 
 // Bridge: Functions still in index.ts — will be extracted to services in next phase
 // These are injected when the router is mounted
@@ -1239,119 +1240,14 @@ router.post('/petitions/generate', authenticateToken, async (req: any, res) => {
         const tenantId = req.user.tenantId;
 
         logger.info(`[Petition] Generating ${templateType} for process ${biddingProcessId} with ${attachments?.length || 0} attachments`);
-        const bidding = await prisma.biddingProcess.findUnique({
-            where: { id: biddingProcessId, tenantId },
-            include: { aiAnalysis: true }
+        const result = await generatePetitionService({
+            biddingProcessId,
+            companyId,
+            templateType,
+            userContext,
+            attachments,
+            tenantId
         });
-
-        const company = await prisma.companyProfile.findUnique({
-            where: { id: companyId, tenantId }
-        });
-
-        if (!bidding || !company) {
-            return res.status(404).json({ error: 'Processo ou Empresa não encontrados.' });
-        }
-
-        if (!biddingProcessId || !companyId || (!userContext && (attachments?.length || 0) === 0)) {
-            return res.status(400).json({ error: 'Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.' });
-        }
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
-
-        const ai = new GoogleGenAI({ apiKey });
-        const aiAnalysis = bidding.aiAnalysis;
-
-        let biddingAnalysisText = 'Nenhuma análise detalhada disponível.';
-        if (aiAnalysis) {
-            // Prefer V2 structured context for petitions (risk + impugnation focus)
-            if (aiAnalysis.schemaV2) {
-                biddingAnalysisText = `
-${buildModuleContext(aiAnalysis.schemaV2, 'petition')}
-
-Resumo Executivo: ${aiAnalysis.fullSummary || 'N/A'}
-`.trim();
-                logger.info(`[Petition] Using buildModuleContext('petition') for generation`);
-            } else {
-                biddingAnalysisText = `
-Resumo do Edital (Card): ${bidding.summary || 'Não disponível'}
-Parecer Técnico-Jurídico Profundo: ${aiAnalysis.fullSummary || 'Não disponível'}
-Documentos Exigidos: ${typeof aiAnalysis.requiredDocuments === 'string' ? aiAnalysis.requiredDocuments : JSON.stringify(aiAnalysis.requiredDocuments)}
-Itens e Lotes: ${aiAnalysis.biddingItems || 'Não disponível'}
-Exigências de Qualificação Técnica (LITERAL): ${aiAnalysis.qualificationRequirements || 'Não disponível'}
-Prazos e Datas Críticas: ${typeof aiAnalysis.deadlines === 'string' ? aiAnalysis.deadlines : JSON.stringify(aiAnalysis.deadlines)}
-Considerações de Preço: ${aiAnalysis.pricingConsiderations || 'Não disponível'}
-Alertas e Irregularidades: ${typeof aiAnalysis.irregularitiesFlags === 'string' ? aiAnalysis.irregularitiesFlags : JSON.stringify(aiAnalysis.irregularitiesFlags)}
-Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
-`.trim();
-            }
-        }
-
-        const currentDateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-        const repName = company.contactName || '[Nome do Representante]';
-        const repCpf = company.contactCpf || '[CPF]';
-
-        let cleanCity = (company.city || '[Cidade]').split('/')[0].trim();
-        const companyState = (company.state || '[UF]').toUpperCase().trim();
-
-        const systemInstruction = MASTER_PETITION_SYSTEM_PROMPT
-            .replace(/{currentDate}/g, currentDateStr)
-            .replace(/{legalRepresentativeName}/g, repName)
-            .replace(/{legalRepresentativeCpf}/g, repCpf)
-            .replace(/{companyCity}/g, cleanCity)
-            .replace(/{companyState}/g, companyState)
-            .replace(/{companyName}/g, company.razaoSocial)
-            .replace(/{companyCnpj}/g, company.cnpj);
-
-        const fullBiddingObject = bidding.summary || bidding.title;
-
-        const userInstruction = PETITION_USER_INSTRUCTION
-            .replace('{petitionType}', templateType.toUpperCase())
-            .replace(/{fullBiddingObject}/g, fullBiddingObject)
-            .replace('{issuer}', bidding.portal)
-            .replace('{modality}', bidding.modality)
-            .replace('{portal}', bidding.portal)
-            .replace('{biddingAnalysis}', biddingAnalysisText)
-            .replace('{companyName}', company.razaoSocial)
-            .replace('{companyCnpj}', company.cnpj)
-            .replace('{companyQualification}', company.qualification || 'Não informada')
-            .replace(/{legalRepresentativeName}/g, repName)
-            .replace(/{legalRepresentativeCpf}/g, repCpf)
-            .replace(/{companyCity}/g, cleanCity)
-            .replace(/{companyState}/g, companyState)
-            .replace(/{currentDate}/g, currentDateStr)
-            .replace('{userContext}', userContext);
-
-        // Preparar partes para o Gemini (Texto + Arquivos PDF/Imagens)
-        const parts: any[] = [{ text: userInstruction }];
-
-        if (attachments && Array.isArray(attachments)) {
-            attachments.forEach((att: any) => {
-                if (att.data && att.mimeType) {
-                    parts.push({
-                        inlineData: {
-                            data: att.data,
-                            mimeType: att.mimeType
-                        }
-                    });
-                }
-            });
-        }
-
-        const result = await callGeminiWithRetry(ai.models, {
-            model: GEMINI_PROFILES.HIGH_INTELLIGENCE,
-            contents: [
-                {
-                    role: 'user',
-                    parts: parts
-                }
-            ],
-            config: {
-                systemInstruction: systemInstruction,
-                temperature: 0.2,
-                maxOutputTokens: 8192
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'petition' });
-
         res.json({ text: result.text });
     } catch (error: any) {
         logger.error('[Petition] Error:', error.message);

@@ -60,6 +60,23 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                             <option value="">-- Selecione a empresa --</option>
                             {companies.map(c => (<option key={c.id} value={c.id}>{c.razaoSocial}</option>))}
                         </select>
+                        {p.selectedCompany && (!p.selectedCompany.contactName || !p.selectedCompany.contactCpf || !p.selectedCompany.city || !p.selectedCompany.state || !p.selectedCompany.cnpj) && (
+                            <div style={{
+                                padding: 'var(--space-3)',
+                                borderRadius: 'var(--radius-lg)',
+                                background: 'rgba(245,158,11,0.06)',
+                                border: '1px solid rgba(245,158,11,0.25)',
+                                color: '#d97706',
+                                fontSize: '0.75rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                marginTop: 'var(--space-2)'
+                            }}>
+                                <strong>⚠️ Cadastro da Empresa Incompleto:</strong>
+                                <span>Faltam dados essenciais (Representante, CPF ou Cidade) que a IA precisa para qualificar a peça e gerar a assinatura.</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Petition Type */}
@@ -98,6 +115,36 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
             <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                 <EditorHeader p={p} />
                 {p.generatedDraft && <AiDisclaimerBanner variant="petition" compact style={{ margin: '12px 16px 0' }} />}
+
+                {p.generatedDraft && (
+                    <div style={{ display: 'flex', gap: '8px', padding: '8px 16px', background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button onClick={() => document.execCommand('bold', false)} className="btn btn-sm btn-ghost" style={{ fontWeight: 'bold', minWidth: '32px', padding: '4px' }}>B</button>
+                        <button onClick={() => document.execCommand('italic', false)} className="btn btn-sm btn-ghost" style={{ fontStyle: 'italic', minWidth: '32px', padding: '4px' }}>I</button>
+                        <button onClick={() => document.execCommand('underline', false)} className="btn btn-sm btn-ghost" style={{ textDecoration: 'underline', minWidth: '32px', padding: '4px' }}>U</button>
+                        <div style={{ width: '1px', background: 'var(--color-border)', height: '18px', margin: '0 4px' }} />
+                        <button onClick={() => document.execCommand('justifyLeft', false)} className="btn btn-sm btn-ghost" style={{ minWidth: '32px', padding: '4px' }}>Align L</button>
+                        <button onClick={() => document.execCommand('justifyCenter', false)} className="btn btn-sm btn-ghost" style={{ minWidth: '32px', padding: '4px' }}>Center</button>
+                        <button onClick={() => document.execCommand('justifyRight', false)} className="btn btn-sm btn-ghost" style={{ minWidth: '32px', padding: '4px' }}>Align R</button>
+                        <button onClick={() => document.execCommand('justifyFull', false)} className="btn btn-sm btn-ghost" style={{ minWidth: '32px', padding: '4px' }}>Justify</button>
+                        <div style={{ width: '1px', background: 'var(--color-border)', height: '18px', margin: '0 4px' }} />
+                        <select onChange={(e) => {
+                            document.execCommand('fontName', false, e.target.value);
+                        }} className="form-control" style={{ width: '140px', height: '28px', padding: '2px 8px', fontSize: '0.75rem', borderRadius: 'var(--radius-md)' }}>
+                            <option value="serif">Times New Roman</option>
+                            <option value="sans-serif">Arial</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Courier New">Courier New</option>
+                        </select>
+                        <select onChange={(e) => {
+                            document.execCommand('fontSize', false, e.target.value);
+                        }} className="form-control" style={{ width: '100px', height: '28px', padding: '2px 8px', fontSize: '0.75rem', borderRadius: 'var(--radius-md)' }}>
+                            <option value="3">Médio (12pt)</option>
+                            <option value="4">Grande (14pt)</option>
+                            <option value="2">Pequeno (10pt)</option>
+                            <option value="5">Muito Grande (18pt)</option>
+                        </select>
+                    </div>
+                )}
 
                 <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: 'var(--color-bg-base)', display: 'flex', justifyContent: 'center' }}>
                     {!p.generatedDraft && !p.isGenerating ? (

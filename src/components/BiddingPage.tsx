@@ -386,6 +386,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                         b.setViewingProcessForAnalysis(null);
                         if (proc) b.handleEdit(proc);
                     }}
+                    onNavigateToModule={onNavigateToModule}
                 />
             )}
 

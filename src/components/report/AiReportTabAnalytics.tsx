@@ -8,9 +8,10 @@ interface Props {
     report: ReturnType<typeof useAiReport>;
     process: any;
     analysis: any;
+    onNavigateToModule?: (module: string, processId?: string) => void;
 }
 
-export function AiReportTabAnalytics({ report, process, analysis }: Props) {
+export function AiReportTabAnalytics({ report, process, analysis, onNavigateToModule }: Props) {
     const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
     const toggleChildren = (key: string) => setExpandedChildren(prev => ({ ...prev, [key]: !prev[key] }));
     const [expandedConditions, setExpandedConditions] = useState<Record<number, boolean>>({});
@@ -279,6 +280,46 @@ export function AiReportTabAnalytics({ report, process, analysis }: Props) {
                                                     📄 {flag.sourceRef}
                                                 </p>
                                             )}
+                                            {onNavigateToModule && (
+                                                <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        onClick={() => {
+                                                            const factsText = `Risco: ${flag.title || ''}\nDescrição: ${flag.text || ''}\nReferência: ${flag.sourceRef || ''}\nAção Recomendada: ${flag.action || ''}`;
+                                                            window.history.pushState({}, '', `?processId=${process.id}&petitionType=impugnacao&facts=${encodeURIComponent(factsText)}`);
+                                                            onNavigateToModule('production-petition', process.id);
+                                                        }}
+                                                        className="btn btn-xs btn-outline"
+                                                        style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            padding: '3px 8px', 
+                                                            borderColor: sc.badge, 
+                                                            color: sc.badge,
+                                                            background: 'transparent',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Gerar Impugnação (IA)
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const factsText = `Risco: ${flag.title || ''}\nDescrição: ${flag.text || ''}\nReferência: ${flag.sourceRef || ''}\nAção Recomendada: ${flag.action || ''}`;
+                                                            window.history.pushState({}, '', `?processId=${process.id}&petitionType=recurso&facts=${encodeURIComponent(factsText)}`);
+                                                            onNavigateToModule('production-petition', process.id);
+                                                        }}
+                                                        className="btn btn-xs btn-outline"
+                                                        style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            padding: '3px 8px', 
+                                                            borderColor: sc.badge, 
+                                                            color: sc.badge,
+                                                            background: 'transparent',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Gerar Recurso (IA)
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -509,6 +550,32 @@ export function AiReportTabAnalytics({ report, process, analysis }: Props) {
                                                                                 </span>
                                                                             )}
                                                                         </div>
+                                                                        {onNavigateToModule && (
+                                                                            <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const factsText = `Exigência de Habilitação: ${doc.title || ''}\nDescrição: ${doc.description || ''}\nReferência: ${doc.sourceRef || ''}\nTipo: ${obl.label}\nFase: ${phaseLabel || ''}`;
+                                                                                        window.history.pushState({}, '', `?processId=${process.id}&petitionType=impugnacao&facts=${encodeURIComponent(factsText)}`);
+                                                                                        onNavigateToModule('production-petition', process.id);
+                                                                                    }}
+                                                                                    className="btn btn-xs btn-outline"
+                                                                                    style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'transparent', cursor: 'pointer' }}
+                                                                                >
+                                                                                    Gerar Impugnação
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const factsText = `Exigência de Habilitação: ${doc.title || ''}\nDescrição: ${doc.description || ''}\nReferência: ${doc.sourceRef || ''}\nTipo: ${obl.label}\nFase: ${phaseLabel || ''}`;
+                                                                                        window.history.pushState({}, '', `?processId=${process.id}&petitionType=recurso&facts=${encodeURIComponent(factsText)}`);
+                                                                                        onNavigateToModule('production-petition', process.id);
+                                                                                    }}
+                                                                                    className="btn btn-xs btn-outline"
+                                                                                    style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'transparent', cursor: 'pointer' }}
+                                                                                >
+                                                                                    Gerar Recurso
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
